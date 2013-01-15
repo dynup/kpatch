@@ -1,0 +1,9 @@
+elf-diff-copy/elf-diff-copy
+*.o
+*.o.cmd
+*.ko
+*.ko.cmd
+*.mod.c
+kmod/.tmp_versions/
+kmod/Module.symvers
+kmod/modules.order

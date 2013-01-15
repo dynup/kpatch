@@ -1,0 +1,26 @@
+#!/bin/sh
+
+yo="this/is/a/test"
+
+case yo in
+	"*test")
+		echo yo
+		;;
+esac
+
+KSRC=/home/jpoimboe/git/linux/
+
+for i in `find $KSRC -newer /tmp/kpatch_timestamp -name "*.o" -not -name "*.mod.o" -not -name "built-in.o" -not -name "vmlinux.o"`; do
+	case ${i##$KSRC} in
+		.tmp_kallsyms1.o|.tmp_kallsyms2.o|init/version.o|arch/x86/boot/version.o|arch/x86/boot/compressed/eboot.o|arch/x86/boot/header.o|arch/x86/boot/compressed/efi_stub_64.o|arch/x86/boot/compressed/piggy.o)
+			continue
+			;;
+	esac
+	num=`readelf -s $i |awk '{print $4}' |grep FILE |wc -l`
+	[[ $num -gt 1 ]] && continue
+	[[ $num == 0 ]] && {
+		echo "ERROR: unsupported assembly file ${i##$KSRC} changed"
+		exit 1
+	}
+	[[ $num == 1 ]] && echo ${i##$KSRC}
+done
