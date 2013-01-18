@@ -17,7 +17,7 @@ KPATCH_LDS="$KMOD_DIR/kpatch.lds"
 
 KPATCH_GEN="$SCRIPT_DIR/kpatch-diff-gen/kpatch-diff-gen"
 KPATCHGCC="$SCRIPT_DIR/kpatch-gcc"
-JOBS=4
+JOBS=`grep -c processor /proc/cpuinfo`
 MAKE_CMD="make -j$JOBS vmlinux"
 export CROSS_COMPILE="$KPATCHGCC "
 # TODO make in function
