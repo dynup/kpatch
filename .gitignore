@@ -1,4 +1,4 @@
-elf-diff-copy/elf-diff-copy
+kpatch-diff-gen/kpatch-diff-gen
 *.o
 *.o.cmd
 *.ko

@@ -1,6 +1,6 @@
 CC=gcc
 CFLAGS=-g -Wall
-PROG=kpatch-gen
+PROG=kpatch-diff-gen
 
 .PHONY: all
 all: $(PROG)

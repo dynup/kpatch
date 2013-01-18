@@ -14,7 +14,7 @@ KMOD_DIR="$SCRIPT_DIR/kmod"
 KPATCH_REG="$KMOD_DIR/kpatch-register.o"
 KPATCH_LDS="$KMOD_DIR/kpatch.lds"
 
-KPATCH_GEN="$SCRIPT_DIR/kpatch-gen/kpatch-gen"
+KPATCH_GEN="$SCRIPT_DIR/kpatch-diff-gen/kpatch-diff-gen"
 KPATCHGCC="$SCRIPT_DIR/kpatch-gcc"
 JOBS=4
 MAKE_CMD="make -j$JOBS vmlinux"

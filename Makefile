@@ -1,2 +1,2 @@
 all:
-	$(MAKE) -C kpatch-gen
+	$(MAKE) -C kpatch-diff-gen
