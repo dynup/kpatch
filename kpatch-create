@@ -9,6 +9,7 @@ set -o pipefail
 CUR_DIR="$PWD"
 SCRIPT="`basename $BASH_SOURCE`"
 SCRIPT_DIR="`dirname $BASH_SOURCE`"
+SCRIPT_DIR="`readlink -f \"$SCRIPT_DIR\"`"
 
 KMOD_DIR="$SCRIPT_DIR/kmod"
 KPATCH_REG="$KMOD_DIR/kpatch-register.o"
@@ -106,7 +107,7 @@ touch "$PROGRESS_FILE"
 $MAKE_CMD > /dev/null
 rm -f "$PROGRESS_FILE"
 
-scriptecho "generating kpatch binaries"
+scriptecho "diffing binaries"
 find . -type f -name '*.o.orig_kpatch' | while read file; do
     origfile="${file#./}"
     newfile="${origfile%.orig_kpatch}"
@@ -118,6 +119,7 @@ find . -type f -name '*.o.orig_kpatch' | while read file; do
     "$KPATCH_GEN" "$origfile" "$newfile" -v vmlinux.orig_kpatch -o "$newfile.kpatch_gen"
 done
 
+scriptecho "generating kpatch modules"
 unset CROSS_COMPILE
 cp -a "$KMOD_DIR" "$TMPDIR/kmod"
 
@@ -131,4 +133,4 @@ make -C "$KERNEL_DIR" M="$TMPDIR/kmod" kpatch-patch.ko > /dev/null
 
 cp kpatch.ko kpatch-patch.ko "$OUTPUT_DIR"
 
-scriptecho Success!
+scriptecho success!

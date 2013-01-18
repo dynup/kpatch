@@ -7,7 +7,7 @@ struct kpatch_func {
 	unsigned long new_func_addr;
 	char *old_func_name;
 	unsigned long old_func_addr_end;
-	struct module *owner;
+	struct module *mod;
 };
 
 struct kpatch_rela {

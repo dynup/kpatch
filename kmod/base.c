@@ -152,7 +152,7 @@ int kpatch_register(struct module *mod, void *kpatch_relas,
 	int size;
 	int num_patches;
 	struct kpatch_patch *patches;
-	struct kpatch_func *funcs;
+	struct kpatch_func *funcs, *f;
 
 	num_relas = (kpatch_relas_end - kpatch_relas) / sizeof(*relas);
 	relas = kpatch_relas;
@@ -181,6 +181,7 @@ int kpatch_register(struct module *mod, void *kpatch_relas,
 		//printk("%p <- %lx\n", loc, val);
 		//printk("%lx\n", (unsigned long)__va(__pa((unsigned long)loc)));
 		//loc = __va(__pa((unsigned long)loc));
+		/* TODO: safe to assume it was ro to start with? */
 		set_memory_rw((unsigned long)loc & PAGE_MASK, 1);
 		ret = probe_kernel_write(loc, &val, size);
 		set_memory_ro((unsigned long)loc & PAGE_MASK, 1);
@@ -199,7 +200,18 @@ int kpatch_register(struct module *mod, void *kpatch_relas,
 	for (i = 0; i < num_patches; i++) {
 		funcs[i].old_func_addr = patches[i].orig;
 		funcs[i].new_func_addr = patches[i].new;
-		funcs[i].old_func_name = "FIXME";
+		funcs[i].mod = mod;
+		funcs[i].old_func_name = "TODO";
+		/* TODO: need old_func_addr_end too */
+		/* TODO: verify name/address with kallsyms */
+
+		/* Do any needed incremental patching. */
+		for (f = kpatch_funcs; f->old_func_name; f++) {
+			if (funcs[i].old_func_addr == f->old_func_addr) {
+				funcs[i].old_func_addr = f->new_func_addr;
+				ref_module(funcs[i].mod, f->mod);
+			}
+		}
 
 		ret = ftrace_set_filter_ip(&kpatch_ftrace_ops, patches[i].orig,
 					   0, 0);
@@ -225,13 +237,6 @@ int kpatch_register(struct module *mod, void *kpatch_relas,
 			ret = -ENXIO;
 			goto out;
 		}
-
-		/* Do any needed incremental patching. */
-		for (g = kpatch_funcs; g->old_func_name; g++)
-			if (f->old_func_addr == g->old_func_addr) {
-				f->old_func_addr = g->new_func_addr;
-				ref_module(f->owner, g->owner);
-			}
 
 
 		if (!kallsyms_lookup_size_offset(f->old_func_addr, &size,
@@ -289,7 +294,6 @@ out:
 }
 EXPORT_SYMBOL(kpatch_register);
 
-#if 0
 /* Called from stop_machine */
 static int kpatch_remove_patch(void *data)
 {
@@ -300,7 +304,7 @@ static int kpatch_remove_patch(void *data)
 	if (ret)
 		goto out;
 
-	for (i = 0; i < KPATCH_MAX_FUNCS; i++)
+	for (i = 0; i < KPATCH_MAX_FUNCS; i++) /* TODO iterate by pointer */
 		if (kpatch_funcs[i].old_func_addr == funcs->old_func_addr)
 			break;
 
@@ -321,13 +325,21 @@ static int kpatch_remove_patch(void *data)
 out:
 	return ret;
 }
-#endif
 
 int kpatch_unregister(struct module *mod)
 {
 	int ret = 0;
-#if 0
-	struct kpatch_func *f;
+	struct kpatch_func *funcs, *f;
+	int num_funcs, i;
+
+	num_funcs = kpatch_num_funcs(kpatch_funcs);
+
+	funcs = kmalloc((num_funcs + 1) * sizeof(*funcs), GFP_KERNEL);
+
+	for (f = kpatch_funcs, i = 0; f->old_func_name; f++)
+		if (f->mod == mod)
+			memcpy(&funcs[i++], f, sizeof(*funcs));
+	memset(&funcs[i], 0, sizeof(*funcs));
 
 	ret = stop_machine(kpatch_remove_patch, funcs, NULL);
 	if (ret)
@@ -353,7 +365,7 @@ int kpatch_unregister(struct module *mod)
 	}
 
 out:
-#endif
+	kfree(funcs);
 	return ret;
 }
 EXPORT_SYMBOL(kpatch_unregister);

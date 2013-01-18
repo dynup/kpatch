@@ -4,6 +4,7 @@ kpatch-diff-gen/kpatch-diff-gen
 *.ko
 *.ko.cmd
 *.mod.c
+*.swp
 kmod/.tmp_versions/
 kmod/Module.symvers
 kmod/modules.order
