@@ -4,7 +4,6 @@
 #include <stdlib.h>
 #include <argp.h>
 #include <string.h>
-#include <elfutils/elf-knowledge.h>
 #include <udis86.h>
 #include <error.h>
 #include <gelf.h>
