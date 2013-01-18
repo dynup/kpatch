@@ -144,7 +144,6 @@ int kpatch_register(struct module *mod, void *kpatch_relas,
 {
 	int ret = 0;
 	int ret2;
-	struct kpatch_func *f, *g;
 	int num_relas;
 	struct kpatch_rela *relas;
 	int i;
@@ -179,7 +178,7 @@ int kpatch_register(struct module *mod, void *kpatch_relas,
 				ret = -EINVAL;
 				goto out;
 		}
-		printk("%p <- %lx\n", loc, val);
+		//printk("%p <- %lx\n", loc, val);
 		//printk("%lx\n", (unsigned long)__va(__pa((unsigned long)loc)));
 		//loc = __va(__pa((unsigned long)loc));
 		set_memory_rw((unsigned long)loc & PAGE_MASK, 1);
@@ -290,6 +289,7 @@ out:
 }
 EXPORT_SYMBOL(kpatch_register);
 
+#if 0
 /* Called from stop_machine */
 static int kpatch_remove_patch(void *data)
 {
@@ -321,13 +321,14 @@ static int kpatch_remove_patch(void *data)
 out:
 	return ret;
 }
+#endif
 
 int kpatch_unregister(struct module *mod)
 {
 	int ret = 0;
+#if 0
 	struct kpatch_func *f;
 
-#if 0
 	ret = stop_machine(kpatch_remove_patch, funcs, NULL);
 	if (ret)
 		goto out;
@@ -350,9 +351,9 @@ int kpatch_unregister(struct module *mod)
 			goto out;
 		}
 	}
-#endif
 
 out:
+#endif
 	return ret;
 }
 EXPORT_SYMBOL(kpatch_unregister);

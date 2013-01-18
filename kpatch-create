@@ -4,6 +4,8 @@ set -o nounset
 set -o errexit
 set -o pipefail
 
+# TODO: log output to a file instead of /dev/null
+
 CUR_DIR="$PWD"
 SCRIPT="`basename $BASH_SOURCE`"
 SCRIPT_DIR="`dirname $BASH_SOURCE`"
@@ -24,6 +26,13 @@ PROGRESS_FILE="kpatch-in-progress"
 PATCHED=
 PATCH=
 KERNEL_DIR=
+OUTPUT_DIR=
+
+usage ()
+{
+    echo "usage: $SCRIPT -p [PATCH] -k [KERNEL DIR] -o [OUTPUT DIR]" >&2
+    exit 1
+}
 
 
 scriptecho ()
@@ -45,12 +54,12 @@ cleanup ()
     cleanup_objs
     if [ $PATCHED ]; then
         cd "$KERNEL_DIR"
-        patch -p1 -R < "$PATCH"
+        patch -p1 -R < "$PATCH" > /dev/null
         export CROSS_COMPILE="$KPATCHGCC "
         $MAKE_CMD > /dev/null
     fi
 
-    #rm -rf "$TMPDIR"
+    rm -rf "$TMPDIR"
 }
 
 die ()
@@ -59,27 +68,24 @@ die ()
     exit 1
 }
 
-usage ()
-{
-    echo "usage: $SCRIPT -p [patch] -k [KERNEL_DIR]" >&2
-    exit 1
-}
-
-while getopts "p:k:" arg; do
+while getopts "p:k:o:" arg; do
     case "$arg" in
         p) PATCH="$OPTARG" ;;
         k) KERNEL_DIR="$OPTARG" ;;
+        o) OUTPUT_DIR="$OPTARG" ;;
         *) usage ;;
     esac
 done
 
-[ ! "$PATCH" ] || [ ! "$KERNEL_DIR" ] && usage
+[ ! "$PATCH" ] || [ ! "$KERNEL_DIR" ] || [ ! "$OUTPUT_DIR" ] && usage
 
 [ ! -f "$PATCH" ] && die "$PATCH doesn't exist"
 [ ! -d "$KERNEL_DIR" ] && die "$KERNEL_DIR doesn't exist"
+mkdir -p "$OUTPUT_DIR"
 
 PATCH="`readlink -f \"$PATCH\"`"
 KERNEL_DIR="`readlink -f \"$KERNEL_DIR\"`"
+OUTPUT_DIR="`readlink -f \"$OUTPUT_DIR\"`"
 
 TMPDIR="`mktemp -d`"
 trap cleanup exit
@@ -92,7 +98,7 @@ $MAKE_CMD > /dev/null
 cp vmlinux vmlinux.orig_kpatch
 
 scriptecho "patching kernel"
-patch -p1 < "$PATCH"
+patch -p1 < "$PATCH" > /dev/null
 PATCHED=1
 
 scriptecho "compiling patched kernel"
@@ -115,12 +121,14 @@ done
 unset CROSS_COMPILE
 cp -a "$KMOD_DIR" "$TMPDIR/kmod"
 
-make -C "$KERNEL_DIR" M="$TMPDIR/kmod" kpatch-patch-hook.o
+make -C "$KERNEL_DIR" M="$TMPDIR/kmod" kpatch-patch-hook.o > /dev/null
 
 cd $TMPDIR/kmod
 find "$KERNEL_DIR" -name "*.kpatch_gen" -exec ld -m elf_x86_64 -r -o kpatch-patch-foo.o kpatch-patch-hook.o kpatch.lds {} +
 
-make -C "$KERNEL_DIR" M="$TMPDIR/kmod" kpatch.ko
-make -C "$KERNEL_DIR" M="$TMPDIR/kmod" kpatch-patch.ko
+make -C "$KERNEL_DIR" M="$TMPDIR/kmod" kpatch.ko > /dev/null
+make -C "$KERNEL_DIR" M="$TMPDIR/kmod" kpatch-patch.ko > /dev/null
 
-scriptecho success
+cp kpatch.ko kpatch-patch.ko "$OUTPUT_DIR"
+
+scriptecho Success!
