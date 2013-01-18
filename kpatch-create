@@ -1,0 +1,126 @@
+#!/bin/bash
+# vim: tabstop=4 shiftwidth=4 expandtab
+set -o nounset
+set -o errexit
+set -o pipefail
+
+CUR_DIR="$PWD"
+SCRIPT="`basename $BASH_SOURCE`"
+SCRIPT_DIR="`dirname $BASH_SOURCE`"
+
+KMOD_DIR="$SCRIPT_DIR/kmod"
+KPATCH_REG="$KMOD_DIR/kpatch-register.o"
+KPATCH_LDS="$KMOD_DIR/kpatch.lds"
+
+KPATCH_GEN="$SCRIPT_DIR/kpatch-gen/kpatch-gen"
+KPATCHGCC="$SCRIPT_DIR/kpatch-gcc"
+JOBS=4
+MAKE_CMD="make -j$JOBS vmlinux"
+export CROSS_COMPILE="$KPATCHGCC "
+# TODO make in function
+
+PROGRESS_FILE="kpatch-in-progress"
+
+PATCHED=
+PATCH=
+KERNEL_DIR=
+
+
+scriptecho ()
+{
+    echo "$SCRIPT: $*"
+}
+
+cleanup_objs ()
+{
+    find "$KERNEL_DIR" -name "*.orig_kpatch" -o -name "*.kpatch_gen" | while read file; do
+        rm -f $file
+    done
+}
+
+cleanup ()
+{
+    scriptecho "cleaning up..."
+    rm -f "$PROGRESS_FILE"
+    cleanup_objs
+    if [ $PATCHED ]; then
+        cd "$KERNEL_DIR"
+        patch -p1 -R < "$PATCH"
+        export CROSS_COMPILE="$KPATCHGCC "
+        $MAKE_CMD > /dev/null
+    fi
+
+    #rm -rf "$TMPDIR"
+}
+
+die ()
+{
+    echo "$SCRIPT: error: $*" >&2
+    exit 1
+}
+
+usage ()
+{
+    echo "usage: $SCRIPT -p [patch] -k [KERNEL_DIR]" >&2
+    exit 1
+}
+
+while getopts "p:k:" arg; do
+    case "$arg" in
+        p) PATCH="$OPTARG" ;;
+        k) KERNEL_DIR="$OPTARG" ;;
+        *) usage ;;
+    esac
+done
+
+[ ! "$PATCH" ] || [ ! "$KERNEL_DIR" ] && usage
+
+[ ! -f "$PATCH" ] && die "$PATCH doesn't exist"
+[ ! -d "$KERNEL_DIR" ] && die "$KERNEL_DIR doesn't exist"
+
+PATCH="`readlink -f \"$PATCH\"`"
+KERNEL_DIR="`readlink -f \"$KERNEL_DIR\"`"
+
+TMPDIR="`mktemp -d`"
+trap cleanup exit
+
+scriptecho "compiling original kernel"
+rm -f "$PROGRESS_FILE"
+cleanup_objs
+cd "$KERNEL_DIR"
+$MAKE_CMD > /dev/null
+cp vmlinux vmlinux.orig_kpatch
+
+scriptecho "patching kernel"
+patch -p1 < "$PATCH"
+PATCHED=1
+
+scriptecho "compiling patched kernel"
+touch "$PROGRESS_FILE"
+$MAKE_CMD > /dev/null
+rm -f "$PROGRESS_FILE"
+
+scriptecho "generating kpatch binaries"
+find . -type f -name '*.o.orig_kpatch' | while read file; do
+    origfile="${file#./}"
+    newfile="${origfile%.orig_kpatch}"
+    [ ! -f "$newfile" ] && die "can't find \"$newfile\""
+	num="`readelf -s \"$file\" |awk '{print $4}' |grep -c FILE`"
+    [ "$num" = 0 ] && die "unsupported change in (assembly?) file \"$file\""
+	[ "$num" -gt 1 ] && die "\"$newfile\" has too many FILE symbols"
+    scriptecho "object changed: \"$newfile\""
+    "$KPATCH_GEN" "$origfile" "$newfile" -v vmlinux.orig_kpatch -o "$newfile.kpatch_gen"
+done
+
+unset CROSS_COMPILE
+cp -a "$KMOD_DIR" "$TMPDIR/kmod"
+
+make -C "$KERNEL_DIR" M="$TMPDIR/kmod" kpatch-patch-hook.o
+
+cd $TMPDIR/kmod
+find "$KERNEL_DIR" -name "*.kpatch_gen" -exec ld -m elf_x86_64 -r -o kpatch-patch-foo.o kpatch-patch-hook.o kpatch.lds {} +
+
+make -C "$KERNEL_DIR" M="$TMPDIR/kmod" kpatch.ko
+make -C "$KERNEL_DIR" M="$TMPDIR/kmod" kpatch-patch.ko
+
+scriptecho success

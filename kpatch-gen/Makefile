@@ -1,10 +1,11 @@
 CC=gcc
 CFLAGS=-g -Wall
+PROG=kpatch-gen
 
 .PHONY: all
-all: elf-diff-copy
+all: $(PROG)
 
 
-elf-diff-copy: elf-diff-copy.c
+$(PROG): $(PROG).c
 	$(CC) $(CFLAGS) -o $@ $^ -lelf -ludis86
 

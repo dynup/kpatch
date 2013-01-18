@@ -1,0 +1,34 @@
+#!/bin/bash
+# vim: tabstop=4 shiftwidth=4 expandtab
+set -o nounset
+set -o errexit
+set -o pipefail
+
+SCRIPT="`basename $BASH_SOURCE`"
+
+args="$*"
+outfile=
+
+die ()
+{
+    echo "$SCRIPT: error: $*" >&2
+    exit 1
+}
+
+if [ -f kpatch-in-progress ] && [ "$#" -gt 0 ] && [ "$1" = "gcc" ]; then
+    while [ "$#" -gt 0 ]; do
+        if [ "$1" = "-o" ]; then
+            case "$2" in
+                *.mod.o|*built-in.o|vmlinux.o|.tmp_kallsyms1.o|.tmp_kallsyms2.o|init/version.o|arch/x86/boot/version.o|arch/x86/boot/compressed/eboot.o|arch/x86/boot/header.o|arch/x86/boot/compressed/efi_stub_64.o|arch/x86/boot/compressed/piggy.o)
+                    ;;
+                *.o)
+                    cp -f "$2" "$2.orig_kpatch"
+                    ;;
+            esac
+            break
+        fi
+        shift
+    done
+fi
+
+exec $args
