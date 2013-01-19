@@ -163,6 +163,11 @@ int kpatch_register(struct module *mod, void *kpatch_relas,
 	/* FIXME consider change dest/src to loc/val */
 	/* TODO: ensure dest value is all zeros before touching it, and that it's within the module bounds */
 	for (i = 0; i < num_relas; i++) {
+
+		/* combined .o files have gaps */
+		if (!relas[i].type && !relas[i].src && !relas[i].dest)
+			continue;
+
 		switch (relas[i].type) {
 			case R_X86_64_PC32:
 				loc = (void *)relas[i].dest;
@@ -176,8 +181,9 @@ int kpatch_register(struct module *mod, void *kpatch_relas,
 				break;
 			default:
 				printk("unsupported rela type %ld for "
-				       "0x%lx <- 0x%lx\n", relas[i].type,
-				       relas[i].dest, relas[i].src);
+				       "0x%lx <- 0x%lx at index %d\n",
+				       relas[i].type, relas[i].dest,
+				       relas[i].src, i);
 				ret = -EINVAL;
 				goto out;
 		}
@@ -201,6 +207,11 @@ int kpatch_register(struct module *mod, void *kpatch_relas,
 
 	funcs = kmalloc((num_patches + 1) * sizeof(*funcs), GFP_KERNEL); /*TODO: error handling, free, etc */
 	for (i = 0; i < num_patches; i++) {
+
+		/* combined .o files have gaps */
+		if (!patches[i].orig && !patches[i].new)
+			continue;
+
 		funcs[i].old_func_addr = patches[i].orig;
 		funcs[i].new_func_addr = patches[i].new;
 		funcs[i].mod = mod;
