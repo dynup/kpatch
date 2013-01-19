@@ -55,7 +55,7 @@ cleanup ()
     cleanup_objs
     if [ $PATCHED ]; then
         cd "$KERNEL_DIR"
-        patch -p1 -R < "$PATCH" > /dev/null
+        patch -p1 -R < "$PATCH"
         export CROSS_COMPILE="$KPATCHGCC "
         $MAKE_CMD > /dev/null
     fi
@@ -99,7 +99,7 @@ $MAKE_CMD > /dev/null
 cp vmlinux vmlinux.kpatch_orig
 
 scriptecho "patching kernel"
-patch -p1 < "$PATCH" > /dev/null
+patch -p1 < "$PATCH"
 PATCHED=1
 
 scriptecho "compiling patched kernel"

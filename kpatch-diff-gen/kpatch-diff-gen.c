@@ -1374,7 +1374,8 @@ int main(int argc, char *argv[])
 		if (!rela->dest_sym->diff)
 			continue;
 
-		if (rela->src_sym->bind != STB_LOCAL) {
+		if (rela->src_sym->bind != STB_LOCAL ||
+		    rela->src_sym->type == STT_OBJECT) {
 			rela->kpatch_rela = malloc(sizeof(*rela->kpatch_rela));
 			rela->kpatch_rela->type = rela->type;
 			rela->kpatch_rela->dest = 0;
@@ -1405,7 +1406,7 @@ int main(int argc, char *argv[])
 	sec->data->d_type = ELF_T_BYTE; /* TODO? */
 	sec->sh.sh_type = SHT_PROGBITS;
 	sec->sh.sh_name = kpatch_relas_sec_strndx;
-	sec->sh.sh_addralign = kpatch_rela_size;
+	sec->sh.sh_addralign = 8;
 	sec->sh.sh_entsize = kpatch_rela_size;
 	sec->sh.sh_flags = SHF_ALLOC;
 	index = 0;
@@ -1488,7 +1489,7 @@ int main(int argc, char *argv[])
 	sec->sh.sh_type = SHT_PROGBITS;
 	sec->sh.sh_name = kpatch_patches_sec_strndx;
 	sec->sh.sh_entsize = sizeof(struct kpatch_patch);
-	sec->sh.sh_addralign = sec->sh.sh_entsize;
+	sec->sh.sh_addralign = 8;
 	sec->sh.sh_flags = SHF_ALLOC;
 	index = 0;
 	for (sym = symso; sym; sym = sym->next) {
