@@ -175,6 +175,9 @@ int kpatch_register(struct module *mod, void *kpatch_relas,
 				size = 4;
 				break;
 			default:
+				printk("unsupported rela type %ld for "
+				       "0x%lx <- 0x%lx\n", relas[i].type,
+				       relas[i].dest, relas[i].src);
 				ret = -EINVAL;
 				goto out;
 		}

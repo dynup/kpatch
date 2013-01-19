@@ -695,7 +695,8 @@ void compare_sections(void)
 		    !strcmp(sec1->name, ".rela.init.text") ||
 		    !strcmp(sec1->name, ".rela.rodata") ||
 		    !strncmp(sec1->name, ".rela.data", 10) ||
-		    !strncmp(sec1->name, ".rela___ksymtab_gpl", 19))
+		    !strncmp(sec1->name, ".rela___ksymtab_gpl", 19) ||
+		    !strncmp(sec1->name, ".rela.initcall", 14))
 			continue;
 
 		/* TODO: handle changes to .initcall* and .rela.initcall*
@@ -849,8 +850,10 @@ void compare_symbols(void)
 		sym2 = sym1->twin;
 
 		if (sym1->sym.st_info != sym2->sym.st_info ||
-		    sym1->sym.st_other != sym2->sym.st_other ||
-		    sym1->sym.st_shndx != sym2->sym.st_shndx)
+		    sym1->sym.st_other != sym2->sym.st_other || /* TODO st_other could point to a section # which can change and still be the same section? */
+		    (sym1->sec && sym2->sec && sym1->sec->twin != sym2->sec) ||
+		    (sym1->sec && !sym2->sec) ||
+		    (sym2->sec && !sym1->sec))
 			DIFF_FATAL("symbol info mismatch: %s", sym1->name);
 
 		if (sym1->sym.st_shndx == SHN_UNDEF)
@@ -886,7 +889,8 @@ void compare_symbols(void)
 
 		if (!sym2->twin) {
 
-			if (sym2->sym.st_shndx == SHN_UNDEF)
+			if (sym2->sym.st_shndx == SHN_UNDEF ||
+			    sym2->type == STT_SECTION)
 				continue;
 
 			DIFF(SYM_ADDED, sym2);
@@ -1035,8 +1039,8 @@ void print_changes(void)
 			break;
 
 		default:
-			ERROR("invalid diff %d for symbol %s", sym->diff,
-			      sym->name);
+			ERROR("invalid diff %d for symbol %s of type %d",
+			      sym->diff, sym->name, sym->type);
 		}
 	}
 

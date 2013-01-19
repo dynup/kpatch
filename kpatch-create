@@ -43,7 +43,7 @@ scriptecho ()
 
 cleanup_objs ()
 {
-    find "$KERNEL_DIR" -name "*.orig_kpatch" -o -name "*.kpatch_gen" | while read file; do
+    find "$KERNEL_DIR" -name "*.kpatch_orig" -o -name "*.kpatch_gen" | while read file; do
         rm -f $file
     done
 }
@@ -96,7 +96,7 @@ rm -f "$PROGRESS_FILE"
 cleanup_objs
 cd "$KERNEL_DIR"
 $MAKE_CMD > /dev/null
-cp vmlinux vmlinux.orig_kpatch
+cp vmlinux vmlinux.kpatch_orig
 
 scriptecho "patching kernel"
 patch -p1 < "$PATCH" > /dev/null
@@ -108,15 +108,15 @@ $MAKE_CMD > /dev/null
 rm -f "$PROGRESS_FILE"
 
 scriptecho "diffing binaries"
-find . -type f -name '*.o.orig_kpatch' | while read file; do
+find . -type f -name '*.o.kpatch_orig' | while read file; do
     origfile="${file#./}"
-    newfile="${origfile%.orig_kpatch}"
+    newfile="${origfile%.kpatch_orig}"
     [ ! -f "$newfile" ] && die "can't find \"$newfile\""
 	num="`readelf -s \"$file\" |awk '{print $4}' |grep -c FILE`"
     [ "$num" = 0 ] && die "unsupported change in (assembly?) file \"$file\""
 	[ "$num" -gt 1 ] && die "\"$newfile\" has too many FILE symbols"
     scriptecho "object changed: \"$newfile\""
-    "$KPATCH_GEN" "$origfile" "$newfile" -v vmlinux.orig_kpatch -o "$newfile.kpatch_gen"
+    "$KPATCH_GEN" "$origfile" "$newfile" -v vmlinux.kpatch_orig -o "$newfile.kpatch_gen"
 done
 
 scriptecho "generating kpatch modules"
