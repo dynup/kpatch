@@ -205,6 +205,7 @@ int kpatch_register(struct module *mod, void *kpatch_relas,
 	for (i = 0; i < num_patches; i++) {
 
 		funcs[i].old_func_addr = patches[i].orig;
+		funcs[i].old_func_addr_end = patches[i].orig_end;
 		funcs[i].new_func_addr = patches[i].new;
 		funcs[i].mod = mod;
 		funcs[i].old_func_name = "TODO";

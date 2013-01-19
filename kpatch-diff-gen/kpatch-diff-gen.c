@@ -53,6 +53,7 @@ struct rela {
 struct kpatch_patch {
 	unsigned long new; /* TODO don't rely on this being the first */
 	unsigned long orig; /* TODO eventually add name of symbol so we can verify it with kallsyms */
+	unsigned long orig_end;
 };
 
 
@@ -1497,6 +1498,7 @@ int main(int argc, char *argv[])
 			continue;
 		patch = sec->data->d_buf + (index * sec->sh.sh_entsize);
 		patch->orig = sym->twino->twinv->sym.st_value;
+		patch->orig_end = patch->orig + sym->sym.st_size;
 		patch->new = 0;
 		index++;
 	}

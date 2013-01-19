@@ -111,11 +111,11 @@ scriptecho "diffing binaries"
 find . -type f -name '*.o.kpatch_orig' | while read file; do
     origfile="${file#./}"
     newfile="${origfile%.kpatch_orig}"
-    [ ! -f "$newfile" ] && die "can't find \"$newfile\""
+    [ ! -f "$newfile" ] && die "can't find $newfile"
 	num="`readelf -s \"$file\" |awk '{print $4}' |grep -c FILE`"
-    [ "$num" = 0 ] && die "unsupported change in (assembly?) file \"$file\""
-	[ "$num" -gt 1 ] && die "\"$newfile\" has too many FILE symbols"
-    scriptecho "object changed: \"$newfile\""
+    [ "$num" = 0 ] && die "unsupported change in (assembly?) file $file"
+	[ "$num" -gt 1 ] && die "$newfile has too many FILE symbols"
+    scriptecho "object changed: $newfile"
     "$KPATCH_GEN" "$origfile" "$newfile" -v vmlinux.kpatch_orig -o "$newfile.kpatch_gen"
 done
 

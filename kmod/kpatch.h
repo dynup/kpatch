@@ -19,6 +19,7 @@ struct kpatch_rela {
 struct kpatch_patch {
 	unsigned long new;
 	unsigned long orig; /* TODO eventually add name of symbol so we can verify it with kallsyms */
+	unsigned long orig_end; /* TODO: rename this struct to kpatch_func, embed it within original kpatch_func, and rename original kpatch_func to kpatch_func_reg? */
 };
 
 void kpatch_trampoline(unsigned long ip, unsigned long parent_ip,
