@@ -57,8 +57,6 @@ cleanup ()
     if [ $PATCHED ]; then
         cd "$KERNEL_DIR"
         patch -p1 -R < "$PATCH"
-        export CROSS_COMPILE="$KPATCHGCC "
-        $MAKE_CMD > /dev/null
     fi
 
     rm -rf "$TMPDIR"
