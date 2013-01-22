@@ -28,6 +28,7 @@ PATCHED=
 PATCH=
 KERNEL_DIR=
 OUTPUT_DIR=
+NOCLEAN=
 
 usage ()
 {
@@ -52,7 +53,7 @@ cleanup ()
 {
     scriptecho "cleaning up..."
     rm -f "$PROGRESS_FILE"
-    cleanup_objs
+    [ ! "$NOCLEAN" ] && cleanup_objs
     if [ $PATCHED ]; then
         cd "$KERNEL_DIR"
         patch -p1 -R < "$PATCH"
@@ -69,11 +70,12 @@ die ()
     exit 1
 }
 
-while getopts "p:k:o:" arg; do
+while getopts "p:k:o:n" arg; do
     case "$arg" in
         p) PATCH="$OPTARG" ;;
         k) KERNEL_DIR="$OPTARG" ;;
         o) OUTPUT_DIR="$OPTARG" ;;
+        n) NOCLEAN=1 ;;
         *) usage ;;
     esac
 done
