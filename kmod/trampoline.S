@@ -44,24 +44,9 @@ found:
 	/* get new function address */
 	movq 8(%r10), %r10
 
-	/* restore regs owned by original calling function */
+	/* tell ftrace to return to new function */
 	popq %rax
-	movq RBP(%rax), %rbp
-	movq RBX(%rax), %rbx
-	movq R12(%rax), %r12
-	movq R13(%rax), %r13
-	movq R14(%rax), %r14
-	movq R15(%rax), %r15
-
-	/* restore arg registers and stack for new function */
-	movq RDI(%rax), %rdi
-	movq RSI(%rax), %rsi
-	movq RDX(%rax), %rdx
-	movq RCX(%rax), %rcx
-	movq RSP(%rax), %rsp
-
-	/* jump to new function */
-	jmpq *%r10
+	movq %r10, RIP(%rax)
 
 bail:
-	ret
+	retq
