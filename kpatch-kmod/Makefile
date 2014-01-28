@@ -1,7 +1,5 @@
-KPATCH_BUILD = /home/sjennings/projects/linux
-KPATCH_OBJ = /home/sjennings/projects/obj
-KPATCH_MODULES = $(PWD)
-KPATCH_MAKE = $(MAKE) -C $(KPATCH_BUILD) O=$(KPATCH_OBJ) M=$(KPATCH_MODULES)
+KPATCH_BUILD ?= /usr/lib/modules/$(shell uname -r)/build
+KPATCH_MAKE = $(MAKE) -C $(KPATCH_BUILD) M=$(PWD)
 
 obj-m := kpatch.o
 kpatch-y := base.o trampoline.o
