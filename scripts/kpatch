@@ -1,0 +1,179 @@
+#!/bin/bash
+
+# This is the primary kpatch user script that manages loading, unloading
+# and displaying information on the hotfixes that are installed on the
+# system.
+
+# Subcommands:
+# - enable MODULE
+# - disable MODULE
+# - load [--all | MODULE]
+# - unload [--all | MODULE]
+# - list
+# - info MODULE
+
+# TODO: add kernelrelease option to manage releases other than the
+# currently running one
+
+KERNELRELEASE=$(uname -r)
+VARDIR=/var/lib/kpatch/$KERNELRELEASE
+USRDIR=/usr/lib/kpatch/$KERNELRELEASE
+
+usage () {
+	echo "usage:"
+	echo "kpatch enable MODULE"
+	echo "kpatch disable MODULE"
+	echo "kpatch load [--all | MODULE]"
+	echo "kpatch unload [--all | MODULE]"
+	echo "kpatch list"
+	echo "kpatch info MODULE"
+	exit 1
+}
+
+# return either VARDIR or USRDIR (or exits if not found)
+find_hotfix () {
+	[ -e $VARDIR/available/$1 ] && DIR=$VARDIR && return
+	[ -e $USRDIR/available/$1 ] && DIR=$USRDIR && return
+	echo "Hotfix $2 is not installed"
+	echo "Use "kpatch list" for available hotfixes"
+	exit 2
+}
+
+# takes full path to hotfix module
+load_hotfix () {
+	NAME=$(basename $1)
+	NAME=${NAME%.*}
+	insmod $1
+	if [ $? -ne 0 ]
+	then
+		echo "Hotfix $NAME failed to load"
+		exit 3
+	fi
+	echo "Hotfix $NAME loaded"
+}
+
+# takes only the module filename
+unload_hotfix () {
+	NAME=$(basename $1)
+	rmmod ${NAME%.*}
+	if [ $? -ne 0 ]
+	then
+		echo "Hotfix $NAME failed to unload"
+		exit 3
+	fi
+	echo "Hotfix $NAME unloaded"
+}
+
+unset DIR
+[ $# -gt 2 ] || [ $# -lt 1 ] && usage
+MODFILE=$2.ko
+case $1 in
+"enable")
+	[ $# -ne 2 ] && usage
+	find_hotfix $MODFILE
+	if [ -e $DIR/enabled/$MODFILE ]
+	then
+		echo "Hotfix $2 is already enabled"
+		exit 0
+	fi
+	ln -s $DIR/available/$MODFILE $DIR/enabled/$MODFILE
+	if [ $? -ne 0 ]
+	then
+		echo "Failed to enable hotfix $2"
+		exit 3
+	else
+		echo "Hotfix $2 enabled"
+	fi
+	;;
+"disable")
+	[ $# -ne 2 ] && usage
+	find_hotfix $MODFILE
+	if [ ! -e $DIR/enabled/$MODFILE ]
+	then
+		echo "Hotfix $2 is already disabled"
+		exit 0
+	fi
+	rm -f $DIR/enabled/$MODFILE
+	if [ $? -ne 0 ]
+	then
+		echo "Failed to disable hotfix $2"
+		exit 3
+	else
+		echo "Hotfix $2 disabled"
+	fi
+	;;
+"load")
+	[ $# -ne 2 ] && usage
+	case $2 in
+	"--all")
+		for i in $(ls $VARDIR/enabled)
+		do
+			load_hotfix $VARDIR/enabled/$i
+		done
+		for i in $(ls $USRDIR/enabled)
+		do
+			load_hotfix $USRDIR/enabled/$i
+		done
+		;;
+	*)
+		find_hotfix $MODFILE
+		load_hotfix $DIR/available/$MODFILE
+		;;
+	esac
+	;;
+"unload")
+	[ $# -ne 2 ] && usage
+	case $2 in
+	"--all")
+		for i in $(ls $VARDIR/available)
+		do
+			unload_hotfix ${i%.*}
+		done
+		for i in $(ls $USRDIR/available)
+		do
+			unload_hotfix ${i%.*}
+		done
+		;;
+	*)
+		find_hotfix $MODFILE
+		unload_hotfix $2
+		;;
+	esac
+	;;
+"list")
+	[ $# -ne 1 ] && usage
+	echo "User hotfixes available:"
+	for i in $(ls $VARDIR/available)
+	do
+		echo ${i%.*}
+	done
+	echo ""
+	echo "User hotfixes enabled:"
+	for i in $(ls $VARDIR/enabled)
+	do
+		echo ${i%.*}
+	done
+	echo ""
+	echo "System hotfixes available:"
+	for i in $(ls $USRDIR/available)
+	do
+		echo ${i%.*}
+	done
+	echo ""
+	echo "System hotfixes enabled:"
+	for i in $(ls $USRDIR/enabled)
+	do
+		echo ${i%.*}
+	done
+	;;
+"info")
+	[ $# -ne 2 ] && usage
+	find_hotfix $MODFILE
+	echo "Hotfix information for ${2%.*}:"
+	modinfo $DIR/available/$MODFILE
+	;;
+*)
+	echo "subcommand $1 not recognized"
+	usage
+	;;
+esac

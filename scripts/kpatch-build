@@ -1,0 +1,131 @@
+#/bin/bash
+
+# kpatch build script
+#
+# This script takes a patch based on the version of the kernel
+# currently running and creates a kernel module that will
+# replace modified functions in the kernel such that the
+# patched code takes effect.
+
+# This script:
+# - Installs the required yum/rpm tools
+# - Downloads the kernel src rpm for the currently running kernel
+# - Installs the build dependencies for the src rpm
+# - Unpacks and prepares the src rpm for building
+# - Builds the base kernel (vmlinux)
+# - Builds the patched kernel and monitors changed objects
+# - Builds the patched objects with gcc flags -f[function|data]-sections
+# - Runs kpatch tools to create and link the patch kernel module
+
+BASE=$PWD
+LOGFILE=$PWD/kpatch-build.log
+KPATCHPATH=/usr/local/share/kpatch
+ARCHVERSION=$(uname -r)
+DISTROVERSION=${ARCHVERSION%*.*}
+CPUS=$(grep -c ^processor /proc/cpuinfo)
+LOCALVERSION=$(uname -r)
+LOCALVERSION=-${LOCALVERSION##*-}
+
+cleanup() {
+	rm -Rf kernel-$DISTROVERSION.src.rpm rpmbuild $LOGFILE $TEMPDIR > /dev/null 2>/dev/null
+}
+
+die() {
+	echo "kpatch encountered an error"
+	exit 1
+}
+
+if [ $# -ne 1 ]
+then
+	echo "kpatch patchfile"
+	exit 2
+fi
+
+PATCHFILE=$(readlink -f $1)
+if [ ! -e $PATCHFILE ]
+then
+	echo "patch file not found"
+	exit 3
+fi
+
+cleanup
+
+echo "Verifying required development tools"
+yum install rpmdevtools yum-utils || die
+
+echo "Downloading kernel source for $ARCHVERSION"
+yumdownloader --source kernel-$ARCHVERSION || die
+
+echo "Verifying build dependencies for kernel package"
+yum-builddep kernel-$DISTROVERSION.src.rpm || die
+
+echo "Unpacking kernel source"
+rpmdev-setuptree >> $LOGFILE 2>&1 || die
+rpm -Uvh kernel-$DISTROVERSION.src.rpm >> $LOGFILE 2>&1 || die
+cd ~/rpmbuild/SPECS || die
+rpmbuild -bp --target=$(uname -m) kernel.spec >> $LOGFILE 2>&1 || die
+cd ~/rpmbuild/BUILD/kernel-* || die
+cd linux-$ARCHVERSION || die
+BUILD=$PWD
+echo $LOCALVERSION > localversion
+
+echo "Building the base kernel"
+make -j$CPUS vmlinux >> $LOGFILE 2>&1 || die
+TEMPDIR=`mktemp -d` || die
+cp -R $KPATCHPATH/* $TEMPDIR || die
+cp vmlinux $TEMPDIR || die
+
+echo "Building the patched kernel"
+patch -p1 < $PATCHFILE >> $LOGFILE 2>&1
+make -j$CPUS vmlinux > $TEMPDIR/patched_build.log 2>&1 || die
+
+echo "Detecting changed objects"
+grep CC $TEMPDIR/patched_build.log | grep -v init/version.o | awk '{print $2}' >> $TEMPDIR/changed_objs
+if [ $? -ne 0 ]
+then
+	echo "No changed objects"
+	exit 0
+fi
+
+echo "Rebuilding changed objects"
+mkdir $TEMPDIR/patched
+for i in $(cat $TEMPDIR/changed_objs)
+do
+	rm -f $i
+	KCFLAGS="-ffunction-sections -fdata-sections" make $i >> $LOGFILE 2>&1 || die
+	strip -d $i
+	cp -f $i $TEMPDIR/patched/
+	
+done
+patch -R -p1 < $PATCHFILE >> $LOGFILE 2>&1
+mkdir $TEMPDIR/base
+for i in $(cat $TEMPDIR/changed_objs)
+do
+	rm -f $i
+	KCFLAGS="-ffunction-sections -fdata-sections" make $i >> $LOGFILE 2>&1 || die
+	strip -d $i
+	cp -f $i $TEMPDIR/base/
+done
+
+echo "Extracting new and modified ELF sections"
+cd $TEMPDIR
+mkdir output
+for i in base/* 
+do
+	FILE=`basename $i`
+	./tools/create-diff-object base/$FILE patched/$FILE output/$FILE >> $LOGFILE 2>&1
+done
+
+echo "Building hotfix module"
+ld -r -o output.o output/* >> $LOGFILE 2>&1 || die
+./tools/add-patches-section output.o vmlinux >> $LOGFILE 2>&1 || die
+KPATCH_BUILD=$BUILD make >> $LOGFILE 2>&1 || die
+strip -d kpatch-patch.ko >> $LOGFILE 2>&1 || die
+./tools/link-vmlinux-syms kpatch-patch.ko vmlinux >> $LOGFILE 2>&1 || die
+
+echo "Patch generation complete"
+cp -f $TEMPDIR/kpatch-patch.ko $BASE
+echo "Cleaning up"
+cleanup
+echo "Done"
+
