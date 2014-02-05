@@ -1,4 +1,4 @@
-SUBDIRS = kpatch-kmod kpatch-files tools
+SUBDIRS = kpatch-kmod tools
 
 test: test.c
 	$(CC) -g -o $@ $^ -lelf
