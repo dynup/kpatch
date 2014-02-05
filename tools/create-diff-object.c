@@ -1140,7 +1140,7 @@ void kpatch_link_symtab_vmlinux(struct kpatch_elf *kelf, struct kpatch_elf *vmke
 }
 #endif
 
-void kpatch_write_output_elf(struct kpatch_elf *kelf, Elf *elf)
+void kpatch_write_output_elf(struct kpatch_elf *kelf, Elf *elf, char *outfile)
 {
 	int fd, i, index = 0;
 	struct section *sec;
@@ -1151,7 +1151,7 @@ void kpatch_write_output_elf(struct kpatch_elf *kelf, Elf *elf)
 	GElf_Shdr sh;
 
 	/* TODO make this argv */
-	fd = creat("output.kpatch_gen", 0777);
+	fd = creat(outfile, 0777);
 	if (fd == -1)
 		ERROR("creat");
 
@@ -1210,13 +1210,14 @@ void kpatch_write_output_elf(struct kpatch_elf *kelf, Elf *elf)
 
 int main(int argc, char *argv[])
 {
-	struct kpatch_elf *kelf_base, *kelf_patched, *kelf_out, *kelf_vmlinux;
+	struct kpatch_elf *kelf_base, *kelf_patched, *kelf_out;
+	char *outfile;
 
 	elf_version(EV_CURRENT);
 
 	kelf_base = kpatch_elf_open(argv[1]);
 	kelf_patched = kpatch_elf_open(argv[2]);
-	kelf_vmlinux = kpatch_elf_open("/home/sjennings/projects/obj/vmlinux");
+	outfile = argv[3];
 
 	kpatch_compare_elf_headers(kelf_base->elf, kelf_patched->elf);
 	kpatch_check_program_headers(kelf_base->elf);
@@ -1245,7 +1246,6 @@ int main(int argc, char *argv[])
 
 	/* Generate the output elf */
 	kpatch_generate_output(kelf_patched, &kelf_out);
-	/*kpatch_link_symtab_vmlinux(kelf_out, kelf_vmlinux);*/
 	kpatch_create_rela_sections(kelf_out);
 	kpatch_create_shstrtab(kelf_out);
 	kpatch_create_strtab(kelf_out);
@@ -1254,7 +1254,7 @@ int main(int argc, char *argv[])
 	kpatch_dump_kelf(kelf_out);
 #endif
 
-	kpatch_write_output_elf(kelf_out, kelf_patched->elf);
+	kpatch_write_output_elf(kelf_out, kelf_patched->elf, outfile);
 
 	return 0;
 }
