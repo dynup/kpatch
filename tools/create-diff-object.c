@@ -656,30 +656,31 @@ void kpatch_compare_correlated_elements(struct kpatch_elf *kelf)
 	 * Find unchanged sections/symbols that are dependencies of
  	 * changed sections
  	 */
-	for_each_section(i, sec, &kelf->sections)
-		if (is_rela_section(sec) && sec->status == CHANGED)
-			for_each_rela(j, rela, &sec->relas) {
+	for_each_section(i, sec, &kelf->sections) {
+		if (!is_rela_section(sec) || sec->status != CHANGED)
+			continue;
+		for_each_rela(j, rela, &sec->relas) {
 /*
  * Nuts, I know.  Determine if the section of the symbol referenced by
  * the rela entry is associated with a symbol of type STT_SECTION. This
  * is to avoid including unchanged local functions or objects that are
  * called by a changed function.
  */
-				if (rela->sym->sym.st_shndx != SHN_UNDEF &&
-		    		    rela->sym->sym.st_shndx != SHN_ABS &&
-				    rela->sym->status != CHANGED &&
-				    rela->sym->sec->sym->type == STT_SECTION) {
-					rela->sym->status = DEPENDENCY;
-					rela->sym->sec->status = DEPENDENCY;
-				}
-
+			if (rela->sym->sym.st_shndx != SHN_UNDEF &&
+			    rela->sym->sym.st_shndx != SHN_ABS &&
+			    rela->sym->status != CHANGED &&
+			    rela->sym->sec->sym->type == STT_SECTION) {
+				rela->sym->status = DEPENDENCY;
+				rela->sym->sec->status = DEPENDENCY;
+			}
 /*
  * All symbols referenced by entries in a changed rela section are
  * dependencies.
  */
-				if (rela->sym->status == SAME)
-					rela->sym->status = DEPENDENCY;
-			}
+			if (rela->sym->status == SAME)
+				rela->sym->status = DEPENDENCY;
+		}
+	}
 }
 
 void kpatch_dump_kelf(struct kpatch_elf *kelf)
