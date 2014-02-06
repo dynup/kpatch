@@ -806,6 +806,7 @@ void kpatch_validate_reachability(struct kpatch_elf *kelf)
 
 	for_each_section(i, sec, &kelf->sections)
 		if (sec->status != SAME && !sec->reachable &&
+		    strcmp(sec->name, ".shstrtab") &&
 		    strcmp(sec->name, ".symtab") &&
 		    strcmp(sec->name, ".strtab"))
 			DIFF_FATAL("unreachable changed section %s",
