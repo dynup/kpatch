@@ -76,6 +76,7 @@ struct rela {
 	unsigned char type;
 	int addend;
 	int offset;
+	char *string;
 	enum status status;
 };
 
@@ -218,11 +219,18 @@ void kpatch_create_rela_table(struct kpatch_elf *kelf, struct section *sec)
 		rela->sym = find_symbol_by_index(&kelf->sybmols, symndx);
 		if (!rela->sym)
 			ERROR("could not find rela entry symbol\n");
-
+		if (rela->sym->sec && (rela->sym->sec->sh.sh_flags & SHF_STRINGS)) {
+			rela->string = rela->sym->sec->data->d_buf + rela->addend;
+			if (!rela->string)
+				ERROR("could not lookup rela string\n");
+		}
 #if DEBUG
-		printf("offset %d, type %d, %s %s %d\n", rela->offset,
+		printf("offset %d, type %d, %s %s %d", rela->offset,
 			rela->type, rela->sym->name,
 			(rela->addend < 0)?"-":"+", abs(rela->addend));
+		if (rela->string)
+			printf(" (string = %s)", rela->string);
+		printf("\n");
 #endif
 	}
 }
@@ -543,7 +551,9 @@ void kpatch_correlate_relas(struct section *sec)
 	for_each_rela(i, rela1, &sec->relas) {
 		for_each_rela(j, rela2, &sec->twin->relas) {
 			if (rela1->type == rela2->type &&
-			    rela1->addend == rela2->addend &&
+			    (rela1->addend == rela2->addend ||
+			     (rela1->string && rela2->string &&
+			      !strcmp(rela1->string, rela2->string))) &&
 			    !strcmp(rela1->sym->name, rela2->sym->name) &&
 			    rela1->offset == rela2->offset) {
 				rela1->twin = rela2;
