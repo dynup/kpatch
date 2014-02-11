@@ -8,3 +8,6 @@ kpatch-diff-gen/kpatch-diff-gen
 kmod/.tmp_versions/
 kmod/Module.symvers
 kmod/modules.order
+tools/add-patches-section
+tools/create-diff-object
+tools/link-vmlinux-syms
