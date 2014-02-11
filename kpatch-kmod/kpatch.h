@@ -1,3 +1,12 @@
+/*
+ * kpatch.h
+ *
+ * Copyright (C) 2014 Seth Jennings <sjenning@redhat.com>
+ * Copyright (C) 2013 Josh Poimboeuf <jpoimboe@redhat.com>
+ *
+ * Contains the API for the core kpatch module used by the hotfix modules
+ */
+
 #ifndef _KPATCH_H_
 #define _KPATCH_H_
 
