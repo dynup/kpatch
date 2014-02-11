@@ -1,3 +1,21 @@
+/*
+ * tools/add-patches-section.c
+ *
+ * Copyright (C) 2014 Seth Jennings <sjenning@redhat.com>
+ *
+ * This tool takes an elf object, the output of create-diff-object
+ * and the base vmlinux as arguments and adds two new sections
+ * to the elf object; .patches and .rela.patches.
+ *
+ * These two sections allow the kpatch core modules to know which
+ * functions are overridden by the patch module.
+ *
+ * For each struct kpatch_patch entry in the .patches section, the core
+ * module will register the new function as an ftrace handler for the
+ * old function.  The new function will return to the caller of the old
+ * function, not the old function itself, bypassing the old function.
+ */
+
 #include <sys/types.h>
 #include <sys/stat.h>
 #include <fcntl.h>

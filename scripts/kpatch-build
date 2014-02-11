@@ -1,11 +1,16 @@
 #/bin/bash
 
-# kpatch build script
-#
+# kpatch build script for Fedora
+
 # This script takes a patch based on the version of the kernel
 # currently running and creates a kernel module that will
 # replace modified functions in the kernel such that the
 # patched code takes effect.
+
+# This script contains Fedora specific nuances and will probably
+# not work on other distributions; however, it does serve as a tutorial
+# on the various steps involved and should be adaptable to other
+# distributions.
 
 # This script:
 # - Installs the required yum/rpm tools

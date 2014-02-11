@@ -1,3 +1,35 @@
+/*
+ * tools/create-diff-object.c
+ *
+ * Copyright (C) 2014 Seth Jennings <sjenning@redhat.com>
+ * Copyright (C) 2013 Josh Poimboeuf <jpoimboe@redhat.com>
+ *
+ * This file contains the heart of the ELF object differencing engine.
+ *
+ * The tool takes two ELF objects from two versions of the same source
+ * file; a "base" object and a "patched" object.  These object need to have
+ * been compiled with the -ffunction-sections and -fdata-sections GCC options.
+ *
+ * The tool compares the objects at a section level to determine what
+ * sections have changed.  Once a list of changed sections has been generated,
+ * various rules are applied to determine any object local sections that
+ * are dependencies of the changed section and also need to be included in
+ * the output object.
+ *
+ * After all the sections for the output object have been selected, a
+ * reachability test is performed to ensure that every included section
+ * is reachable from a changed function symbol.  If there is a section that
+ * is not reachable from a changed function, this means that the source-level
+ * change can not be captured by employing ftrace and therefore can not be
+ * dynamically patched by kpatch.  Changes to static data structures are an
+ * example.
+ *
+ * If the reachability test succeeds
+ * - Changed text sections are copied into the output object
+ * - Changed rela sections have there symbol indexes fixed up
+ * - shstrtab, strtab, and symtab are all rebuilt from scratch
+ */
+
 #include <sys/types.h>
 #include <sys/stat.h>
 #include <fcntl.h>

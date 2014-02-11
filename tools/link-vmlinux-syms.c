@@ -1,3 +1,18 @@
+/*
+ * tools/link-vmlinux-syms.c
+ *
+ * Copyright (C) Seth Jennings <sjenning@redhat.com>
+ *
+ * This tools takes the nearly complete hotfix kernel module and
+ * the base vmlinux. It hardcodes the addresses of any global symbols
+ * that are referenced by the output object but are not exported by
+ * vmlinux into the symbol table of the kernel module.
+ *
+ * Global symbols that are exported by the base vmlinux can be
+ * resolved by the kernel module linker at load time and are
+ * left unmodified.
+ */
+
 #include <sys/types.h>
 #include <sys/stat.h>
 #include <fcntl.h>
