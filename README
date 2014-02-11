@@ -1,0 +1,70 @@
+====================
+README for kpatch
+====================
+
+LICENSE
+
+kpatch is under the GPLv2 license.
+
+This program is free software; you can redistribute it and/or
+modify it under the terms of the GNU General Public License
+as published by the Free Software Foundation; either version 2
+of the License, or (at your option) any later version.
+
+This program is distributed in the hope that it will be useful,
+but WITHOUT ANY WARRANTY; without even the implied warranty of
+MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+GNU General Public License for more details.
+
+You should have received a copy of the GNU General Public License
+along with this program; if not, write to the Free Software
+Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
+
+STATUS
+
+kpatch is currently is early development.  For now, it should _not_ be used
+in production environments until significantly more testing on various
+patches and environments is conducted.
+
+DEPENDENCIES
+
+kpatch tools require libelf library and development headers to be installed.
+See GOTCHAS below.
+
+GOTCHAS
+
+The version of elfutils (namely libelf) that ship with most distros as of
+the time of this writing, have a bug in libelf that is exposed by kpatch.
+
+elfutils-0.158 or higher contains the fix.
+
+The specific commit is 88ad5ddb71bd1fa8ed043a840157ebf23c0057b3.
+
+git://git.fedorahosted.org/git/elfutils.git
+
+OVERVIEW
+
+An example script for automating the hotfix module generation is in
+scripts/kpatch-build.  The script is written for Fedora but should
+be adaptable to other distributions with limited changes.
+
+The primary steps in the hotfix module generation process are:
+- Building the unstripped vmlinux for the kernel
+- Patching the source tree
+- Rebuilding vmlinux and monitoring which objects are building rebuilt.
+  These are the "changed objects".
+- Recompile each changed object with -ffunction-sections -fdata-sections
+  resulting in the changed patched objects
+- Unpatch the source tree
+- Recompile each changed object with -ffunction-sections -fdata-sections
+  resulting in the changed base objects
+- Use tools/create-diff-object to analyze each base/patched object pair
+  for patchability and generate an output object containing modified
+  sections
+- Link all the output objects in a into a cumulative object
+- Use tools/add-patches-section to add the .patches section that the
+  core kpatch module uses to determine the list of functions that need
+  to be redirected using ftrace
+- Generate the hotfix kernel module
+- Use tools/link-vmlinux-syms to hardcode non-exported kernel symbols
+  into the symbol table of the hotfix kernel module
