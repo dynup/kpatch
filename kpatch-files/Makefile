@@ -3,7 +3,7 @@ KPATCH_MAKE = $(MAKE) -C $(KPATCH_BUILD) M=$(PWD)
 
 obj-m += kpatch-patch.o
 
-kpatch-patch-objs += kpatch-patch-hook.o kpatch.lds ../output.kpatch_gen
+kpatch-patch-objs += kpatch-patch-hook.o kpatch.lds output.o
 
 all: kpatch-patch.ko
 
