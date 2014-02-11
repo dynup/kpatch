@@ -2,6 +2,16 @@
 README for kpatch
 ====================
 
+OVERVIEW
+
+kpatch is a tool for the generation and application of kernel
+modules that patch a running Linux kernel while in operation,
+without requiring a reboot.  This is very valuable in cases
+where critical workloads, which do not have high availability via
+scale-out, run on a single machine and are very downtime
+sensitive or require a heavyweight approval process and
+notification of workload users in the event of downtime.
+
 LICENSE
 
 kpatch is under the GPLv2 license.
@@ -42,7 +52,7 @@ The specific commit is 88ad5ddb71bd1fa8ed043a840157ebf23c0057b3.
 
 git://git.fedorahosted.org/git/elfutils.git
 
-OVERVIEW
+HOWTO
 
 An example script for automating the hotfix module generation is in
 scripts/kpatch-build.  The script is written for Fedora but should
@@ -68,3 +78,13 @@ The primary steps in the hotfix module generation process are:
 - Generate the hotfix kernel module
 - Use tools/link-vmlinux-syms to hardcode non-exported kernel symbols
   into the symbol table of the hotfix kernel module
+
+DEMONSTRATION
+
+A demonstration of kpatch is available on Youtube:
+
+http://www.youtube.com/watch?v=WeSmG-XirC4
+
+This demonstration completes each step in the HOWTO section in a manual
+fashion.  However, from a end-user perspective, most of these steps will
+be hidden away in scripts (eventually).
