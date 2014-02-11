@@ -1,8 +1,0 @@
-obj-m += kpatch.o
-obj-m += dummy.o
-obj-m += kpatch-patch.o
-
-kpatch-objs += base.o trampoline.o
-kpatch-patch-objs += kpatch-patch-foo.o
-dummy-objs += kpatch-patch-hook.o
-

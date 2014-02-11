@@ -1,13 +1,21 @@
+#define pr_fmt(fmt) KBUILD_MODNAME ": " fmt
+
 #include <linux/module.h>
 #include <linux/slab.h>
 #include <linux/stop_machine.h>
+#include <linux/ftrace.h>
 #include <asm/stacktrace.h>
 #include <asm/cacheflush.h>
 #include "kpatch.h"
 
+#define KPATCH_MAX_FUNCS	256
 struct kpatch_func kpatch_funcs[KPATCH_MAX_FUNCS+1];
 
 static int kpatch_num_registered;
+
+/* from trampoline.S */
+extern void kpatch_trampoline(unsigned long ip, unsigned long parent_ip,
+		       struct ftrace_ops *op, struct pt_regs *regs);
 
 /*
  * Deal with some of the peculiarities caused by the trampoline being called
@@ -134,72 +142,24 @@ out:
 
 static struct ftrace_ops kpatch_ftrace_ops __read_mostly = {
 	.func = kpatch_trampoline,
-	.flags = FTRACE_OPS_FL_NORETURN | FTRACE_OPS_FL_SAVE_REGS,
+	.flags = FTRACE_OPS_FL_SAVE_REGS,
 };
 
 
-int kpatch_register(struct module *mod, void *kpatch_relas,
-		    void *kpatch_relas_end, void *kpatch_patches,
+int kpatch_register(struct module *mod, void *kpatch_patches,
 		    void *kpatch_patches_end)
 {
 	int ret = 0;
 	int ret2;
-	int num_relas;
-	struct kpatch_rela *relas;
 	int i;
-	u64 val;
-	void *loc;
-	int size;
 	int num_patches;
 	struct kpatch_patch *patches;
 	struct kpatch_func *funcs, *f;
 
-	num_relas = (kpatch_relas_end - kpatch_relas) / sizeof(*relas);
-	relas = kpatch_relas;
+	pr_err("loading patch module \"%s\"", mod->name);
 
 	num_patches = (kpatch_patches_end - kpatch_patches) / sizeof(*patches);
 	patches = kpatch_patches;
-
-	/* FIXME consider change dest/src to loc/val */
-	/* TODO: ensure dest value is all zeros before touching it, and that it's within the module bounds */
-	for (i = 0; i < num_relas; i++) {
-
-		switch (relas[i].type) {
-			case R_X86_64_PC32:
-				loc = (void *)relas[i].dest;
-				val = (u32)(relas[i].src - relas[i].dest);
-				size = 4;
-				break;
-			case R_X86_64_32S:
-				loc = (void *)relas[i].dest;
-				val = (s32)relas[i].src;
-				size = 4;
-				break;
-			default:
-				printk("unsupported rela type %ld for "
-				       "0x%lx <- 0x%lx at index %d\n",
-				       relas[i].type, relas[i].dest,
-				       relas[i].src, i);
-				ret = -EINVAL;
-				goto out;
-		}
-		//printk("%p <- %lx\n", loc, val);
-		//printk("%lx\n", (unsigned long)__va(__pa((unsigned long)loc)));
-		//loc = __va(__pa((unsigned long)loc));
-		/* TODO: safe to assume it was ro to start with? */
-		set_memory_rw((unsigned long)loc & PAGE_MASK, 1);
-		ret = probe_kernel_write(loc, &val, size);
-		set_memory_ro((unsigned long)loc & PAGE_MASK, 1);
-		if (ret)
-			goto out;
-		/* TODO: sync_core? */
-		/* TODO: understand identity mapping vs text mapping */
-	}
-
-	/* TODO: mutex here? */
-
-	/* TODO verify num_patches is within acceptable bounds */
-
 
 	funcs = kmalloc((num_patches + 1) * sizeof(*funcs), GFP_KERNEL); /*TODO: error handling, free, etc */
 	for (i = 0; i < num_patches; i++) {
@@ -209,8 +169,6 @@ int kpatch_register(struct module *mod, void *kpatch_relas,
 		funcs[i].new_func_addr = patches[i].new;
 		funcs[i].mod = mod;
 		funcs[i].old_func_name = "TODO";
-		/* TODO: need old_func_addr_end too */
-		/* TODO: verify name/address with kallsyms */
 
 		/* Do any needed incremental patching. */
 		for (f = kpatch_funcs; f->old_func_name; f++) {
@@ -230,46 +188,6 @@ int kpatch_register(struct module *mod, void *kpatch_relas,
 		}
 	}
 	memset(&funcs[num_patches], 0, sizeof(*funcs));
-
-#if 0
-	/* Find the functions to be replaced. */
-	for (f = funcs; f->old_func_name; f++) {
-		/* TODO: verify it's a function and look for duplicate symbol names */
-		/* TODO: use pre-generated func address? if using exact kernel
-		 * is a requirement?*/
-		f->old_func_addr = kallsyms_lookup_name(f->old_func_name);
-		if (!f->old_func_addr) {
-			printk("kpatch: can't find function '%s'\n",
-			       f->old_func_name);
-			ret = -ENXIO;
-			goto out;
-		}
-
-
-		if (!kallsyms_lookup_size_offset(f->old_func_addr, &size,
-						 &offset)) {
-			printk("kpatch: no size for function '%s'\n",
-			       f->old_func_name);
-
-			ret = -ENXIO;
-			goto out;
-		}
-		/* TODO: check ret, size, offset */
-
-		f->old_func_addr_end = f->old_func_addr + size;
-
-		ret = ftrace_set_filter_ip(&kpatch_ftrace_ops, f->old_func_addr,
-					   0, 0);
-		if (ret) {
-			printk("kpatch: can't set ftrace filter at "
-				"%lx '%s' (%d)\n",
-				f->old_func_addr, f->old_func_name, ret);
-			goto out;
-		}
-	}
-
-	/* TODO: global variable/array locking */
-#endif
 
 	/* Register the ftrace trampoline if it hasn't been done already. */
 	if (!kpatch_num_registered++) {
