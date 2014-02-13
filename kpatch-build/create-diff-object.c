@@ -441,7 +441,8 @@ void kpatch_compare_correlated_section(struct section *sec)
 
 	if (sec1->sh.sh_size != sec2->sh.sh_size ||
 	    sec1->data->d_size != sec2->data->d_size || 
-	    memcmp(sec1->data->d_buf, sec2->data->d_buf, sec1->data->d_size))
+	    (sec1->sh.sh_type != SHT_NOBITS &&
+	     memcmp(sec1->data->d_buf, sec2->data->d_buf, sec1->data->d_size)))
 		sec1->status = CHANGED;
 	else
 		sec1->status = SAME;
