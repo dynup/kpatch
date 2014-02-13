@@ -24,7 +24,7 @@
 
 BASE=$PWD
 LOGFILE=$PWD/kpatch-build.log
-TOOLSDIR=$BASE/tools
+TOOLSDIR=$BASE/kpatch-build
 ARCHVERSION=$(uname -r)
 DISTROVERSION=${ARCHVERSION%*.*}
 CPUS=$(grep -c ^processor /proc/cpuinfo)
@@ -56,10 +56,10 @@ then
 	exit 3
 fi
 
-PATCHBASE=`basename $PATCHFILE`
-if [[ $PATCHBASE =~ \.patch ]] || [[ $PATCHBASE =~ \.diff ]]
+PATCHNAME=`basename $PATCHFILE`
+if [[ $PATCHNAME =~ \.patch ]] || [[ $PATCHNAME =~ \.diff ]]
 then
-	PATCHBASE=${PATCHBASE%.*}
+	PATCHNAME=${PATCHNAME%.*}
 fi
 
 cleanup
@@ -101,7 +101,7 @@ else
 	cp -a $KSRCDIR $KSRCDIR_CACHE
 fi
 
-cp -R $BASE/kpatch-files/* $BASE/kpatch-kmod $TEMPDIR || die
+cp -R $BASE/kmod/patch/* $BASE/kmod/core $TEMPDIR || die
 cp vmlinux $TEMPDIR || die
 
 echo "Building patched kernel"
@@ -127,36 +127,36 @@ do
 	
 done
 patch -R -p1 < $PATCHFILE >> $LOGFILE 2>&1
-mkdir $TEMPDIR/base
+mkdir $TEMPDIR/orig
 for i in $(cat $TEMPDIR/changed_objs)
 do
 	rm -f $i
 	KCFLAGS="-ffunction-sections -fdata-sections" make $i >> $LOGFILE 2>&1 || die
 	strip -d $i
-	cp -f $i $TEMPDIR/base/
+	cp -f $i $TEMPDIR/orig/
 done
 
 echo "Extracting new and modified ELF sections"
 cd $TEMPDIR
 mkdir output
-for i in base/* 
+for i in orig/* 
 do
 	FILE=`basename $i`
-	$TOOLSDIR/create-diff-object base/$FILE patched/$FILE output/$FILE >> $LOGFILE 2>&1 || die
+	$TOOLSDIR/create-diff-object orig/$FILE patched/$FILE output/$FILE >> $LOGFILE 2>&1 || die
 done
 
-echo "Building base module: kpatch.ko"
-cd kpatch-kmod
+echo "Building core module: kpatch.ko"
+cd core
 KPATCH_BUILD=$KSRCDIR make >> $LOGFILE 2>&1 || die
 cd ..
 
-echo "Building hotpatch module: kpatch-$PATCHBASE.ko"
+echo "Building patch module: kpatch-$PATCHNAME.ko"
 ld -r -o output.o output/* >> $LOGFILE 2>&1 || die
 $TOOLSDIR/add-patches-section output.o vmlinux >> $LOGFILE 2>&1 || die
-KPATCH_BASEDIR=$TEMPDIR/kpatch-kmod KPATCH_BUILD=$KSRCDIR KPATCH_NAME=$PATCHBASE make >> $LOGFILE 2>&1 || die
-strip -d kpatch-$PATCHBASE.ko >> $LOGFILE 2>&1 || die
-$TOOLSDIR/link-vmlinux-syms kpatch-$PATCHBASE.ko vmlinux >> $LOGFILE 2>&1 || die
+KPATCH_BASEDIR=$TEMPDIR/core KPATCH_BUILD=$KSRCDIR KPATCH_NAME=$PATCHNAME make >> $LOGFILE 2>&1 || die
+strip -d kpatch-$PATCHNAME.ko >> $LOGFILE 2>&1 || die
+$TOOLSDIR/link-vmlinux-syms kpatch-$PATCHNAME.ko vmlinux >> $LOGFILE 2>&1 || die
 
 echo "SUCCESS"
-cp -f $TEMPDIR/kpatch-$PATCHBASE.ko $TEMPDIR/kpatch-kmod/kpatch.ko $BASE
+cp -f $TEMPDIR/kpatch-$PATCHNAME.ko $TEMPDIR/core/kpatch.ko $BASE
 cleanup

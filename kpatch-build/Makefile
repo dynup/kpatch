@@ -1,4 +1,4 @@
-CFLAGS=-I../kpatch-kmod
+CFLAGS=-I../kmod/core
 
 all: create-diff-object add-patches-section link-vmlinux-syms
 

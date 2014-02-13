@@ -1,13 +1,9 @@
-kpatch-diff-gen/kpatch-diff-gen
 *.o
 *.o.cmd
 *.ko
 *.ko.cmd
 *.mod.c
 *.swp
-kmod/.tmp_versions/
-kmod/Module.symvers
-kmod/modules.order
-tools/add-patches-section
-tools/create-diff-object
-tools/link-vmlinux-syms
+kpatch-build/add-patches-section
+kpatch-build/create-diff-object
+kpatch-build/link-vmlinux-syms

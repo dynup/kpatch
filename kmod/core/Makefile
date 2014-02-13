@@ -2,9 +2,9 @@ KPATCH_BUILD ?= /usr/lib/modules/$(shell uname -r)/build
 KPATCH_MAKE = $(MAKE) -C $(KPATCH_BUILD) M=$(PWD)
 
 obj-m := kpatch.o
-kpatch-y := base.o trampoline.o
+kpatch-y := core.o trampoline.o
 
-kpatch.ko: base.c trampoline.S
+kpatch.ko: core.c trampoline.S
 	$(KPATCH_MAKE) kpatch.ko
 
 all: kpatch.ko
