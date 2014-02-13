@@ -12,19 +12,29 @@ scale-out, run on a single machine and are very downtime
 sensitive or require a heavyweight approval process and
 notification of workload users in the event of downtime.
 
+
+INSTALLATION
+
+The default install prefix is in /usr/local.
+
+    make
+    sudo make install
+
+
 QUICK START
 
 NOTE: While kpatch is designed to work with any recent Linux
-kernel on any distribution, these quick start instructions
-currently only work on Fedora.
+kernel on any distribution, the "kpatch build" command currently
+only works on Fedora.
 
 First make a patch against the kernel tree, e.g. foo.patch.
 Then:
 
-    sudo kpatch-build/kpatch-build ~/foo.patch
-    insmod kpatch.ko kpatch-foo.ko
+    sudo /usr/local/sbin/kpatch build foo.patch
+    sudo insmod kpatch.ko kpatch-foo.ko
 
 Voila, your kernel is patched.
+
 
 LICENSE
 

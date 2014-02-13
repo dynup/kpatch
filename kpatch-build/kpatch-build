@@ -24,7 +24,8 @@
 
 BASE=$PWD
 LOGFILE=$PWD/kpatch-build.log
-TOOLSDIR=$BASE/kpatch-build
+TOOLSDIR=/usr/local/libexec/kpatch
+DATADIR=/usr/local/share/kpatch
 ARCHVERSION=$(uname -r)
 DISTROVERSION=${ARCHVERSION%*.*}
 CPUS=$(grep -c ^processor /proc/cpuinfo)
@@ -39,8 +40,8 @@ cleanup() {
 }
 
 die() {
-	echo "kpatch encountered an error"
-	echo "check kpatch-build.log"
+	echo "ERROR: kpatch build failed"
+	echo "check kpatch-build.log for more details"
 	exit 1
 }
 
@@ -64,9 +65,6 @@ then
 fi
 
 cleanup
-
-echo "Building tools"
-make -C $TOOLSDIR >> $LOGFILE 2>&1 || die
 
 TEMPDIR=`mktemp -d` || die
 
@@ -103,7 +101,7 @@ else
 	tar czf $KSRCDIR_CACHE -C $KSRCDIR_DIR $ARCHVERSION
 fi
 
-cp -R $BASE/kmod/patch/* $BASE/kmod/core $TEMPDIR || die
+cp -R $DATADIR/core $DATADIR/patch $TEMPDIR || die
 cp vmlinux $TEMPDIR || die
 
 echo "Building patched kernel"
@@ -153,12 +151,13 @@ KPATCH_BUILD=$KSRCDIR make >> $LOGFILE 2>&1 || die
 cd ..
 
 echo "Building patch module: kpatch-$PATCHNAME.ko"
-ld -r -o output.o output/* >> $LOGFILE 2>&1 || die
-$TOOLSDIR/add-patches-section output.o vmlinux >> $LOGFILE 2>&1 || die
+cd patch
+ld -r -o output.o ../output/* >> $LOGFILE 2>&1 || die
+$TOOLSDIR/add-patches-section output.o ../vmlinux >> $LOGFILE 2>&1 || die
 KPATCH_BASEDIR=$TEMPDIR/core KPATCH_BUILD=$KSRCDIR KPATCH_NAME=$PATCHNAME make >> $LOGFILE 2>&1 || die
 strip -d kpatch-$PATCHNAME.ko >> $LOGFILE 2>&1 || die
-$TOOLSDIR/link-vmlinux-syms kpatch-$PATCHNAME.ko vmlinux >> $LOGFILE 2>&1 || die
+$TOOLSDIR/link-vmlinux-syms kpatch-$PATCHNAME.ko ../vmlinux >> $LOGFILE 2>&1 || die
 
 echo "SUCCESS"
-cp -f $TEMPDIR/kpatch-$PATCHNAME.ko $TEMPDIR/core/kpatch.ko $BASE
+cp -f $TEMPDIR/patch/kpatch-$PATCHNAME.ko $TEMPDIR/core/kpatch.ko $BASE
 cleanup

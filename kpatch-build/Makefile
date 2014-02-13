@@ -1,15 +1,19 @@
-CFLAGS=-I../kmod/core
+include ../Makefile.inc
 
-all: create-diff-object add-patches-section link-vmlinux-syms
+CFLAGS  = -I../kmod/core
+LDFLAGS = -lelf
 
-create-diff-object: create-diff-object.c
-	$(CC) $(CFLAGS) -o $@ $^ -lelf
+TARGETS = create-diff-object add-patches-section link-vmlinux-syms
 
-add-patches-section: add-patches-section.c
-	$(CC) $(CFLAGS) -o $@ $^ -lelf
 
-link-vmlinux-syms: link-vmlinux-syms.c
-	$(CC) $(CFLAGS) -o $@ $^ -lelf
+all: $(TARGETS)
+
+%: %.c
+	$(CC) $(CFLAGS) $^ -o $@ $(LDFLAGS)
+
+install: all
+	$(INSTALL) -d $(LIBEXECDIR)
+	$(INSTALL) $(TARGETS) kpatch-build $(LIBEXECDIR)
 
 clean:
-	$(RM) -Rf create-diff-object add-patches-section link-vmlinux-syms
+	$(RM) $(TARGETS)
