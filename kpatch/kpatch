@@ -18,6 +18,7 @@
 KERNELRELEASE=$(uname -r)
 VARDIR=/var/lib/kpatch/$KERNELRELEASE
 USRDIR=/usr/lib/kpatch/$KERNELRELEASE
+TOOLSDIR=/usr/local/libexec/kpatch
 
 usage () {
 	echo "usage:"
@@ -27,6 +28,7 @@ usage () {
 	echo "kpatch unload [--all | MODULE]"
 	echo "kpatch list"
 	echo "kpatch info MODULE"
+	echo "kpatch build PATCH"
 	exit 1
 }
 
@@ -171,6 +173,11 @@ case $1 in
 	find_patch $MODFILE
 	echo "Hotfix information for ${2%.*}:"
 	modinfo $DIR/available/$MODFILE
+	;;
+"build")
+	[ $# -ne 2 ] && usage
+	$TOOLSDIR/kpatch-build $2
+	[ $? -ne 0 ] && exit 3
 	;;
 *)
 	echo "subcommand $1 not recognized"
