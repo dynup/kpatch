@@ -365,8 +365,13 @@ void kpatch_create_symbol_table(struct kpatch_elf *kelf)
 				ERROR("couldn't find section for symbol %s\n",
 					sym->name);
 
-			/* create reverse link from sec to sym */
-			sym->sec->sym = sym;
+			/* create reverse link from local sec to local sym */
+			if (GELF_ST_TYPE(sym->sym.st_info) != STT_NOTYPE) {
+				if (sym->sym.st_value)
+					ERROR("local symbol starts at section offset %d, expected 0",
+					      sym->sym.st_value);
+				sym->sec->sym = sym;
+			}
 
 			if (sym->type == STT_SECTION)
 				/* use the section name as the symbol name */
@@ -436,7 +441,8 @@ void kpatch_compare_correlated_section(struct section *sec)
 
 	if (sec1->sh.sh_size != sec2->sh.sh_size ||
 	    sec1->data->d_size != sec2->data->d_size || 
-	    memcmp(sec1->data->d_buf, sec2->data->d_buf, sec1->data->d_size))
+	    (sec1->sh.sh_type != SHT_NOBITS &&
+	     memcmp(sec1->data->d_buf, sec2->data->d_buf, sec1->data->d_size)))
 		sec1->status = CHANGED;
 	else
 		sec1->status = SAME;
