@@ -39,7 +39,7 @@
 #include <error.h>
 #include <gelf.h>
 
-#include "../kpatch-kmod/kpatch.h"
+#include "kpatch.h"
 
 #define ERROR(format, ...) \
 	error(1, 0, "%s: %d: " format, __FUNCTION__, __LINE__, ##__VA_ARGS__)

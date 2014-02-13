@@ -2,7 +2,7 @@
 
 #include <linux/module.h>
 #include <linux/printk.h>
-#include "../kpatch-kmod/kpatch.h"
+#include "kpatch.h"
 
 extern char __kpatch_patches, __kpatch_patches_end;
 

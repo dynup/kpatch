@@ -12,6 +12,20 @@ scale-out, run on a single machine and are very downtime
 sensitive or require a heavyweight approval process and
 notification of workload users in the event of downtime.
 
+QUICK START
+
+NOTE: While kpatch is designed to work with any recent Linux
+kernel on any distribution, these quick start instructions
+currently only work on Fedora.
+
+First make a patch against the kernel tree, e.g. foo.patch.
+Then:
+
+    sudo kpatch-build/kpatch-build ~/foo.patch
+    insmod kpatch.ko kpatch-foo.ko
+
+Voila, your kernel is patched.
+
 LICENSE
 
 kpatch is under the GPLv2 license.
@@ -38,7 +52,7 @@ patches and environments is conducted.
 
 DEPENDENCIES
 
-kpatch tools require libelf library and development headers to be installed.
+kpatch-build tools require libelf library and development headers to be installed.
 See GOTCHAS below.
 
 GOTCHAS
@@ -54,11 +68,11 @@ git://git.fedorahosted.org/git/elfutils.git
 
 HOWTO
 
-An example script for automating the hotfix module generation is in
-scripts/kpatch-build.  The script is written for Fedora but should
+An example script for automating the patch module generation is
+kpatch-build/kpatch-build.  The script is written for Fedora but should
 be adaptable to other distributions with limited changes.
 
-The primary steps in the hotfix module generation process are:
+The primary steps in the patch module generation process are:
 - Building the unstripped vmlinux for the kernel
 - Patching the source tree
 - Rebuilding vmlinux and monitoring which objects are building rebuilt.
@@ -67,17 +81,17 @@ The primary steps in the hotfix module generation process are:
   resulting in the changed patched objects
 - Unpatch the source tree
 - Recompile each changed object with -ffunction-sections -fdata-sections
-  resulting in the changed base objects
-- Use tools/create-diff-object to analyze each base/patched object pair
+  resulting in the changed original objects
+- Use create-diff-object to analyze each original/patched object pair
   for patchability and generate an output object containing modified
   sections
 - Link all the output objects in a into a cumulative object
-- Use tools/add-patches-section to add the .patches section that the
+- Use add-patches-section to add the .patches section that the
   core kpatch module uses to determine the list of functions that need
   to be redirected using ftrace
-- Generate the hotfix kernel module
-- Use tools/link-vmlinux-syms to hardcode non-exported kernel symbols
-  into the symbol table of the hotfix kernel module
+- Generate the patch kernel module
+- Use link-vmlinux-syms to hardcode non-exported kernel symbols
+  into the symbol table of the patch kernel module
 
 DEMONSTRATION
 

@@ -1,17 +1,15 @@
 /*
- * kpatch-kmod/base.c
- *
  * Copyright (C) 2014 Seth Jennings <sjenning@redhat.com>
  * Copyright (C) 2013 Josh Poimboeuf <jpoimboe@redhat.com>
  *
  * Contains the code for the core kpatch module.  This module reads
- * information from the hotfix modules, find new patched functions,
+ * information from the patch modules, find new patched functions,
  * and register those functions in the ftrace handlers the redirects
  * the old function call to the new function code.
  *
- * Each hotfix can contain one or more patched functions.  This information
- * is contained in the .patches section of the hotfix module.  For each
- * function patched by the module we must:
+ * Each patch module can contain one or more patched functions.  This
+ * information is contained in the .patches section of the patch module.  For
+ * each function patched by the module we must:
  * - Call stop_machine
  * - Ensure that no execution thread is currently in the function to be
  *   patched (or has the function in the call stack)

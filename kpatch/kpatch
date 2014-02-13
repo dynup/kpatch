@@ -1,7 +1,7 @@
 #!/bin/bash
 
 # This is the primary kpatch user script that manages loading, unloading
-# and displaying information on the hotfixes that are installed on the
+# and displaying information on the patches that are installed on the
 # system.
 
 # Subcommands:
@@ -31,16 +31,16 @@ usage () {
 }
 
 # return either VARDIR or USRDIR (or exits if not found)
-find_hotfix () {
+find_patch () {
 	[ -e $VARDIR/available/$1 ] && DIR=$VARDIR && return
 	[ -e $USRDIR/available/$1 ] && DIR=$USRDIR && return
 	echo "Hotfix $2 is not installed"
-	echo "Use "kpatch list" for available hotfixes"
+	echo "Use "kpatch list" for available patches"
 	exit 2
 }
 
-# takes full path to hotfix module
-load_hotfix () {
+# takes full path to patch module
+load_patch () {
 	NAME=$(basename $1)
 	NAME=${NAME%.*}
 	insmod $1
@@ -53,7 +53,7 @@ load_hotfix () {
 }
 
 # takes only the module filename
-unload_hotfix () {
+unload_patch () {
 	NAME=$(basename $1)
 	rmmod ${NAME%.*}
 	if [ $? -ne 0 ]
@@ -70,7 +70,7 @@ MODFILE=$2.ko
 case $1 in
 "enable")
 	[ $# -ne 2 ] && usage
-	find_hotfix $MODFILE
+	find_patch $MODFILE
 	if [ -e $DIR/enabled/$MODFILE ]
 	then
 		echo "Hotfix $2 is already enabled"
@@ -79,7 +79,7 @@ case $1 in
 	ln -s $DIR/available/$MODFILE $DIR/enabled/$MODFILE
 	if [ $? -ne 0 ]
 	then
-		echo "Failed to enable hotfix $2"
+		echo "Failed to enable patch $2"
 		exit 3
 	else
 		echo "Hotfix $2 enabled"
@@ -87,7 +87,7 @@ case $1 in
 	;;
 "disable")
 	[ $# -ne 2 ] && usage
-	find_hotfix $MODFILE
+	find_patch $MODFILE
 	if [ ! -e $DIR/enabled/$MODFILE ]
 	then
 		echo "Hotfix $2 is already disabled"
@@ -96,7 +96,7 @@ case $1 in
 	rm -f $DIR/enabled/$MODFILE
 	if [ $? -ne 0 ]
 	then
-		echo "Failed to disable hotfix $2"
+		echo "Failed to disable patch $2"
 		exit 3
 	else
 		echo "Hotfix $2 disabled"
@@ -108,16 +108,16 @@ case $1 in
 	"--all")
 		for i in $(ls $VARDIR/enabled)
 		do
-			load_hotfix $VARDIR/enabled/$i
+			load_patch $VARDIR/enabled/$i
 		done
 		for i in $(ls $USRDIR/enabled)
 		do
-			load_hotfix $USRDIR/enabled/$i
+			load_patch $USRDIR/enabled/$i
 		done
 		;;
 	*)
-		find_hotfix $MODFILE
-		load_hotfix $DIR/available/$MODFILE
+		find_patch $MODFILE
+		load_patch $DIR/available/$MODFILE
 		;;
 	esac
 	;;
@@ -127,40 +127,40 @@ case $1 in
 	"--all")
 		for i in $(ls $VARDIR/available)
 		do
-			unload_hotfix ${i%.*}
+			unload_patch ${i%.*}
 		done
 		for i in $(ls $USRDIR/available)
 		do
-			unload_hotfix ${i%.*}
+			unload_patch ${i%.*}
 		done
 		;;
 	*)
-		find_hotfix $MODFILE
-		unload_hotfix $2
+		find_patch $MODFILE
+		unload_patch $2
 		;;
 	esac
 	;;
 "list")
 	[ $# -ne 1 ] && usage
-	echo "User hotfixes available:"
+	echo "User patches available:"
 	for i in $(ls $VARDIR/available)
 	do
 		echo ${i%.*}
 	done
 	echo ""
-	echo "User hotfixes enabled:"
+	echo "User patches enabled:"
 	for i in $(ls $VARDIR/enabled)
 	do
 		echo ${i%.*}
 	done
 	echo ""
-	echo "System hotfixes available:"
+	echo "System patches available:"
 	for i in $(ls $USRDIR/available)
 	do
 		echo ${i%.*}
 	done
 	echo ""
-	echo "System hotfixes enabled:"
+	echo "System patches enabled:"
 	for i in $(ls $USRDIR/enabled)
 	do
 		echo ${i%.*}
@@ -168,7 +168,7 @@ case $1 in
 	;;
 "info")
 	[ $# -ne 2 ] && usage
-	find_hotfix $MODFILE
+	find_patch $MODFILE
 	echo "Hotfix information for ${2%.*}:"
 	modinfo $DIR/available/$MODFILE
 	;;
