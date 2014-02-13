@@ -365,8 +365,13 @@ void kpatch_create_symbol_table(struct kpatch_elf *kelf)
 				ERROR("couldn't find section for symbol %s\n",
 					sym->name);
 
-			/* create reverse link from sec to sym */
-			sym->sec->sym = sym;
+			/* create reverse link from local sec to local sym */
+			if (GELF_ST_TYPE(sym->sym.st_info) != STT_NOTYPE) {
+				if (sym->sym.st_value)
+					ERROR("local symbol starts at section offset %d, expected 0",
+					      sym->sym.st_value);
+				sym->sec->sym = sym;
+			}
 
 			if (sym->type == STT_SECTION)
 				/* use the section name as the symbol name */
