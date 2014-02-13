@@ -31,10 +31,11 @@ CPUS=$(grep -c ^processor /proc/cpuinfo)
 LOCALVERSION=$(uname -r)
 LOCALVERSION=-${LOCALVERSION##*-}
 KSRCDIR=~/.kpatch/$ARCHVERSION
-KSRCDIR_CACHE=$KSRCDIR.cache
+KSRCDIR_DIR=$(dirname $KSRCDIR)
+KSRCDIR_CACHE=$KSRCDIR.tgz
 
 cleanup() {
-	rm -Rf kernel-$DISTROVERSION.src.rpm $LOGFILE $TEMPDIR > /dev/null 2>/dev/null
+	rm -Rf $KSRCDIR kernel-$DISTROVERSION.src.rpm $LOGFILE $TEMPDIR > /dev/null 2>/dev/null
 }
 
 die() {
@@ -69,12 +70,12 @@ make -C $TOOLSDIR >> $LOGFILE 2>&1 || die
 
 TEMPDIR=`mktemp -d` || die
 
-if [ -d "$KSRCDIR_CACHE" ]
+if [ -f "$KSRCDIR_CACHE" ]
 then
 	echo "Using cache at $KSRCDIR_CACHE"
 	rm -rf $KSRCDIR
-	cp -a $KSRCDIR_CACHE $KSRCDIR
-	cd $KSRCDIR
+	tar xzf $KSRCDIR_CACHE -C $KSRCDIR_DIR || die
+	cd $KSRCDIR || die
 else
 	echo "Verifying required development tools"
 	yum install rpmdevtools yum-utils || die
@@ -90,15 +91,16 @@ else
 	rpm -Uvh kernel-$DISTROVERSION.src.rpm >> $LOGFILE 2>&1 || die
 	rpmbuild -bp --target=$(uname -m) ~/rpmbuild/SPECS/kernel.spec >> $LOGFILE 2>&1 || die
 	rm -rf $KSRCDIR
-	mkdir -p ~/.kpatch
+	mkdir -p $KSRCDIR_DIR
 	mv ~/rpmbuild/BUILD/kernel-*/linux-$ARCHVERSION $KSRCDIR >> $LOGFILE 2>&1 || die
 
-	echo "Building the base kernel"
+	echo "Building original kernel"
 	cd $KSRCDIR
 	echo $LOCALVERSION > localversion
 	make -j$CPUS vmlinux >> $LOGFILE 2>&1 || die
 
-	cp -a $KSRCDIR $KSRCDIR_CACHE
+	echo "Creating cache"
+	tar czf $KSRCDIR_CACHE -C $KSRCDIR_DIR $ARCHVERSION
 fi
 
 cp -R $BASE/kmod/patch/* $BASE/kmod/core $TEMPDIR || die
