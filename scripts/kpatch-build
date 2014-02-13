@@ -24,7 +24,7 @@
 
 BASE=$PWD
 LOGFILE=$PWD/kpatch-build.log
-KPATCHPATH=/usr/local/share/kpatch
+TOOLSDIR=$BASE/tools
 ARCHVERSION=$(uname -r)
 DISTROVERSION=${ARCHVERSION%*.*}
 CPUS=$(grep -c ^processor /proc/cpuinfo)
@@ -34,17 +34,18 @@ KSRCDIR=~/.kpatch/$ARCHVERSION
 KSRCDIR_CACHE=$KSRCDIR.cache
 
 cleanup() {
-	rm -Rf kernel-$DISTROVERSION.src.rpm rpmbuild $LOGFILE $TEMPDIR > /dev/null 2>/dev/null
+	rm -Rf kernel-$DISTROVERSION.src.rpm $LOGFILE $TEMPDIR > /dev/null 2>/dev/null
 }
 
 die() {
 	echo "kpatch encountered an error"
+	echo "check kpatch-build.log"
 	exit 1
 }
 
 if [ $# -ne 1 ]
 then
-	echo "kpatch patchfile"
+	echo "usage: $0 PATCH"
 	exit 2
 fi
 
@@ -55,13 +56,22 @@ then
 	exit 3
 fi
 
+PATCHBASE=`basename $PATCHFILE`
+if [[ $PATCHBASE =~ \.patch ]] || [[ $PATCHBASE =~ \.diff ]]
+then
+	PATCHBASE=${PATCHBASE%.*}
+fi
+
 cleanup
+
+echo "Building tools"
+make -C $TOOLSDIR >> $LOGFILE 2>&1 || die
 
 TEMPDIR=`mktemp -d` || die
 
 if [ -d "$KSRCDIR_CACHE" ]
 then
-	echo "Using kernel source compile cache at $KSRCDIR_CACHE"
+	echo "Using cache at $KSRCDIR_CACHE"
 	rm -rf $KSRCDIR
 	cp -a $KSRCDIR_CACHE $KSRCDIR
 	cd $KSRCDIR
@@ -91,10 +101,10 @@ else
 	cp -a $KSRCDIR $KSRCDIR_CACHE
 fi
 
-cp -R $KPATCHPATH/* $TEMPDIR || die
+cp -R $BASE/kpatch-files/* $BASE/kpatch-kmod $TEMPDIR || die
 cp vmlinux $TEMPDIR || die
 
-echo "Building the patched kernel"
+echo "Building patched kernel"
 patch -p1 < $PATCHFILE >> $LOGFILE 2>&1
 make -j$CPUS vmlinux > $TEMPDIR/patched_build.log 2>&1 || die
 
@@ -132,19 +142,21 @@ mkdir output
 for i in base/* 
 do
 	FILE=`basename $i`
-	./tools/create-diff-object base/$FILE patched/$FILE output/$FILE >> $LOGFILE 2>&1
+	$TOOLSDIR/create-diff-object base/$FILE patched/$FILE output/$FILE >> $LOGFILE 2>&1 || die
 done
 
-echo "Building hotfix module"
-ld -r -o output.o output/* >> $LOGFILE 2>&1 || die
-./tools/add-patches-section output.o vmlinux >> $LOGFILE 2>&1 || die
+echo "Building base module: kpatch.ko"
+cd kpatch-kmod
 KPATCH_BUILD=$KSRCDIR make >> $LOGFILE 2>&1 || die
-strip -d kpatch-patch.ko >> $LOGFILE 2>&1 || die
-./tools/link-vmlinux-syms kpatch-patch.ko vmlinux >> $LOGFILE 2>&1 || die
+cd ..
 
-echo "Patch generation complete"
-cp -f $TEMPDIR/kpatch-patch.ko $BASE
-echo "Cleaning up"
+echo "Building hotpatch module: kpatch-$PATCHBASE.ko"
+ld -r -o output.o output/* >> $LOGFILE 2>&1 || die
+$TOOLSDIR/add-patches-section output.o vmlinux >> $LOGFILE 2>&1 || die
+KPATCH_BASEDIR=$TEMPDIR/kpatch-kmod KPATCH_BUILD=$KSRCDIR KPATCH_NAME=$PATCHBASE make >> $LOGFILE 2>&1 || die
+strip -d kpatch-$PATCHBASE.ko >> $LOGFILE 2>&1 || die
+$TOOLSDIR/link-vmlinux-syms kpatch-$PATCHBASE.ko vmlinux >> $LOGFILE 2>&1 || die
+
+echo "SUCCESS"
+cp -f $TEMPDIR/kpatch-$PATCHBASE.ko $TEMPDIR/kpatch-kmod/kpatch.ko $BASE
 cleanup
-echo "Done"
-

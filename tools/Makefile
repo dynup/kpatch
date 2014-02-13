@@ -1,3 +1,5 @@
+CFLAGS=-I../kpatch-kmod
+
 all: create-diff-object add-patches-section link-vmlinux-syms
 
 create-diff-object: create-diff-object.c

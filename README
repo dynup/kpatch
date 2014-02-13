@@ -12,6 +12,19 @@ scale-out, run on a single machine and are very downtime
 sensitive or require a heavyweight approval process and
 notification of workload users in the event of downtime.
 
+QUICK START
+
+This only works on Fedora currently.
+
+First make a patch against the kernel tree, e.g. foo.patch.  Then:
+
+    sudo scripts/kpatch-build ~/foo.patch
+    insmod kpatch.ko kpatch-foo.ko
+
+Voila, your kernel is patched.
+
+A less crude interface is coming soon.
+
 LICENSE
 
 kpatch is under the GPLv2 license.
