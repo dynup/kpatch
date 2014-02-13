@@ -14,16 +14,17 @@ notification of workload users in the event of downtime.
 
 QUICK START
 
-This only works on Fedora currently.
+NOTE: While kpatch is designed to work with any recent Linux
+kernel on any distribution, these quick start instructions
+currently only work on Fedora.
 
-First make a patch against the kernel tree, e.g. foo.patch.  Then:
+First make a patch against the kernel tree, e.g. foo.patch.
+Then:
 
     sudo kpatch-build/kpatch-build ~/foo.patch
     insmod kpatch.ko kpatch-foo.ko
 
 Voila, your kernel is patched.
-
-A less crude interface is coming soon.
 
 LICENSE
 
