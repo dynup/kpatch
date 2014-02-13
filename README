@@ -68,11 +68,11 @@ git://git.fedorahosted.org/git/elfutils.git
 
 HOWTO
 
-An example script for automating the hotfix module generation is
+An example script for automating the patch module generation is
 kpatch-build/kpatch-build.  The script is written for Fedora but should
 be adaptable to other distributions with limited changes.
 
-The primary steps in the hotfix module generation process are:
+The primary steps in the patch module generation process are:
 - Building the unstripped vmlinux for the kernel
 - Patching the source tree
 - Rebuilding vmlinux and monitoring which objects are building rebuilt.
@@ -89,9 +89,9 @@ The primary steps in the hotfix module generation process are:
 - Use add-patches-section to add the .patches section that the
   core kpatch module uses to determine the list of functions that need
   to be redirected using ftrace
-- Generate the hotfix kernel module
+- Generate the patch kernel module
 - Use link-vmlinux-syms to hardcode non-exported kernel symbols
-  into the symbol table of the hotfix kernel module
+  into the symbol table of the patch kernel module
 
 DEMONSTRATION
 
