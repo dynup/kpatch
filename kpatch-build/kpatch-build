@@ -36,7 +36,7 @@ KSRCDIR_CACHE="$KSRCDIR.tgz"
 TEMPDIR=
 
 cleanup() {
-	rm -Rf "$KSRCDIR" "kernel-$DISTROVERSION.src.rpm" "$LOGFILE" "$TEMPDIR" > /dev/null 2>/dev/null
+	rm -Rf "$KSRCDIR" "$LOGFILE" "$TEMPDIR" > /dev/null 2>/dev/null
 }
 
 die() {
@@ -87,14 +87,14 @@ else
 	yum install rpmdevtools yum-utils >> "$LOGFILE" 2>&1 || die
 
 	echo "Downloading kernel source for $ARCHVERSION"
-	yumdownloader --source "kernel-$ARCHVERSION" >> "$LOGFILE" 2>&1 || die
+	yumdownloader --source --destdir "$TEMPDIR" "kernel-$ARCHVERSION" >> "$LOGFILE" 2>&1 || die
 
 	echo "Verifying build dependencies for kernel package"
-	yum-builddep "kernel-$DISTROVERSION.src.rpm" >> "$LOGFILE" 2>&1 || die
+	yum-builddep "$TEMPDIR/kernel-$DISTROVERSION.src.rpm" >> "$LOGFILE" 2>&1 || die
 
 	echo "Unpacking kernel source"
 	rpmdev-setuptree >> "$LOGFILE" 2>&1 || die
-	rpm -Uvh "kernel-$DISTROVERSION.src.rpm" >> "$LOGFILE" 2>&1 || die
+	rpm -Uvh "$TEMPDIR/kernel-$DISTROVERSION.src.rpm" >> "$LOGFILE" 2>&1 || die
 	rpmbuild -bp "--target=$(uname -m)" "$HOME/rpmbuild/SPECS/kernel.spec" >> "$LOGFILE" 2>&1 || die
 	rm -rf "$KSRCDIR"
 	mkdir -p "$KSRCDIR_DIR"
