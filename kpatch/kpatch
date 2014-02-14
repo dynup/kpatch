@@ -4,14 +4,6 @@
 # and displaying information on the patches that are installed on the
 # system.
 
-# Subcommands:
-# - enable MODULE
-# - disable MODULE
-# - load [--all | MODULE]
-# - unload [--all | MODULE]
-# - list
-# - info MODULE
-
 # TODO: add kernelrelease option to manage releases other than the
 # currently running one
 
@@ -26,7 +18,7 @@ usage () {
 	echo "kpatch enable MODULE" >&2
 	echo "kpatch disable MODULE" >&2
 	echo "kpatch load [--all | MODULE]" >&2
-	echo "kpatch unload [--all | MODULE]" >&2
+	echo "kpatch unload MODULE" >&2
 	echo "kpatch list" >&2
 	echo "kpatch info MODULE" >&2
 	echo "kpatch build PATCH" >&2
@@ -105,16 +97,6 @@ case "$1" in
 "unload")
 	[[ "$#" -ne 2 ]] && usage
 	case "$2" in
-	"--all")
-		for i in "$SYSDIR"/*.ko; do
-			[[ -e "$i" ]] || continue
-			unload_patch "${i%.*}" || die "failed to unload patch $PATCH"
-		done
-		for i in "$USERDIR"/*.ko; do
-			[[ -e "$i" ]] || continue
-			unload_patch "${i%.*}" || die "failed to unload patch $PATCH"
-		done
-		;;
 	*)
 		PATCH="$2"
 		MODFILE="$PATCH.ko"
