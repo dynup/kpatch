@@ -10,7 +10,6 @@ KERNELRELEASE="$(uname -r)"
 SYSDIR="/usr/lib/kpatch/$KERNELRELEASE"
 USERDIR="/var/lib/kpatch/$KERNELRELEASE"
 ENABLEDDIR="$USERDIR/enabled"
-TOOLSDIR=/usr/local/libexec/kpatch
 
 usage () {
 	echo "usage:" >&2
@@ -68,6 +67,20 @@ echo_patch_name() {
 	NAME="${NAME%.ko}"
 	NAME="${NAME#kpatch-}"
 	echo $NAME
+}
+
+find_kpatch_build() {
+	SCRIPTDIR="$(readlink -f $(dirname $0))"
+
+	# git repo
+	KPATCHBUILD="$(readlink -f $SCRIPTDIR/../kpatch-build/kpatch-build)"
+	[[ -e "$KPATCHBUILD" ]] && return
+
+	# installation path
+	KPATCHBUILD="$(readlink -f $SCRIPTDIR/../libexec/kpatch/kpatch-build)"
+	[[ -e "$KPATCHBUILD" ]] && return
+
+	return 1
 }
 
 unset MODULE
@@ -148,9 +161,9 @@ case "$1" in
 	;;
 
 "build")
-	[[ "$#" -ne 2 ]] && usage
+	find_kpatch_build || die "kpatch-build is not installed"
 	shift
-	"$TOOLSDIR/kpatch-build" "$@" || die "kpatch build failed"
+	"$KPATCHBUILD" "$@" || die "kpatch build failed"
 	;;
 
 *)

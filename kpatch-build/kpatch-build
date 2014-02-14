@@ -24,8 +24,7 @@
 
 BASE="$PWD"
 LOGFILE="$PWD/kpatch-build.log"
-TOOLSDIR=/usr/local/libexec/kpatch
-DATADIR=/usr/local/share/kpatch
+TOOLSDIR="$(readlink -f $(dirname $0))"
 ARCHVERSION="$(uname -r)"
 DISTROVERSION="${ARCHVERSION%*.*}"
 CPUS="$(grep -c ^processor /proc/cpuinfo)"
@@ -44,6 +43,18 @@ die() {
 	echo "ERROR: kpatch build failed" >&2
 	echo "check kpatch-build.log for more details" >&2
 	exit 1
+}
+
+find_data_dir() {
+	# git repo
+	DATADIR="$(readlink -f $TOOLSDIR/../kmod)"
+	[[ -e "$DATADIR" ]] && return
+
+	# installation path
+	DATADIR="$(readlink -f $TOOLSDIR/../../share/kpatch)"
+	[[ -e "$DATADIR" ]] && return
+
+	return 1
 }
 
 if [[ "$#" -ne 1 ]]; then
@@ -97,6 +108,8 @@ else
 	echo "Creating cache"
 	tar czf "$KSRCDIR_CACHE" -C "$KSRCDIR_DIR" "$ARCHVERSION" >> "$LOGFILE" 2>&1 || die
 fi
+
+find_data_dir || (echo "can't find data dir" >&2 && die)
 
 cp -R "$DATADIR/core" "$DATADIR/patch" "$TEMPDIR" || die
 cp vmlinux "$TEMPDIR" || die
