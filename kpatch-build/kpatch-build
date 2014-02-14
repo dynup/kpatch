@@ -23,7 +23,7 @@
 # - Runs kpatch tools to create and link the patch kernel module
 
 BASE="$PWD"
-LOGFILE="$PWD/kpatch-build.log"
+LOGFILE="/tmp/kpatch-build-$(date +%s).log"
 TOOLSDIR="$(readlink -f $(dirname $0))"
 ARCHVERSION="$(uname -r)"
 DISTROVERSION="${ARCHVERSION%*.*}"
@@ -40,8 +40,7 @@ cleanup() {
 }
 
 die() {
-	echo "ERROR: kpatch build failed" >&2
-	echo "check kpatch-build.log for more details" >&2
+	echo "ERROR: kpatch build failed. Check kpatch-build.log for more details." >&2
 	exit 1
 }
 
@@ -166,5 +165,5 @@ strip -d "kpatch-$PATCHNAME.ko" >> "$LOGFILE" 2>&1 || die
 
 cp -f "$TEMPDIR/patch/kpatch-$PATCHNAME.ko" "$TEMPDIR/core/kpatch.ko" "$BASE" || die
 
-echo "SUCCESS"
 cleanup
+echo "SUCCESS"
