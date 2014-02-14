@@ -16,8 +16,9 @@
 # currently running one
 
 KERNELRELEASE="$(uname -r)"
-VARDIR="/var/lib/kpatch/$KERNELRELEASE"
-USRDIR="/usr/lib/kpatch/$KERNELRELEASE"
+SYSDIR="/usr/lib/kpatch/$KERNELRELEASE"
+USERDIR="/var/lib/kpatch/$KERNELRELEASE"
+ENABLEDDIR="$USERDIR/enabled"
 TOOLSDIR=/usr/local/libexec/kpatch
 
 usage () {
@@ -41,10 +42,10 @@ die() {
 	exit 1
 }
 
-# return either VARDIR or USRDIR
+# return full module path in DIR
 find_patch () {
-	[[ -f "$VARDIR/available/$1" ]] && DIR="$VARDIR" && return
-	[[ -f "$USRDIR/available/$1" ]] && DIR="$USRDIR" && return
+	[[ -f "$USERDIR/$1" ]] && DIR="$USERDIR" && return
+	[[ -f "$SYSDIR/$1" ]] && DIR="$SYSDIR" && return
 	return 1
 }
 
@@ -69,9 +70,9 @@ case "$1" in
 	PATCH=$2
 	MODFILE="$PATCH.ko"
 	find_patch "$MODFILE" || die "$PATCH is not installed"
-	[[ -e "$DIR/enabled/$MODFILE" ]] && die "patch $2 is already enabled"
-	mkdir -p $DIR/enabled
-	ln -s "$DIR/available/$MODFILE" "$DIR/enabled/$MODFILE" || die "failed to enable patch $PATCH"
+	[[ -e "$ENABLEDDIR/$MODFILE" ]] && die "patch $2 is already enabled"
+	mkdir -p $ENABLEDDIR
+	ln -s "$DIR/$MODFILE" "$ENABLEDDIR/$MODFILE" || die "failed to enable patch $PATCH"
 	;;
 
 "disable")
@@ -79,28 +80,24 @@ case "$1" in
 	PATCH=$2
 	MODFILE="$PATCH.ko"
 	find_patch "$MODFILE" || die "$PATCH is not installed"
-	[[ ! -e "$DIR/enabled/$MODFILE" ]] && die "$PATCH is already disabled"
-	rm -f "$DIR/enabled/$MODFILE" || die "failed to disable patch $PATCH"
+	[[ ! -e "$ENABLEDDIR/$MODFILE" ]] && die "$PATCH is already disabled"
+	rm -f "$ENABLEDDIR/$MODFILE" || die "failed to disable patch $PATCH"
 	;;
 
 "load")
 	[[ "$#" -ne 2 ]] && usage
 	case "$2" in
 	"--all")
-		for i in "$VARDIR"/enabled/*.ko; do
+		for i in "$ENABLEDDIR"/*.ko; do
 			[[ -e "$i" ]] || continue
-			load_patch "$VARDIR/enabled/$i" || die "failed to load patch $PATCH"
-		done
-		for i in "$USRDIR"/enabled/*.ko; do
-			[[ -e "$i" ]] || continue
-			load_patch "$USRDIR/enabled/$i" || die "failed to load patch $PATCH"
+			load_patch "$i" || die "failed to load patch $PATCH"
 		done
 		;;
 	*)
 		PATCH="$2"
 		MODFILE="$PATCH.ko"
 		find_patch "$MODFILE" || die "$PATCH is not installed"
-		load_patch "$DIR/available/$MODFILE" || die "failed to load patch $PATCH"
+		load_patch "$DIR/$MODFILE" || die "failed to load patch $PATCH"
 		;;
 	esac
 	;;
@@ -109,11 +106,11 @@ case "$1" in
 	[[ "$#" -ne 2 ]] && usage
 	case "$2" in
 	"--all")
-		for i in "$VARDIR"/available/*.ko; do
+		for i in "$SYSDIR"/*.ko; do
 			[[ -e "$i" ]] || continue
 			unload_patch "${i%.*}" || die "failed to unload patch $PATCH"
 		done
-		for i in "$USRDIR"/available/*.ko; do
+		for i in "$USERDIR"/*.ko; do
 			[[ -e "$i" ]] || continue
 			unload_patch "${i%.*}" || die "failed to unload patch $PATCH"
 		done
@@ -129,26 +126,20 @@ case "$1" in
 
 "list")
 	[[ "$#" -ne 1 ]] && usage
-	echo "User patches available:"
-	for i in "$VARDIR"/available/*.ko; do
+	echo "System patches:"
+	for i in "$SYSDIR"/*.ko; do
 		[[ -e "$i" ]] || continue
 		echo "$(basename ${i%.*})"
 	done
 	echo ""
-	echo "User patches enabled:"
-	for i in "$VARDIR"/enabled/*.ko; do
+	echo "User patches:"
+	for i in "$USERDIR"/*.ko; do
 		[[ -e "$i" ]] || continue
 		echo "$(basename ${i%.*})"
 	done
 	echo ""
-	echo "System patches available:"
-	for i in "$USRDIR"/available/*.ko; do
-		[[ -e "$i" ]] || continue
-		echo "$(basename ${i%.*})"
-	done
-	echo ""
-	echo "System patches enabled:"
-	for i in "$USRDIR"/enabled/*.ko; do
+	echo "Enabled patches:"
+	for i in "$ENABLEDDIR"/*.ko; do
 		[[ -e "$i" ]] || continue
 		echo "$(basename ${i%.*})"
 	done
@@ -160,7 +151,7 @@ case "$1" in
 	MODFILE="$PATCH.ko"
 	find_patch "$MODFILE" || die "$PATCH is not installed"
 	echo "Patch information for $PATCH:"
-	/usr/sbin/modinfo "$DIR/available/$MODFILE"
+	/usr/sbin/modinfo "$DIR/$MODFILE"
 	;;
 
 "build")
