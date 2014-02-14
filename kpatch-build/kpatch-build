@@ -22,142 +22,136 @@
 # - Builds the patched objects with gcc flags -f[function|data]-sections
 # - Runs kpatch tools to create and link the patch kernel module
 
-BASE=$PWD
-LOGFILE=$PWD/kpatch-build.log
+BASE="$PWD"
+LOGFILE="$PWD/kpatch-build.log"
 TOOLSDIR=/usr/local/libexec/kpatch
 DATADIR=/usr/local/share/kpatch
-ARCHVERSION=$(uname -r)
-DISTROVERSION=${ARCHVERSION%*.*}
-CPUS=$(grep -c ^processor /proc/cpuinfo)
-LOCALVERSION=$(uname -r)
-LOCALVERSION=-${LOCALVERSION##*-}
-KSRCDIR=~/.kpatch/$ARCHVERSION
-KSRCDIR_DIR=$(dirname $KSRCDIR)
-KSRCDIR_CACHE=$KSRCDIR.tgz
+ARCHVERSION="$(uname -r)"
+DISTROVERSION="${ARCHVERSION%*.*}"
+CPUS="$(grep -c ^processor /proc/cpuinfo)"
+LOCALVERSION="$(uname -r)"
+LOCALVERSION="-${LOCALVERSION##*-}"
+KSRCDIR="$HOME/.kpatch/$ARCHVERSION"
+KSRCDIR_DIR="$(dirname $KSRCDIR)"
+KSRCDIR_CACHE="$KSRCDIR.tgz"
+TEMPDIR=
 
 cleanup() {
-	rm -Rf $KSRCDIR kernel-$DISTROVERSION.src.rpm $LOGFILE $TEMPDIR > /dev/null 2>/dev/null
+	rm -Rf "$KSRCDIR" "kernel-$DISTROVERSION.src.rpm" "$LOGFILE" "$TEMPDIR" > /dev/null 2>/dev/null
 }
 
 die() {
-	echo "ERROR: kpatch build failed"
-	echo "check kpatch-build.log for more details"
+	echo "ERROR: kpatch build failed" >&2
+	echo "check kpatch-build.log for more details" >&2
 	exit 1
 }
 
-if [ $# -ne 1 ]
-then
-	echo "usage: $0 PATCH"
+if [[ "$#" -ne 1 ]]; then
+	echo "usage: $0 PATCH" >&2
 	exit 2
 fi
 
-PATCHFILE=$(readlink -f $1)
-if [ ! -e $PATCHFILE ]
-then
-	echo "patch file not found"
+PATCHFILE="$(readlink -f $1)"
+if [[ ! -f "$PATCHFILE" ]]; then
+	echo "ERROR: patch file $PATCHFILE not found" >&2
 	exit 3
 fi
 
-PATCHNAME=`basename $PATCHFILE`
-if [[ $PATCHNAME =~ \.patch ]] || [[ $PATCHNAME =~ \.diff ]]
-then
-	PATCHNAME=${PATCHNAME%.*}
+PATCHNAME="$(basename $PATCHFILE)"
+if [[ "$PATCHNAME" =~ \.patch ]] || [[ "$PATCHNAME" =~ \.diff ]]; then
+	PATCHNAME="${PATCHNAME%.*}"
 fi
 
 cleanup
 
-TEMPDIR=`mktemp -d` || die
+TEMPDIR="$(mktemp -d)" || die
 
-if [ -f "$KSRCDIR_CACHE" ]
-then
+if [[ -f "$KSRCDIR_CACHE" ]]; then
 	echo "Using cache at $KSRCDIR_CACHE"
-	rm -rf $KSRCDIR
-	tar xzf $KSRCDIR_CACHE -C $KSRCDIR_DIR || die
-	cd $KSRCDIR || die
+	rm -rf "$KSRCDIR"
+	tar xzf "$KSRCDIR_CACHE" -C "$KSRCDIR_DIR" >> "$LOGFILE" 2>&1 || die
+	cd "$KSRCDIR" || die
 else
 	echo "Verifying required development tools"
-	yum install rpmdevtools yum-utils || die
+	yum install rpmdevtools yum-utils >> "$LOGFILE" 2>&1 || die
 
 	echo "Downloading kernel source for $ARCHVERSION"
-	yumdownloader --source kernel-$ARCHVERSION || die
+	yumdownloader --source "kernel-$ARCHVERSION" >> "$LOGFILE" 2>&1 || die
 
 	echo "Verifying build dependencies for kernel package"
-	yum-builddep kernel-$DISTROVERSION.src.rpm || die
+	yum-builddep "kernel-$DISTROVERSION.src.rpm" >> "$LOGFILE" 2>&1 || die
 
 	echo "Unpacking kernel source"
-	rpmdev-setuptree >> $LOGFILE 2>&1 || die
-	rpm -Uvh kernel-$DISTROVERSION.src.rpm >> $LOGFILE 2>&1 || die
-	rpmbuild -bp --target=$(uname -m) ~/rpmbuild/SPECS/kernel.spec >> $LOGFILE 2>&1 || die
-	rm -rf $KSRCDIR
-	mkdir -p $KSRCDIR_DIR
-	mv ~/rpmbuild/BUILD/kernel-*/linux-$ARCHVERSION $KSRCDIR >> $LOGFILE 2>&1 || die
+	rpmdev-setuptree >> "$LOGFILE" 2>&1 || die
+	rpm -Uvh "kernel-$DISTROVERSION.src.rpm" >> "$LOGFILE" 2>&1 || die
+	rpmbuild -bp "--target=$(uname -m)" "$HOME/rpmbuild/SPECS/kernel.spec" >> "$LOGFILE" 2>&1 || die
+	rm -rf "$KSRCDIR"
+	mkdir -p "$KSRCDIR_DIR"
+	mv "$HOME"/rpmbuild/BUILD/kernel-*/linux-"$ARCHVERSION" "$KSRCDIR" >> "$LOGFILE" 2>&1 || die
 
 	echo "Building original kernel"
-	cd $KSRCDIR
-	echo $LOCALVERSION > localversion
-	make -j$CPUS vmlinux >> $LOGFILE 2>&1 || die
+	cd "$KSRCDIR"
+	echo "$LOCALVERSION" > localversion || die
+	make "-j$CPUS" vmlinux >> "$LOGFILE" 2>&1 || die
 
 	echo "Creating cache"
-	tar czf $KSRCDIR_CACHE -C $KSRCDIR_DIR $ARCHVERSION
+	tar czf "$KSRCDIR_CACHE" -C "$KSRCDIR_DIR" "$ARCHVERSION" >> "$LOGFILE" 2>&1 || die
 fi
 
-cp -R $DATADIR/core $DATADIR/patch $TEMPDIR || die
-cp vmlinux $TEMPDIR || die
+cp -R "$DATADIR/core" "$DATADIR/patch" "$TEMPDIR" || die
+cp vmlinux "$TEMPDIR" || die
 
 echo "Building patched kernel"
-patch -p1 < $PATCHFILE >> $LOGFILE 2>&1
-make -j$CPUS vmlinux > $TEMPDIR/patched_build.log 2>&1 || die
+patch -p1 < "$PATCHFILE" >> "$LOGFILE" 2>&1
+make "-j$CPUS" vmlinux > "$TEMPDIR/patched_build.log" 2>&1 || die
 
 echo "Detecting changed objects"
-grep CC $TEMPDIR/patched_build.log | grep -v init/version.o | awk '{print $2}' >> $TEMPDIR/changed_objs
-if [ $? -ne 0 ]
-then
+grep CC "$TEMPDIR/patched_build.log" | grep -v init/version.o | awk '{print $2}' >> "$TEMPDIR/changed_objs"
+if [[ $? -ne 0 ]]; then
 	echo "No changed objects"
-	exit 0
+	exit 1
 fi
 
 echo "Rebuilding changed objects"
-mkdir $TEMPDIR/patched
-for i in $(cat $TEMPDIR/changed_objs)
-do
-	rm -f $i
-	KCFLAGS="-ffunction-sections -fdata-sections" make $i >> $LOGFILE 2>&1 || die
-	strip -d $i
-	cp -f $i $TEMPDIR/patched/
+mkdir "$TEMPDIR/patched"
+for i in "$(cat $TEMPDIR/changed_objs)"; do
+	rm -f "$i"
+	KCFLAGS="-ffunction-sections -fdata-sections" make "$i" >> "$LOGFILE" 2>&1 || die
+	strip -d "$i" >> "$LOGFILE" 2>&1 || die
+	cp -f "$i" "$TEMPDIR/patched/" || die
 	
 done
-patch -R -p1 < $PATCHFILE >> $LOGFILE 2>&1
-mkdir $TEMPDIR/orig
-for i in $(cat $TEMPDIR/changed_objs)
-do
-	rm -f $i
-	KCFLAGS="-ffunction-sections -fdata-sections" make $i >> $LOGFILE 2>&1 || die
-	strip -d $i
-	cp -f $i $TEMPDIR/orig/
+patch -R -p1 < "$PATCHFILE" >> "$LOGFILE" 2>&1
+mkdir "$TEMPDIR/orig"
+for i in "$(cat $TEMPDIR/changed_objs)"; do
+	rm -f "$i"
+	KCFLAGS="-ffunction-sections -fdata-sections" make "$i" >> "$LOGFILE" 2>&1 || die
+	strip -d "$i" >> "$LOGFILE" 2>&1 || die
+	cp -f "$i" "$TEMPDIR/orig/" || die
 done
 
 echo "Extracting new and modified ELF sections"
-cd $TEMPDIR
+cd "$TEMPDIR"
 mkdir output
-for i in orig/* 
-do
-	FILE=`basename $i`
-	$TOOLSDIR/create-diff-object orig/$FILE patched/$FILE output/$FILE >> $LOGFILE 2>&1 || die
+for i in orig/*; do
+	FILE="$(basename $i)"
+	"$TOOLSDIR"/create-diff-object "orig/$FILE" "patched/$FILE" "output/$FILE" >> "$LOGFILE" 2>&1 || die
 done
 
 echo "Building core module: kpatch.ko"
 cd core
-KPATCH_BUILD=$KSRCDIR make >> $LOGFILE 2>&1 || die
+KPATCH_BUILD="$KSRCDIR" make >> "$LOGFILE" 2>&1 || die
 cd ..
 
 echo "Building patch module: kpatch-$PATCHNAME.ko"
 cd patch
-ld -r -o output.o ../output/* >> $LOGFILE 2>&1 || die
-$TOOLSDIR/add-patches-section output.o ../vmlinux >> $LOGFILE 2>&1 || die
-KPATCH_BASEDIR=$TEMPDIR/core KPATCH_BUILD=$KSRCDIR KPATCH_NAME=$PATCHNAME make >> $LOGFILE 2>&1 || die
-strip -d kpatch-$PATCHNAME.ko >> $LOGFILE 2>&1 || die
-$TOOLSDIR/link-vmlinux-syms kpatch-$PATCHNAME.ko ../vmlinux >> $LOGFILE 2>&1 || die
+ld -r -o output.o ../output/* >> "$LOGFILE" 2>&1 || die
+"$TOOLSDIR"/add-patches-section output.o ../vmlinux >> "$LOGFILE" 2>&1 || die
+KPATCH_BASEDIR="$TEMPDIR/core" KPATCH_BUILD="$KSRCDIR" KPATCH_NAME="$PATCHNAME" make >> "$LOGFILE" 2>&1 || die
+strip -d "kpatch-$PATCHNAME.ko" >> "$LOGFILE" 2>&1 || die
+"$TOOLSDIR"/link-vmlinux-syms "kpatch-$PATCHNAME.ko" ../vmlinux >> "$LOGFILE" 2>&1 || die
+
+cp -f "$TEMPDIR/patch/kpatch-$PATCHNAME.ko" "$TEMPDIR/core/kpatch.ko" "$BASE" || die
 
 echo "SUCCESS"
-cp -f $TEMPDIR/patch/kpatch-$PATCHNAME.ko $TEMPDIR/core/kpatch.ko $BASE
 cleanup
