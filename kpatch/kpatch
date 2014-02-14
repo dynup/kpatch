@@ -15,170 +15,153 @@
 # TODO: add kernelrelease option to manage releases other than the
 # currently running one
 
-KERNELRELEASE=$(uname -r)
-VARDIR=/var/lib/kpatch/$KERNELRELEASE
-USRDIR=/usr/lib/kpatch/$KERNELRELEASE
+set -o errexit
+set -o nounset
+
+KERNELRELEASE="$(uname -r)"
+VARDIR="/var/lib/kpatch/$KERNELRELEASE"
+USRDIR="/usr/lib/kpatch/$KERNELRELEASE"
 TOOLSDIR=/usr/local/libexec/kpatch
 
 usage () {
-	echo "usage:"
-	echo "kpatch enable MODULE"
-	echo "kpatch disable MODULE"
-	echo "kpatch load [--all | MODULE]"
-	echo "kpatch unload [--all | MODULE]"
-	echo "kpatch list"
-	echo "kpatch info MODULE"
-	echo "kpatch build PATCH"
+	echo "usage:" >&2
+	echo "kpatch enable MODULE" >&2
+	echo "kpatch disable MODULE" >&2
+	echo "kpatch load [--all | MODULE]" >&2
+	echo "kpatch unload [--all | MODULE]" >&2
+	echo "kpatch list" >&2
+	echo "kpatch info MODULE" >&2
+	echo "kpatch build PATCH" >&2
 	exit 1
 }
 
-# return either VARDIR or USRDIR (or exits if not found)
+warn() {
+	echo "kpatch: $@" >&2
+}
+
+die() {
+	warn "$@"
+	exit 1
+}
+
+# return either VARDIR or USRDIR
 find_patch () {
-	[ -e $VARDIR/available/$1 ] && DIR=$VARDIR && return
-	[ -e $USRDIR/available/$1 ] && DIR=$USRDIR && return
-	echo "Hotfix $2 is not installed"
-	echo "Use "kpatch list" for available patches"
-	exit 2
+	[[ -f "$VARDIR/available/$1" ]] && DIR="$VARDIR" && return
+	[[ -f "$USRDIR/available/$1" ]] && DIR="$USRDIR" && return
+	return 1
 }
 
 # takes full path to patch module
 load_patch () {
-	NAME=$(basename $1)
-	NAME=${NAME%.*}
-	insmod $1
-	if [ $? -ne 0 ]
-	then
-		echo "Hotfix $NAME failed to load"
-		exit 3
-	fi
-	echo "Hotfix $NAME loaded"
+	/usr/sbin/insmod "$1"
 }
 
 # takes only the module filename
 unload_patch () {
-	NAME=$(basename $1)
-	rmmod ${NAME%.*}
-	if [ $? -ne 0 ]
-	then
-		echo "Hotfix $NAME failed to unload"
-		exit 3
-	fi
-	echo "Hotfix $NAME unloaded"
+	NAME="$(basename $1)"
+	/usr/sbin/rmmod "${NAME%.*}"
 }
 
 unset DIR
-[ $# -gt 2 ] || [ $# -lt 1 ] && usage
-MODFILE=$2.ko
-case $1 in
+[[ "$#" -gt 2 ]] || [[ "$#" -lt 1 ]] && usage
+case "$1" in
 "enable")
-	[ $# -ne 2 ] && usage
-	find_patch $MODFILE
-	if [ -e $DIR/enabled/$MODFILE ]
-	then
-		echo "Hotfix $2 is already enabled"
-		exit 0
-	fi
-	ln -s $DIR/available/$MODFILE $DIR/enabled/$MODFILE
-	if [ $? -ne 0 ]
-	then
-		echo "Failed to enable patch $2"
-		exit 3
-	else
-		echo "Hotfix $2 enabled"
-	fi
+	[[ "$#" -ne 2 ]] && usage
+	PATCH=$2
+	MODFILE="$PATCH.ko"
+	find_patch "$MODFILE" || die "$PATCH is not installed"
+	[[ -f "$DIR/enabled/$MODFILE" ]] && die "patch $2 is already enabled"
+	mkdir -p $DIR/enabled
+	ln -s "$DIR/available/$MODFILE" "$DIR/enabled/$MODFILE" || die "failed to enable patch $PATCH"
 	;;
+
 "disable")
-	[ $# -ne 2 ] && usage
-	find_patch $MODFILE
-	if [ ! -e $DIR/enabled/$MODFILE ]
-	then
-		echo "Hotfix $2 is already disabled"
-		exit 0
-	fi
-	rm -f $DIR/enabled/$MODFILE
-	if [ $? -ne 0 ]
-	then
-		echo "Failed to disable patch $2"
-		exit 3
-	else
-		echo "Hotfix $2 disabled"
-	fi
+	[[ "$#" -ne 2 ]] && usage
+	PATCH=$2
+	MODFILE="$PATCH.ko"
+	find_patch "$MODFILE" || die "$PATCH is not installed"
+	[[ ! -f "$DIR/enabled/$MODFILE" ]] && die "$PATCH is already disabled"
+	rm -f "$DIR/enabled/$MODFILE" || die "failed to disable patch $PATCH"
 	;;
+
 "load")
-	[ $# -ne 2 ] && usage
-	case $2 in
+	[[ "$#" -ne 2 ]] && usage
+	case "$2" in
 	"--all")
-		for i in $(ls $VARDIR/enabled)
-		do
-			load_patch $VARDIR/enabled/$i
+		for i in "$VARDIR"/enabled/*.ko; do
+			load_patch "$VARDIR/enabled/$i"
 		done
-		for i in $(ls $USRDIR/enabled)
-		do
-			load_patch $USRDIR/enabled/$i
+		for i in "$USRDIR"/enabled/*.ko; do
+			load_patch "$USRDIR/enabled/$i"
 		done
 		;;
 	*)
-		find_patch $MODFILE
-		load_patch $DIR/available/$MODFILE
+		PATCH="$2"
+		MODFILE="$PATCH.ko"
+		find_patch "$MODFILE" || die "$PATCH is not installed"
+		load_patch "$DIR/available/$MODFILE"
 		;;
 	esac
 	;;
+
 "unload")
-	[ $# -ne 2 ] && usage
-	case $2 in
+	[[ "$#" -ne 2 ]] && usage
+	case "$2" in
 	"--all")
-		for i in $(ls $VARDIR/available)
-		do
-			unload_patch ${i%.*}
+		for i in "$(ls $VARDIR/available)"; do
+			unload_patch "${i%.*}"
 		done
-		for i in $(ls $USRDIR/available)
-		do
-			unload_patch ${i%.*}
+		for i in "$(ls $USRDIR/available)"; do
+			unload_patch "${i%.*}"
 		done
 		;;
 	*)
-		find_patch $MODFILE
-		unload_patch $2
+		PATCH="$2"
+		MODFILE="$PATCH.ko"
+		find_patch "$MODFILE" || die "$PATCH is not installed"
+		unload_patch "$PATCH"
 		;;
 	esac
 	;;
+
 "list")
-	[ $# -ne 1 ] && usage
+	[[ "$#" -ne 1 ]] && usage
 	echo "User patches available:"
-	for i in $(ls $VARDIR/available)
-	do
-		echo ${i%.*}
+	for i in "$(ls $VARDIR/available)"; do
+		echo "${i%.*}"
 	done
 	echo ""
 	echo "User patches enabled:"
-	for i in $(ls $VARDIR/enabled)
-	do
-		echo ${i%.*}
+	for i in "$(ls $VARDIR/enabled)"; do
+		echo "${i%.*}"
 	done
 	echo ""
 	echo "System patches available:"
-	for i in $(ls $USRDIR/available)
-	do
-		echo ${i%.*}
+	for i in "$(ls $USRDIR/available)"; do
+		echo "${i%.*}"
 	done
 	echo ""
 	echo "System patches enabled:"
-	for i in $(ls $USRDIR/enabled)
-	do
-		echo ${i%.*}
+	for i in "$(ls $USRDIR/enabled)"; do
+		echo "${i%.*}"
 	done
 	;;
+
 "info")
-	[ $# -ne 2 ] && usage
-	find_patch $MODFILE
-	echo "Hotfix information for ${2%.*}:"
-	modinfo $DIR/available/$MODFILE
+	[[ "$#" -ne 2 ]] && usage
+	PATCH="$2"
+	MODFILE="$PATCH.ko"
+	find_patch "$MODFILE" || die "$PATCH is not installed"
+	echo "Patch information for $PATCH:"
+	/usr/sbin/modinfo "$DIR/available/$MODFILE"
 	;;
+
 "build")
-	[ $# -ne 2 ] && usage
-	$TOOLSDIR/kpatch-build $2
-	[ $? -ne 0 ] && exit 3
+	[[ "$#" -ne 2 ]] && usage
+	"$TOOLSDIR/kpatch-build" "$2"
+	[[ "$?" -ne 0 ]] && exit 3
 	;;
+
 *)
 	echo "subcommand $1 not recognized"
 	usage
