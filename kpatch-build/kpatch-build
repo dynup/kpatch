@@ -47,7 +47,7 @@ die() {
 }
 
 if [[ "$#" -ne 1 ]]; then
-	echo "usage: $0 PATCH" >&2
+	echo "usage: $0 patchfile" >&2
 	exit 2
 fi
 
