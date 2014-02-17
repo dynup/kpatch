@@ -125,7 +125,7 @@ struct rela {
 struct kpatch_elf {
 	Elf *elf;
 	struct table sections;
-	struct table sybmols;
+	struct table symbols;
 };
 
 /*******************
@@ -248,7 +248,7 @@ void kpatch_create_rela_table(struct kpatch_elf *kelf, struct section *sec)
 		rela->addend = rela->rela.r_addend;
 		rela->offset = rela->rela.r_offset;
 		symndx = GELF_R_SYM(rela->rela.r_info);
-		rela->sym = find_symbol_by_index(&kelf->sybmols, symndx);
+		rela->sym = find_symbol_by_index(&kelf->symbols, symndx);
 		if (!rela->sym)
 			ERROR("could not find rela entry symbol\n");
 		if (rela->sym->sec && (rela->sym->sec->sh.sh_flags & SHF_STRINGS)) {
@@ -334,14 +334,14 @@ void kpatch_create_symbol_table(struct kpatch_elf *kelf)
 
 	symbols_nr = symtab->sh.sh_size / symtab->sh.sh_entsize;
 
-	alloc_table(&kelf->sybmols, sizeof(struct symbol), symbols_nr);
+	alloc_table(&kelf->symbols, sizeof(struct symbol), symbols_nr);
 
 #if DEBUG
 	printf("\n=== symbol table (%d entries) ===\n", symbols_nr);
 #endif
 
 	/* iterator i declared in for_each_entry() macro */
-	for_each_symbol(i, sym, &kelf->sybmols) {
+	for_each_symbol(i, sym, &kelf->symbols) {
 		if (i == 0) /* skip symbol 0 */
 			continue;
 		sym->index = i;
@@ -670,7 +670,7 @@ void kpatch_correlate_elfs(struct kpatch_elf *kelf1, struct kpatch_elf *kelf2)
 	int i;
 
 	kpatch_correlate_sections(&kelf1->sections, &kelf2->sections);
-	kpatch_correlate_symbols(&kelf1->sybmols, &kelf2->sybmols);
+	kpatch_correlate_symbols(&kelf1->symbols, &kelf2->symbols);
 
 	/* at this point, sections are correlated, we can use sec->twin */
 	for_each_section(i, sec, &kelf1->sections)
@@ -686,7 +686,7 @@ void kpatch_compare_correlated_elements(struct kpatch_elf *kelf)
 
 	/* tables are already correlated at this point */
 	kpatch_compare_correlated_sections(&kelf->sections);
-	kpatch_compare_correlated_symbols(&kelf->sybmols);
+	kpatch_compare_correlated_symbols(&kelf->symbols);
 
 	for_each_section(i, sec, &kelf->sections)
 		if (is_rela_section(sec))
@@ -763,7 +763,7 @@ void kpatch_dump_kelf(struct kpatch_elf *kelf)
 	}
 
 	printf("\n=== Symbols ===\n");
-	for_each_symbol(i, sym, &kelf->sybmols) {
+	for_each_symbol(i, sym, &kelf->symbols) {
 		if (i == 0) /* ugh */
 			continue;
 		printf("sym %02d, type %d=%d, bind %d=%d, ndx %02d, name %s (%s)",
@@ -780,7 +780,7 @@ int kpatch_find_changed_functions(struct kpatch_elf *kelf)
 	struct symbol *sym;
 	int i, changed = 0;
 
-	for_each_symbol(i, sym, &kelf->sybmols) {
+	for_each_symbol(i, sym, &kelf->symbols) {
 		if (sym->type != STT_FUNC)
 			continue;
 		if (sym->status == CHANGED) {
@@ -837,7 +837,7 @@ void kpatch_validate_reachability(struct kpatch_elf *kelf)
 	struct section *sec;
 	int i;
 
-	for_each_symbol(i, sym, &kelf->sybmols)
+	for_each_symbol(i, sym, &kelf->symbols)
 		if (!sym->reachable && sym->status != SAME &&
 		    sym->type == STT_FUNC)
 			kpatch_reachable_symbol(sym);
@@ -878,7 +878,7 @@ void kpatch_generate_output(struct kpatch_elf *kelf, struct kpatch_elf **kelfout
 #endif
 
 	/* count output symbols */
-	for_each_symbol(i, sym, &kelf->sybmols) {
+	for_each_symbol(i, sym, &kelf->symbols) {
 		if (i == 0 || sym->status != SAME)
 			symbols_nr++;
 	}
@@ -894,7 +894,7 @@ void kpatch_generate_output(struct kpatch_elf *kelf, struct kpatch_elf **kelfout
 
 	/* allocate tables */
 	alloc_table(&out->sections, sizeof(struct section), sections_nr);
-	alloc_table(&out->sybmols, sizeof(struct symbol), symbols_nr);
+	alloc_table(&out->symbols, sizeof(struct symbol), symbols_nr);
 
 	/* copy to output kelf sections, link to kelf, and reindex */
 	index = 0;
@@ -911,11 +911,11 @@ void kpatch_generate_output(struct kpatch_elf *kelf, struct kpatch_elf **kelfout
 
 	/* copy to output kelf symbols, link to kelf, and reindex */
 	index = 0;
-	for_each_symbol(i, sym, &kelf->sybmols) {
+	for_each_symbol(i, sym, &kelf->symbols) {
 		if (i != 0 && sym->status == SAME)
 			continue;
 
-		symout = &((struct symbol *)(out->sybmols.data))[index];
+		symout = &((struct symbol *)(out->symbols.data))[index];
 		*symout = *sym;
 		symout->index = index;
 		symout->twino = sym;
@@ -929,7 +929,7 @@ void kpatch_generate_output(struct kpatch_elf *kelf, struct kpatch_elf **kelfout
 			symout->sym.st_shndx = sym->sec->twino->index;
 	}
 
-	for_each_symbol(i, sym, &out->sybmols) {
+	for_each_symbol(i, sym, &out->symbols) {
 		if (i == 0)
 			continue;
 		/*
@@ -1076,7 +1076,7 @@ void kpatch_create_strtab(struct kpatch_elf *kelf)
 
 	/* determine size of string table */
 	size = 1; /* for initial NULL terminator */
-	for_each_symbol(i, sym, &kelf->sybmols) {
+	for_each_symbol(i, sym, &kelf->symbols) {
 		if (i == 0 || sym->type == STT_SECTION)
 			continue;
 		size += strlen(sym->name) + 1; /* include NULL terminator */
@@ -1090,7 +1090,7 @@ void kpatch_create_strtab(struct kpatch_elf *kelf)
 
 	/* populate string table and link with section header */
 	offset = 1;
-	for_each_symbol(i, sym, &kelf->sybmols) {
+	for_each_symbol(i, sym, &kelf->symbols) {
 		if (i == 0)
 			continue;
 		if (sym->type == STT_SECTION) {
@@ -1116,7 +1116,7 @@ void kpatch_create_strtab(struct kpatch_elf *kelf)
 	print_strtab(buf, size);
 	printf("\n");
 
-	for_each_symbol(i, sym, &kelf->sybmols)
+	for_each_symbol(i, sym, &kelf->symbols)
 		printf("%s @ strtab offset %d\n",sym->name,sym->sym.st_name);
 #endif
 }
@@ -1134,13 +1134,13 @@ void kpatch_create_symtab(struct kpatch_elf *kelf)
 		ERROR("find_section_by_name");
 
 	/* create new symtab buffer */
-	size = kelf->sybmols.nr * symtab->sh.sh_entsize;
+	size = kelf->symbols.nr * symtab->sh.sh_entsize;
 	buf = malloc(size);
 	if (!buf)
 		ERROR("malloc");
 	memset(buf, 0, size);
 
-	for_each_symbol(i, sym, &kelf->sybmols) {
+	for_each_symbol(i, sym, &kelf->symbols) {
 		memcpy(buf + (i * symtab->sh.sh_entsize), &sym->sym,
 		       symtab->sh.sh_entsize);
 	}
@@ -1162,19 +1162,19 @@ void kpatch_link_symtab_vmlinux(struct kpatch_elf *kelf, struct kpatch_elf *vmke
 	char kstrbuf[BUFSIZE];
 	int i;
 
-	for_each_symbol(i, sym, &kelf->sybmols) {
+	for_each_symbol(i, sym, &kelf->symbols) {
 		if (GELF_ST_BIND(sym->sym.st_info) != STB_GLOBAL)
 			continue;
 
 		/* figure out if symbol is exported by the kernel */
 		snprintf(kstrbuf, BUFSIZE, "%s%s", "__ksymtab_", sym->name);
 		printf("looking for %s\n",kstrbuf);
-		vmsym = find_symbol_by_name(&vmkelf->sybmols, kstrbuf);
+		vmsym = find_symbol_by_name(&vmkelf->symbols, kstrbuf);
 		if (vmsym)
 			continue;
 
 		/* it is not, lookup address in vmlinux */
-		vmsym = find_symbol_by_name(&vmkelf->sybmols, sym->name);
+		vmsym = find_symbol_by_name(&vmkelf->symbols, sym->name);
 		if (!vmsym)
 			ERROR("symbol not found in vmlinux");
 
