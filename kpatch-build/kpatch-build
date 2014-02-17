@@ -30,6 +30,7 @@ KSRCDIR="$HOME/.kpatch/$ARCHVERSION"
 KSRCDIR_DIR="$(dirname $KSRCDIR)"
 KSRCDIR_CACHE="$KSRCDIR.tgz"
 TEMPDIR=
+STRIPCMD="strip -d --keep-file-symbols"
 
 cleanup() {
 	rm -Rf "$KSRCDIR" "$LOGFILE" "$TEMPDIR" > /dev/null 2>/dev/null
@@ -127,7 +128,7 @@ mkdir "$TEMPDIR/patched"
 for i in "$(cat $TEMPDIR/changed_objs)"; do
 	rm -f "$i"
 	KCFLAGS="-ffunction-sections -fdata-sections" make "$i" >> "$LOGFILE" 2>&1 || die
-	strip -d "$i" >> "$LOGFILE" 2>&1 || die
+	"$STRIPCMD" "$i" >> "$LOGFILE" 2>&1 || die
 	cp -f "$i" "$TEMPDIR/patched/" || die
 	
 done
@@ -136,7 +137,7 @@ mkdir "$TEMPDIR/orig"
 for i in "$(cat $TEMPDIR/changed_objs)"; do
 	rm -f "$i"
 	KCFLAGS="-ffunction-sections -fdata-sections" make "$i" >> "$LOGFILE" 2>&1 || die
-	strip -d "$i" >> "$LOGFILE" 2>&1 || die
+	"$STRIPCMD" -d "$i" >> "$LOGFILE" 2>&1 || die
 	cp -f "$i" "$TEMPDIR/orig/" || die
 done
 
@@ -158,7 +159,7 @@ cd patch
 ld -r -o output.o ../output/* >> "$LOGFILE" 2>&1 || die
 "$TOOLSDIR"/add-patches-section output.o ../vmlinux >> "$LOGFILE" 2>&1 || die
 KPATCH_BASEDIR="$TEMPDIR/core" KPATCH_BUILD="$KSRCDIR" KPATCH_NAME="$PATCHNAME" make >> "$LOGFILE" 2>&1 || die
-strip -d "kpatch-$PATCHNAME.ko" >> "$LOGFILE" 2>&1 || die
+"$STRIPCMD" "kpatch-$PATCHNAME.ko" >> "$LOGFILE" 2>&1 || die
 "$TOOLSDIR"/link-vmlinux-syms "kpatch-$PATCHNAME.ko" ../vmlinux >> "$LOGFILE" 2>&1 || die
 
 cp -f "$TEMPDIR/patch/kpatch-$PATCHNAME.ko" "$TEMPDIR/core/kpatch.ko" "$BASE" || die
