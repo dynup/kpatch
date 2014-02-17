@@ -30,6 +30,7 @@ KSRCDIR="$HOME/.kpatch/$ARCHVERSION"
 KSRCDIR_DIR="$(dirname $KSRCDIR)"
 KSRCDIR_CACHE="$KSRCDIR.tgz"
 TEMPDIR=
+STRIPCMD="strip -d --keep-file-symbols"
 
 cleanup() {
 	rm -Rf "$KSRCDIR" "$LOGFILE" "$TEMPDIR" > /dev/null 2>/dev/null
@@ -127,8 +128,9 @@ mkdir "$TEMPDIR/patched"
 for i in "$(cat $TEMPDIR/changed_objs)"; do
 	rm -f "$i"
 	KCFLAGS="-ffunction-sections -fdata-sections" make "$i" >> "$LOGFILE" 2>&1 || die
-	strip -d "$i" >> "$LOGFILE" 2>&1 || die
-	cp -f "$i" "$TEMPDIR/patched/" || die
+	"$STRIPCMD" "$i" >> "$LOGFILE" 2>&1 || die
+	mkdir -p "$TEMPDIR/patched/$(dirname $i)"
+	cp -f "$i" "$TEMPDIR/patched/$i" || die
 	
 done
 patch -R -p1 < "$PATCHFILE" >> "$LOGFILE" 2>&1
@@ -136,16 +138,19 @@ mkdir "$TEMPDIR/orig"
 for i in "$(cat $TEMPDIR/changed_objs)"; do
 	rm -f "$i"
 	KCFLAGS="-ffunction-sections -fdata-sections" make "$i" >> "$LOGFILE" 2>&1 || die
-	strip -d "$i" >> "$LOGFILE" 2>&1 || die
-	cp -f "$i" "$TEMPDIR/orig/" || die
+	"$STRIPCMD" -d "$i" >> "$LOGFILE" 2>&1 || die
+	mkdir -p "$TEMPDIR/base/$(dirname $i)"
+	cp -f "$i" "$TEMPDIR/orig/$i" || die
 done
 
 echo "Extracting new and modified ELF sections"
+cd "$TEMPDIR/orig"
+FILES="$(find * -type f)"
 cd "$TEMPDIR"
 mkdir output
-for i in orig/*; do
-	FILE="$(basename $i)"
-	"$TOOLSDIR"/create-diff-object "orig/$FILE" "patched/$FILE" "output/$FILE" >> "$LOGFILE" 2>&1 || die
+for i in $FILES; do
+	mkdir -p "output/$(dirname $i)"
+	"$TOOLSDIR"/create-diff-object "orig/$i" "patched/$i" "output/$i" >> "$LOGFILE" 2>&1 || die
 done
 
 echo "Building core module: kpatch.ko"
@@ -154,11 +159,12 @@ KPATCH_BUILD="$KSRCDIR" make >> "$LOGFILE" 2>&1 || die
 cd ..
 
 echo "Building patch module: kpatch-$PATCHNAME.ko"
-cd patch
-ld -r -o output.o ../output/* >> "$LOGFILE" 2>&1 || die
+cd "$TEMDIR/output"
+ld -r -o ../patch/output.o $FILES >> "$LOGFILE" 2>&1 || die
+cd "$TEMPDIR/patch"
 "$TOOLSDIR"/add-patches-section output.o ../vmlinux >> "$LOGFILE" 2>&1 || die
 KPATCH_BASEDIR="$TEMPDIR/core" KPATCH_BUILD="$KSRCDIR" KPATCH_NAME="$PATCHNAME" make >> "$LOGFILE" 2>&1 || die
-strip -d "kpatch-$PATCHNAME.ko" >> "$LOGFILE" 2>&1 || die
+"$STRIPCMD" "kpatch-$PATCHNAME.ko" >> "$LOGFILE" 2>&1 || die
 "$TOOLSDIR"/link-vmlinux-syms "kpatch-$PATCHNAME.ko" ../vmlinux >> "$LOGFILE" 2>&1 || die
 
 cp -f "$TEMPDIR/patch/kpatch-$PATCHNAME.ko" "$TEMPDIR/core/kpatch.ko" "$BASE" || die
