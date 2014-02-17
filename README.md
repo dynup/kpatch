@@ -1,8 +1,5 @@
-====================
-README for kpatch
-====================
-
-OVERVIEW
+kpatch: dynamic kernel patching
+===============================
 
 kpatch is a tool for the generation and application of kernel
 modules that patch a running Linux kernel while in operation,
@@ -13,7 +10,8 @@ sensitive or require a heavyweight approval process and
 notification of workload users in the event of downtime.
 
 
-INSTALLATION
+Installation
+------------
 
 The default install prefix is in /usr/local.
 
@@ -21,11 +19,12 @@ The default install prefix is in /usr/local.
     sudo make install
 
 
-QUICK START
+Quick Start
+-----------
 
-NOTE: While kpatch is designed to work with any recent Linux
+*NOTE: While kpatch is designed to work with any recent Linux
 kernel on any distribution, the "kpatch build" command currently
-only works on Fedora.
+only works on Fedora.*
 
 First, use diff to make a source patch against the kernel tree, e.g. foo.patch.
 Then:
@@ -36,7 +35,8 @@ Then:
 Voila, your kernel is patched.
 
 
-LICENSE
+License
+-------
 
 kpatch is under the GPLv2 license.
 
@@ -54,18 +54,24 @@ You should have received a copy of the GNU General Public License
 along with this program; if not, write to the Free Software
 Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
 
-STATUS
+
+Status
+------
 
 kpatch is currently is early development.  For now, it should _not_ be used
 in production environments until significantly more testing on various
 patches and environments is conducted.
 
-DEPENDENCIES
+
+Dependencies
+------------
 
 kpatch-build tools require libelf library and development headers to be installed.
-See GOTCHAS below.
+See Gotchas section below.
 
-GOTCHAS
+
+Gotchas
+-------
 
 The version of elfutils (namely libelf) that ship with most distros as of
 the time of this writing, have a bug in libelf that is exposed by kpatch.
@@ -76,7 +82,9 @@ The specific commit is 88ad5ddb71bd1fa8ed043a840157ebf23c0057b3.
 
 git://git.fedorahosted.org/git/elfutils.git
 
-HOWTO
+
+Patch module generation algorithm
+---------------------------------
 
 An example script for automating the patch module generation is
 kpatch-build/kpatch-build.  The script is written for Fedora but should
@@ -103,12 +111,14 @@ The primary steps in the patch module generation process are:
 - Use link-vmlinux-syms to hardcode non-exported kernel symbols
   into the symbol table of the patch kernel module
 
-DEMONSTRATION
 
-A demonstration of kpatch is available on Youtube:
+Demonstration
+-------------
+
+A low-level demonstration of kpatch is available on Youtube:
 
 http://www.youtube.com/watch?v=WeSmG-XirC4
 
-This demonstration completes each step in the HOWTO section in a manual
+This demonstration completes each step in the previous section in a manual
 fashion.  However, from a end-user perspective, most of these steps will
 be hidden away in scripts (eventually).
