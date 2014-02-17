@@ -27,10 +27,10 @@ NOTE: While kpatch is designed to work with any recent Linux
 kernel on any distribution, the "kpatch build" command currently
 only works on Fedora.
 
-First make a patch against the kernel tree, e.g. foo.patch.
+First, use diff to make a source patch against the kernel tree, e.g. foo.patch.
 Then:
 
-    sudo /usr/local/sbin/kpatch build foo.patch
+    kpatch build foo.patch
     sudo insmod kpatch.ko kpatch-foo.ko
 
 Voila, your kernel is patched.

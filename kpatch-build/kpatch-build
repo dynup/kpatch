@@ -1,21 +1,17 @@
 #!/bin/bash
 
-# kpatch build script for Fedora
+# kpatch build script
 
 # This script takes a patch based on the version of the kernel
 # currently running and creates a kernel module that will
 # replace modified functions in the kernel such that the
 # patched code takes effect.
 
-# This script contains Fedora specific nuances and will probably
-# not work on other distributions; however, it does serve as a tutorial
-# on the various steps involved and should be adaptable to other
-# distributions.
+# This script currently only works on Fedora and will need to be adapted to
+# work on other distros.
 
 # This script:
-# - Installs the required yum/rpm tools
 # - Downloads the kernel src rpm for the currently running kernel
-# - Installs the build dependencies for the src rpm
 # - Unpacks and prepares the src rpm for building
 # - Builds the base kernel (vmlinux)
 # - Builds the patched kernel and monitors changed objects
@@ -23,9 +19,8 @@
 # - Runs kpatch tools to create and link the patch kernel module
 
 BASE="$PWD"
-LOGFILE="$PWD/kpatch-build.log"
-TOOLSDIR=/usr/local/libexec/kpatch
-DATADIR=/usr/local/share/kpatch
+LOGFILE="/tmp/kpatch-build-$(date +%s).log"
+TOOLSDIR="$(readlink -f $(dirname $0))"
 ARCHVERSION="$(uname -r)"
 DISTROVERSION="${ARCHVERSION%*.*}"
 CPUS="$(grep -c ^processor /proc/cpuinfo)"
@@ -37,17 +32,32 @@ KSRCDIR_CACHE="$KSRCDIR.tgz"
 TEMPDIR=
 
 cleanup() {
-	rm -Rf "$KSRCDIR" "kernel-$DISTROVERSION.src.rpm" "$LOGFILE" "$TEMPDIR" > /dev/null 2>/dev/null
+	rm -Rf "$KSRCDIR" "$LOGFILE" "$TEMPDIR" > /dev/null 2>/dev/null
 }
 
 die() {
-	echo "ERROR: kpatch build failed" >&2
-	echo "check kpatch-build.log for more details" >&2
+	if [[ -z $1 ]]; then
+		echo "ERROR: kpatch build failed. Check kpatch-build.log for more details." >&2
+	else
+		echo "ERROR: $1" >&2
+	fi
 	exit 1
 }
 
+find_data_dir() {
+	# git repo
+	DATADIR="$(readlink -f $TOOLSDIR/../kmod)"
+	[[ -e "$DATADIR" ]] && return
+
+	# installation path
+	DATADIR="$(readlink -f $TOOLSDIR/../../share/kpatch)"
+	[[ -e "$DATADIR" ]] && return
+
+	return 1
+}
+
 if [[ "$#" -ne 1 ]]; then
-	echo "usage: $0 PATCH" >&2
+	echo "usage: $0 patchfile" >&2
 	exit 2
 fi
 
@@ -64,7 +74,7 @@ fi
 
 cleanup
 
-TEMPDIR="$(mktemp -d)" || die
+TEMPDIR="$(mktemp -d)" || die "mktemp failed"
 
 if [[ -f "$KSRCDIR_CACHE" ]]; then
 	echo "Using cache at $KSRCDIR_CACHE"
@@ -72,19 +82,17 @@ if [[ -f "$KSRCDIR_CACHE" ]]; then
 	tar xzf "$KSRCDIR_CACHE" -C "$KSRCDIR_DIR" >> "$LOGFILE" 2>&1 || die
 	cd "$KSRCDIR" || die
 else
-	echo "Verifying required development tools"
-	yum install rpmdevtools yum-utils >> "$LOGFILE" 2>&1 || die
+	rpm -q --quiet rpmdevtools || die "rpmdevtools not installed"
+	rpm -q --quiet yum-utils || die "yum-utils not installed"
 
 	echo "Downloading kernel source for $ARCHVERSION"
-	yumdownloader --source "kernel-$ARCHVERSION" >> "$LOGFILE" 2>&1 || die
-
-	echo "Verifying build dependencies for kernel package"
-	yum-builddep "kernel-$DISTROVERSION.src.rpm" >> "$LOGFILE" 2>&1 || die
+	yumdownloader --source --destdir "$TEMPDIR" "kernel-$ARCHVERSION" >> "$LOGFILE" 2>&1 || die
 
 	echo "Unpacking kernel source"
 	rpmdev-setuptree >> "$LOGFILE" 2>&1 || die
-	rpm -Uvh "kernel-$DISTROVERSION.src.rpm" >> "$LOGFILE" 2>&1 || die
-	rpmbuild -bp "--target=$(uname -m)" "$HOME/rpmbuild/SPECS/kernel.spec" >> "$LOGFILE" 2>&1 || die
+	rpm -ivh "$TEMPDIR/kernel-$DISTROVERSION.src.rpm" >> "$LOGFILE" 2>&1 || die
+	rpmbuild -bp "--target=$(uname -m)" "$HOME/rpmbuild/SPECS/kernel.spec" >> "$LOGFILE" 2>&1 ||
+		die "rpmbuild -bp failed.  you may need to run 'yum-builddep kernel' first."
 	rm -rf "$KSRCDIR"
 	mkdir -p "$KSRCDIR_DIR"
 	mv "$HOME"/rpmbuild/BUILD/kernel-*/linux-"$ARCHVERSION" "$KSRCDIR" >> "$LOGFILE" 2>&1 || die
@@ -97,6 +105,8 @@ else
 	echo "Creating cache"
 	tar czf "$KSRCDIR_CACHE" -C "$KSRCDIR_DIR" "$ARCHVERSION" >> "$LOGFILE" 2>&1 || die
 fi
+
+find_data_dir || (echo "can't find data dir" >&2 && die)
 
 cp -R "$DATADIR/core" "$DATADIR/patch" "$TEMPDIR" || die
 cp vmlinux "$TEMPDIR" || die
@@ -153,5 +163,5 @@ strip -d "kpatch-$PATCHNAME.ko" >> "$LOGFILE" 2>&1 || die
 
 cp -f "$TEMPDIR/patch/kpatch-$PATCHNAME.ko" "$TEMPDIR/core/kpatch.ko" "$BASE" || die
 
-echo "SUCCESS"
 cleanup
+echo "SUCCESS"
