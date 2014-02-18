@@ -13,6 +13,9 @@ kpatch is currently is early development.  For now, it should _not_ be used
 in production environments until significantly more testing on various
 patches and environments is conducted.
 
+**WARNING: Use with caution!  Kernel crashes, spontaneous reboots, and data loss
+may occur!**
+
 
 Installation
 ------------
@@ -114,6 +117,21 @@ address on the stack and returns to ftrace, which then restores the original
 function's arguments and stack, and "returns" to the new function.
 
 
+Limitations
+-----------
+
+- kpatch can't detect when a patch changes the contents of a dynamically
+  allocated data structure, and isn't able to determine whether such patches
+  are safe to apply.  It's the user's responsibility to analyze any such
+  patches for safety before applying them.
+- Patches which change the contents of static data structures are not currently
+  supported.  kpatch build will detect such changes and report an error.
+- Patches to functions which are always in the call stack of a task, such as
+  schedule(), will fail to apply at runtime.
+- Patches which change functions that are only called in the kernel init path
+  will have no effect (obviously).
+
+
 Demonstration
 -------------
 
@@ -124,6 +142,13 @@ http://www.youtube.com/watch?v=WeSmG-XirC4
 This demonstration completes each step in the previous section in a manual
 fashion.  However, from a end-user perspective, most of these steps are hidden
 by the "kpatch build" command.
+
+
+Get involved
+------------
+
+If you have feedback or you want to contribute, feel free to join the mailing
+list at https://www.redhat.com/mailman/listinfo/kpatch and say hello.
 
 
 License
