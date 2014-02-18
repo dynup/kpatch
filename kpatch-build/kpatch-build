@@ -128,7 +128,7 @@ mkdir "$TEMPDIR/patched"
 for i in "$(cat $TEMPDIR/changed_objs)"; do
 	rm -f "$i"
 	KCFLAGS="-ffunction-sections -fdata-sections" make "$i" >> "$LOGFILE" 2>&1 || die
-	"$STRIPCMD" "$i" >> "$LOGFILE" 2>&1 || die
+	$STRIPCMD "$i" >> "$LOGFILE" 2>&1 || die
 	mkdir -p "$TEMPDIR/patched/$(dirname $i)"
 	cp -f "$i" "$TEMPDIR/patched/$i" || die
 	
@@ -138,7 +138,7 @@ mkdir "$TEMPDIR/orig"
 for i in "$(cat $TEMPDIR/changed_objs)"; do
 	rm -f "$i"
 	KCFLAGS="-ffunction-sections -fdata-sections" make "$i" >> "$LOGFILE" 2>&1 || die
-	"$STRIPCMD" -d "$i" >> "$LOGFILE" 2>&1 || die
+	$STRIPCMD -d "$i" >> "$LOGFILE" 2>&1 || die
 	mkdir -p "$TEMPDIR/orig/$(dirname $i)"
 	cp -f "$i" "$TEMPDIR/orig/$i" || die
 done
@@ -159,7 +159,7 @@ ld -r -o ../patch/output.o $FILES >> "$LOGFILE" 2>&1 || die
 cd "$TEMPDIR/patch"
 "$TOOLSDIR"/add-patches-section output.o ../vmlinux >> "$LOGFILE" 2>&1 || die
 KPATCH_BUILD="$KSRCDIR" KPATCH_NAME="$PATCHNAME" make >> "$LOGFILE" 2>&1 || die
-"$STRIPCMD" "kpatch-$PATCHNAME.ko" >> "$LOGFILE" 2>&1 || die
+$STRIPCMD "kpatch-$PATCHNAME.ko" >> "$LOGFILE" 2>&1 || die
 "$TOOLSDIR"/link-vmlinux-syms "kpatch-$PATCHNAME.ko" ../vmlinux >> "$LOGFILE" 2>&1 || die
 
 cp -f "$TEMPDIR/patch/kpatch-$PATCHNAME.ko" "$BASE" || die
