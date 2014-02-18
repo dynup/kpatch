@@ -28,9 +28,9 @@ LOCALVERSION="$(uname -r)"
 LOCALVERSION="-${LOCALVERSION##*-}"
 KSRCDIR="$HOME/.kpatch/$ARCHVERSION"
 KSRCDIR_DIR="$(dirname $KSRCDIR)"
-KSRCDIR_CACHE="$KSRCDIR.tgz"
 TEMPDIR=
 STRIPCMD="strip -d --keep-file-symbols"
+APPLIEDPATCHFILE="applied-patch"
 
 die() {
 	if [[ -z $1 ]]; then
@@ -71,13 +71,16 @@ fi
 
 TEMPDIR="$(mktemp -d)" || die "mktemp failed"
 
-trap "rm -rf $TEMPDIR $KSRCDIR" EXIT INT TERM
+trap "rm -rf $TEMPDIR" EXIT INT TERM
 
-if [[ -f "$KSRCDIR_CACHE" ]]; then
-	echo "Using cache at $KSRCDIR_CACHE"
-	rm -rf "$KSRCDIR"
-	tar xzf "$KSRCDIR_CACHE" -C "$KSRCDIR_DIR" >> "$LOGFILE" 2>&1 || die
+if [[ -d "$KSRCDIR" ]]; then
+	echo "Using cache at $KSRCDIR"
 	cd "$KSRCDIR" || die
+	if [[ -f "$APPLIEDPATCHFILE" ]]; then
+		patch -R -p1 < "$APPLIEDPATCHFILE" || die "the kpatch cache is corrupted. \"rm -rf $KSRCDIR\" and try again"
+		rm -f "$APPLIEDPATCHFILE"
+	fi
+	make "-j$CPUS" vmlinux >> "$LOGFILE" 2>&1 || die
 else
 	rpm -q --quiet rpmdevtools || die "rpmdevtools not installed"
 	rpm -q --quiet yum-utils || die "yum-utils not installed"
@@ -90,7 +93,6 @@ else
 	rpm -ivh "$TEMPDIR/kernel-$DISTROVERSION.src.rpm" >> "$LOGFILE" 2>&1 || die
 	rpmbuild -bp "--target=$(uname -m)" "$HOME/rpmbuild/SPECS/kernel.spec" >> "$LOGFILE" 2>&1 ||
 		die "rpmbuild -bp failed.  you may need to run 'yum-builddep kernel' first."
-	rm -rf "$KSRCDIR"
 	mkdir -p "$KSRCDIR_DIR"
 	mv "$HOME"/rpmbuild/BUILD/kernel-*/linux-"$ARCHVERSION" "$KSRCDIR" >> "$LOGFILE" 2>&1 || die
 
@@ -98,9 +100,6 @@ else
 	cd "$KSRCDIR"
 	echo "$LOCALVERSION" > localversion || die
 	make "-j$CPUS" vmlinux >> "$LOGFILE" 2>&1 || die
-
-	echo "Creating cache"
-	tar czf "$KSRCDIR_CACHE" -C "$KSRCDIR_DIR" "$ARCHVERSION" >> "$LOGFILE" 2>&1 || die
 fi
 
 find_data_dir || (echo "can't find data dir" >&2 && die)
@@ -109,7 +108,8 @@ cp -LR "$DATADIR/patch" "$TEMPDIR" || die
 cp vmlinux "$TEMPDIR" || die
 
 echo "Building patched kernel"
-patch -p1 < "$PATCHFILE" >> "$LOGFILE" 2>&1
+cp "$PATCHFILE" "$APPLIEDPATCHFILE" || die
+patch -p1 < "$APPLIEDPATCHFILE" >> "$LOGFILE" 2>&1 || die
 make "-j$CPUS" vmlinux > "$TEMPDIR/patched_build.log" 2>&1 || die
 
 echo "Detecting changed objects"
@@ -129,7 +129,8 @@ for i in $(cat $TEMPDIR/changed_objs); do
 	cp -f "$i" "$TEMPDIR/patched/$i" || die
 	
 done
-patch -R -p1 < "$PATCHFILE" >> "$LOGFILE" 2>&1
+patch -R -p1 < "$APPLIEDPATCHFILE" >> "$LOGFILE" 2>&1
+rm -f "$APPLIEDPATCHFILE"
 mkdir "$TEMPDIR/orig"
 for i in $(cat $TEMPDIR/changed_objs); do
 	rm -f "$i"
