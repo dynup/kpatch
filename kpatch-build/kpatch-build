@@ -32,10 +32,6 @@ KSRCDIR_CACHE="$KSRCDIR.tgz"
 TEMPDIR=
 STRIPCMD="strip -d --keep-file-symbols"
 
-cleanup() {
-	rm -Rf "$KSRCDIR" "$LOGFILE" "$TEMPDIR" > /dev/null 2>/dev/null
-}
-
 die() {
 	if [[ -z $1 ]]; then
 		echo "ERROR: kpatch build failed. Check $LOGFILE for more details." >&2
@@ -73,9 +69,9 @@ if [[ "$PATCHNAME" =~ \.patch ]] || [[ "$PATCHNAME" =~ \.diff ]]; then
 	PATCHNAME="${PATCHNAME%.*}"
 fi
 
-cleanup
-
 TEMPDIR="$(mktemp -d)" || die "mktemp failed"
+
+trap "rm -rf $TEMPDIR $KSRCDIR" EXIT INT TERM
 
 if [[ -f "$KSRCDIR_CACHE" ]]; then
 	echo "Using cache at $KSRCDIR_CACHE"
@@ -164,5 +160,6 @@ $STRIPCMD "kpatch-$PATCHNAME.ko" >> "$LOGFILE" 2>&1 || die
 
 cp -f "$TEMPDIR/patch/kpatch-$PATCHNAME.ko" "$BASE" || die
 
-cleanup
+rm -f "$LOGFILE"
+
 echo "SUCCESS"
