@@ -297,6 +297,7 @@ int main(int argc, char **argv)
 		patches_data[i].orig_end = cur->vm_addr + cur->vm_len;
 		relas_data[i].r_offset = i * sizeof(struct kpatch_patch);
 		relas_data[i].r_info = GELF_R_INFO(cur->index, R_X86_64_64);
+		i++;
 	}
 
 	/* get next section index from elf header */
