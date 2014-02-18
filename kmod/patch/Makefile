@@ -1,7 +1,6 @@
 KPATCH_NAME ?= patch
 KPATCH_BUILD ?= /lib/modules/$(shell uname -r)/build
 KPATCH_MAKE = $(MAKE) -C $(KPATCH_BUILD) M=$(PWD)
-ccflags-y += -I$(KPATCH_BASEDIR)
 
 obj-m += kpatch-$(KPATCH_NAME).o
 

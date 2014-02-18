@@ -1,11 +1,13 @@
 include ../Makefile.inc
 
 all:
+	$(MAKE) -C core
 
 install:
-	$(INSTALL) -d $(DATADIR)/core
-	$(INSTALL) -m 644 core/* $(DATADIR)/core
+	$(INSTALL) -d $(MODULESDIR)/(uname -r)/kpatch
+	$(INSTALL) -m 644 core/kpatch.ko $(MODULESDIR)/(uname -r)/kpatch
 	$(INSTALL) -d $(DATADIR)/patch
 	$(INSTALL) -m 644 patch/* $(DATADIR)/patch
 
 clean:
+	$(MAKE) -C core clean
