@@ -31,6 +31,9 @@ Install the dependencies for the "kpatch build" command:
     sudo yum install rpmdevtools pesign
     sudo yum-builddep kernel
 
+    # optional, but highly recommended
+    sudo yum install ccache
+
 Compile kpatch:
 
     make
