@@ -121,7 +121,7 @@ fi
 
 echo "Rebuilding changed objects"
 mkdir "$TEMPDIR/patched"
-for i in "$(cat $TEMPDIR/changed_objs)"; do
+for i in $(cat $TEMPDIR/changed_objs); do
 	rm -f "$i"
 	KCFLAGS="-ffunction-sections -fdata-sections" make "$i" >> "$LOGFILE" 2>&1 || die
 	$STRIPCMD "$i" >> "$LOGFILE" 2>&1 || die
@@ -131,7 +131,7 @@ for i in "$(cat $TEMPDIR/changed_objs)"; do
 done
 patch -R -p1 < "$PATCHFILE" >> "$LOGFILE" 2>&1
 mkdir "$TEMPDIR/orig"
-for i in "$(cat $TEMPDIR/changed_objs)"; do
+for i in $(cat $TEMPDIR/changed_objs); do
 	rm -f "$i"
 	KCFLAGS="-ffunction-sections -fdata-sections" make "$i" >> "$LOGFILE" 2>&1 || die
 	$STRIPCMD -d "$i" >> "$LOGFILE" 2>&1 || die
