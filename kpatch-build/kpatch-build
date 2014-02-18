@@ -93,6 +93,7 @@ else
 	rpm -ivh "$TEMPDIR/kernel-$DISTROVERSION.src.rpm" >> "$LOGFILE" 2>&1 || die
 	rpmbuild -bp "--target=$(uname -m)" "$HOME/rpmbuild/SPECS/kernel.spec" >> "$LOGFILE" 2>&1 ||
 		die "rpmbuild -bp failed.  you may need to run 'yum-builddep kernel' first."
+	rm -rf "$KSRCDIR_DIR"
 	mkdir -p "$KSRCDIR_DIR"
 	mv "$HOME"/rpmbuild/BUILD/kernel-*/linux-"$ARCHVERSION" "$KSRCDIR" >> "$LOGFILE" 2>&1 || die
 
