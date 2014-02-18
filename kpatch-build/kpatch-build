@@ -38,7 +38,7 @@ cleanup() {
 
 die() {
 	if [[ -z $1 ]]; then
-		echo "ERROR: kpatch build failed. Check kpatch-build.log for more details." >&2
+		echo "ERROR: kpatch build failed. Check $LOGFILE for more details." >&2
 	else
 		echo "ERROR: $1" >&2
 	fi
