@@ -13,23 +13,23 @@ ENABLEDDIR="$USERDIR/enabled"
 
 usage () {
 	echo "usage: kpatch <command> [<args>]" >&2
-	echo
+	echo >&2
 	echo "Valid commands:" >&2
-	printf '   %-20s %s\n' "build <file>"         "build hotpatch module from source diff patch file"
-	echo
-	printf '   %-20s %s\n' "install <file>"       "install hotpatch module to the kpatch DB"
-	printf '   %-20s %s\n' "uninstall <hotpatch>" "uninstall hotpatch module from the kpatch DB"
-	echo
-	printf '   %-20s %s\n' "apply --all"          "apply all enabled hotpatch modules to the running kernel"
-	printf '   %-20s %s\n' "apply <hotpatch>"     "apply installed hotpatch module to the running kernel"
-	printf '   %-20s %s\n' "remove <hotpatch>"    "remove hotpatch module from the running kernel"
-	echo
-	printf '   %-20s %s\n' "enable <hotpatch>"    "automatically apply hotpatch module during boot"
-	printf '   %-20s %s\n' "disable <hotpatch>"   "don't automatically apply hotpatch module during boot"
-	echo
-	printf '   %-20s %s\n' "info <hotpatch>"      "show information about an installed hotpatch module"
-	echo
-	printf '   %-20s %s\n' "list"                 "list installed hotpatch modules"
+	printf '   %-20s %s\n' "build <file>"         "build hotpatch module from source diff patch file" >&2
+	echo >&2
+	printf '   %-20s %s\n' "install <file>"       "install hotpatch module to the kpatch DB" >&2
+	printf '   %-20s %s\n' "uninstall <hotpatch>" "uninstall hotpatch module from the kpatch DB" >&2
+	echo >&2
+	printf '   %-20s %s\n' "apply --all"          "apply all enabled hotpatch modules to the running kernel" >&2
+	printf '   %-20s %s\n' "apply <hotpatch>"     "apply installed hotpatch module to the running kernel" >&2
+	printf '   %-20s %s\n' "remove <hotpatch>"    "remove hotpatch module from the running kernel" >&2
+	echo >&2
+	printf '   %-20s %s\n' "enable <hotpatch>"    "automatically apply hotpatch module during boot" >&2
+	printf '   %-20s %s\n' "disable <hotpatch>"   "don't automatically apply hotpatch module during boot" >&2
+	echo >&2
+	printf '   %-20s %s\n' "info <hotpatch>"      "show information about an installed hotpatch module" >&2
+	echo >&2
+	printf '   %-20s %s\n' "list"                 "list installed hotpatch modules" >&2
 	exit 1
 }
 
