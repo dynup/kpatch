@@ -42,12 +42,9 @@ __find_module () {
 	return 1
 }
 
-# Given a patch name, find the corresponding module and return its full path in
-# $MODULE.  For a given module kpatch-foo.ko, we allow foo or kpatch-foo or
-# kpatch-foo.ko as input.
 find_module () {
-	arg=$1
-	__find_module "kpatch-$arg.ko" || __find_module "$arg.ko" || __find_module "${arg}"
+	arg="$1"
+	__find_module "${arg}"
 }
 
 load_module () {
@@ -64,8 +61,6 @@ module_enabled() {
 
 echo_patch_name() {
 	NAME="$(basename $1)"
-	NAME="${NAME%.ko}"
-	NAME="${NAME#kpatch-}"
 	echo $NAME
 }
 
