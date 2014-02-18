@@ -123,12 +123,23 @@ case "$1" in
 "remove")
 	[[ "$#" -ne 2 ]] && usage
 	PATCH="$2"
-	case "$PATCH" in
-	*)
-		find_module "$PATCH" || die "$PATCH is not installed"
-		unload_module "$MODULE" || die "failed to unload patch $PATCH"
-		;;
-	esac
+	find_module "$PATCH" || die "$PATCH is not installed"
+	unload_module "$MODULE" || die "failed to unload patch $PATCH"
+	;;
+
+"install")
+	[[ "$#" -ne 2 ]] && usage
+	PATCH="$2"
+	[[ -e "$PATCH" ]] || die "$PATCH doesn't exist"
+	[[ ${PATCH: -3} == ".ko" ]] || "$PATCH isn't a .ko file"
+	cp -f "$PATCH" "$USERDIR" || die "failed to install patch $PATCH"
+	;;
+
+"uninstall")
+	[[ "$#" -ne 2 ]] && usage
+	PATCH="$2"
+	find_module "$PATCH" || die "$PATCH is not installed"
+	rm -f "$USERDIR/$(basename $MODULE)" || die "failed to uninstall patch $PATCH"
 	;;
 
 "list")
