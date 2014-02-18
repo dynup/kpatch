@@ -109,7 +109,7 @@ fi
 
 find_data_dir || (echo "can't find data dir" >&2 && die)
 
-cp -R "$DATADIR/patch" "$TEMPDIR" || die
+cp -LR "$DATADIR/patch" "$TEMPDIR" || die
 cp vmlinux "$TEMPDIR" || die
 
 echo "Building patched kernel"
