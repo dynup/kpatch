@@ -4,8 +4,8 @@ all:
 	$(MAKE) -C core
 
 install:
-	$(INSTALL) -d $(MODULESDIR)/(uname -r)/kpatch
-	$(INSTALL) -m 644 core/kpatch.ko $(MODULESDIR)/(uname -r)/kpatch
+	$(INSTALL) -d $(MODULESDIR)/$(shell uname -r)/kpatch
+	$(INSTALL) -m 644 core/kpatch.ko $(MODULESDIR)/$(shell uname -r)/kpatch
 	$(INSTALL) -d $(DATADIR)/patch
 	$(INSTALL) -m 644 patch/* $(DATADIR)/patch
 
