@@ -26,13 +26,25 @@ Quick Start
 kernel on any distribution, the "kpatch build" command currently
 only works on Fedora.*
 
-First, use diff to make a source patch against the kernel tree, e.g. foo.patch.
-Then:
+Load the kpatch core module:
 
-    kpatch build foo.patch
-    sudo insmod kpatch.ko kpatch-foo.ko
+    sudo insmod /usr/local/lib/modules/$(uname -r)/kpatch/kpatch.ko
 
-Voila, your kernel is patched.
+Make a source patch against the kernel tree:
+
+    # from a kernel git tree:
+    git diff > /path/to/foo.patch
+
+Build the hot patch kernel module:
+
+    kpatch build /path/to/foo.patch
+
+This outputs a hot patch module named `kpatch-foo.ko` in the current
+directory.  Now apply it to the running kernel:
+
+    sudo insmod kpatch-foo.ko
+
+Done!  The kernel is now patched.
 
 
 License

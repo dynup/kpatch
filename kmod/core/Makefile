@@ -1,6 +1,12 @@
 # make rules
-KPATCH_BUILD ?= /usr/lib/modules/$(shell uname -r)/build
-KPATCH_MAKE = $(MAKE) -C $(KPATCH_BUILD) M=$(PWD)
+KPATCH_BUILD ?= /usr/src/kernels/$(shell uname -r)
+THISDIR := $(abspath $(dir $(lastword $(MAKEFILE_LIST))))
+
+ifeq ($(wildcard $(KPATCH_BUILD)),)
+$(error $(KPATCH_BUILD) doesn\'t exist.  Try installing the kernel-devel-$(shell uname -r) RPM.)
+endif
+
+KPATCH_MAKE = $(MAKE) -C $(KPATCH_BUILD) M=$(THISDIR)
 
 kpatch.ko: core.c trampoline.S
 	$(KPATCH_MAKE) kpatch.ko

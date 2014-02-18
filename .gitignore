@@ -4,6 +4,8 @@
 *.ko.cmd
 *.mod.c
 *.swp
+.tmp_versions
+Module.symvers
 kpatch-build/add-patches-section
 kpatch-build/create-diff-object
 kpatch-build/link-vmlinux-syms
