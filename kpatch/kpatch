@@ -12,14 +12,24 @@ USERDIR="/var/lib/kpatch/$KERNELRELEASE"
 ENABLEDDIR="$USERDIR/enabled"
 
 usage () {
-	echo "usage:" >&2
-	echo "kpatch enable PATCH" >&2
-	echo "kpatch disable PATCH" >&2
-	echo "kpatch apply [--all | PATCH]" >&2
-	echo "kpatch remove PATCH" >&2
-	echo "kpatch list" >&2
-	echo "kpatch info PATCH" >&2
-	echo "kpatch build PATCH.patch" >&2
+	echo "usage: kpatch <command> [<args>]" >&2
+	echo
+	echo "Valid commands:" >&2
+	printf '   %-20s %s\n' "build <file>"         "build hotpatch module from source diff patch file"
+	echo
+	printf '   %-20s %s\n' "install <file>"       "install hotpatch module to the kpatch DB"
+	printf '   %-20s %s\n' "uninstall <hotpatch>" "uninstall hotpatch module from the kpatch DB"
+	echo
+	printf '   %-20s %s\n' "apply --all"          "apply all enabled hotpatch modules to the running kernel"
+	printf '   %-20s %s\n' "apply <hotpatch>"     "apply installed hotpatch module to the running kernel"
+	printf '   %-20s %s\n' "remove <hotpatch>"    "remove hotpatch module from the running kernel"
+	echo
+	printf '   %-20s %s\n' "enable <hotpatch>"    "automatically apply hotpatch module during boot"
+	printf '   %-20s %s\n' "disable <hotpatch>"   "don't automatically apply hotpatch module during boot"
+	echo
+	printf '   %-20s %s\n' "info <hotpatch>"      "show information about an installed hotpatch module"
+	echo
+	printf '   %-20s %s\n' "list"                 "list installed hotpatch modules"
 	exit 1
 }
 
@@ -133,13 +143,13 @@ case "$1" in
 
 "list")
 	[[ "$#" -ne 1 ]] && usage
-	echo "System patches:"
+	echo "System installed patches:"
 	for i in "$SYSDIR"/*.ko; do
 		[[ -e "$i" ]] || continue
 		echo_patch_name $i
 	done
 	echo ""
-	echo "User patches:"
+	echo "User installed patches:"
 	for i in "$USERDIR"/*.ko; do
 		[[ -e "$i" ]] || continue
 		echo_patch_name $i
@@ -164,6 +174,10 @@ case "$1" in
 	find_kpatch_build || die "kpatch-build is not installed"
 	shift
 	"$KPATCHBUILD" "$@" || die "kpatch build failed"
+	;;
+
+"help"|"-h"|"--help")
+	usage
 	;;
 
 *)
