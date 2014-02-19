@@ -9,7 +9,7 @@ scale-out, run on a single machine and are very downtime
 sensitive or require a heavyweight approval process and
 notification of workload users in the event of downtime.
 
-kpatch is currently is early development.  For now, it should _not_ be used
+kpatch is currently in active development.  For now, it should _not_ be used
 in production environments until significantly more testing on various
 patches and environments is conducted.
 
@@ -76,6 +76,29 @@ Done!  The kernel is now patched.
 
 How it works
 ------------
+
+kpatch works at a function granularity: old functions are replaced with new
+ones.  It has four main components:
+
+- **kpatch-build**: a collection of tools which convert a source diff patch to
+  a hot patch module.  They work by compiling the kernel both with and without
+  the source patch, comparing the binaries, and generating a hot patch module
+  which includes new binary versions of the functions to be replaced.
+
+- **hot patch module**: a kernel module (.ko file) which includes the
+  replacement functions and metadata about the original functions.
+
+- **kpatch core module**: a kernel module (.ko file) which provides an
+  interface for the hot patch modules to register new functions for
+  replacement.  It uses the kernel ftrace subsystem to hook into the original
+  function's mcount call instruction, so that a call to the original function
+  is redirected to the replacement function.
+
+- **kpatch utility:** a command-line tool which allows a user to manage a
+  collection of hot patch modules.  One or more hot patch modules may be
+  configured to be loaded at boot time, so that a system can remain patched
+  even after a reboot into the same version of the kernel.
+
 
 ### kpatch build
 
@@ -150,8 +173,8 @@ by the "kpatch build" command.
 Get involved
 ------------
 
-If you have feedback or you want to contribute, feel free to join the mailing
-list at https://www.redhat.com/mailman/listinfo/kpatch and say hello.
+If you have questions, feedback, or you'd like to contribute, feel free to join
+the mailing list at https://www.redhat.com/mailman/listinfo/kpatch and say hi.
 
 
 License
