@@ -1,17 +1,15 @@
 kpatch: dynamic kernel patching
 ===============================
 
-kpatch is a tool for the generation and application of kernel
-modules that patch a running Linux kernel while in operation,
-without requiring a reboot.  This is very valuable in cases
-where critical workloads, which do not have high availability via
-scale-out, run on a single machine and are very downtime
-sensitive or require a heavyweight approval process and
-notification of workload users in the event of downtime.
+kpatch is a Linux dynamic kernel patching tool which allows you to patch a
+running kernel without rebooting or restarting any processes.  It enables
+sysadmins to apply critical security patches to to kernel immediately, without
+having to wait for long-running tasks to complete, users to log off, or
+scheduled reboot windows.  It gives more control over uptime without
+sacrificing security or stability.
 
 kpatch is currently in active development.  For now, it should _not_ be used
-in production environments until significantly more testing on various
-patches and environments is conducted.
+in production environments.
 
 **WARNING: Use with caution!  Kernel crashes, spontaneous reboots, and data loss
 may occur!**
@@ -157,6 +155,82 @@ Limitations
 - Patches which change functions that are only called in the kernel init path
   will have no effect (obviously).
 
+
+Frequently Asked Questions
+--------------------------
+
+**Q. Isn't this just a virus/rootkit injection framework?**
+
+kpatch uses kernel modules to replace code.  It requires the `CAP_SYS_MODULE`
+capability.  If you already have that capability, then you already have the
+ability to arbitrarily modify the kernel, with or without kpatch.
+
+**Q. How can I detect if somebody has patched the kernel?**
+
+We hope to create a new kernel TAINT flag which will get set whenever a kpatch
+module is loaded.
+
+Also, many distros ship with cryptographically signed kernel modules, and will
+taint the kernel anyway if you load an unsigned module.
+
+**Q. Will it destabilize my system?**
+
+No, as long as the patch is chosen carefully.  See the Limitations section
+above.
+
+**Q. Why does kpatch use ftrace to jump to the replacement function instead of
+adding the jump directly?**
+
+ftrace owns the first "call mcount" instruction of every kernel function.  In
+order to keep compatibility with ftrace, we go through ftrace rather than
+updating the instruction directly.
+
+**Q Is kpatch compatible with \<insert kernel debugging subsystem here\>?**
+
+We aim to be good kernel citizens and maintain compatibility.  A hot patch
+replacement function is no different than a function loaded by any other kernel
+module.  Each replacement function has its own symbol name and kallsyms entry,
+so it looks like a normal function to the kernel.
+
+- **oops stack traces**: Yes.  If the replacement function is involved in an
+  oops, the stack trace will show the function and kernel module name of the
+  replacement function, just like any other kernel module function.  The oops
+  message will also show the taint flag. [TODO: taint flag]
+- **kdump/crash**: Yes.  Replacement functions are normal functions, so crash
+  will have no issues. [TODO: create patch module debuginfo symbols and crash
+  warning message]
+- **ftrace**: Yes, see previous question.
+- **systemtap/kprobes**: TODO: try it out
+- **perf**: TODO: try it out
+
+**Q. Why not use something like kexec instead?**
+
+If you want to avoid a hardware reboot, but are ok with restarting processes,
+kexec is a good alternative.
+
+**Q. If an application can't handle a reboot, it's designed wrong.**
+
+That's a good poi... [system reboots]
+
+**Q. What changes are needed in other upstream projects?**
+
+We hope to make the following changes to other projects:
+
+- kernel:
+	- ftrace improvements to close any windows that would allow a patch to
+	  be inadvertently disabled
+	- hot patch taint flag
+	- possibly the kpatch core module itself
+
+- crash:
+	- make it glaringly obvious that you're debugging a patched kernel
+	- point it to where the patch modules and corresponding debug symbols
+	  live on the file system
+
+**Q: Is it possible to register a function that gets called atomically with
+`stop_machine` when the patch module loads and unloads?**
+
+We do have plans to implement something like that.
 
 Demonstration
 -------------
