@@ -96,7 +96,7 @@ ones.  It has four main components:
 
 - **kpatch utility:** a command-line tool which allows a user to manage a
   collection of hot patch modules.  One or more hot patch modules may be
-  configured to be loaded at boot time, so that a system can remain patched
+  configured to load at boot time, so that a system can remain patched
   even after a reboot into the same version of the kernel.
 
 
