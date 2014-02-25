@@ -365,17 +365,16 @@ void kpatch_create_symbol_table(struct kpatch_elf *kelf)
 				ERROR("couldn't find section for symbol %s\n",
 					sym->name);
 
-			/* create reverse link from local sec to local sym */
-			if (GELF_ST_TYPE(sym->sym.st_info) != STT_NOTYPE) {
+			if (sym->type == STT_FUNC ||
+			    sym->type == STT_OBJECT) {
 				if (sym->sym.st_value)
 					ERROR("local symbol starts at section offset %d, expected 0",
 					      sym->sym.st_value);
 				sym->sec->sym = sym;
-			}
-
-			if (sym->type == STT_SECTION)
+			} else if (sym->type == STT_SECTION) {
 				/* use the section name as the symbol name */
 				sym->name = sym->sec->name;
+			}
 		}
 #if 0
 		printf("sym %02d, type %d, bind %d, ndx %02d, name %s",
@@ -581,6 +580,26 @@ void kpatch_correlate_symbols(struct table *table1, struct table *table2)
 	}
 }
 
+int rela_equal(struct rela *rela1, struct rela *rela2)
+{
+	if (rela1->type != rela2->type ||
+	    rela1->offset != rela2->offset ||
+	    strcmp(rela1->sym->name, rela2->sym->name))
+		return 0;
+
+	if (rela1->string) {
+		if (rela2->string &&
+		    !strcmp(rela1->string, rela2->string) &&
+		    !strcmp(rela1->sym->name, rela2->sym->name))
+			return 1;
+	} else {
+		if (rela1->addend == rela2->addend)
+			return 1;
+	}
+
+	return 0;
+}
+
 void kpatch_correlate_relas(struct section *sec)
 {
 	struct rela *rela1, *rela2;
@@ -588,12 +607,7 @@ void kpatch_correlate_relas(struct section *sec)
 
 	for_each_rela(i, rela1, &sec->relas) {
 		for_each_rela(j, rela2, &sec->twin->relas) {
-			if (rela1->type == rela2->type &&
-			    (rela1->addend == rela2->addend ||
-			     (rela1->string && rela2->string &&
-			      !strcmp(rela1->string, rela2->string))) &&
-			    !strcmp(rela1->sym->name, rela2->sym->name) &&
-			    rela1->offset == rela2->offset) {
+			    if (rela_equal(rela1, rela2)) {
 				rela1->twin = rela2;
 				rela2->twin = rela1;
 				break;
@@ -653,7 +667,9 @@ void kpatch_verify_rela_section_status(struct section *sec)
 			 * This rela section really is different. Make
 			 * sure the base section comes along too.
 			 */
+			sec->status = CHANGED;
 			sec->base->status = CHANGED;
+			sec->base->sym->status = CHANGED;
 			return;
 		}
 
@@ -697,7 +713,7 @@ void kpatch_compare_correlated_elements(struct kpatch_elf *kelf)
 	 * caused by symbol renumeration.
 	 */
 	for_each_section(i, sec, &kelf->sections)
-		if (is_rela_section(sec) && sec->status == CHANGED)
+		if (is_rela_section(sec))
 			kpatch_verify_rela_section_status(sec);
 
 	/*
@@ -709,18 +725,14 @@ void kpatch_compare_correlated_elements(struct kpatch_elf *kelf)
 			continue;
 		for_each_rela(j, rela, &sec->relas) {
 /*
- * Nuts, I know.  Determine if the section of the symbol referenced by
- * the rela entry is associated with a symbol of type STT_SECTION. This
- * is to avoid including unchanged local functions or objects that are
- * called by a changed function.
+ * If the rela entry references an unchanged local symbol, mark that
+ * symbol as a dependency.  The function text will not be included
+ * in the output object; instead the symbol will be redefined as global
+ * and its address looked up in vmlinux.
  */
-			if (rela->sym->sym.st_shndx != SHN_UNDEF &&
-			    rela->sym->sym.st_shndx != SHN_ABS &&
-			    rela->sym->status != CHANGED &&
-			    rela->sym->sec->sym->type == STT_SECTION) {
+			if (rela->sym->bind = STB_LOCAL &&
+			    rela->sym->status != CHANGED)
 				rela->sym->status = DEPENDENCY;
-				rela->sym->sec->status = DEPENDENCY;
-			}
 /*
  * All symbols referenced by entries in a changed rela section are
  * dependencies.
