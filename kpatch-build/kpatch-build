@@ -100,6 +100,7 @@ else
 
 	cd "$SRCDIR"
 	cp .config "$OBJDIR" || die
+	perl -pi -e "s/EXTRAVERSION =/EXTRAVERSION = $LOCALVERSION/" Makefile || die
 	echo "$LOCALVERSION" > "$OBJDIR/localversion" || die
 fi
 
