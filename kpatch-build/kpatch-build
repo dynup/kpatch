@@ -100,7 +100,7 @@ else
 
 	cd "$SRCDIR"
 	cp .config "$OBJDIR" || die
-	echo "$LOCALVERSION" > "$OBJDIR/localversion" || die
+	echo "$LOCALVERSION" > "$SRCDIR/localversion" || die
 fi
 
 echo "Building original kernel"
