@@ -368,7 +368,7 @@ void kpatch_create_symbol_table(struct kpatch_elf *kelf)
 			/* create reverse link from local sec to local sym */
 			if (GELF_ST_TYPE(sym->sym.st_info) != STT_NOTYPE) {
 				if (sym->sym.st_value)
-					ERROR("local symbol starts at section offset %d, expected 0",
+					ERROR("local symbol starts at section offset %zu, expected 0",
 					      sym->sym.st_value);
 				sym->sec->sym = sym;
 			}
@@ -745,7 +745,7 @@ void kpatch_dump_kelf(struct kpatch_elf *kelf)
 			printf(", base-> %s\n", sec->base->name);
 			printf("rela section expansion\n");
 			for_each_rela(j, rela, &sec->relas) {
-				printf("sym %d, offset %d, type %d, %s %s %d %s\n",
+				printf("sym %zd, offset %d, type %d, %s %s %d %s\n",
 				       GELF_R_SYM(rela->rela.r_info),
 				       rela->offset, rela->type,
 				       rela->sym->name,

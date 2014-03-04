@@ -263,7 +263,7 @@ int main(int argc, char **argv)
 		cur->vm_addr = vsym->sym.st_value;
 		cur->vm_len = vsym->sym.st_size;
 		cur->action = LINK;
-		printf("original symbol at address %016lx (length %d)\n",
+		printf("original symbol at address %016lx (length %zu)\n",
 		       cur->vm_addr, cur->vm_len);
 	}
 
