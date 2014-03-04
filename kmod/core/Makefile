@@ -1,5 +1,5 @@
 # make rules
-KPATCH_BUILD ?= /usr/src/kernels/$(shell uname -r)
+KPATCH_BUILD ?= /lib/modules/$(shell uname -r)/source
 THISDIR := $(abspath $(dir $(lastword $(MAKEFILE_LIST))))
 
 ifeq ($(wildcard $(KPATCH_BUILD)),)
