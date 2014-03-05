@@ -428,7 +428,6 @@ struct kpatch_elf *kpatch_elf_open(const char *name)
 void kpatch_compare_correlated_nonrela_section(struct section *sec)
 {
 	struct section *sec1 = sec, *sec2 = sec->twin;
-	enum status status;
 
 	/* Compare section headers (must match or fatal) */
 	if (sec1->sh.sh_type != sec2->sh.sh_type ||
@@ -666,8 +665,7 @@ void kpatch_correlate_elfs(struct kpatch_elf *kelf1, struct kpatch_elf *kelf2)
 void kpatch_compare_correlated_elements(struct kpatch_elf *kelf)
 {
 	struct section *sec;
-	struct rela *rela;
-	int i, j;
+	int i;
 
 	/* tables are already correlated at this point */
 	kpatch_compare_correlated_nonrela_sections(&kelf->sections);
@@ -715,7 +713,7 @@ void kpatch_dump_kelf(struct kpatch_elf *kelf)
 			printf(", base-> %s\n", sec->base->name);
 			printf("rela section expansion\n");
 			for_each_rela(j, rela, &sec->relas) {
-				printf("sym %d, offset %d, type %d, %s %s %d %s\n",
+				printf("sym %lu, offset %d, type %d, %s %s %d %s\n",
 				       GELF_R_SYM(rela->rela.r_info),
 				       rela->offset, rela->type,
 				       rela->sym->name,
@@ -1158,7 +1156,7 @@ void kpatch_create_symtab(struct kpatch_elf *kelf)
 
 void kpatch_write_output_elf(struct kpatch_elf *kelf, Elf *elf, char *outfile)
 {
-	int fd, i, index = 0;
+	int fd, i;
 	struct section *sec;
 	Elf *elfout;
 	GElf_Ehdr eh, ehout;

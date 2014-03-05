@@ -1,6 +1,6 @@
 include ../Makefile.inc
 
-CFLAGS  += -I../kmod/core
+CFLAGS  += -I../kmod/core -Wall
 LDFLAGS = -lelf
 
 TARGETS = create-diff-object add-patches-section link-vmlinux-syms

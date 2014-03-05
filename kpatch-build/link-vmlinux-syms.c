@@ -138,7 +138,7 @@ static void find_section_by_name(struct elf *elf, char *name, struct section *se
 	GElf_Shdr sh;
 	char *secname;
 
-	while (scn = elf_nextscn(elf->elf, scn)) {
+	while ((scn = elf_nextscn(elf->elf, scn))) {
 		if (!gelf_getshdr(scn, &sh))
 			ERROR("gelf_getshdr");
 
@@ -205,17 +205,9 @@ int main(int argc, char **argv)
 	struct sym *cur, *vsym;
 	struct elf elf, elfv;
 	char name[255];
-	void *buf;
-	struct kpatch_patch *patches_data;
-	GElf_Rela *relas_data;
-	int patches_nr = 0, i, patches_size, relas_size, len;
-	int patches_offset, relas_offset, patches_index, relas_index;
 	struct section symtab;
 	Elf_Scn *scn;
 	Elf_Data *data;
-	GElf_Shdr sh, *shp;
-	GElf_Ehdr eh;
-	GElf_Sym sym;
 
 	/* set elf version (required by libelf) */
 	if (elf_version(EV_CURRENT) == EV_NONE)
@@ -280,7 +272,7 @@ int main(int argc, char **argv)
 		cur->vm_addr = vsym->sym.st_value;
 		cur->vm_len = vsym->sym.st_size;
 		cur->action = LINK;
-		printf("original symbol at address %016lx (length %d)\n",
+		printf("original symbol at address %016lx (length %zu)\n",
 		       cur->vm_addr, cur->vm_len);
 	}
 
@@ -360,7 +352,6 @@ int main(int argc, char **argv)
 #endif
 	find_section_by_name(&elf, ".symtab", &symtab);
 	scn = symtab.scn;
-	shp = &symtab.sh;
 
 	data = elf_getdata(scn, NULL);
 	if (!data)
