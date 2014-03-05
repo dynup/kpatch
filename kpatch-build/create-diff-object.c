@@ -366,10 +366,18 @@ void kpatch_create_symbol_table(struct kpatch_elf *kelf)
 				ERROR("couldn't find section for symbol %s\n",
 					sym->name);
 
+<<<<<<< HEAD
+			/* create reverse link from local sec to local sym */
+			if (GELF_ST_TYPE(sym->sym.st_info) != STT_NOTYPE) {
+				if (sym->sym.st_value)
+					ERROR("local symbol starts at section offset %zu, expected 0",
+					      sym->sym.st_value);
+=======
 			if ((sym->type == STT_FUNC ||
 			     sym->type == STT_OBJECT) &&
 			    sym->sym.st_value == 0 &&
 			    strcmp(sym->sec->name, "__ksymtab_strings")) {
+>>>>>>> upstream/master
 				sym->sec->sym = sym;
 			} else if (sym->type == STT_SECTION) {
 				sym->sec->secsym = sym;
@@ -713,7 +721,11 @@ void kpatch_dump_kelf(struct kpatch_elf *kelf)
 			printf(", base-> %s\n", sec->base->name);
 			printf("rela section expansion\n");
 			for_each_rela(j, rela, &sec->relas) {
+<<<<<<< HEAD
+				printf("sym %zd, offset %d, type %d, %s %s %d %s\n",
+=======
 				printf("sym %lu, offset %d, type %d, %s %s %d %s\n",
+>>>>>>> upstream/master
 				       GELF_R_SYM(rela->rela.r_info),
 				       rela->offset, rela->type,
 				       rela->sym->name,
