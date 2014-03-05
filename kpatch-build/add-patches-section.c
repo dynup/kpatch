@@ -1,8 +1,25 @@
 /*
- * tools/add-patches-section.c
+ * add-patches-section.c
  *
  * Copyright (C) 2014 Seth Jennings <sjenning@redhat.com>
  *
+ * This program is free software; you can redistribute it and/or
+ * modify it under the terms of the GNU General Public License
+ * as published by the Free Software Foundation; either version 2
+ * of the License, or (at your option) any later version.
+ *
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU General Public License for more details.
+ *
+ * You should have received a copy of the GNU General Public License
+ * along with this program; if not, write to the Free Software
+ * Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA,
+ * 02110-1301, USA.
+ */
+
+/*
  * This tool takes an elf object, the output of create-diff-object
  * and the base vmlinux as arguments and adds two new sections
  * to the elf object; .patches and .rela.patches.
@@ -124,7 +141,7 @@ static void find_section_by_name(struct elf *elf, char *name, struct section *se
 	GElf_Shdr sh;
 	char *secname;
 
-	while (scn = elf_nextscn(elf->elf, scn)) {
+	while ((scn = elf_nextscn(elf->elf, scn))) {
 		if (!gelf_getshdr(scn, &sh))
 			ERROR("gelf_getshdr");
 
@@ -190,7 +207,6 @@ int main(int argc, char **argv)
 	struct symlist symlist, symlistv;
 	struct sym *cur, *vsym;
 	struct elf elf, elfv;
-	char name[255];
 	void *buf;
 	struct kpatch_patch *patches_data;
 	GElf_Rela *relas_data;

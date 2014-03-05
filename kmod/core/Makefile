@@ -1,5 +1,9 @@
 # make rules
+<<<<<<< HEAD
 KPATCH_BUILD ?= /lib/modules/$(shell uname -r)/source
+=======
+KPATCH_BUILD ?= /lib/modules/$(shell uname -r)/build
+>>>>>>> upstream/master
 THISDIR := $(abspath $(dir $(lastword $(MAKEFILE_LIST))))
 
 ifeq ($(wildcard $(KPATCH_BUILD)),)

@@ -1,9 +1,26 @@
 /*
- * tools/create-diff-object.c
+ * create-diff-object.c
  *
  * Copyright (C) 2014 Seth Jennings <sjenning@redhat.com>
  * Copyright (C) 2013 Josh Poimboeuf <jpoimboe@redhat.com>
  *
+ * This program is free software; you can redistribute it and/or
+ * modify it under the terms of the GNU General Public License
+ * as published by the Free Software Foundation; either version 2
+ * of the License, or (at your option) any later version.
+ *
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU General Public License for more details.
+ *
+ * You should have received a copy of the GNU General Public License
+ * along with this program; if not, write to the Free Software
+ * Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA,
+ * 02110-1301, USA.
+ */
+
+/*
  * This file contains the heart of the ELF object differencing engine.
  *
  * The tool takes two ELF objects from two versions of the same source
@@ -15,19 +32,6 @@
  * various rules are applied to determine any object local sections that
  * are dependencies of the changed section and also need to be included in
  * the output object.
- *
- * After all the sections for the output object have been selected, a
- * reachability test is performed to ensure that every included section
- * is reachable from a changed function symbol.  If there is a section that
- * is not reachable from a changed function, this means that the source-level
- * change can not be captured by employing ftrace and therefore can not be
- * dynamically patched by kpatch.  Changes to static data structures are an
- * example.
- *
- * If the reachability test succeeds
- * - Changed text sections are copied into the output object
- * - Changed rela sections have there symbol indexes fixed up
- * - shstrtab, strtab, and symtab are all rebuilt from scratch
  */
 
 #include <sys/types.h>
@@ -61,8 +65,7 @@ struct rela;
 enum status {
 	NEW,
 	CHANGED,
-	SAME,
-	DEPENDENCY
+	SAME
 };
 
 struct table {
@@ -77,7 +80,7 @@ struct section {
 	char *name;
 	int index;
 	enum status status;
-	int reachable;
+	int include;
 	union {
 		struct { /* if (is_rela_section()) */
 			struct section *base;
@@ -85,7 +88,7 @@ struct section {
 		};
 		struct { /* else */
 			struct section *rela;
-			struct symbol *sym;
+			struct symbol *secsym, *sym;
 		};
 	};
 };
@@ -98,7 +101,7 @@ struct symbol {
 	int index;
 	unsigned char bind, type;
 	enum status status;
-	int reachable;
+	int include;
 };
 
 struct rela {
@@ -141,8 +144,6 @@ char *status_str(enum status status)
 		return "CHANGED";
 	case SAME:
 		return "SAME";
-	case DEPENDENCY:
-		return "DEPENDENCY";
 	default:
 		ERROR("status_str");
 	}
@@ -357,31 +358,38 @@ void kpatch_create_symbol_table(struct kpatch_elf *kelf)
 		sym->type = GELF_ST_TYPE(sym->sym.st_info);
 		sym->bind = GELF_ST_BIND(sym->sym.st_info);
 
-		if (sym->sym.st_shndx != SHN_UNDEF &&
-		    sym->sym.st_shndx != SHN_ABS) {
+		if (sym->sym.st_shndx > SHN_UNDEF &&
+		    sym->sym.st_shndx < SHN_LORESERVE) {
 			sym->sec = find_section_by_index(&kelf->sections,
 					sym->sym.st_shndx);
 			if (!sym->sec)
 				ERROR("couldn't find section for symbol %s\n",
 					sym->name);
 
+<<<<<<< HEAD
 			/* create reverse link from local sec to local sym */
 			if (GELF_ST_TYPE(sym->sym.st_info) != STT_NOTYPE) {
 				if (sym->sym.st_value)
 					ERROR("local symbol starts at section offset %zu, expected 0",
 					      sym->sym.st_value);
+=======
+			if ((sym->type == STT_FUNC ||
+			     sym->type == STT_OBJECT) &&
+			    sym->sym.st_value == 0 &&
+			    strcmp(sym->sec->name, "__ksymtab_strings")) {
+>>>>>>> upstream/master
 				sym->sec->sym = sym;
-			}
-
-			if (sym->type == STT_SECTION)
+			} else if (sym->type == STT_SECTION) {
+				sym->sec->secsym = sym;
 				/* use the section name as the symbol name */
 				sym->name = sym->sec->name;
+			}
 		}
-#if 0
+#if DEBUG
 		printf("sym %02d, type %d, bind %d, ndx %02d, name %s",
 			sym->index, sym->type, sym->bind, sym->sym.st_shndx,
 			sym->name);
-		if (sym->sec && (sym->type == STT_FUNC || sym->type == STT_OBJECT))
+		if (sym->sec)
 			printf(" -> %s", sym->sec->name);
 		printf("\n");
 #endif
@@ -425,10 +433,9 @@ struct kpatch_elf *kpatch_elf_open(const char *name)
 	return kelf;
 }
 
-void kpatch_compare_correlated_section(struct section *sec)
+void kpatch_compare_correlated_nonrela_section(struct section *sec)
 {
 	struct section *sec1 = sec, *sec2 = sec->twin;
-	enum status status;
 
 	/* Compare section headers (must match or fatal) */
 	if (sec1->sh.sh_type != sec2->sh.sh_type ||
@@ -446,31 +453,29 @@ void kpatch_compare_correlated_section(struct section *sec)
 		sec1->status = CHANGED;
 	else
 		sec1->status = SAME;
-
-	if (!is_rela_section(sec1)) {
-		/* Sync section symbol status */
-		if (sec1->sym)
-			sec1->sym->status = sec1->status;
-		/* Sync rela section status */
-		if (sec1->rela)
-			sec1->rela->status = sec1->status;
-	}
-
-#if DEBUG
-	printf("section %s is %s\n", sec1->name, status_str(sec1->status));
-#endif
 }
 
-void kpatch_compare_correlated_sections(struct table *table)
+void kpatch_compare_correlated_nonrela_sections(struct table *table)
 {
 	struct section *sec;
 	int i;
 
-	for_each_section(i, sec, table)
+	for_each_section(i, sec, table) {
+		if (is_rela_section(sec))
+			continue;
 		if (sec->twin)
-			kpatch_compare_correlated_section(sec);
+			kpatch_compare_correlated_nonrela_section(sec);
 		else
 			sec->status = NEW;
+
+		/* sync any rela section and associated symbols */
+		if (sec->sym)
+			sec->sym->status = sec->status;
+		if (sec->secsym)
+			sec->secsym->status = sec->status;
+		if (sec->rela)
+			sec->rela->status = sec->status;
+	}
 }
 
 void kpatch_compare_correlated_symbol(struct symbol *sym)
@@ -491,17 +496,6 @@ void kpatch_compare_correlated_symbol(struct symbol *sym)
 	if (sym1->sym.st_shndx == SHN_UNDEF ||
 	     sym1->sym.st_shndx == SHN_ABS)
 		sym1->status = SAME;
-	else if (sym1->sec)
-		sym1->status = sym1->sec->status;
-	else if (sym1->status != CHANGED)
-		sym1->status = SAME;
-
-	/* special case for type FILE */
-	if (sym1->type == STT_FILE)
-		sym1->status = DEPENDENCY;
-#if DEBUG
-	printf("symbol %s is %s\n", sym->name, status_str(sym->status));
-#endif
 }
 
 void kpatch_compare_correlated_symbols(struct table *table)
@@ -516,33 +510,11 @@ void kpatch_compare_correlated_symbols(struct table *table)
 			kpatch_compare_correlated_symbol(sym);
 		else
 			sym->status = NEW;
+#if DEBUG
+		printf("symbol %s is %s\n", sym->name, status_str(sym->status));
+#endif
 	}
 }
-
-void kpatch_compare_correlated_rela(struct rela *rela)
-{
-	struct rela *rela1 = rela, *rela2 = rela->twin;
-
-	/*
-	 * rela entry status is either SAME or NEW.  All correlated entries
-	 * are SAME because the criteria used to correlate them is sufficient
-	 * to consider them unchanged.
-	 */
-	rela->status = SAME;
-}
-
-void kpatch_compare_correlated_relas(struct table *table)
-{
-	struct rela *rela;
-	int i;
-
-	for_each_rela(i, rela, table)
-		if (rela->twin)
-			kpatch_compare_correlated_rela(rela);
-		else
-			rela->status = NEW;
-}
-
 
 void kpatch_correlate_sections(struct table *table1, struct table *table2)
 {
@@ -556,6 +528,8 @@ void kpatch_correlate_sections(struct table *table1, struct table *table2)
 				continue;
 			sec1->twin = sec2;
 			sec2->twin = sec1;
+			/* set initial status, might change */
+			sec1->status = sec2->status = SAME;
 			break;
 		}
 	}
@@ -575,10 +549,32 @@ void kpatch_correlate_symbols(struct table *table1, struct table *table2)
 			if (!strcmp(sym1->name, sym2->name)) {
 				sym1->twin = sym2;
 				sym2->twin = sym1;
+				/* set initial status, might change */
+				sym1->status = sym2->status = SAME;
 				break;
 			}
 		}
 	}
+}
+
+int rela_equal(struct rela *rela1, struct rela *rela2)
+{
+	if (rela1->type != rela2->type ||
+	    rela1->offset != rela2->offset)
+		return 0;
+
+	if (rela1->string) {
+		if (rela2->string &&
+		    !strcmp(rela1->string, rela2->string))
+			return 1;
+	} else {
+		if (strcmp(rela1->sym->name, rela2->sym->name))
+			return 0;
+		if (rela1->addend == rela2->addend)
+			return 1;
+	}
+
+	return 0;
 }
 
 void kpatch_correlate_relas(struct section *sec)
@@ -588,14 +584,10 @@ void kpatch_correlate_relas(struct section *sec)
 
 	for_each_rela(i, rela1, &sec->relas) {
 		for_each_rela(j, rela2, &sec->twin->relas) {
-			if (rela1->type == rela2->type &&
-			    (rela1->addend == rela2->addend ||
-			     (rela1->string && rela2->string &&
-			      !strcmp(rela1->string, rela2->string))) &&
-			    !strcmp(rela1->sym->name, rela2->sym->name) &&
-			    rela1->offset == rela2->offset) {
+			    if (rela_equal(rela1, rela2)) {
 				rela1->twin = rela2;
 				rela2->twin = rela1;
+				rela1->status = rela2->status = SAME;
 				break;
 			}
 		}
@@ -623,9 +615,6 @@ void kpatch_compare_elf_headers(Elf *elf1, Elf *elf2)
 	    eh1.e_phentsize != eh2.e_phentsize ||
 	    eh1.e_shentsize != eh2.e_shentsize)
 		DIFF_FATAL("ELF headers differ");
-#if DEBUG
-	printf("kpatch_compare_elf_headers passed\n");
-#endif
 }
 
 void kpatch_check_program_headers(Elf *elf)
@@ -637,12 +626,9 @@ void kpatch_check_program_headers(Elf *elf)
 
 	if (ph_nr != 0)
 		DIFF_FATAL("ELF contains program header");
-#if DEBUG
-	printf("kpatch_check_program_headers passed\n");
-#endif
 }
 
-void kpatch_verify_rela_section_status(struct section *sec)
+void kpatch_set_rela_section_status(struct section *sec)
 {
 	struct rela *rela;
 	int i;
@@ -650,10 +636,16 @@ void kpatch_verify_rela_section_status(struct section *sec)
 	for_each_rela(i, rela, &sec->relas)
 		if (rela->status == NEW) {
 			/*
-			 * This rela section really is different. Make
-			 * sure the base section comes along too.
+			 * This rela section is different. Make
+			 * sure the text section and any associated
+			 * symbols come along too.
 			 */
+			sec->status = CHANGED;
 			sec->base->status = CHANGED;
+			if (sec->base->sym)
+				sec->base->sym->status = CHANGED;
+			if (sec->base->secsym)
+				sec->base->secsym->status = CHANGED;
 			return;
 		}
 
@@ -681,52 +673,36 @@ void kpatch_correlate_elfs(struct kpatch_elf *kelf1, struct kpatch_elf *kelf2)
 void kpatch_compare_correlated_elements(struct kpatch_elf *kelf)
 {
 	struct section *sec;
-	struct rela *rela;
-	int i, j;
+	int i;
 
 	/* tables are already correlated at this point */
-	kpatch_compare_correlated_sections(&kelf->sections);
+	kpatch_compare_correlated_nonrela_sections(&kelf->sections);
 	kpatch_compare_correlated_symbols(&kelf->symbols);
 
 	for_each_section(i, sec, &kelf->sections)
-		if (is_rela_section(sec))
-			kpatch_compare_correlated_relas(&sec->relas);
+		if (is_rela_section(sec) && sec->status == SAME)
+			kpatch_set_rela_section_status(sec);
+}
 
-	/*
-	 * Check for false positives on changed rela sections
-	 * caused by symbol renumeration.
-	 */
-	for_each_section(i, sec, &kelf->sections)
-		if (is_rela_section(sec) && sec->status == CHANGED)
-			kpatch_verify_rela_section_status(sec);
+void kpatch_replace_sections_syms(struct kpatch_elf *kelf)
+{
+	struct section *sec;
+	struct rela *rela;
+	int i, j;
 
-	/*
-	 * Find unchanged sections/symbols that are dependencies of
- 	 * changed sections
- 	 */
 	for_each_section(i, sec, &kelf->sections) {
-		if (!is_rela_section(sec) || sec->status != CHANGED)
+		if (!is_rela_section(sec))
 			continue;
+
 		for_each_rela(j, rela, &sec->relas) {
-/*
- * Nuts, I know.  Determine if the section of the symbol referenced by
- * the rela entry is associated with a symbol of type STT_SECTION. This
- * is to avoid including unchanged local functions or objects that are
- * called by a changed function.
- */
-			if (rela->sym->sym.st_shndx != SHN_UNDEF &&
-			    rela->sym->sym.st_shndx != SHN_ABS &&
-			    rela->sym->status != CHANGED &&
-			    rela->sym->sec->sym->type == STT_SECTION) {
-				rela->sym->status = DEPENDENCY;
-				rela->sym->sec->status = DEPENDENCY;
-			}
-/*
- * All symbols referenced by entries in a changed rela section are
- * dependencies.
- */
-			if (rela->sym->status == SAME)
-				rela->sym->status = DEPENDENCY;
+			if (rela->sym->type != STT_SECTION ||
+			    !rela->sym->sec || !rela->sym->sec->sym)
+				continue;
+#if DEBUG
+			printf("replacing %s with %s\n",
+			       rela->sym->name, rela->sym->sec->sym->name);
+#endif
+			rela->sym = rela->sym->sec->sym;
 		}
 	}
 }
@@ -745,7 +721,11 @@ void kpatch_dump_kelf(struct kpatch_elf *kelf)
 			printf(", base-> %s\n", sec->base->name);
 			printf("rela section expansion\n");
 			for_each_rela(j, rela, &sec->relas) {
+<<<<<<< HEAD
 				printf("sym %zd, offset %d, type %d, %s %s %d %s\n",
+=======
+				printf("sym %lu, offset %d, type %d, %s %s %d %s\n",
+>>>>>>> upstream/master
 				       GELF_R_SYM(rela->rela.r_info),
 				       rela->offset, rela->type,
 				       rela->sym->name,
@@ -756,6 +736,8 @@ void kpatch_dump_kelf(struct kpatch_elf *kelf)
 		} else {
 			if (sec->sym)
 				printf(", sym-> %s", sec->sym->name);
+			if (sec->secsym)
+				printf(", secsym-> %s", sec->secsym->name);
 			if (sec->rela)
 				printf(", rela-> %s", sec->rela->name);
 		}
@@ -766,8 +748,8 @@ void kpatch_dump_kelf(struct kpatch_elf *kelf)
 	for_each_symbol(i, sym, &kelf->symbols) {
 		if (i == 0) /* ugh */
 			continue;
-		printf("sym %02d, type %d=%d, bind %d=%d, ndx %02d, name %s (%s)",
-			sym->index, sym->type, GELF_ST_TYPE(sym->sym.st_info), sym->bind, GELF_ST_BIND(sym->sym.st_info), sym->sym.st_shndx,
+		printf("sym %02d, type %d, bind %d, ndx %02d, name %s (%s)",
+			sym->index, sym->type, sym->bind, sym->sym.st_shndx,
 			sym->name, status_str(sym->status));
 		if (sym->sec && (sym->type == STT_FUNC || sym->type == STT_OBJECT))
 			printf(" -> %s", sym->sec->name);
@@ -795,62 +777,70 @@ int kpatch_find_changed_functions(struct kpatch_elf *kelf)
 	return changed;
 }
 
-void kpatch_reachable_symbol(struct symbol *sym)
+#if DEBUG
+#define inc_printf(fmt, ...) \
+	printf("%*s" fmt, recurselevel, "", ##__VA_ARGS__);
+#else
+#define inc_printf(fmt, ...);
+#endif
+
+void kpatch_include_symbol(struct symbol *sym, int recurselevel)
 {
 	struct rela *rela;
 	struct section *sec;
 	int i;
 
-	sym->reachable = 1;
-#if DEBUG
-	printf("symbol %s is reachable\n", sym->name);
-#endif
-	if (!sym->sec)
-		return;
+	inc_printf("start include_symbol(%s)\n", sym->name);
+	sym->include = 1;
+	inc_printf("symbol %s is included\n", sym->name);
+	/*
+	 * Check if sym is a non-local symbol (sym->sec is NULL) or
+	 * if an unchanged local symbol.  This a base case for the
+	 * inclusion recursion.
+	 */
+	if (!sym->sec || (sym->type != STT_SECTION && sym->status == SAME))
+		goto out;
 	sec = sym->sec;
-	sec->reachable = 1;
-#if DEBUG
-	printf("section %s is reachable\n", sec->name);
-#endif
-	if (sec->sym)
-		sec->sym->reachable = 1;
-#if DEBUG
-	printf("symbol %s is reachable\n", sym->sec->name);
-#endif
-	if (!sec->rela)
-		return;
-	sec->rela->reachable = 1;
-#if DEBUG
-	printf("section %s is reachable\n", sec->rela->name);
-#endif
-	for_each_rela(i, rela, &sec->rela->relas) {
-		if (rela->sym->status == SAME ||
-		    rela->sym->reachable)
-			continue;
-		kpatch_reachable_symbol(rela->sym);
+	sec->include = 1;
+	inc_printf("section %s is included\n", sec->name);
+	if (sec->secsym == sym)
+		goto out;
+	if (sec->secsym) {
+		sec->secsym->include = 1;
+		inc_printf("section symbol %s is included\n", sec->secsym->name);
 	}
+	if (!sec->rela)
+		goto out;
+	sec->rela->include = 1;
+	inc_printf("section %s is included\n", sec->rela->name);
+	for_each_rela(i, rela, &sec->rela->relas) {
+		if (rela->sym->include)
+			continue;
+		kpatch_include_symbol(rela->sym, recurselevel+1);
+	}
+out:
+	inc_printf("end include_symbol(%s)\n", sym->name);
+	return;
 }
 
-void kpatch_validate_reachability(struct kpatch_elf *kelf)
+void kpatch_include_changed_functions(struct kpatch_elf *kelf)
 {
 	struct symbol *sym;
-	struct section *sec;
 	int i;
 
-	for_each_symbol(i, sym, &kelf->symbols)
-		if (!sym->reachable && sym->status != SAME &&
-		    sym->type == STT_FUNC)
-			kpatch_reachable_symbol(sym);
+#if DEBUG
+	printf("\n=== Inclusion Tree ===\n");
+#endif
 
-	for_each_section(i, sec, &kelf->sections)
-		if (sec->status != SAME && !sec->reachable &&
-		    strcmp(sec->name, ".shstrtab") &&
-		    strcmp(sec->name, ".symtab") &&
-		    strcmp(sec->name, ".strtab"))
-			DIFF_FATAL("unreachable changed section %s",
-			           sec->name);
+	for_each_symbol(i, sym, &kelf->symbols) {
+		if (sym->status == CHANGED &&
+		    sym->type == STT_FUNC &&
+		    !sym->include)
+			kpatch_include_symbol(sym, 0);
 
-	printf("All changed sections are reachable\n");
+		if (sym->type == STT_FILE)
+			sym->include = 1;
+	}
 }
 
 void kpatch_generate_output(struct kpatch_elf *kelf, struct kpatch_elf **kelfout)
@@ -863,13 +853,12 @@ void kpatch_generate_output(struct kpatch_elf *kelf, struct kpatch_elf **kelfout
 	/* count output sections */
 	for_each_section(i, sec, &kelf->sections) {
 		/* include these sections even if they haven't changed */
-		if (sec->status == SAME &&
-		    (!strcmp(sec->name, ".shstrtab") ||
+		if (!strcmp(sec->name, ".shstrtab") ||
 		     !strcmp(sec->name, ".strtab") ||
-		     !strcmp(sec->name, ".symtab")))
-			sec->status = DEPENDENCY;
+		     !strcmp(sec->name, ".symtab"))
+			sec->include = 1;
 
-		if (sec->status != SAME)
+		if (sec->include)
 			sections_nr++;
 	}
 
@@ -879,7 +868,7 @@ void kpatch_generate_output(struct kpatch_elf *kelf, struct kpatch_elf **kelfout
 
 	/* count output symbols */
 	for_each_symbol(i, sym, &kelf->symbols) {
-		if (i == 0 || sym->status != SAME)
+		if (i == 0 || sym->include)
 			symbols_nr++;
 	}
 #if DEBUG
@@ -899,7 +888,7 @@ void kpatch_generate_output(struct kpatch_elf *kelf, struct kpatch_elf **kelfout
 	/* copy to output kelf sections, link to kelf, and reindex */
 	index = 0;
 	for_each_section(i, sec, &kelf->sections) {
-		if (sec->status == SAME)
+		if (!sec->include)
 			continue;
 
 		secout = &((struct section *)(out->sections.data))[index];
@@ -909,10 +898,31 @@ void kpatch_generate_output(struct kpatch_elf *kelf, struct kpatch_elf **kelfout
 		sec->twino = secout;
 	}
 
-	/* copy to output kelf symbols, link to kelf, and reindex */
+	/*
+	 * Search symbol table for local functions whose sections are
+	 * not included, and modify them to be non-local.
+	 */
+	for_each_symbol(i, sym, &kelf->symbols) {
+		if (i == 0)
+			continue;
+		if ((sym->type == STT_OBJECT ||
+		     sym->type == STT_FUNC) &&
+		    !sym->sec->include) {
+			sym->type = STT_NOTYPE;
+			sym->bind = STB_GLOBAL;
+			sym->sym.st_info = GELF_ST_INFO(STB_GLOBAL, STT_NOTYPE);
+			sym->sym.st_shndx = SHN_UNDEF;
+			sym->sym.st_size = 0;
+		}
+	}
+
+	/* copy local syms to output kelf symbols, link to kelf, and reindex */
 	index = 0;
 	for_each_symbol(i, sym, &kelf->symbols) {
-		if (i != 0 && sym->status == SAME)
+		if (i != 0 && !sym->include)
+			continue;
+
+		if (sym->bind == STB_GLOBAL)
 			continue;
 
 		symout = &((struct symbol *)(out->symbols.data))[index];
@@ -923,28 +933,30 @@ void kpatch_generate_output(struct kpatch_elf *kelf, struct kpatch_elf **kelfout
 		index++;
 
 		if (i == 0)
-			continue;
-
-		if (sym->sec && sym->sec->twino)
+			symout->sym.st_shndx = SHN_UNDEF;
+		else if (sym->sec && sym->sec->twino)
 			symout->sym.st_shndx = sym->sec->twino->index;
 	}
 
-	for_each_symbol(i, sym, &out->symbols) {
-		if (i == 0)
+	/* copy global syms to output kelf symbols, link to kelf, and reindex */
+	for_each_symbol(i, sym, &kelf->symbols) {
+		if (i != 0 && !sym->include)
 			continue;
-		/*
-		 * Search symbol table for local functions whose sections are
-		 * not included, and modify them to be non-local.
-		 */
-		if ((sym->type == STT_OBJECT ||
-		     sym->type == STT_FUNC) &&
-		    sym->status == DEPENDENCY) {
-			sym->type = STT_NOTYPE;
-			sym->bind = STB_GLOBAL;
-			sym->sym.st_info = GELF_ST_INFO(STB_GLOBAL, STT_NOTYPE);
-			sym->sym.st_shndx = SHN_UNDEF;
-			sym->sym.st_size = 0;
-		}
+
+		if (sym->bind == STB_LOCAL)
+			continue;
+
+		symout = &((struct symbol *)(out->symbols.data))[index];
+		*symout = *sym;
+		symout->index = index;
+		symout->twino = sym;
+		sym->twino = symout;
+		index++;
+
+		if (i == 0)
+			symout->sym.st_shndx = SHN_UNDEF;
+		else if (sym->sec && sym->sec->twino)
+			symout->sym.st_shndx = sym->sec->twino->index;
 	}
 
 	*kelfout = out;
@@ -1154,45 +1166,9 @@ void kpatch_create_symtab(struct kpatch_elf *kelf)
 		find_section_by_name(&kelf->sections, ".shstrtab")->index;
 }
 
-#if 0
-void kpatch_link_symtab_vmlinux(struct kpatch_elf *kelf, struct kpatch_elf *vmkelf)
-{
-	struct symbol *sym, *vmsym;
-#define BUFSIZE 255
-	char kstrbuf[BUFSIZE];
-	int i;
-
-	for_each_symbol(i, sym, &kelf->symbols) {
-		if (GELF_ST_BIND(sym->sym.st_info) != STB_GLOBAL)
-			continue;
-
-		/* figure out if symbol is exported by the kernel */
-		snprintf(kstrbuf, BUFSIZE, "%s%s", "__ksymtab_", sym->name);
-		printf("looking for %s\n",kstrbuf);
-		vmsym = find_symbol_by_name(&vmkelf->symbols, kstrbuf);
-		if (vmsym)
-			continue;
-
-		/* it is not, lookup address in vmlinux */
-		vmsym = find_symbol_by_name(&vmkelf->symbols, sym->name);
-		if (!vmsym)
-			ERROR("symbol not found in vmlinux");
-
-		sym->sym.st_value = vmsym->sym.st_value;
-		sym->sym.st_info = GELF_ST_INFO(STB_LOCAL,
-			GELF_ST_TYPE(vmsym->sym.st_info));
-		sym->sym.st_shndx = SHN_ABS;
-#if DEBUG
-		printf("symbol %s found with address %016lx\n",
-			sym->name, sym->sym.st_value);
-#endif
-	}
-}
-#endif
-
 void kpatch_write_output_elf(struct kpatch_elf *kelf, Elf *elf, char *outfile)
 {
-	int fd, i, index = 0;
+	int fd, i;
 	struct section *sec;
 	Elf *elfout;
 	GElf_Ehdr eh, ehout;
@@ -1280,19 +1256,21 @@ int main(int argc, char *argv[])
 	 * section, symbol, and rela lists of kelf_patched.
 	 */
 	kpatch_compare_correlated_elements(kelf_patched);
+
+	/*
+	 * Mangle the relas a little.  The compiler will sometimes
+	 * use section symbols to reference local objects and functions
+	 * rather than the object or function symbols themselves.
+	 * We substitute the object/function symbols for the section
+	 * symbol in this case so that the existing object/function
+	 * in vmlinux can be linked to.
+	 */
+	kpatch_replace_sections_syms(kelf_patched);
+
+	kpatch_include_changed_functions(kelf_patched);
 #if DEBUG
 	kpatch_dump_kelf(kelf_patched);
 #endif
-	/*
-	 * At this point, the kelf is fully linked and statuses on
-	 * all sections and symbols have been set.
-	 */
-
-	/* Go through changes and make sure they are hot-patchable */
-	kpatch_validate_reachability(kelf_patched);
-
-	if (!kpatch_find_changed_functions(kelf_patched))
-		return 0;
 
 	/* Generate the output elf */
 	kpatch_generate_output(kelf_patched, &kelf_out);
