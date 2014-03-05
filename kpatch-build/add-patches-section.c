@@ -141,7 +141,7 @@ static void find_section_by_name(struct elf *elf, char *name, struct section *se
 	GElf_Shdr sh;
 	char *secname;
 
-	while (scn = elf_nextscn(elf->elf, scn)) {
+	while ((scn = elf_nextscn(elf->elf, scn))) {
 		if (!gelf_getshdr(scn, &sh))
 			ERROR("gelf_getshdr");
 
@@ -207,7 +207,6 @@ int main(int argc, char **argv)
 	struct symlist symlist, symlistv;
 	struct sym *cur, *vsym;
 	struct elf elf, elfv;
-	char name[255];
 	void *buf;
 	struct kpatch_patch *patches_data;
 	GElf_Rela *relas_data;
@@ -252,7 +251,7 @@ int main(int argc, char **argv)
 		cur->vm_addr = vsym->sym.st_value;
 		cur->vm_len = vsym->sym.st_size;
 		cur->action = PATCH;
-		printf("original function at address %016lx (length %d)\n",
+		printf("original function at address %016lx (length %zu)\n",
 		       cur->vm_addr, cur->vm_len);
 		patches_nr++;
 	}
