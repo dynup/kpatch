@@ -953,6 +953,33 @@ void kpatch_generate_output(struct kpatch_elf *kelf, struct kpatch_elf **kelfout
 	*kelfout = out;
 }
 
+void kpatch_write_inventory_file(struct kpatch_elf *kelf, char *outfile)
+{
+	FILE *out;
+	char outbuf[255];
+	int i;
+	struct section *sec;
+	struct symbol *sym;
+
+	if (snprintf(outbuf, 254, "%s.inventory", outfile) < 0)
+		ERROR("snprintf");
+
+	out = fopen(outbuf, "w");
+	if (!out)
+		ERROR("fopen");
+
+	for_each_section(i, sec, &kelf->sections)
+		fprintf(out, "section %s\n", sec->name);
+
+	for_each_symbol(i, sym, &kelf->symbols) {
+		if (i == 0)
+			continue;
+		fprintf(out, "symbol %s %d %d\n", sym->name, sym->type, sym->bind);
+	}
+
+	fclose(out);
+}
+
 void kpatch_create_rela_section(struct section *sec, int link)
 {
 	struct rela *rela;
@@ -1222,12 +1249,14 @@ void kpatch_write_output_elf(struct kpatch_elf *kelf, Elf *elf, char *outfile)
 struct arguments {
 	char *args[3];
 	int debug;
+	int inventory;
 };
 
 static char args_doc[] = "original.o patched.o output.o";
 
 static struct argp_option options[] = {
 	{"debug", 'd', 0, 0, "Show debug output" },
+	{"inventory", 'i', 0, 0, "Create inventory file with list of sections and symbols" },
 	{ 0 }
 };
 
@@ -1241,6 +1270,9 @@ static error_t parse_opt (int key, char *arg, struct argp_state *state)
 	{
 		case 'd':
 			arguments->debug = 1;
+			break;
+		case 'i':
+			arguments->inventory = 1;
 			break;
 		case ARGP_KEY_ARG:
 			if (state->arg_num >= 3)
@@ -1268,6 +1300,7 @@ int main(int argc, char *argv[])
 	struct arguments arguments;
 
 	arguments.debug = 0;
+	arguments.inventory = 0;
 	argp_parse (&argp, argc, argv, 0, 0, &arguments);
 	if (arguments.debug)
 		loglevel = DEBUG;
@@ -1311,6 +1344,8 @@ int main(int argc, char *argv[])
 	kpatch_create_symtab(kelf_out);
 	kpatch_dump_kelf(kelf_out);
 
+	if (arguments.inventory)
+		kpatch_write_inventory_file(kelf_out, outfile);
 	kpatch_write_output_elf(kelf_out, kelf_patched->elf, outfile);
 
 	return 0;
