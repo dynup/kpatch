@@ -290,7 +290,7 @@ void kpatch_create_section_table(struct kpatch_elf *kelf)
 		ERROR("elf_getshdrstrndx");
 
 #if DEBUG
-	printf("=== section list (%d) ===\n", sections_nr);
+	printf("=== section list (%zu) ===\n", sections_nr);
 #endif
 
 	for_each_section(i, sec, &kelf->sections) {
@@ -312,7 +312,7 @@ void kpatch_create_section_table(struct kpatch_elf *kelf)
 		sec->index = elf_ndxscn(scn);
 
 #if DEBUG
-		printf("ndx %02d, data %08x, size, %08x, name %s\n",
+		printf("ndx %02d, data %p, size %zu, name %s\n",
 			sec->index, sec->data->d_buf, sec->data->d_size,
 			sec->name);
 #endif
