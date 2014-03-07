@@ -42,6 +42,7 @@
 #include <string.h>
 #include <error.h>
 #include <gelf.h>
+#include <argp.h>
 
 #include "kpatch.h"
 
@@ -54,6 +55,22 @@
 	error(2, 0, "unreconcilable difference"); \
 })
 
+#define log_debug(format, ...) log(DEBUG, format, ##__VA_ARGS__)
+#define log_normal(format, ...) log(NORMAL, format, ##__VA_ARGS__)
+
+#define log(level, format, ...) \
+({ \
+	if (loglevel <= (level)) \
+		printf(format, ##__VA_ARGS__); \
+})
+
+
+enum loglevel {
+	DEBUG,
+	NORMAL
+};
+
+static enum loglevel loglevel = NORMAL;
 
 /*******************
  * Data structures
@@ -236,10 +253,9 @@ void kpatch_create_rela_table(struct kpatch_elf *kelf, struct section *sec)
 	rela_nr = sec->sh.sh_size / sec->sh.sh_entsize;
 	alloc_table(&sec->relas, sizeof(struct rela), rela_nr);
 
-#if DEBUG
-	printf("\n=== rela table for %s (%d entries) ===\n",
+	log_debug("\n=== rela table for %s (%d entries) ===\n",
 		sec->base->name, rela_nr);
-#endif
+
 	/* read and store the rela entries */
 	for_each_rela(i, rela, &sec->relas) {
 		if (!gelf_getrela(sec->data, i, &rela->rela))
@@ -257,14 +273,13 @@ void kpatch_create_rela_table(struct kpatch_elf *kelf, struct section *sec)
 			if (!rela->string)
 				ERROR("could not lookup rela string\n");
 		}
-#if DEBUG
-		printf("offset %d, type %d, %s %s %d", rela->offset,
+
+		log_debug("offset %d, type %d, %s %s %d", rela->offset,
 			rela->type, rela->sym->name,
 			(rela->addend < 0)?"-":"+", abs(rela->addend));
 		if (rela->string)
-			printf(" (string = %s)", rela->string);
-		printf("\n");
-#endif
+			log_debug(" (string = %s)", rela->string);
+		log_debug("\n");
 	}
 }
 
@@ -289,9 +304,7 @@ void kpatch_create_section_table(struct kpatch_elf *kelf)
 	if (elf_getshdrstrndx(kelf->elf, &shstrndx))
 		ERROR("elf_getshdrstrndx");
 
-#if DEBUG
-	printf("=== section list (%zu) ===\n", sections_nr);
-#endif
+	log_debug("=== section list (%zu) ===\n", sections_nr);
 
 	for_each_section(i, sec, &kelf->sections) {
 		scn = elf_nextscn(kelf->elf, scn);
@@ -311,11 +324,9 @@ void kpatch_create_section_table(struct kpatch_elf *kelf)
 
 		sec->index = elf_ndxscn(scn);
 
-#if DEBUG
-		printf("ndx %02d, data %p, size %zu, name %s\n",
+		log_debug("ndx %02d, data %p, size %zu, name %s\n",
 			sec->index, sec->data->d_buf, sec->data->d_size,
 			sec->name);
-#endif
 	}
 
 	/* Sanity check, one more call to elf_nextscn() should return NULL */
@@ -337,9 +348,7 @@ void kpatch_create_symbol_table(struct kpatch_elf *kelf)
 
 	alloc_table(&kelf->symbols, sizeof(struct symbol), symbols_nr);
 
-#if DEBUG
-	printf("\n=== symbol table (%d entries) ===\n", symbols_nr);
-#endif
+	log_debug("\n=== symbol table (%d entries) ===\n", symbols_nr);
 
 	/* iterator i declared in for_each_entry() macro */
 	for_each_symbol(i, sym, &kelf->symbols) {
@@ -377,14 +386,13 @@ void kpatch_create_symbol_table(struct kpatch_elf *kelf)
 				sym->name = sym->sec->name;
 			}
 		}
-#if DEBUG
-		printf("sym %02d, type %d, bind %d, ndx %02d, name %s",
+
+		log_debug("sym %02d, type %d, bind %d, ndx %02d, name %s",
 			sym->index, sym->type, sym->bind, sym->sym.st_shndx,
 			sym->name);
 		if (sym->sec)
-			printf(" -> %s", sym->sec->name);
-		printf("\n");
-#endif
+			log_debug(" -> %s", sym->sec->name);
+		log_debug("\n");
 	}
 
 }
@@ -502,9 +510,8 @@ void kpatch_compare_correlated_symbols(struct table *table)
 			kpatch_compare_correlated_symbol(sym);
 		else
 			sym->status = NEW;
-#if DEBUG
-		printf("symbol %s is %s\n", sym->name, status_str(sym->status));
-#endif
+
+		log_debug("symbol %s is %s\n", sym->name, status_str(sym->status));
 	}
 }
 
@@ -690,10 +697,10 @@ void kpatch_replace_sections_syms(struct kpatch_elf *kelf)
 			if (rela->sym->type != STT_SECTION ||
 			    !rela->sym->sec || !rela->sym->sec->sym)
 				continue;
-#if DEBUG
-			printf("replacing %s with %s\n",
+
+			log_debug("replacing %s with %s\n",
 			       rela->sym->name, rela->sym->sec->sym->name);
-#endif
+
 			rela->sym = rela->sym->sec->sym;
 		}
 	}
@@ -705,6 +712,9 @@ void kpatch_dump_kelf(struct kpatch_elf *kelf)
 	struct symbol *sym;
 	struct rela *rela;
 	int i, j;
+
+	if (loglevel > DEBUG)
+		return;
 
 	printf("\n=== Sections ===\n");
 	for_each_section(i, sec, &kelf->sections) {
@@ -765,12 +775,8 @@ int kpatch_find_changed_functions(struct kpatch_elf *kelf)
 	return changed;
 }
 
-#if DEBUG
 #define inc_printf(fmt, ...) \
-	printf("%*s" fmt, recurselevel, "", ##__VA_ARGS__);
-#else
-#define inc_printf(fmt, ...);
-#endif
+	log_debug("%*s" fmt, recurselevel, "", ##__VA_ARGS__);
 
 void kpatch_include_symbol(struct symbol *sym, int recurselevel)
 {
@@ -816,15 +822,15 @@ void kpatch_include_changed_functions(struct kpatch_elf *kelf)
 	struct symbol *sym;
 	int i;
 
-#if DEBUG
-	printf("\n=== Inclusion Tree ===\n");
-#endif
+	log_debug("\n=== Inclusion Tree ===\n");
 
 	for_each_symbol(i, sym, &kelf->symbols) {
 		if (sym->status == CHANGED &&
 		    sym->type == STT_FUNC &&
-		    !sym->include)
+		    !sym->include) {
+			log_normal("function %s has changed\n", sym->name);
 			kpatch_include_symbol(sym, 0);
+		}
 
 		if (sym->type == STT_FILE)
 			sym->include = 1;
@@ -850,18 +856,15 @@ void kpatch_generate_output(struct kpatch_elf *kelf, struct kpatch_elf **kelfout
 			sections_nr++;
 	}
 
-#if DEBUG
-	printf("outputting %d sections\n",sections_nr);
-#endif
+	log_debug("outputting %d sections\n",sections_nr);
 
 	/* count output symbols */
 	for_each_symbol(i, sym, &kelf->symbols) {
 		if (i == 0 || sym->include)
 			symbols_nr++;
 	}
-#if DEBUG
-	printf("outputting %d symbols\n",symbols_nr);
-#endif
+
+	log_debug("outputting %d symbols\n",symbols_nr);
 
 	/* allocate output kelf */
 	out = malloc(sizeof(*out));
@@ -966,10 +969,8 @@ void kpatch_create_rela_section(struct section *sec, int link)
 
 	/* reindex and copy into buffer */
 	for_each_rela(i, rela, &sec->relas) {
-#if DEBUG
 		if (!rela->sym || !rela->sym->twino)
 			ERROR("expected rela symbol");
-#endif
 		symndx = rela->sym->twino->index;
 		type = GELF_R_TYPE(rela->rela.r_info);
 		rela->rela.r_info = GELF_R_INFO(symndx, type);
@@ -999,7 +1000,6 @@ void kpatch_create_rela_sections(struct kpatch_elf *kelf)
 			kpatch_create_rela_section(sec, link);
 }
 
-#if DEBUG
 void print_strtab(char *buf, size_t size)
 {
 	int i;
@@ -1011,7 +1011,6 @@ void print_strtab(char *buf, size_t size)
 			printf("%c",buf[i]);
 	}
 }
-#endif
 
 void kpatch_create_shstrtab(struct kpatch_elf *kelf)
 {
@@ -1044,22 +1043,21 @@ void kpatch_create_shstrtab(struct kpatch_elf *kelf)
 		offset += len;
 	}
 
-#if DEBUG
 	if (offset != size)
 		ERROR("shstrtab size mismatch");
-#endif
 
 	shstrtab->data->d_buf = buf;
 	shstrtab->data->d_size = size;
 
-#if DEBUG
-	printf("shstrtab: ");
-	print_strtab(buf, size);
-	printf("\n");
+	if (loglevel <= DEBUG) {
+		printf("shstrtab: ");
+		print_strtab(buf, size);
+		printf("\n");
 
-	for_each_section(i, sec, &kelf->sections)
-		printf("%s @ shstrtab offset %d\n",sec->name,sec->sh.sh_name);
-#endif
+		for_each_section(i, sec, &kelf->sections)
+			printf("%s @ shstrtab offset %d\n",
+			       sec->name, sec->sh.sh_name);
+	}
 }
 
 void kpatch_create_strtab(struct kpatch_elf *kelf)
@@ -1103,22 +1101,21 @@ void kpatch_create_strtab(struct kpatch_elf *kelf)
 		offset += len;
 	}
 
-#if DEBUG
 	if (offset != size)
 		ERROR("shstrtab size mismatch");
-#endif
 
 	strtab->data->d_buf = buf;
 	strtab->data->d_size = size;
 
-#if DEBUG
-	printf("strtab: ");
-	print_strtab(buf, size);
-	printf("\n");
+	if (loglevel <= DEBUG) {
+		printf("strtab: ");
+		print_strtab(buf, size);
+		printf("\n");
 
-	for_each_symbol(i, sym, &kelf->symbols)
-		printf("%s @ strtab offset %d\n",sym->name,sym->sym.st_name);
-#endif
+		for_each_symbol(i, sym, &kelf->symbols)
+			printf("%s @ strtab offset %d\n",
+			       sym->name, sym->sym.st_name);
+	}
 }
 
 void kpatch_create_symtab(struct kpatch_elf *kelf)
@@ -1222,16 +1219,64 @@ void kpatch_write_output_elf(struct kpatch_elf *kelf, Elf *elf, char *outfile)
 	}
 }
 
+struct arguments {
+	char *args[3];
+	int debug;
+};
+
+static char args_doc[] = "original.o patched.o output.o";
+
+static struct argp_option options[] = {
+	{"debug", 'd', 0, 0, "Show debug output" },
+	{ 0 }
+};
+
+static error_t parse_opt (int key, char *arg, struct argp_state *state)
+{
+	/* Get the input argument from argp_parse, which we
+	   know is a pointer to our arguments structure. */
+	struct arguments *arguments = state->input;
+
+	switch (key)
+	{
+		case 'd':
+			arguments->debug = 1;
+			break;
+		case ARGP_KEY_ARG:
+			if (state->arg_num >= 3)
+				/* Too many arguments. */
+				argp_usage (state);
+			arguments->args[state->arg_num] = arg;
+			break;
+		case ARGP_KEY_END:
+			if (state->arg_num < 3)
+				/* Not enough arguments. */
+				argp_usage (state);
+			break;
+		default:
+			return ARGP_ERR_UNKNOWN;
+	}
+	return 0;
+}
+
+static struct argp argp = { options, parse_opt, args_doc, 0 };
+
 int main(int argc, char *argv[])
 {
 	struct kpatch_elf *kelf_base, *kelf_patched, *kelf_out;
 	char *outfile;
+	struct arguments arguments;
+
+	arguments.debug = 0;
+	argp_parse (&argp, argc, argv, 0, 0, &arguments);
+	if (arguments.debug)
+		loglevel = DEBUG;
 
 	elf_version(EV_CURRENT);
 
-	kelf_base = kpatch_elf_open(argv[1]);
-	kelf_patched = kpatch_elf_open(argv[2]);
-	outfile = argv[3];
+	kelf_base = kpatch_elf_open(arguments.args[0]);
+	kelf_patched = kpatch_elf_open(arguments.args[1]);
+	outfile = arguments.args[2];
 
 	kpatch_compare_elf_headers(kelf_base->elf, kelf_patched->elf);
 	kpatch_check_program_headers(kelf_base->elf);
@@ -1256,9 +1301,7 @@ int main(int argc, char *argv[])
 	kpatch_replace_sections_syms(kelf_patched);
 
 	kpatch_include_changed_functions(kelf_patched);
-#if DEBUG
 	kpatch_dump_kelf(kelf_patched);
-#endif
 
 	/* Generate the output elf */
 	kpatch_generate_output(kelf_patched, &kelf_out);
@@ -1266,9 +1309,7 @@ int main(int argc, char *argv[])
 	kpatch_create_shstrtab(kelf_out);
 	kpatch_create_strtab(kelf_out);
 	kpatch_create_symtab(kelf_out);
-#if DEBUG
 	kpatch_dump_kelf(kelf_out);
-#endif
 
 	kpatch_write_output_elf(kelf_out, kelf_patched->elf, outfile);
 
