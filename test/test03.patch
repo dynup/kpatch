@@ -1,0 +1,15 @@
+--- test03.c.orig	2014-03-10 14:34:02.564251278 -0500
++++ test03.c	2014-03-10 14:34:02.566251318 -0500
+@@ -1,7 +1,12 @@
+ #include <stdio.h>
+ 
++static void test_func2() {
++	printf("this is after\n");
++}
++
+ void test_func() {
+ 	printf("this is before\n");
++	test_func2();
+ }
+ 
+ /*
