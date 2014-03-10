@@ -384,8 +384,10 @@ void kpatch_create_symbol_table(struct kpatch_elf *kelf)
 			 */
 			if ((sym->type == STT_FUNC ||
 			     sym->type == STT_OBJECT) &&
-			    sym->sym.st_value == 0 &&
 			    strcmp(sym->sec->name, "__ksymtab_strings")) {
+				if (sym->sym.st_value != 0)
+					ERROR("symbol %s at offset %lu within section %s, expected 0",
+					      sym->name, sym->sym.st_value, sym->sec->name);
 				sym->sec->sym = sym;
 			} else if (sym->type == STT_SECTION) {
 				sym->sec->secsym = sym;
