@@ -38,12 +38,11 @@
 
 BASE="$PWD"
 LOGFILE="/tmp/kpatch-build-$(date +%s).log"
-TOOLSDIR="$(readlink -f $(dirname $0))"
+SCRIPTDIR="$(readlink -f $(dirname $0))"
 ARCHVERSION="$(uname -r)"
 DISTROVERSION="${ARCHVERSION%*.*}"
+LOCALVERSION="-${ARCHVERSION##*-}"
 CPUS="$(grep -c ^processor /proc/cpuinfo)"
-LOCALVERSION="$(uname -r)"
-LOCALVERSION="-${LOCALVERSION##*-}"
 CACHEDIR="$HOME/.kpatch"
 SRCDIR="$CACHEDIR/$ARCHVERSION/src"
 OBJDIR="$CACHEDIR/$ARCHVERSION/obj"
@@ -63,12 +62,24 @@ die() {
 
 find_data_dir() {
 	# git repo
-	DATADIR="$(readlink -f $TOOLSDIR/../kmod)"
+	DATADIR="$(readlink -f $SCRIPTDIR/../kmod)"
 	[[ -e "$DATADIR" ]] && return
 
 	# installation path
-	DATADIR="$(readlink -f $TOOLSDIR/../../share/kpatch)"
+	DATADIR="$(readlink -f $SCRIPTDIR/../share/kpatch)"
 	[[ -e "$DATADIR" ]] && return
+
+	return 1
+}
+
+find_tools_dir() {
+	#git repo
+	TOOLSDIR="$SCRIPTDIR"
+	[[ -e "$TOOLSDIR/create-diff-object" ]] && return
+
+	#installation path
+	TOOLSDIR="$(readlink -f $SCRIPTDIR/../libexec/kpatch)"
+	[[ -e "$TOOLSDIR/create-diff-object" ]] && return
 
 	return 1
 }
@@ -90,6 +101,9 @@ if [[ "$PATCHNAME" =~ \.patch ]] || [[ "$PATCHNAME" =~ \.diff ]]; then
 fi
 
 TEMPDIR="$(mktemp -d)" || die "mktemp failed"
+
+find_data_dir || (echo "can't find data dir" >&2 && die)
+find_tools_dir || (echo "can't find tools dir" >&2 && die)
 
 trap "rm -rf $TEMPDIR" EXIT INT TERM
 
@@ -124,8 +138,6 @@ fi
 echo "Building original kernel"
 make mrproper >> "$LOGFILE" 2>&1 || die
 make "-j$CPUS" vmlinux "O=$OBJDIR" >> "$LOGFILE" 2>&1 || die
-
-find_data_dir || (echo "can't find data dir" >&2 && die)
 
 cp -LR "$DATADIR/patch" "$TEMPDIR" || die
 cp "$OBJDIR/vmlinux" "$TEMPDIR" || die
