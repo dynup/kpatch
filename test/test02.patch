@@ -1,0 +1,10 @@
+--- test02.c.orig	2014-03-10 14:34:02.556251118 -0500
++++ test02.c	2014-03-10 14:34:02.558251160 -0500
+@@ -4,6 +4,7 @@
+ 
+ void test_func() {
+ 	printf("%d\n",a);
++	printf("this is after\n");
+ }
+ 
+ /* this is to ensure that a isn't optimized out by the compiler */

@@ -1,0 +1,13 @@
+section .rodata.str1.1
+section .text.test_func
+section .rela.text.test_func
+section .shstrtab
+section .symtab
+section .strtab
+symbol test02.c 4 0
+symbol .rodata.str1.1 3 0
+symbol .text.test_func 3 0
+symbol a 0 1
+symbol test_func 2 1
+symbol printf 0 1
+symbol puts 0 1
