@@ -84,15 +84,35 @@ find_tools_dir() {
 	return 1
 }
 
-if [[ "$#" -ne 1 ]]; then
-	echo "usage: $0 patchfile" >&2
-	exit 2
-fi
+usage() {
+	echo "usage: $0 [-s|--sourcedir <dir>] <patch file>" >&2
+}
 
-PATCHFILE="$(readlink -f $1)"
-if [[ ! -f "$PATCHFILE" ]]; then
-	echo "ERROR: patch file $PATCHFILE not found" >&2
-	exit 3
+while [[ "$#" -gt 0 ]]; do
+	case "$1" in
+		-h|--help)
+			usage
+			exit 0
+			;;
+		-s|--sourcedir)
+			shift
+			[[ "$#" -eq 0 ]] && die "no source dir specified"
+			USERSRCDIR="$(readlink -f $1)"
+			[[ ! -d "$USERSRCDIR" ]] && die "source dir $1 not found"
+			shift
+			;;
+		*)
+			[[ -n "$PATCHFILE" ]] && die "bad argument: $1"
+			PATCHFILE="$(readlink -f $1)"
+			[[ ! -f "$PATCHFILE" ]] && die "patch file $1 not found"
+			shift
+			;;
+	esac
+done
+
+if [[ -z "$PATCHFILE" ]]; then
+	usage
+	exit 1
 fi
 
 PATCHNAME="$(basename $PATCHFILE)"
@@ -107,8 +127,24 @@ find_tools_dir || (echo "can't find tools dir" >&2 && die)
 
 trap "rm -rf $TEMPDIR" EXIT INT TERM
 
-if [[ -d "$SRCDIR" ]]; then
-	echo "Using cache at $SRCDIR"
+if [[ -d "$SRCDIR" ]] || [[ -n "$USERSRCDIR" ]]; then
+	if [[ -n "$USERSRCDIR" ]]; then
+		SRCDIR="$CACHEDIR/src"
+		OBJDIR="$CACHEDIR/obj"
+		OBJDIR2="$CACHEDIR/obj2"
+
+		rm -rf "$CACHEDIR"
+		mkdir -p "$CACHEDIR"
+		mkdir -p "$OBJDIR" "$OBJDIR2"
+
+		cp "$USERSRCDIR/.config" "$OBJDIR" || die "source dir is missing a .config file"
+
+		echo "Copying source to $SRCDIR"
+		cp -a "$USERSRCDIR" "$SRCDIR" || die "copy failed"
+	else
+		echo "Using cache at $SRCDIR"
+	fi
+
 	cd "$SRCDIR" || die
 	if [[ -f "$APPLIEDPATCHFILE" ]]; then
 		patch -R -p1 < "$APPLIEDPATCHFILE" >> "$LOGFILE" 2>&1 || die "the kpatch cache is corrupted. \"rm -rf $CACHEDIR\" and try again"
