@@ -172,7 +172,8 @@ cd "$TEMPDIR"
 mkdir output
 for i in $FILES; do
 	mkdir -p "output/$(dirname $i)"
-	"$TOOLSDIR"/create-diff-object "orig/$i" "patched/$i" "output/$i" >> "$LOGFILE" 2>&1 || die
+	"$TOOLSDIR"/create-diff-object "orig/$i" "patched/$i" "output/$i" 2>&1 |tee -a "$LOGFILE"
+	[[ "${PIPESTATUS[0]}" -eq 0 ]] || die
 done
 
 echo "Building patch module: kpatch-$PATCHNAME.ko"
