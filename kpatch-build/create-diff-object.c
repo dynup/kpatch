@@ -375,10 +375,19 @@ void kpatch_create_symbol_table(struct kpatch_elf *kelf)
 				ERROR("couldn't find section for symbol %s\n",
 					sym->name);
 
+			/*
+			 * __ksymtab_strings is a special case where the
+			 * compiler creates FUNC/OBJECT syms that refer
+			 * to offsets inside the __ksymtab_strings section
+			 * for kernel exported symbols.  We want to ignore
+			 * those.
+			 */
 			if ((sym->type == STT_FUNC ||
 			     sym->type == STT_OBJECT) &&
-			    sym->sym.st_value == 0 &&
 			    strcmp(sym->sec->name, "__ksymtab_strings")) {
+				if (sym->sym.st_value != 0)
+					ERROR("symbol %s at offset %lu within section %s, expected 0",
+					      sym->name, sym->sym.st_value, sym->sec->name);
 				sym->sec->sym = sym;
 			} else if (sym->type == STT_SECTION) {
 				sym->sec->secsym = sym;
@@ -890,8 +899,8 @@ void kpatch_generate_output(struct kpatch_elf *kelf, struct kpatch_elf **kelfout
 	}
 
 	/*
-	 * Search symbol table for local functions whose sections are
-	 * not included, and modify them to be non-local.
+	 * Search symbol table for local functions and objects whose sections
+	 * are not included, and modify them to be non-local.
 	 */
 	for_each_symbol(i, sym, &kelf->symbols) {
 		if (i == 0)
