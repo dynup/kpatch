@@ -899,8 +899,8 @@ void kpatch_generate_output(struct kpatch_elf *kelf, struct kpatch_elf **kelfout
 	}
 
 	/*
-	 * Search symbol table for local functions whose sections are
-	 * not included, and modify them to be non-local.
+	 * Search symbol table for local functions and objects whose sections
+	 * are not included, and modify them to be non-local.
 	 */
 	for_each_symbol(i, sym, &kelf->symbols) {
 		if (i == 0)
