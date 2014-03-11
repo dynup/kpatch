@@ -13,7 +13,9 @@ all: $(TARGETS)
 
 install: all
 	$(INSTALL) -d $(LIBEXECDIR)
-	$(INSTALL) $(TARGETS) kpatch-build $(LIBEXECDIR)
+	$(INSTALL) $(TARGETS) $(LIBEXECDIR)
+	$(INSTALL) -d $(BINDIR)
+	$(INSTALL) kpatch-build $(BINDIR)
 
 clean:
 	$(RM) $(TARGETS)

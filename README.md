@@ -27,7 +27,7 @@ Install the dependencies for compiling kpatch:
 
 *NOTE: Ensure you have elfutils-0.158 or newer.*
 
-Install the dependencies for the "kpatch build" command:
+Install the dependencies for the "kpatch-build" command:
 
     sudo yum install rpmdevtools pesign
     sudo yum-builddep kernel
@@ -48,7 +48,7 @@ Quick start
 -----------
 
 *NOTE: While kpatch is designed to work with any recent Linux
-kernel on any distribution, the "kpatch build" command currently
+kernel on any distribution, the "kpatch-build" command currently
 only works on Fedora.*
 
 Load the kpatch core module:
@@ -62,7 +62,7 @@ Make a source patch against the kernel tree:
 
 Build the hot patch kernel module:
 
-    kpatch build /path/to/foo.patch
+    kpatch-build /path/to/foo.patch
 
 This outputs a hot patch module named `kpatch-foo.ko` in the current
 directory.  Now apply it to the running kernel:
@@ -98,9 +98,9 @@ ones.  It has four main components:
   even after a reboot into the same version of the kernel.
 
 
-### kpatch build
+### kpatch-build
 
-The "kpatch build" command converts a source-level diff patch file to a hot
+The "kpatch-build" command converts a source-level diff patch file to a hot
 patch kernel module.  Most of its work is performed by the kpatch-build script
 which uses a collection of utilities: `create-diff-object`,
 `add-patch-section`, and `link-vmlinux-syms`.
@@ -149,7 +149,7 @@ Limitations
   are safe to apply.  It's the user's responsibility to analyze any such
   patches for safety before applying them.
 - Patches which change the contents of static data structures are not currently
-  supported.  kpatch build will detect such changes and report an error.
+  supported.  kpatch-build will detect such changes and report an error.
 - Patches to functions which are always in the call stack of a task, such as
   schedule(), will fail to apply at runtime.
 - Patches which change functions that are only called in the kernel init path
@@ -256,7 +256,7 @@ http://www.youtube.com/watch?v=WeSmG-XirC4
 
 This demonstration completes each step in the previous section in a manual
 fashion.  However, from a end-user perspective, most of these steps are hidden
-by the "kpatch build" command.
+by the "kpatch-build" command.
 
 
 Get involved

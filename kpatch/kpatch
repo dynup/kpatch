@@ -20,7 +20,7 @@
 # Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA,
 # 02110-1301, USA.
 
-# This is the primary kpatch user script that manages building, applying, and
+# This is the kpatch user script that manages installing, applying, and
 # displaying information about kernel patch modules installed on the system.
 
 # TODO: add kernelrelease option to manage releases other than the
@@ -35,8 +35,6 @@ usage () {
 	echo "usage: kpatch <command> [<args>]" >&2
 	echo >&2
 	echo "Valid commands:" >&2
-	printf '   %-20s %s\n' "build <file>"         "build hotpatch module from source diff patch file" >&2
-	echo >&2
 	printf '   %-20s %s\n' "install <file>"       "install hotpatch module to the kpatch DB" >&2
 	printf '   %-20s %s\n' "uninstall <hotpatch>" "uninstall hotpatch module from the kpatch DB" >&2
 	echo >&2
@@ -92,20 +90,6 @@ module_enabled() {
 echo_patch_name() {
 	NAME="$(basename $1)"
 	echo $NAME
-}
-
-find_kpatch_build() {
-	SCRIPTDIR="$(readlink -f $(dirname $0))"
-
-	# git repo
-	KPATCHBUILD="$(readlink -f $SCRIPTDIR/../kpatch-build/kpatch-build)"
-	[[ -e "$KPATCHBUILD" ]] && return
-
-	# installation path
-	KPATCHBUILD="$(readlink -f $SCRIPTDIR/../libexec/kpatch/kpatch-build)"
-	[[ -e "$KPATCHBUILD" ]] && return
-
-	return 1
 }
 
 unset MODULE
@@ -194,12 +178,6 @@ case "$1" in
 	find_module "$PATCH" || die "$PATCH is not installed"
 	echo "Patch information for $PATCH:"
 	/usr/sbin/modinfo "$MODULE" || die "failed to get info for patch $PATCH"
-	;;
-
-"build")
-	find_kpatch_build || die "kpatch-build is not installed"
-	shift
-	"$KPATCHBUILD" "$@" || die "kpatch build failed"
 	;;
 
 "help"|"-h"|"--help")
