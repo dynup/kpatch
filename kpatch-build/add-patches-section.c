@@ -177,11 +177,6 @@ static void create_symlist(struct elf *elf, struct symlist *symlist)
 	if (!data)
 		ERROR("elf_getdata");
 
-	/* find (local) function symbols
-	 * NOTE: If the function symbol is in the kpatch-gen file, it needs
-	 * to be patched.  If the function didn't need to be patched,
-	 * it wouldn't have been incldued in the kpatch-gen file.
-	 */
 	symlist->len = sh->sh_size / sh->sh_entsize;
 	for (i = 0; i < symlist->len; i++) {
 		if (!gelf_getsym(data, i, &sym))
