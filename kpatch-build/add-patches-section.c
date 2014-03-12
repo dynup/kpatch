@@ -70,7 +70,7 @@ struct sym {
 };
 
 struct symlist {
-	struct sym *head;
+	struct sym *head, *tail;
 	size_t len;
 };
 
@@ -131,8 +131,11 @@ static void insert_sym(struct symlist *list, GElf_Sym *sym, char *name,
 	newsym->name = name;
 	newsym->index = index;
 
-	newsym->next = list->head;
-	list->head = newsym;
+	if (list->tail)
+		list->tail->next = newsym;
+	if (!list->head)
+		list->head = newsym;
+	list->tail = newsym;
 }
 
 static void find_section_by_name(struct elf *elf, char *name, struct section *sec)
@@ -192,13 +195,36 @@ static void create_symlist(struct elf *elf, struct symlist *symlist)
 	}
 }
 
-static struct sym *find_symbol_by_name(struct symlist *list, char *name)
+static struct sym *find_symbol_by_name(struct symlist *list, struct sym *sym,
+                                       char *hint)
 {
-	struct sym *cur;
+	struct sym *cur, *ret = NULL;
+	char *name = sym->name, *curfile = NULL;
 
+	/* try to find a local symbol in the hint file first */
+	if (hint && GELF_ST_BIND(sym->sym.st_info) == STB_LOCAL) {
+		for_each_sym(list, cur) {
+			if (GELF_ST_TYPE(cur->sym.st_info) == STT_FILE)
+				curfile = cur->name;
+			if (!curfile || strcmp(curfile, hint))
+				continue;
+			if (!strcmp(cur->name, name)) {
+				if (ret)
+					ERROR("unresolvable symbol ambiguity for symbol '%s' in file '%s'", name, hint);
+				ret = cur;
+			}
+		}
+	}
+
+	if (ret)
+		return ret;
+
+	/* search globally for the symbol */
 	for_each_sym(list, cur)
-		if (!strcmp(cur->name, name))
+		if (GELF_ST_BIND(sym->sym.st_info) == STB_GLOBAL &&
+		    !strcmp(cur->name, name))
 			return cur;
+
 	return NULL;
 }
 
@@ -218,6 +244,7 @@ int main(int argc, char **argv)
 	GElf_Shdr sh, *shp;
 	GElf_Ehdr eh;
 	GElf_Sym sym;
+	char *hint = NULL;
 
 	/* set elf version (required by libelf) */
 	if (elf_version(EV_CURRENT) == EV_NONE)
@@ -240,12 +267,15 @@ int main(int argc, char **argv)
 
 	/* lookup patched functions in vmlinux */
 	for_each_sym(&symlist, cur) {
+		if (GELF_ST_TYPE(cur->sym.st_info) == STT_FILE)
+			hint = cur->name;
+
 		if (GELF_ST_TYPE(cur->sym.st_info) != STT_FUNC)
 			continue;
 
 		printf("found patched function %s\n", cur->name);
 
-		vsym = find_symbol_by_name(&symlistv, cur->name);
+		vsym = find_symbol_by_name(&symlistv, cur, hint);
 		if (!vsym)
 			ERROR("couldn't find patched function in vmlinux");
 		cur->vm_addr = vsym->sym.st_value;
