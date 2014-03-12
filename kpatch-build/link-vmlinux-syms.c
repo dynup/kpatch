@@ -194,6 +194,11 @@ static struct sym *find_symbol_by_name(struct symlist *list, char *name)
 	return NULL;
 }
 
+/*
+ * TODO: de-dup common code above these point with code
+ * in add-patches-section.c
+ */
+
 int main(int argc, char **argv)
 {
 	struct symlist symlist, symlistv;
