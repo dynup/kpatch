@@ -286,33 +286,6 @@ int main(int argc, char **argv)
 		patches_nr++;
 	}
 
-#if 0
-	/* lookup non-exported globals and insert vmlinux address */
-	for_each_sym(&symlist, cur) {
-		if (GELF_ST_TYPE(cur->sym.st_info) != STT_NOTYPE ||
-		    GELF_ST_BIND(cur->sym.st_info) != STB_GLOBAL)
-			continue;
-
-		printf("found global symbol %s\n", cur->name);
-		sprintf(name, "__kstrtab_%s", cur->name);
-		vsym = find_symbol_by_name(&symlistv, name);
-		if (vsym) {
-			printf("symbol is exported by the kernel\n");
-			continue;
-		}
-
-		vsym = find_symbol_by_name(&symlistv, cur->name);
-		if (!vsym)
-			ERROR("couldn't find global function in vmlinux");
-
-		cur->vm_addr = vsym->sym.st_value;
-		cur->vm_len = vsym->sym.st_size;
-		cur->action = LINK;
-		printf("original symbol at address %016lx (length %d)\n",
-		       cur->vm_addr, cur->vm_len);
-	}
-#endif
-
 	elf_end(elfv.elf);
 	close(elfv.fd);
 
@@ -393,17 +366,6 @@ int main(int argc, char **argv)
 	data = elf_getdata(scn, NULL);
 	if (!data)
 		ERROR("elf_getdata");
-#if 0
-	/* update LINK symbols */
-	for_each_sym(&symlist, cur) {
-		if (cur->action != LINK)
-			continue;
-		cur->sym.st_value = cur->vm_addr;
-		cur->sym.st_info = GELF_ST_INFO(STB_LOCAL,STT_FUNC);
-		cur->sym.st_shndx = SHN_ABS;
-		gelf_update_sym(data, cur->index, &cur->sym);
-	}
-#endif
 
 	/* add new section symbols to symtab */
 	len = sizeof(GElf_Sym) * 2;
