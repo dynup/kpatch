@@ -172,16 +172,19 @@ else
 	echo "$LOCALVERSION" > "$SRCDIR/localversion" || die
 fi
 
-echo "Building original kernel"
+echo "Testing patch file"
 cd "$SRCDIR" || die
+cp "$PATCHFILE" "$APPLIEDPATCHFILE" || die
+patch -p1 < "$APPLIEDPATCHFILE" || die "source patch file failed to apply"
+patch -p1 -R < "$APPLIEDPATCHFILE" &> /dev/null || die "reverse patch apply failed"
+
+echo "Building original kernel"
 make mrproper >> "$LOGFILE" 2>&1 || die
 make "-j$CPUS" vmlinux "O=$OBJDIR" >> "$LOGFILE" 2>&1 || die
-
 cp -LR "$DATADIR/patch" "$TEMPDIR" || die
 cp "$OBJDIR/vmlinux" "$TEMPDIR" || die
 
 echo "Building patched kernel"
-cp "$PATCHFILE" "$APPLIEDPATCHFILE" || die
 patch -p1 < "$APPLIEDPATCHFILE" >> "$LOGFILE" 2>&1 || die
 make "-j$CPUS" vmlinux "O=$OBJDIR" > "$TEMPDIR/patched_build.log" 2>&1 || die
 
