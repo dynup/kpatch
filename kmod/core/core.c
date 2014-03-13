@@ -151,8 +151,6 @@ static int kpatch_apply_patch(void *data)
 	memcpy(&kpatch_funcs[num_global_funcs], funcs,
 	       num_new_funcs * sizeof(struct kpatch_func));
 
-	/* TODO: sync_core? */
-
 out:
 	return ret;
 }
