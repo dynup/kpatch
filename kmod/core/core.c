@@ -205,7 +205,12 @@ int kpatch_register(struct module *mod, void *kpatch_patches,
 	num_patches = (kpatch_patches_end - kpatch_patches) / sizeof(*patches);
 	patches = kpatch_patches;
 
-	funcs = kmalloc((num_patches + 1) * sizeof(*funcs), GFP_KERNEL); /*TODO: error handling, free, etc */
+	funcs = kmalloc((num_patches + 1) * sizeof(*funcs), GFP_KERNEL);
+	if (!funcs) {
+		ret = -ENOMEM;
+		goto out;
+	}
+
 	for (i = 0; i < num_patches; i++) {
 
 		funcs[i].old_func_addr = patches[i].orig;
@@ -227,7 +232,8 @@ int kpatch_register(struct module *mod, void *kpatch_patches,
 		if (ret) {
 			printk("kpatch: can't set ftrace filter at "
 				"%lx '%s' (%d)\n",
-				funcs[i].old_func_addr, funcs[i].old_func_name, ret);
+				funcs[i].old_func_addr, funcs[i].old_func_name,
+				ret);
 			goto out;
 		}
 	}
@@ -259,6 +265,8 @@ int kpatch_register(struct module *mod, void *kpatch_patches,
 	}
 
 out:
+	if (funcs)
+		kfree(funcs);
 	return ret;
 }
 EXPORT_SYMBOL(kpatch_register);
@@ -304,6 +312,10 @@ int kpatch_unregister(struct module *mod)
 	num_funcs = kpatch_num_funcs(kpatch_funcs);
 
 	funcs = kmalloc((num_funcs + 1) * sizeof(*funcs), GFP_KERNEL);
+	if (!funcs) {
+		ret = -ENOMEM;
+		goto out;
+	}
 
 	for (f = kpatch_funcs, i = 0; f->old_func_name; f++)
 		if (f->mod == mod)
@@ -334,7 +346,8 @@ int kpatch_unregister(struct module *mod)
 	}
 
 out:
-	kfree(funcs);
+	if (funcs)
+		kfree(funcs);
 	return ret;
 }
 EXPORT_SYMBOL(kpatch_unregister);
