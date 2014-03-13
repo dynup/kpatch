@@ -184,11 +184,8 @@ patch -p1 < "$APPLIEDPATCHFILE" >> "$LOGFILE" 2>&1 || die
 make "-j$CPUS" vmlinux "O=$OBJDIR" > "$TEMPDIR/patched_build.log" 2>&1 || die
 
 echo "Detecting changed objects"
-grep CC "$TEMPDIR/patched_build.log" | grep -v init/version.o | awk '{print $2}' >> "$TEMPDIR/changed_objs"
-if [[ $? -ne 0 ]]; then
-	echo "No changed objects"
-	exit 1
-fi
+grep CC "$TEMPDIR/patched_build.log" | grep -v init/version.o | awk '{print $2}' > "$TEMPDIR/changed_objs"
+[[ ! -s "$TEMPDIR/changed_objs" ]] && die "no changed objects were detected"
 
 echo "Rebuilding changed objects"
 rm -rf "$OBJDIR2"
