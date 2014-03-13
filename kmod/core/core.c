@@ -18,23 +18,20 @@
  * 02110-1301, USA.
  */
 
-/* Contains the code for the core kpatch module.  This module reads
- * information from the patch modules, find new patched functions,
- * and register those functions in the ftrace handlers the redirects
- * the old function call to the new function code.
+/* Contains the code for the core kpatch module.  Each patch module registers
+ * with this module to redirect old functions to new functions.
  *
- * Each patch module can contain one or more patched functions.  This
- * information is contained in the .patches section of the patch module.  For
- * each function patched by the module we must:
+ * Each patch module can contain one or more new functions.  This information
+ * is contained in the .patches section of the patch module.  For each function
+ * patched by the module we must:
  * - Call stop_machine
- * - Ensure that no execution thread is currently in the function to be
- *   patched (or has the function in the call stack)
+ * - Ensure that no execution thread is currently in the old function (or has
+ *   it in the call stack)
  * - Add the new function address to the kpatch_funcs table
  *
- * After that, each call to the old function calls into kpatch_trampoline()
- * which searches for a patched version of the function in the kpatch_funcs
- * table.  If a patched version is found, the return instruction pointer is
- * overwritten to return to the new function.
+ * After that, each call to the old function calls into kpatch_ftrace_handler()
+ * which finds the new function in the kpatch_funcs table and updates the
+ * return instruction pointer so that ftrace will return to the new function.
  */
 
 #define pr_fmt(fmt) KBUILD_MODNAME ": " fmt
