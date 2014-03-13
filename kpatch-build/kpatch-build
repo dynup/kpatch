@@ -60,6 +60,14 @@ die() {
 	exit 1
 }
 
+cleanup() {
+	rm -rf "$TEMPDIR"
+	if [[ -e "$SRCDIR/$APPLIEDPATCHFILE" ]]; then
+		patch -p1 -R -d "$SRCDIR" < "$SRCDIR/$APPLIEDPATCHFILE" &> /dev/null
+		rm -f "$SRCDIR/$APPLIEDPATCHFILE"
+	fi
+}
+
 find_data_dir() {
 	# git repo
 	DATADIR="$(readlink -f $SCRIPTDIR/../kmod)"
@@ -122,10 +130,10 @@ fi
 
 TEMPDIR="$(mktemp -d)" || die "mktemp failed"
 
+trap cleanup EXIT INT TERM
+
 find_data_dir || (echo "can't find data dir" >&2 && die)
 find_tools_dir || (echo "can't find tools dir" >&2 && die)
-
-trap "rm -rf $TEMPDIR" EXIT INT TERM
 
 if [[ -d "$SRCDIR" ]] || [[ -n "$USERSRCDIR" ]]; then
 	if [[ -n "$USERSRCDIR" ]]; then
@@ -144,12 +152,6 @@ if [[ -d "$SRCDIR" ]] || [[ -n "$USERSRCDIR" ]]; then
 	else
 		echo "Using cache at $SRCDIR"
 	fi
-
-	cd "$SRCDIR" || die
-	if [[ -f "$APPLIEDPATCHFILE" ]]; then
-		patch -R -p1 < "$APPLIEDPATCHFILE" >> "$LOGFILE" 2>&1 || die "the kpatch cache is corrupted. \"rm -rf $CACHEDIR\" and try again"
-		rm -f "$APPLIEDPATCHFILE"
-	fi
 else
 	rpm -q --quiet rpmdevtools || die "rpmdevtools not installed"
 	rpm -q --quiet yum-utils || die "yum-utils not installed"
@@ -166,12 +168,12 @@ else
 	mkdir -p "$OBJDIR"
 	mv "$HOME"/rpmbuild/BUILD/kernel-*/linux-"$ARCHVERSION" "$SRCDIR" >> "$LOGFILE" 2>&1 || die
 
-	cd "$SRCDIR"
-	cp .config "$OBJDIR" || die
+	cp "$SRCDIR/.config" "$OBJDIR" || die
 	echo "$LOCALVERSION" > "$SRCDIR/localversion" || die
 fi
 
 echo "Building original kernel"
+cd "$SRCDIR" || die
 make mrproper >> "$LOGFILE" 2>&1 || die
 make "-j$CPUS" vmlinux "O=$OBJDIR" >> "$LOGFILE" 2>&1 || die
 
