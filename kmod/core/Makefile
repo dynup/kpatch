@@ -8,7 +8,7 @@ endif
 
 KPATCH_MAKE = $(MAKE) -C $(KPATCH_BUILD) M=$(THISDIR)
 
-kpatch.ko: core.c trampoline.S
+kpatch.ko: core.c
 	$(KPATCH_MAKE) kpatch.ko
 
 all: kpatch.ko
@@ -20,4 +20,4 @@ clean:
 
 # kbuild rules
 obj-m := kpatch.o
-kpatch-y := core.o trampoline.o
+kpatch-y := core.o

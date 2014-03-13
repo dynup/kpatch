@@ -1,6 +1,6 @@
 /*
  * Copyright (C) 2014 Seth Jennings <sjenning@redhat.com>
- * Copyright (C) 2013 Josh Poimboeuf <jpoimboe@redhat.com>
+ * Copyright (C) 2013-2014 Josh Poimboeuf <jpoimboe@redhat.com>
  *
  * This program is free software; you can redistribute it and/or
  * modify it under the terms of the GNU General Public License
@@ -47,26 +47,11 @@
 #include <asm/cacheflush.h>
 #include "kpatch.h"
 
+/* TODO: this array is horrible */
 #define KPATCH_MAX_FUNCS	256
 struct kpatch_func kpatch_funcs[KPATCH_MAX_FUNCS+1];
 
 static int kpatch_num_registered;
-
-/* from trampoline.S */
-extern void kpatch_trampoline(unsigned long ip, unsigned long parent_ip,
-		       struct ftrace_ops *op, struct pt_regs *regs);
-
-/*
- * Deal with some of the peculiarities caused by the trampoline being called
- * from __ftrace_ops_list_func instead of directly from ftrace_regs_caller.
- */
-void kpatch_ftrace_hacks(void)
-{
-#define TRACE_INTERNAL_BIT		(1<<11)
-#define trace_recursion_clear(bit)	do { (current)->trace_recursion &= ~(bit); } while (0)
-	trace_recursion_clear(TRACE_INTERNAL_BIT);
-	preempt_enable_notrace();
-}
 
 static int kpatch_num_funcs(struct kpatch_func *f)
 {
@@ -178,9 +163,57 @@ out:
 	return ret;
 }
 
+#define TRACE_INTERNAL_BIT		(1<<11)
+#define trace_recursion_clear(bit)	do { (current)->trace_recursion &= ~(bit); } while (0)
+void kpatch_ftrace_handler(unsigned long ip, unsigned long parent_ip,
+		           struct ftrace_ops *op, struct pt_regs *regs)
+{
+	int i;
+	struct kpatch_func *func = NULL;
+
+	/*
+	 * FIXME: HACKS
+	 *
+	 * Deal with some of the peculiarities caused by the handler being
+	 * called from __ftrace_ops_list_func instead of directly from
+	 * ftrace_regs_caller.
+	 */
+	trace_recursion_clear(TRACE_INTERNAL_BIT);
+	preempt_enable_notrace();
+
+	/*
+	 * TODO: if preemption is possible then we'll need to think about how
+	 * to ensure atomic access to the array and how to ensure activeness
+	 * safety here.  if preemption is enabled then we need to make sure the
+	 * IP isn't inside kpatch_trampoline for any task.
+	 */
+
+	for (i = 0; i < KPATCH_MAX_FUNCS &&
+		    kpatch_funcs[i].old_func_addr; i++) {
+		if (kpatch_funcs[i].old_func_addr == ip) {
+			func = &kpatch_funcs[i];
+			break;
+		}
+	}
+
+	/*
+	 * Check for the rare case where we don't have a new function to call.
+	 * This can happen in the small window of time during patch module
+	 * insmod after it has called register_ftrace_function() but before it
+	 * has called stop_machine() to do the activeness safety check and the
+	 * array update.  In this case we just return and let the old function
+	 * run.
+	 */
+	if (!func)
+		return;
+
+	regs->ip = func->new_func_addr;
+	return;
+}
+
 
 static struct ftrace_ops kpatch_ftrace_ops __read_mostly = {
-	.func = kpatch_trampoline,
+	.func = kpatch_ftrace_handler,
 	.flags = FTRACE_OPS_FL_SAVE_REGS,
 };
 
@@ -268,7 +301,7 @@ static int kpatch_remove_patch(void *data)
 	if (ret)
 		goto out;
 
-	for (i = 0; i < KPATCH_MAX_FUNCS; i++) /* TODO iterate by pointer */
+	for (i = 0; i < KPATCH_MAX_FUNCS && kpatch_funcs[i].old_func_addr; i++)
 		if (kpatch_funcs[i].old_func_addr == funcs->old_func_addr)
 			break;
 
