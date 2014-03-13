@@ -837,7 +837,7 @@ void kpatch_include_changed_functions(struct kpatch_elf *kelf)
 		if (sym->status == CHANGED &&
 		    sym->type == STT_FUNC &&
 		    !sym->include) {
-			log_normal("function %s has changed\n", sym->name);
+			log_normal("changed function: %s\n", sym->name);
 			kpatch_include_symbol(sym, 0);
 		}
 
