@@ -124,9 +124,6 @@ static int kpatch_verify_activeness_safety(struct kpatch_func *funcs)
 		}
 	} while_each_thread(g, t);
 
-	/* TODO: for preemptible support we would need to ensure that functions
-	 * on top of the stack are actually seen on the stack.
-	 */
 out:
 	return ret;
 }
@@ -165,13 +162,6 @@ void kpatch_ftrace_handler(unsigned long ip, unsigned long parent_ip,
 {
 	int i;
 	struct kpatch_func *func = NULL;
-
-	/*
-	 * TODO: if preemption is possible then we'll need to think about how
-	 * to ensure atomic access to the array and how to ensure activeness
-	 * safety here.  if preemption is enabled then we need to make sure the
-	 * IP isn't inside kpatch_trampoline for any task.
-	 */
 
 	for (i = 0; i < KPATCH_MAX_FUNCS &&
 		    kpatch_funcs[i].old_func_addr; i++) {
