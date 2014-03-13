@@ -160,23 +160,11 @@ out:
 	return ret;
 }
 
-#define TRACE_INTERNAL_BIT		(1<<11)
-#define trace_recursion_clear(bit)	do { (current)->trace_recursion &= ~(bit); } while (0)
 void kpatch_ftrace_handler(unsigned long ip, unsigned long parent_ip,
 		           struct ftrace_ops *op, struct pt_regs *regs)
 {
 	int i;
 	struct kpatch_func *func = NULL;
-
-	/*
-	 * FIXME: HACKS
-	 *
-	 * Deal with some of the peculiarities caused by the handler being
-	 * called from __ftrace_ops_list_func instead of directly from
-	 * ftrace_regs_caller.
-	 */
-	trace_recursion_clear(TRACE_INTERNAL_BIT);
-	preempt_enable_notrace();
 
 	/*
 	 * TODO: if preemption is possible then we'll need to think about how
@@ -207,7 +195,6 @@ void kpatch_ftrace_handler(unsigned long ip, unsigned long parent_ip,
 	regs->ip = func->new_func_addr;
 	return;
 }
-
 
 static struct ftrace_ops kpatch_ftrace_ops __read_mostly = {
 	.func = kpatch_ftrace_handler,
