@@ -44,8 +44,6 @@
 #include <gelf.h>
 #include <argp.h>
 
-#include "kpatch.h"
-
 #define ERROR(format, ...) \
 	error(1, 0, "%s: %d: " format, __FUNCTION__, __LINE__, ##__VA_ARGS__)
 
