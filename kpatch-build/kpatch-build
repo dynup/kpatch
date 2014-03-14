@@ -38,7 +38,7 @@
 
 BASE="$PWD"
 LOGFILE="/tmp/kpatch-build-$(date +%s).log"
-SCRIPTDIR="$(readlink -f $(dirname $0))"
+SCRIPTDIR="$(readlink -f $(dirname $(type -p $0)))"
 ARCHVERSION="$(uname -r)"
 DISTROVERSION="${ARCHVERSION%*.*}"
 LOCALVERSION="-${ARCHVERSION##*-}"
