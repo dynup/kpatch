@@ -200,7 +200,6 @@ int kpatch_register(struct module *mod, void *kpatch_patches,
 	struct kpatch_patch *patches;
 	struct kpatch_func *funcs, *f;
 
-	pr_err("loading patch module \"%s\"\n", mod->name);
 
 	num_patches = (kpatch_patches_end - kpatch_patches) / sizeof(*patches);
 	patches = kpatch_patches;
@@ -261,6 +260,8 @@ int kpatch_register(struct module *mod, void *kpatch_patches,
 
 		goto out;
 	}
+
+	pr_notice("loaded patch module \"%s\"\n", mod->name);
 
 out:
 	if (funcs)
@@ -342,6 +343,8 @@ int kpatch_unregister(struct module *mod)
 			goto out;
 		}
 	}
+
+	pr_notice("unloaded patch module \"%s\"\n", mod->name);
 
 out:
 	if (funcs)
