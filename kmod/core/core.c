@@ -155,6 +155,38 @@ out:
 	return ret;
 }
 
+/* Called from stop_machine */
+static int kpatch_remove_patch(void *data)
+{
+	int num_remove_funcs, i, ret = 0;
+	struct kpatch_func *funcs = data;
+
+	ret = kpatch_verify_activeness_safety(funcs);
+	if (ret)
+		goto out;
+
+	for (i = 0; i < KPATCH_MAX_FUNCS && kpatch_funcs[i].old_func_addr; i++)
+		if (kpatch_funcs[i].old_func_addr == funcs->old_func_addr)
+			break;
+
+	if (i == KPATCH_MAX_FUNCS) {
+		ret = -EINVAL;
+		goto out;
+	}
+
+	num_remove_funcs = kpatch_num_funcs(funcs);
+
+	memset(&kpatch_funcs[i], 0,
+	       num_remove_funcs * sizeof(struct kpatch_func));
+
+	for ( ;kpatch_funcs[i + num_remove_funcs].old_func_addr; i++)
+		memcpy(&kpatch_funcs[i], &kpatch_funcs[i + num_remove_funcs],
+		       sizeof(struct kpatch_func));
+
+out:
+	return ret;
+}
+
 void kpatch_ftrace_handler(unsigned long ip, unsigned long parent_ip,
 		           struct ftrace_ops *op, struct pt_regs *regs)
 {
@@ -269,38 +301,6 @@ out:
 	return ret;
 }
 EXPORT_SYMBOL(kpatch_register);
-
-/* Called from stop_machine */
-static int kpatch_remove_patch(void *data)
-{
-	int num_remove_funcs, i, ret = 0;
-	struct kpatch_func *funcs = data;
-
-	ret = kpatch_verify_activeness_safety(funcs);
-	if (ret)
-		goto out;
-
-	for (i = 0; i < KPATCH_MAX_FUNCS && kpatch_funcs[i].old_func_addr; i++)
-		if (kpatch_funcs[i].old_func_addr == funcs->old_func_addr)
-			break;
-
-	if (i == KPATCH_MAX_FUNCS) {
-		ret = -EINVAL;
-		goto out;
-	}
-
-	num_remove_funcs = kpatch_num_funcs(funcs);
-
-	memset(&kpatch_funcs[i], 0,
-	       num_remove_funcs * sizeof(struct kpatch_func));
-
-	for ( ;kpatch_funcs[i + num_remove_funcs].old_func_addr; i++)
-		memcpy(&kpatch_funcs[i], &kpatch_funcs[i + num_remove_funcs],
-		       sizeof(struct kpatch_func));
-
-out:
-	return ret;
-}
 
 int kpatch_unregister(struct module *mod)
 {
