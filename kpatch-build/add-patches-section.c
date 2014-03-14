@@ -28,9 +28,9 @@
  * functions are overridden by the patch module.
  *
  * For each struct kpatch_patch entry in the .patches section, the core
- * module will register the new function as an ftrace handler for the
- * old function.  The new function will return to the caller of the old
- * function, not the old function itself, bypassing the old function.
+ * module will register as an ftrace handler for the old function.  The new
+ * function will return to the caller of the old function, not the old function
+ * itself, bypassing the old function.
  */
 
 #include <sys/types.h>
@@ -309,8 +309,8 @@ int main(int argc, char **argv)
 	for_each_sym(&symlist, cur) {
 		if (cur->action != PATCH)
 			continue;
-		patches_data[i].orig = cur->vm_addr;
-		patches_data[i].orig_end = cur->vm_addr + cur->vm_len;
+		patches_data[i].old_addr = cur->vm_addr;
+		patches_data[i].old_size = cur->vm_len;
 		relas_data[i].r_offset = i * sizeof(struct kpatch_patch);
 		relas_data[i].r_info = GELF_R_INFO(cur->index, R_X86_64_64);
 		i++;

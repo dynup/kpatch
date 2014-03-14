@@ -26,16 +26,16 @@
 #define _KPATCH_H_
 
 struct kpatch_func {
-	unsigned long old_func_addr;
-	unsigned long new_func_addr;
-	unsigned long old_func_addr_end;
+	unsigned long new_addr;
+	unsigned long old_addr;
+	unsigned long old_size;
 	struct module *mod;
 };
 
 struct kpatch_patch {
-	unsigned long new;
-	unsigned long orig;
-	unsigned long orig_end;
+	unsigned long new_addr;
+	unsigned long old_addr;
+	unsigned long old_size;
 };
 
 int kpatch_register(struct module *mod, void *kpatch_patches,
