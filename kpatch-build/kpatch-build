@@ -186,7 +186,8 @@ cp "$OBJDIR/vmlinux" "$TEMPDIR" || die
 
 echo "Building patched kernel"
 patch -p1 < "$APPLIEDPATCHFILE" >> "$LOGFILE" 2>&1 || die
-make "-j$CPUS" vmlinux "O=$OBJDIR" > "$TEMPDIR/patched_build.log" 2>&1 || die
+make "-j$CPUS" vmlinux "O=$OBJDIR" 2>&1 | tee -a "$TEMPDIR/patched_build.log" >> "$LOGFILE"
+[[ "${PIPESTATUS[0]}" -eq 0 ]] || die
 
 echo "Detecting changed objects"
 grep CC "$TEMPDIR/patched_build.log" | grep -v init/version.o | awk '{print $2}' > "$TEMPDIR/changed_objs"
