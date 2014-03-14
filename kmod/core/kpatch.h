@@ -32,12 +32,6 @@ struct kpatch_func {
 	struct module *mod;
 };
 
-struct kpatch_rela {
-	unsigned long dest;
-	unsigned long src;
-	unsigned long type;
-};
-
 struct kpatch_patch {
 	unsigned long new;
 	unsigned long orig;
