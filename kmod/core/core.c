@@ -141,18 +141,7 @@ static int kpatch_apply_patch(void *data)
 		goto out;
 
 	for (i = 0; i < num_funcs; i++) {
-		struct kpatch_func *f;
 		struct kpatch_func *func = &funcs[i];
-
-		/* do any needed incremental patching */
-		/* TODO: performance */
-		hash_for_each_possible(kpatch_func_hash, f, node,
-				       func->old_addr) {
-			if (f->old_addr == func->old_addr) {
-				func->old_addr = f->new_addr;
-				ref_module(func->mod, f->mod);
-			}
-		}
 
 		/* update the global list and go live */
 		hash_add(kpatch_func_hash, &func->node, func->old_addr);
@@ -187,6 +176,14 @@ void kpatch_ftrace_handler(unsigned long ip, unsigned long parent_ip,
 {
 	struct kpatch_func *f;
 
+	/*
+	 * This is where the magic happens.  Update regs->ip to tell ftrace to
+	 * return to the new function.
+	 *
+	 * If there are multiple patch modules that have registered to patch
+	 * the same function, the last one to register wins, as it'll be first
+	 * in the hash bucket.
+	 */
 	preempt_disable_notrace();
 	hash_for_each_possible(kpatch_func_hash, f, node, ip) {
 		if (f->old_addr == ip) {
@@ -214,10 +211,26 @@ int kpatch_register(struct module *mod, struct kpatch_func *funcs,
 	down(&kpatch_mutex);
 
 	for (i = 0; i < num_funcs; i++) {
-		struct kpatch_func *func = &funcs[i];
+		struct kpatch_func *f, *func = &funcs[i];
+		bool found = false;
 
 		func->mod = mod;
 
+		/*
+		 * If any other modules have also patched this function, it
+		 * already has an ftrace handler.
+		 */
+		hash_for_each_possible(kpatch_func_hash, f, node,
+				       func->old_addr) {
+			if (f->old_addr == func->old_addr) {
+				found = true;
+				break;
+			}
+		}
+		if (found)
+			continue;
+
+		/* Add an ftrace handler for this function. */
 		ret = ftrace_set_filter_ip(&kpatch_ftrace_ops, func->old_addr,
 					   0, 0);
 		if (ret) {
@@ -285,8 +298,24 @@ int kpatch_unregister(struct module *mod, struct kpatch_func *funcs,
 	}
 
 	for (i = 0; i < num_funcs; i++) {
-		struct kpatch_func *func = &funcs[i];
+		struct kpatch_func *f, *func = &funcs[i];
+		bool found = false;
 
+		/*
+		 * If any other modules have also patched this function, don't
+		 * remove its ftrace handler.
+		 */
+		hash_for_each_possible(kpatch_func_hash, f, node,
+				       func->old_addr) {
+			if (f->old_addr == func->old_addr) {
+				found = true;
+				break;
+			}
+		}
+		if (found)
+			continue;
+
+		/* Remove the ftrace handler for this function. */
 		ret = ftrace_set_filter_ip(&kpatch_ftrace_ops, func->old_addr,
 					   1, 0);
 		if (ret) {
