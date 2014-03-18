@@ -70,7 +70,7 @@ struct sym {
 };
 
 struct symlist {
-	struct sym *head;
+	struct sym *head, *tail;
 	size_t len;
 };
 
@@ -131,8 +131,11 @@ static void insert_sym(struct symlist *list, GElf_Sym *sym, char *name,
 	newsym->name = name;
 	newsym->index = index;
 
-	newsym->next = list->head;
-	list->head = newsym;
+	if (list->tail)
+		list->tail->next = newsym;
+	if (!list->head)
+		list->head = newsym;
+	list->tail = newsym;
 }
 
 static void find_section_by_name(struct elf *elf, char *name, struct section *sec)
@@ -174,11 +177,6 @@ static void create_symlist(struct elf *elf, struct symlist *symlist)
 	if (!data)
 		ERROR("elf_getdata");
 
-	/* find (local) function symbols
-	 * NOTE: If the function symbol is in the kpatch-gen file, it needs
-	 * to be patched.  If the function didn't need to be patched,
-	 * it wouldn't have been incldued in the kpatch-gen file.
-	 */
 	symlist->len = sh->sh_size / sh->sh_entsize;
 	for (i = 0; i < symlist->len; i++) {
 		if (!gelf_getsym(data, i, &sym))
@@ -192,15 +190,43 @@ static void create_symlist(struct elf *elf, struct symlist *symlist)
 	}
 }
 
-static struct sym *find_symbol_by_name(struct symlist *list, char *name)
+static struct sym *find_symbol_by_name(struct symlist *list, struct sym *sym,
+                                       char *hint)
 {
-	struct sym *cur;
+	struct sym *cur, *ret = NULL;
+	char *name = sym->name, *curfile = NULL;
 
+	/* try to find a local symbol in the hint file first */
+	if (hint && GELF_ST_BIND(sym->sym.st_info) == STB_LOCAL) {
+		for_each_sym(list, cur) {
+			if (GELF_ST_TYPE(cur->sym.st_info) == STT_FILE)
+				curfile = cur->name;
+			if (!curfile || strcmp(curfile, hint))
+				continue;
+			if (!strcmp(cur->name, name)) {
+				if (ret)
+					ERROR("unresolvable symbol ambiguity for symbol '%s' in file '%s'", name, hint);
+				ret = cur;
+			}
+		}
+	}
+
+	if (ret)
+		return ret;
+
+	/* search globally for the symbol */
 	for_each_sym(list, cur)
-		if (!strcmp(cur->name, name))
+		if (GELF_ST_BIND(sym->sym.st_info) == STB_GLOBAL &&
+		    !strcmp(cur->name, name))
 			return cur;
+
 	return NULL;
 }
+
+/*
+ * TODO: de-dup common code above these point with code
+ * in link-vmlinux-syms.c
+ */
 
 int main(int argc, char **argv)
 {
@@ -218,6 +244,7 @@ int main(int argc, char **argv)
 	GElf_Shdr sh, *shp;
 	GElf_Ehdr eh;
 	GElf_Sym sym;
+	char *hint = NULL;
 
 	/* set elf version (required by libelf) */
 	if (elf_version(EV_CURRENT) == EV_NONE)
@@ -240,12 +267,15 @@ int main(int argc, char **argv)
 
 	/* lookup patched functions in vmlinux */
 	for_each_sym(&symlist, cur) {
+		if (GELF_ST_TYPE(cur->sym.st_info) == STT_FILE)
+			hint = cur->name;
+
 		if (GELF_ST_TYPE(cur->sym.st_info) != STT_FUNC)
 			continue;
 
 		printf("found patched function %s\n", cur->name);
 
-		vsym = find_symbol_by_name(&symlistv, cur->name);
+		vsym = find_symbol_by_name(&symlistv, cur, hint);
 		if (!vsym)
 			ERROR("couldn't find patched function in vmlinux");
 		cur->vm_addr = vsym->sym.st_value;
@@ -255,33 +285,6 @@ int main(int argc, char **argv)
 		       cur->vm_addr, cur->vm_len);
 		patches_nr++;
 	}
-
-#if 0
-	/* lookup non-exported globals and insert vmlinux address */
-	for_each_sym(&symlist, cur) {
-		if (GELF_ST_TYPE(cur->sym.st_info) != STT_NOTYPE ||
-		    GELF_ST_BIND(cur->sym.st_info) != STB_GLOBAL)
-			continue;
-
-		printf("found global symbol %s\n", cur->name);
-		sprintf(name, "__kstrtab_%s", cur->name);
-		vsym = find_symbol_by_name(&symlistv, name);
-		if (vsym) {
-			printf("symbol is exported by the kernel\n");
-			continue;
-		}
-
-		vsym = find_symbol_by_name(&symlistv, cur->name);
-		if (!vsym)
-			ERROR("couldn't find global function in vmlinux");
-
-		cur->vm_addr = vsym->sym.st_value;
-		cur->vm_len = vsym->sym.st_size;
-		cur->action = LINK;
-		printf("original symbol at address %016lx (length %d)\n",
-		       cur->vm_addr, cur->vm_len);
-	}
-#endif
 
 	elf_end(elfv.elf);
 	close(elfv.fd);
@@ -363,17 +366,6 @@ int main(int argc, char **argv)
 	data = elf_getdata(scn, NULL);
 	if (!data)
 		ERROR("elf_getdata");
-#if 0
-	/* update LINK symbols */
-	for_each_sym(&symlist, cur) {
-		if (cur->action != LINK)
-			continue;
-		cur->sym.st_value = cur->vm_addr;
-		cur->sym.st_info = GELF_ST_INFO(STB_LOCAL,STT_FUNC);
-		cur->sym.st_shndx = SHN_ABS;
-		gelf_update_sym(data, cur->index, &cur->sym);
-	}
-#endif
 
 	/* add new section symbols to symtab */
 	len = sizeof(GElf_Sym) * 2;
