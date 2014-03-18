@@ -38,7 +38,7 @@ static int __init patch_init(void)
 	patches = (struct kpatch_patch *)&__kpatch_patches;
 	num_funcs = (&__kpatch_patches_end - &__kpatch_patches) /
 		    sizeof(*patches);
-	funcs = kzalloc(num_funcs * sizeof(*funcs), GFP_KERNEL);
+	funcs = kmalloc(num_funcs * sizeof(*funcs), GFP_KERNEL);
 	if (!funcs)
 		return -ENOMEM;
 
