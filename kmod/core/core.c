@@ -40,51 +40,43 @@
 #include <linux/slab.h>
 #include <linux/stop_machine.h>
 #include <linux/ftrace.h>
+#include <linux/hashtable.h>
 #include <asm/stacktrace.h>
 #include <asm/cacheflush.h>
 #include "kpatch.h"
 
-/* TODO: this array is horrible */
-#define KPATCH_MAX_FUNCS	256
-struct kpatch_func kpatch_funcs[KPATCH_MAX_FUNCS+1];
+#define KPATCH_HASH_BITS 8
+DEFINE_HASHTABLE(kpatch_func_hash, KPATCH_HASH_BITS);
 
 static int kpatch_num_registered;
 
-static int kpatch_num_funcs(struct kpatch_func *funcs)
-{
-	int i;
-
-	for (i = 0; funcs[i].old_addr; i++)
-		;
-
-	return i;
-}
-
-struct ktrace_backtrace_args {
+struct kpatch_backtrace_args {
 	struct kpatch_func *funcs;
-	int ret;
+	int num_funcs, ret;
 };
 
 void kpatch_backtrace_address_verify(void *data, unsigned long address,
 				     int reliable)
 {
-	struct kpatch_func *func;
-	struct ktrace_backtrace_args *args = data;
+	struct kpatch_backtrace_args *args = data;
+	struct kpatch_func *funcs = args->funcs;
+	int i, num_funcs = args->num_funcs;
 
 	if (args->ret)
 		return;
 
-	for (func = args->funcs; func->old_addr; func++)
+	for (i = 0; i < num_funcs; i++) {
+		struct kpatch_func *func = &funcs[i];
+
 		if (address >= func->old_addr &&
-		    address < func->old_addr + func->old_size)
-			goto unsafe;
-
-	return;
-
-unsafe:
-	printk("kpatch: activeness safety check failed for function at address "
-	       "'%lx()'\n", func->old_addr);
-	args->ret = -EBUSY;
+		    address < func->old_addr + func->old_size) {
+			printk("kpatch: activeness safety check failed for "
+			       "function at address " "'%lx()'\n",
+			       func->old_addr);
+			args->ret = -EBUSY;
+			return;
+		}
+	}
 }
 
 static int kpatch_backtrace_stack(void *data, char *name)
@@ -98,20 +90,21 @@ struct stacktrace_ops kpatch_backtrace_ops = {
 	.walk_stack 	= print_context_stack_bp,
 };
 
-
 /*
  * Verify activeness safety, i.e. that none of the to-be-patched functions are
  * on the stack of any task.
  *
  * This function is called from stop_machine() context.
  */
-static int kpatch_verify_activeness_safety(struct kpatch_func *funcs)
+static int kpatch_verify_activeness_safety(struct kpatch_func *funcs,
+					   int num_funcs)
 {
 	struct task_struct *g, *t;
 	int ret = 0;
 
-	struct ktrace_backtrace_args args = {
+	struct kpatch_backtrace_args args = {
 		.funcs = funcs,
+		.num_funcs = num_funcs,
 		.ret = 0
 	};
 
@@ -128,28 +121,40 @@ out:
 	return ret;
 }
 
+struct kpatch_stop_machine_args {
+	struct kpatch_func *funcs;
+	int num_funcs;
+};
+
 /* Called from stop_machine */
 static int kpatch_apply_patch(void *data)
 {
-	int ret, num_global_funcs, num_new_funcs;
-	struct kpatch_func *funcs = data;
+	struct kpatch_stop_machine_args *args = data;
+	struct kpatch_func *funcs = args->funcs;
+	int num_funcs = args->num_funcs;
+	int i, ret;
 
-	ret = kpatch_verify_activeness_safety(funcs);
+	ret = kpatch_verify_activeness_safety(funcs, num_funcs);
 	if (ret)
 		goto out;
 
-	num_global_funcs = kpatch_num_funcs(kpatch_funcs);
-	num_new_funcs = kpatch_num_funcs(funcs);
+	for (i = 0; i < num_funcs; i++) {
+		struct kpatch_func *f;
+		struct kpatch_func *func = &funcs[i];
 
-	if (num_global_funcs + num_new_funcs > KPATCH_MAX_FUNCS) {
-		printk("kpatch: exceeded maximum # of patched functions (%d)\n",
-		       KPATCH_MAX_FUNCS);
-		ret = -E2BIG;
-		goto out;
+		/* do any needed incremental patching */
+		/* TODO: performance */
+		hash_for_each_possible(kpatch_func_hash, f, node,
+				       func->old_addr) {
+			if (f->old_addr == func->old_addr) {
+				func->old_addr = f->new_addr;
+				ref_module(func->mod, f->mod);
+			}
+		}
+
+		/* update the global list and go live */
+		hash_add(kpatch_func_hash, &func->node, func->old_addr);
 	}
-
-	memcpy(&kpatch_funcs[num_global_funcs], funcs,
-	       num_new_funcs * sizeof(struct kpatch_func));
 
 out:
 	return ret;
@@ -158,62 +163,36 @@ out:
 /* Called from stop_machine */
 static int kpatch_remove_patch(void *data)
 {
-	int num_remove_funcs, i, ret = 0;
-	struct kpatch_func *funcs = data;
+	struct kpatch_stop_machine_args *args = data;
+	struct kpatch_func *funcs = args->funcs;
+	int num_funcs = args->num_funcs;
+	int ret, i;
 
-	ret = kpatch_verify_activeness_safety(funcs);
+	ret = kpatch_verify_activeness_safety(funcs, num_funcs);
 	if (ret)
 		goto out;
 
-	for (i = 0; i < KPATCH_MAX_FUNCS && kpatch_funcs[i].old_addr; i++)
-		if (kpatch_funcs[i].old_addr == funcs->old_addr)
-			break;
-
-	if (i == KPATCH_MAX_FUNCS) {
-		ret = -EINVAL;
-		goto out;
-	}
-
-	num_remove_funcs = kpatch_num_funcs(funcs);
-
-	memset(&kpatch_funcs[i], 0,
-	       num_remove_funcs * sizeof(struct kpatch_func));
-
-	for ( ;kpatch_funcs[i + num_remove_funcs].old_addr; i++)
-		memcpy(&kpatch_funcs[i], &kpatch_funcs[i + num_remove_funcs],
-		       sizeof(struct kpatch_func));
+	for (i = 0; i < num_funcs; i++)
+		hlist_del(&funcs[i].node);
 
 out:
 	return ret;
 }
 
+
 void kpatch_ftrace_handler(unsigned long ip, unsigned long parent_ip,
 		           struct ftrace_ops *op, struct pt_regs *regs)
 {
-	int i;
-	struct kpatch_func *func = NULL;
+	struct kpatch_func *f;
 
-	for (i = 0; i < KPATCH_MAX_FUNCS &&
-		    kpatch_funcs[i].old_addr; i++) {
-		if (kpatch_funcs[i].old_addr == ip) {
-			func = &kpatch_funcs[i];
+	preempt_disable_notrace();
+	hash_for_each_possible(kpatch_func_hash, f, node, ip) {
+		if (f->old_addr == ip) {
+			regs->ip = f->new_addr;
 			break;
 		}
 	}
-
-	/*
-	 * Check for the rare case where we don't have a new function to call.
-	 * This can happen in the small window of time during patch module
-	 * insmod after it has called register_ftrace_function() but before it
-	 * has called stop_machine() to do the activeness safety check and the
-	 * array update.  In this case we just return and let the old function
-	 * run.
-	 */
-	if (!func)
-		return;
-
-	regs->ip = func->new_addr;
-	return;
+	preempt_enable_notrace();
 }
 
 static struct ftrace_ops kpatch_ftrace_ops __read_mostly = {
@@ -221,54 +200,32 @@ static struct ftrace_ops kpatch_ftrace_ops __read_mostly = {
 	.flags = FTRACE_OPS_FL_SAVE_REGS,
 };
 
-
-int kpatch_register(struct module *mod, void *kpatch_patches,
-		    void *kpatch_patches_end)
+int kpatch_register(struct module *mod, struct kpatch_func *funcs,
+		    int num_funcs)
 {
-	int ret = 0;
-	int ret2;
-	int i;
-	int num_patches;
-	struct kpatch_patch *patches;
-	struct kpatch_func *funcs, *func;
+	int ret, ret2, i;
+	struct kpatch_stop_machine_args args = {
+		.funcs = funcs,
+		.num_funcs = num_funcs,
+	};
 
-	num_patches = (kpatch_patches_end - kpatch_patches) / sizeof(*patches);
-	patches = kpatch_patches;
+	for (i = 0; i < num_funcs; i++) {
+		struct kpatch_func *func = &funcs[i];
 
-	funcs = kmalloc((num_patches + 1) * sizeof(*funcs), GFP_KERNEL);
-	if (!funcs) {
-		ret = -ENOMEM;
-		goto out;
-	}
+		func->mod = mod;
 
-	for (i = 0; i < num_patches; i++) {
-
-		funcs[i].old_addr = patches[i].old_addr;
-		funcs[i].old_size = patches[i].old_size;
-		funcs[i].new_addr = patches[i].new_addr;
-		funcs[i].mod = mod;
-
-		/* Do any needed incremental patching. */
-		for (func = kpatch_funcs; func->old_addr; func++) {
-			if (funcs[i].old_addr == func->old_addr) {
-				funcs[i].old_addr = func->new_addr;
-				ref_module(funcs[i].mod, func->mod);
-			}
-		}
-
-		ret = ftrace_set_filter_ip(&kpatch_ftrace_ops,
-					   patches[i].old_addr, 0, 0);
+		ret = ftrace_set_filter_ip(&kpatch_ftrace_ops, func->old_addr,
+					   0, 0);
 		if (ret) {
 			printk("kpatch: can't set ftrace filter at address "
 				"0x%lx (%d)\n",
-				funcs[i].old_addr, ret);
+				func->old_addr, ret);
 			goto out;
 		}
 	}
-	memset(&funcs[num_patches], 0, sizeof(*funcs));
 
 	/* Register the ftrace trampoline if it hasn't been done already. */
-	if (!kpatch_num_registered++) {
+	if (!kpatch_num_registered++) { /* TODO atomic */
 		ret = register_ftrace_function(&kpatch_ftrace_ops);
 		if (ret) {
 			printk("kpatch: can't register ftrace function \n");
@@ -280,7 +237,7 @@ int kpatch_register(struct module *mod, void *kpatch_patches,
 	 * Idle the CPUs, verify activeness safety, and atomically make the new
 	 * functions visible to the trampoline.
 	 */
-	ret = stop_machine(kpatch_apply_patch, funcs, NULL);
+	ret = stop_machine(kpatch_apply_patch, &args, NULL);
 	if (ret) {
 		if (!--kpatch_num_registered) {
 			ret2 = unregister_ftrace_function(&kpatch_ftrace_ops);
@@ -295,32 +252,20 @@ int kpatch_register(struct module *mod, void *kpatch_patches,
 	pr_notice("loaded patch module \"%s\"\n", mod->name);
 
 out:
-	if (funcs)
-		kfree(funcs);
 	return ret;
 }
 EXPORT_SYMBOL(kpatch_register);
 
-int kpatch_unregister(struct module *mod)
+int kpatch_unregister(struct module *mod, struct kpatch_func *funcs,
+		      int num_funcs)
 {
-	int ret = 0;
-	struct kpatch_func *funcs, *func;
-	int num_funcs, i;
+	int i, ret;
+	struct kpatch_stop_machine_args args = {
+		.funcs = funcs,
+		.num_funcs = num_funcs,
+	};
 
-	num_funcs = kpatch_num_funcs(kpatch_funcs);
-
-	funcs = kmalloc((num_funcs + 1) * sizeof(*funcs), GFP_KERNEL);
-	if (!funcs) {
-		ret = -ENOMEM;
-		goto out;
-	}
-
-	for (func = kpatch_funcs, i = 0; func->old_addr; func++)
-		if (func->mod == mod)
-			memcpy(&funcs[i++], func, sizeof(*funcs));
-	memset(&funcs[i], 0, sizeof(*funcs));
-
-	ret = stop_machine(kpatch_remove_patch, funcs, NULL);
+	ret = stop_machine(kpatch_remove_patch, &args, NULL);
 	if (ret)
 		goto out;
 
@@ -332,7 +277,9 @@ int kpatch_unregister(struct module *mod)
 		}
 	}
 
-	for (func = funcs; func->old_addr; func++) {
+	for (i = 0; i < num_funcs; i++) {
+		struct kpatch_func *func = &funcs[i];
+
 		ret = ftrace_set_filter_ip(&kpatch_ftrace_ops, func->old_addr,
 					   1, 0);
 		if (ret) {
@@ -346,8 +293,6 @@ int kpatch_unregister(struct module *mod)
 	pr_notice("unloaded patch module \"%s\"\n", mod->name);
 
 out:
-	if (funcs)
-		kfree(funcs);
 	return ret;
 }
 EXPORT_SYMBOL(kpatch_unregister);

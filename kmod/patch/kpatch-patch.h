@@ -1,8 +1,7 @@
 /*
- * kpatch.h
+ * kpatch-patch.h
  *
- * Copyright (C) 2014 Seth Jennings <sjenning@redhat.com>
- * Copyright (C) 2013-2014 Josh Poimboeuf <jpoimboe@redhat.com>
+ * Copyright (C) 2014 Josh Poimboeuf <jpoimboe@redhat.com>
  *
  * This program is free software; you can redistribute it and/or
  * modify it under the terms of the GNU General Public License
@@ -19,25 +18,16 @@
  * Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA,
  * 02110-1301, USA.
  *
- * Contains the API for the core kpatch module used by the patch modules
+ * Contains definitions needed for creating patch modules
  */
 
-#ifndef _KPATCH_H_
-#define _KPATCH_H_
+#ifndef _KPATCH_PATCH_H_
+#define _KPATCH_PATCH_H_
 
-#include <linux/types.h>
-
-struct kpatch_func {
+struct kpatch_patch {
 	unsigned long new_addr;
 	unsigned long old_addr;
 	unsigned long old_size;
-	struct module *mod;
-	struct hlist_node node;
 };
 
-extern int kpatch_register(struct module *mod, struct kpatch_func *funcs,
-			   int num_funcs);
-extern int kpatch_unregister(struct module *mod, struct kpatch_func *funcs,
-			     int num_funcs);
-
-#endif /* _KPATCH_H_ */
+#endif /* _KPATCH_PATCH_H_ */

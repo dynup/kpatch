@@ -40,8 +40,6 @@
 #include <gelf.h>
 #include <unistd.h>
 
-#include "kpatch.h"
-
 #define ERROR(format, ...) \
 	error(1, 0, "%s: %d: " format, __FUNCTION__, __LINE__, ##__VA_ARGS__)
 
@@ -247,7 +245,8 @@ int main(int argc, char **argv)
 
 		vsym = find_symbol_by_name(&symlistv, cur->name);
 		if (!vsym)
-			ERROR("couldn't find global function in vmlinux");
+			ERROR("couldn't find global function %s in vmlinux",
+			      cur->name);
 
 		cur->vm_addr = vsym->sym.st_value;
 		cur->vm_len = vsym->sym.st_size;
