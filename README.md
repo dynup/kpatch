@@ -262,9 +262,13 @@ by the "kpatch-build" command.
 Get involved
 ------------
 
-If you have questions, feedback, or you'd like to contribute, feel free to join
-the mailing list at https://www.redhat.com/mailman/listinfo/kpatch and say hi.
+If you have questions or feedback, join the
+[mailing list](https://www.redhat.com/mailman/listinfo/kpatch) and say hi.
 
+Contributions are very welcome.  Feel free to open issues or PRs on github.
+For big PRs, it's a good idea to discuss them first in github issues or on the
+[mailing list](https://www.redhat.com/mailman/listinfo/kpatch) before you write
+a lot of code.
 
 License
 -------
