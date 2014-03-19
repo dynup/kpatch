@@ -289,6 +289,9 @@ int main(int argc, char **argv)
 	elf_end(elfv.elf);
 	close(elfv.fd);
 
+	if (!patches_nr)
+		ERROR("no patched functions");
+
 	printf("patches_nr = %d\n", patches_nr);
 
 	/* allocate new section data buffers */
