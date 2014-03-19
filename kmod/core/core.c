@@ -48,6 +48,8 @@
 #define KPATCH_HASH_BITS 8
 DEFINE_HASHTABLE(kpatch_func_hash, KPATCH_HASH_BITS);
 
+DEFINE_SEMAPHORE(kpatch_mutex);
+
 static int kpatch_num_registered;
 
 struct kpatch_backtrace_args {
@@ -209,6 +211,8 @@ int kpatch_register(struct module *mod, struct kpatch_func *funcs,
 		.num_funcs = num_funcs,
 	};
 
+	down(&kpatch_mutex);
+
 	for (i = 0; i < num_funcs; i++) {
 		struct kpatch_func *func = &funcs[i];
 
@@ -225,7 +229,7 @@ int kpatch_register(struct module *mod, struct kpatch_func *funcs,
 	}
 
 	/* Register the ftrace trampoline if it hasn't been done already. */
-	if (!kpatch_num_registered++) { /* TODO atomic */
+	if (!kpatch_num_registered++) {
 		ret = register_ftrace_function(&kpatch_ftrace_ops);
 		if (ret) {
 			printk("kpatch: can't register ftrace function \n");
@@ -252,6 +256,7 @@ int kpatch_register(struct module *mod, struct kpatch_func *funcs,
 	pr_notice("loaded patch module \"%s\"\n", mod->name);
 
 out:
+	up(&kpatch_mutex);
 	return ret;
 }
 EXPORT_SYMBOL(kpatch_register);
@@ -264,6 +269,8 @@ int kpatch_unregister(struct module *mod, struct kpatch_func *funcs,
 		.funcs = funcs,
 		.num_funcs = num_funcs,
 	};
+
+	down(&kpatch_mutex);
 
 	ret = stop_machine(kpatch_remove_patch, &args, NULL);
 	if (ret)
@@ -293,6 +300,7 @@ int kpatch_unregister(struct module *mod, struct kpatch_func *funcs,
 	pr_notice("unloaded patch module \"%s\"\n", mod->name);
 
 out:
+	up(&kpatch_mutex);
 	return ret;
 }
 EXPORT_SYMBOL(kpatch_unregister);
