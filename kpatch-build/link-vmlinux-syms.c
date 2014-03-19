@@ -184,12 +184,17 @@ static void create_symlist(struct elf *elf, struct symlist *symlist)
 
 static struct sym *find_symbol_by_name(struct symlist *list, char *name)
 {
-	struct sym *cur;
+	struct sym *cur, *ret = NULL;
 
-	for_each_sym(list, cur)
-		if (!strcmp(cur->name, name))
-			return cur;
-	return NULL;
+	for_each_sym(list, cur) {
+		if (!strcmp(cur->name, name)) {
+			if (ret)
+				ERROR("unresolvable symbol ambiguity for symbol '%s'", name);
+			ret = cur;
+		}
+	}
+
+	return ret;
 }
 
 /*
