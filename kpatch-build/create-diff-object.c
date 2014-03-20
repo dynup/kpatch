@@ -844,11 +844,56 @@ void kpatch_include_changed_functions(struct kpatch_elf *kelf)
 	}
 }
 
+int kpatch_copy_symbols(int startndx, struct kpatch_elf *src,
+                        struct kpatch_elf *dst,
+                        int (*select)(struct symbol *))
+{
+	struct symbol *srcsym, *dstsym;
+	int i, index = startndx;
+
+	for_each_symbol(i, srcsym, &src->symbols) {
+		if (i == 0 || !srcsym->include)
+			continue;
+
+		if (select && !select(srcsym))
+			continue;
+
+		dstsym = &((struct symbol *)(dst->symbols.data))[index];
+		*dstsym = *srcsym;
+		dstsym->index = index;
+		dstsym->twino = srcsym;
+		srcsym->twino = dstsym;
+		index++;
+
+		if (srcsym->sec && srcsym->sec->twino)
+			dstsym->sym.st_shndx = srcsym->sec->twino->index;
+
+		srcsym->include = 0;
+	}
+
+	return index;
+}
+
+int is_file_sym(struct symbol *sym)
+{
+	return sym->type == STT_FILE;
+}
+
+int is_local_func_sym(struct symbol *sym)
+{
+	return sym->bind == STB_LOCAL && sym->type == STT_FUNC;
+}
+
+int is_local_sym(struct symbol *sym)
+{
+	return sym->bind == STB_LOCAL;
+}
+
 void kpatch_generate_output(struct kpatch_elf *kelf, struct kpatch_elf **kelfout)
 {
 	int sections_nr = 0, symbols_nr = 0, i, index;
 	struct section *sec, *secout;
-	struct symbol *sym, *symout;
+	struct symbol *sym;
 	struct kpatch_elf *out;
 
 	/* count output sections */
@@ -914,48 +959,21 @@ void kpatch_generate_output(struct kpatch_elf *kelf, struct kpatch_elf **kelfout
 		}
 	}
 
-	/* copy local syms to output kelf symbols, link to kelf, and reindex */
-	index = 0;
-	for_each_symbol(i, sym, &kelf->symbols) {
-		if (i != 0 && !sym->include)
-			continue;
-
-		if (sym->bind == STB_GLOBAL)
-			continue;
-
-		symout = &((struct symbol *)(out->symbols.data))[index];
-		*symout = *sym;
-		symout->index = index;
-		symout->twino = sym;
-		sym->twino = symout;
-		index++;
-
-		if (i == 0)
-			symout->sym.st_shndx = SHN_UNDEF;
-		else if (sym->sec && sym->sec->twino)
-			symout->sym.st_shndx = sym->sec->twino->index;
-	}
-
-	/* copy global syms to output kelf symbols, link to kelf, and reindex */
-	for_each_symbol(i, sym, &kelf->symbols) {
-		if (i != 0 && !sym->include)
-			continue;
-
-		if (sym->bind == STB_LOCAL)
-			continue;
-
-		symout = &((struct symbol *)(out->symbols.data))[index];
-		*symout = *sym;
-		symout->index = index;
-		symout->twino = sym;
-		sym->twino = symout;
-		index++;
-
-		if (i == 0)
-			symout->sym.st_shndx = SHN_UNDEF;
-		else if (sym->sec && sym->sec->twino)
-			symout->sym.st_shndx = sym->sec->twino->index;
-	}
+	/*
+	 * Copy functions to the output kelf and reindex.  Once the symbol is
+	 * copied, its include field is set to zero so it isn't copied again
+	 * by a subsequent kpatch_copy_symbols() call.
+	 */
+	/* start at 1 to skip over symbol 0 (all zeros) */
+	index = 1;
+	/* copy (LOCAL) FILE sym */
+	index = kpatch_copy_symbols(index, kelf, out, is_file_sym);
+	/* copy LOCAL FUNC syms */
+	index = kpatch_copy_symbols(index, kelf, out, is_local_func_sym);
+	/* copy all other LOCAL syms */
+	index = kpatch_copy_symbols(index, kelf, out, is_local_sym);
+	/* copy all other (GLOBAL) syms */
+	index = kpatch_copy_symbols(index, kelf, out, NULL);
 
 	*kelfout = out;
 }
