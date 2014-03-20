@@ -171,8 +171,8 @@ out:
 }
 
 
-void kpatch_ftrace_handler(unsigned long ip, unsigned long parent_ip,
-		           struct ftrace_ops *op, struct pt_regs *regs)
+void notrace kpatch_ftrace_handler(unsigned long ip, unsigned long parent_ip,
+				   struct ftrace_ops *op, struct pt_regs *regs)
 {
 	struct kpatch_func *f;
 
