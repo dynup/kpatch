@@ -914,10 +914,34 @@ void kpatch_generate_output(struct kpatch_elf *kelf, struct kpatch_elf **kelfout
 		}
 	}
 
-	/* copy local syms to output kelf symbols, link to kelf, and reindex */
-	index = 0;
+	index = 1;
+
+	/* copy local FUNC/FILE syms to kelf symbols */
+	/* TODO: this for block is copeid 3 times, refactor! */
 	for_each_symbol(i, sym, &kelf->symbols) {
-		if (i != 0 && !sym->include)
+		if (i == 0 || !sym->include)
+			continue;
+
+		if (sym->bind == STB_GLOBAL ||
+		    (sym->type != STT_FUNC && sym->type != STT_FILE))
+			continue;
+
+		symout = &((struct symbol *)(out->symbols.data))[index];
+		*symout = *sym;
+		symout->index = index;
+		symout->twino = sym;
+		sym->twino = symout;
+		index++;
+
+		if (sym->sec && sym->sec->twino)
+			symout->sym.st_shndx = sym->sec->twino->index;
+
+		sym->include = 0;
+	}
+
+	/* copy local syms to output kelf symbols, link to kelf, and reindex */
+	for_each_symbol(i, sym, &kelf->symbols) {
+		if (i == 0 || !sym->include)
 			continue;
 
 		if (sym->bind == STB_GLOBAL)
@@ -930,18 +954,15 @@ void kpatch_generate_output(struct kpatch_elf *kelf, struct kpatch_elf **kelfout
 		sym->twino = symout;
 		index++;
 
-		if (i == 0)
-			symout->sym.st_shndx = SHN_UNDEF;
-		else if (sym->sec && sym->sec->twino)
+		if (sym->sec && sym->sec->twino)
 			symout->sym.st_shndx = sym->sec->twino->index;
+
+		sym->include = 0;
 	}
 
 	/* copy global syms to output kelf symbols, link to kelf, and reindex */
 	for_each_symbol(i, sym, &kelf->symbols) {
-		if (i != 0 && !sym->include)
-			continue;
-
-		if (sym->bind == STB_LOCAL)
+		if (i == 0 || !sym->include)
 			continue;
 
 		symout = &((struct symbol *)(out->symbols.data))[index];
@@ -951,10 +972,10 @@ void kpatch_generate_output(struct kpatch_elf *kelf, struct kpatch_elf **kelfout
 		sym->twino = symout;
 		index++;
 
-		if (i == 0)
-			symout->sym.st_shndx = SHN_UNDEF;
-		else if (sym->sec && sym->sec->twino)
+		if (sym->sec && sym->sec->twino)
 			symout->sym.st_shndx = sym->sec->twino->index;
+
+		sym->include = 0;
 	}
 
 	*kelfout = out;
