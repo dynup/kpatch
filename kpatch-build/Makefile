@@ -17,5 +17,9 @@ install: all
 	$(INSTALL) -d $(BINDIR)
 	$(INSTALL) kpatch-build $(BINDIR)
 
+uninstall:
+	$(RM) -R $(LIBEXECDIR)
+	$(RM) $(BINDIR)/kpatch-build
+
 clean:
 	$(RM) $(TARGETS)

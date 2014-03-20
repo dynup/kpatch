@@ -3,6 +3,7 @@ include Makefile.inc
 SUBDIRS     = kpatch-build kpatch kmod
 BUILD_DIRS   = $(SUBDIRS:%=build-%)
 INSTALL_DIRS = $(SUBDIRS:%=install-%)
+UNINSTALL_DIRS = $(SUBDIRS:%=uninstall-%)
 CLEAN_DIRS   = $(SUBDIRS:%=clean-%)
 
 .PHONY: $(SUBDIRS) $(BUILD_DIRS) $(INSTALL_DIRS) $(CLEAN_DIRS)
@@ -15,6 +16,10 @@ $(BUILD_DIRS):
 install: $(INSTALL_DIRS)
 $(INSTALL_DIRS):
 	$(MAKE) -C $(@:install-%=%) install
+
+uninstall: $(UNINSTALL_DIRS)
+$(UNINSTALL_DIRS):
+	$(MAKE) -C $(@:uninstall-%=%) uninstall
 
 clean: $(CLEAN_DIRS)
 $(CLEAN_DIRS):

@@ -9,5 +9,9 @@ install:
 	$(INSTALL) -d $(DATADIR)/patch
 	$(INSTALL) -m 644 patch/* $(DATADIR)/patch
 
+uninstall:
+	$(RM) -R $(MODULESDIR)/*/kpatch
+	$(RM) -R $(DATADIR)
+
 clean:
 	$(MAKE) -C core clean
