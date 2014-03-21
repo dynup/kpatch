@@ -144,18 +144,32 @@ function's arguments and stack, and "returns" to the new function.
 Limitations
 -----------
 
-- kpatch can't detect when a patch changes the contents of a dynamically
-  allocated data structure, and isn't able to determine whether such patches
-  are safe to apply.  It's the user's responsibility to analyze any such
-  patches for safety before applying them.
-- Patches which change the contents of static data structures are not currently
-  supported.  kpatch-build will detect such changes and report an error.
-- Patches to functions which are always in the call stack of a task, such as
-  schedule(), will fail to apply at runtime.
-- Patches which change functions that are only called in the kernel init path
-  will have no effect (obviously).
-- Currently, kernel module functions can't be patched -- only functions in the
-  base kernel image.
+- Patches which modify kernel modules are not supported (yet).  Only
+  functions in the vmlinux file (listed in System.map) can be patched.
+
+- Patches to functions which are always on the stack of at least one
+  process in the system are not supported.  Examples: schedule(),
+  sys_poll(), sys_select(), sys_read(), sys_nanosleep().  Attempting to
+  apply such a patch will cause the insmod of the patch module to return
+  an error.
+
+- Patches which modify init functions (annotated with `__init`) are not
+  supported.  kpatch-build will return an error if the patch attempts
+  to do so.
+
+- Patches which modify statically allocated data are not supported.
+  kpatch-build will detect that and return an error.  (In the future
+  we will add a facility to support it.  It will probably require the
+  user to write code which runs at module loading time which manually
+  updates the data.)
+
+- Patches which change the way a function interacts with dynamically
+  allocated data might be safe, or might not.  It isn't possible for
+  kpatch-build to verify the safety of this kind of patch.  It's up to
+  the user to understand what the patch does, whether the new functions
+  interact with dynamically allocated data in a different way than the
+  old functions did, and whether it would be safe to atomically apply
+  such a patch to a running kernel.
 
 
 Frequently Asked Questions
