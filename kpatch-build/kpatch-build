@@ -93,28 +93,33 @@ find_tools_dir() {
 }
 
 usage() {
-	echo "usage: $0 [-s|--sourcedir <dir>] <patch file>" >&2
+	echo "usage: $0 [options] <patch file>" >&2
+	echo "		-h, --help	Show this help message" >&2
+	echo "		-s, --sourcedir	Specify kernel source directory" >&2
+	echo "		-c, --config	Specify kernel config file" >&2
 }
 
-while [[ "$#" -gt 0 ]]; do
-	case "$1" in
-		-h|--help)
-			usage
-			exit 0
-			;;
-		-s|--sourcedir)
-			shift
-			[[ "$#" -eq 0 ]] && die "no source dir specified"
-			USERSRCDIR="$(readlink -f $1)"
-			[[ ! -d "$USERSRCDIR" ]] && die "source dir $1 not found"
-			shift
-			;;
-		*)
-			[[ -n "$PATCHFILE" ]] && die "bad argument: $1"
-			PATCHFILE="$(readlink -f $1)"
-			[[ ! -f "$PATCHFILE" ]] && die "patch file $1 not found"
-			shift
-			;;
+PARSED_OPT_ARRAY=($(getopt -u -n "$0" -o hs:c: -l "help,sourcedir:,config:" -- "$@")) || die "getopt failed"
+
+for index in ${!PARSED_OPT_ARRAY[*]}; do
+	case "${PARSED_OPT_ARRAY[$index]}" in
+	-h|--help)
+		usage
+		exit 0
+		;;
+	-s|--sourcedir)
+		USERSRCDIR="$(readlink -f ${PARSED_OPT_ARRAY[$(( $index+1 ))]})"
+		[[ ! -d "$USERSRCDIR" ]] && die "source dir $USERSRCDIR not found"
+		;;
+	-c|--config)
+		CONFIGFILE="$(readlink -f ${PARSED_OPT_ARRAY[$(( $index+1 ))]})"
+		[[ ! -f "$CONFIGFILE" ]] && die "config file $CONFIGFILE not found"
+		;;
+	--)
+		PATCHFILE="$(readlink -f ${PARSED_OPT_ARRAY[$(( $index+1 ))]})"
+		[[ ! -f "$PATCHFILE" ]] && die "patch file $PATCHFILE not found"
+		break
+		;;
 	esac
 done
 
@@ -145,7 +150,11 @@ if [[ -d "$SRCDIR" ]] || [[ -n "$USERSRCDIR" ]]; then
 		mkdir -p "$CACHEDIR"
 		mkdir -p "$OBJDIR" "$OBJDIR2"
 
-		cp "$USERSRCDIR/.config" "$OBJDIR" || die "source dir is missing a .config file"
+		if [[ -n "$CONFIGFILE" ]]; then
+			cp "$CONFIGFILE" "$OBJDIR/.config" || die "config file is missing"
+		else
+			cp "$USERSRCDIR/.config" "$OBJDIR" || die "source dir is missing a .config file"
+		fi
 
 		echo "Copying source to $SRCDIR"
 		cp -a "$USERSRCDIR" "$SRCDIR" || die "copy failed"
