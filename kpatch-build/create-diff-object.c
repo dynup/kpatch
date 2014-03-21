@@ -379,10 +379,15 @@ void kpatch_create_symbol_table(struct kpatch_elf *kelf)
 			 * to offsets inside the __ksymtab_strings section
 			 * for kernel exported symbols.  We want to ignore
 			 * those.
+			 *
+			 * Also, functions declared with __init do not honor
+			 * -ffunction-sections and can be at non-zero offsets
+			 *  in the .init.text section, so ignore those.
 			 */
 			if ((sym->type == STT_FUNC ||
 			     sym->type == STT_OBJECT) &&
-			    strcmp(sym->sec->name, "__ksymtab_strings")) {
+			    strcmp(sym->sec->name, "__ksymtab_strings") &&
+			    strcmp(sym->sec->name, ".init.text")) {
 				if (sym->sym.st_value != 0)
 					ERROR("symbol %s at offset %lu within section %s, expected 0",
 					      sym->name, sym->sym.st_value, sym->sec->name);
