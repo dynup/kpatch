@@ -58,7 +58,6 @@ make %{_smp_mflags}
 rm -rf %{buildroot}
 
 make install DESTDIR=%{buildroot}
-strip %{buildroot}/%{_usr}/lib/modules/%{KVER}/%{name}/*
 
 %clean
 rm -rf %{buildroot}
