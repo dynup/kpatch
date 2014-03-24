@@ -332,6 +332,21 @@ void kpatch_create_section_table(struct kpatch_elf *kelf)
 		ERROR("expected NULL");
 }
 
+int is_bundleable(struct symbol *sym)
+{
+	if (sym->type == STT_FUNC &&
+	    !strncmp(sym->sec->name, ".text.",6) &&
+	    !strcmp(sym->sec->name + 6, sym->name))
+		return 1;
+
+	if (sym->type == STT_OBJECT &&
+	   !strncmp(sym->sec->name, ".data.",6) &&
+	   !strcmp(sym->sec->name + 6, sym->name))
+		return 1;
+
+	return 0;
+}
+
 void kpatch_create_symbol_table(struct kpatch_elf *kelf)
 {
 	struct section *symtab;
@@ -373,21 +388,7 @@ void kpatch_create_symbol_table(struct kpatch_elf *kelf)
 				ERROR("couldn't find section for symbol %s\n",
 					sym->name);
 
-			/*
-			 * __ksymtab_strings is a special case where the
-			 * compiler creates FUNC/OBJECT syms that refer
-			 * to offsets inside the __ksymtab_strings section
-			 * for kernel exported symbols.  We want to ignore
-			 * those.
-			 *
-			 * Also, functions declared with __init do not honor
-			 * -ffunction-sections and can be at non-zero offsets
-			 *  in the .init.text section, so ignore those.
-			 */
-			if ((sym->type == STT_FUNC ||
-			     sym->type == STT_OBJECT) &&
-			    strcmp(sym->sec->name, "__ksymtab_strings") &&
-			    strcmp(sym->sec->name, ".init.text")) {
+			if (is_bundleable(sym)) {
 				if (sym->sym.st_value != 0)
 					ERROR("symbol %s at offset %lu within section %s, expected 0",
 					      sym->name, sym->sym.st_value, sym->sec->name);
