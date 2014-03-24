@@ -838,10 +838,10 @@ void kpatch_include_changed_functions(struct kpatch_elf *kelf)
 
 	for_each_symbol(i, sym, &kelf->symbols) {
 		if (sym->status == CHANGED &&
-		    sym->type == STT_FUNC &&
-		    !sym->include) {
+		    sym->type == STT_FUNC) {
 			log_normal("changed function: %s\n", sym->name);
-			kpatch_include_symbol(sym, 0);
+			if (!sym->include)
+				kpatch_include_symbol(sym, 0);
 		}
 
 		if (sym->type == STT_FILE)
