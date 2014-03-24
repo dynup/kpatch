@@ -829,16 +829,17 @@ out:
 	return;
 }
 
-void kpatch_include_changed_functions(struct kpatch_elf *kelf)
+int kpatch_include_changed_functions(struct kpatch_elf *kelf)
 {
 	struct symbol *sym;
-	int i;
+	int i, changed_nr = 0;
 
 	log_debug("\n=== Inclusion Tree ===\n");
 
 	for_each_symbol(i, sym, &kelf->symbols) {
 		if (sym->status == CHANGED &&
 		    sym->type == STT_FUNC) {
+			changed_nr++;
 			log_normal("changed function: %s\n", sym->name);
 			if (!sym->include)
 				kpatch_include_symbol(sym, 0);
@@ -847,6 +848,8 @@ void kpatch_include_changed_functions(struct kpatch_elf *kelf)
 		if (sym->type == STT_FILE)
 			sym->include = 1;
 	}
+
+	return changed_nr;
 }
 
 int kpatch_copy_symbols(int startndx, struct kpatch_elf *src,
@@ -1363,7 +1366,10 @@ int main(int argc, char *argv[])
 	 */
 	kpatch_replace_sections_syms(kelf_patched);
 
-	kpatch_include_changed_functions(kelf_patched);
+	if (!kpatch_include_changed_functions(kelf_patched)) {
+		log_normal("no changed functions were found\n");
+		return 3; /* 1 is ERROR, 2 is DIFF_FATAL */
+	}
 	kpatch_dump_kelf(kelf_patched);
 
 	/* Generate the output elf */
