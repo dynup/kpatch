@@ -128,15 +128,17 @@ struct rela {
 	char *string;
 };
 
-#define for_each_entry(iter, entry, table, type) \
-	for (iter = 0; (iter) < (table)->nr && ((entry) = &((type)(table)->data)[iter]); (iter)++)
+#define for_each_entry(init, iter, entry, table, type) \
+	for (iter = init; (iter) < (table)->nr && ((entry) = &((type)(table)->data)[iter]); (iter)++)
 
 #define for_each_section(iter, entry, table) \
-	for_each_entry(iter, entry, table, struct section *)
+	for_each_entry(0, iter, entry, table, struct section *)
 #define for_each_symbol(iter, entry, table) \
-	for_each_entry(iter, entry, table, struct symbol *)
+	for_each_entry(1, iter, entry, table, struct symbol *)
+#define for_each_symbol_zero(iter, entry, table) \
+	for_each_entry(0, iter, entry, table, struct symbol *)
 #define for_each_rela(iter, entry, table) \
-	for_each_entry(iter, entry, table, struct rela *)
+	for_each_entry(0, iter, entry, table, struct rela *)
 
 struct kpatch_elf {
 	Elf *elf;
@@ -198,7 +200,7 @@ struct symbol *find_symbol_by_index(struct table *table, size_t index)
 	struct symbol *sym;
 	int i;
 
-	for_each_symbol(i, sym, table)
+	for_each_symbol_zero(i, sym, table)
 		if (sym->index == index)
 			return sym;
 
@@ -363,8 +365,6 @@ void kpatch_create_symbol_table(struct kpatch_elf *kelf)
 
 	/* iterator i declared in for_each_entry() macro */
 	for_each_symbol(i, sym, &kelf->symbols) {
-		if (i == 0) /* skip symbol 0 */
-			continue;
 		sym->index = i;
 
 		if (!gelf_getsym(symtab->data, i, &sym->sym))
@@ -569,8 +569,6 @@ void kpatch_compare_symbols(struct table *table)
 	int i;
 
 	for_each_symbol(i, sym, table) {
-		if (i == 0) /* ugh */
-			continue;
 		if (sym->twin)
 			kpatch_compare_correlated_symbol(sym);
 		else
@@ -604,11 +602,7 @@ void kpatch_correlate_symbols(struct table *table1, struct table *table2)
 	int i, j;
 
 	for_each_symbol(i, sym1, table1) {
-		if (i == 0) /* ugh */
-			continue;
 		for_each_symbol(j, sym2, table2) {
-			if (j == 0) /* double ugh */
-				continue;
 			if (!strcmp(sym1->name, sym2->name)) {
 				sym1->twin = sym2;
 				sym2->twin = sym1;
@@ -727,8 +721,6 @@ void kpatch_dump_kelf(struct kpatch_elf *kelf)
 
 	printf("\n=== Symbols ===\n");
 	for_each_symbol(i, sym, &kelf->symbols) {
-		if (i == 0) /* ugh */
-			continue;
 		printf("sym %02d, type %d, bind %d, ndx %02d, name %s (%s)",
 			sym->index, sym->type, sym->bind, sym->sym.st_shndx,
 			sym->name, status_str(sym->status));
@@ -831,7 +823,7 @@ int kpatch_copy_symbols(int startndx, struct kpatch_elf *src,
 	int i, index = startndx;
 
 	for_each_symbol(i, srcsym, &src->symbols) {
-		if (i == 0 || !srcsym->include)
+		if (!srcsym->include)
 			continue;
 
 		if (select && !select(srcsym))
@@ -890,7 +882,7 @@ void kpatch_generate_output(struct kpatch_elf *kelf, struct kpatch_elf **kelfout
 	log_debug("outputting %d sections\n",sections_nr);
 
 	/* count output symbols */
-	for_each_symbol(i, sym, &kelf->symbols) {
+	for_each_symbol_zero(i, sym, &kelf->symbols) {
 		if (i == 0 || sym->include)
 			symbols_nr++;
 	}
@@ -925,8 +917,6 @@ void kpatch_generate_output(struct kpatch_elf *kelf, struct kpatch_elf **kelfout
 	 * are not included, and modify them to be non-local.
 	 */
 	for_each_symbol(i, sym, &kelf->symbols) {
-		if (i == 0)
-			continue;
 		if ((sym->type == STT_OBJECT ||
 		     sym->type == STT_FUNC) &&
 		    !sym->sec->include) {
@@ -975,11 +965,8 @@ void kpatch_write_inventory_file(struct kpatch_elf *kelf, char *outfile)
 	for_each_section(i, sec, &kelf->sections)
 		fprintf(out, "section %s\n", sec->name);
 
-	for_each_symbol(i, sym, &kelf->symbols) {
-		if (i == 0)
-			continue;
+	for_each_symbol(i, sym, &kelf->symbols)
 		fprintf(out, "symbol %s %d %d\n", sym->name, sym->type, sym->bind);
-	}
 
 	fclose(out);
 }
@@ -1106,7 +1093,7 @@ void kpatch_create_strtab(struct kpatch_elf *kelf)
 	/* determine size of string table */
 	size = 1; /* for initial NULL terminator */
 	for_each_symbol(i, sym, &kelf->symbols) {
-		if (i == 0 || sym->type == STT_SECTION)
+		if (sym->type == STT_SECTION)
 			continue;
 		size += strlen(sym->name) + 1; /* include NULL terminator */
 	}
@@ -1120,8 +1107,6 @@ void kpatch_create_strtab(struct kpatch_elf *kelf)
 	/* populate string table and link with section header */
 	offset = 1;
 	for_each_symbol(i, sym, &kelf->symbols) {
-		if (i == 0)
-			continue;
 		if (sym->type == STT_SECTION) {
 			sym->sym.st_name = 0;
 			continue;
@@ -1143,7 +1128,7 @@ void kpatch_create_strtab(struct kpatch_elf *kelf)
 		print_strtab(buf, size);
 		printf("\n");
 
-		for_each_symbol(i, sym, &kelf->symbols)
+		for_each_symbol_zero(i, sym, &kelf->symbols)
 			printf("%s @ strtab offset %d\n",
 			       sym->name, sym->sym.st_name);
 	}
@@ -1168,7 +1153,7 @@ void kpatch_create_symtab(struct kpatch_elf *kelf)
 		ERROR("malloc");
 	memset(buf, 0, size);
 
-	for_each_symbol(i, sym, &kelf->symbols) {
+	for_each_symbol_zero(i, sym, &kelf->symbols) {
 		memcpy(buf + (i * symtab->sh.sh_entsize), &sym->sym,
 		       symtab->sh.sh_entsize);
 	}
