@@ -173,14 +173,9 @@ int is_rela_section(struct section *sec)
 
 struct section *find_section_by_index(struct table *table, unsigned int index)
 {
-	struct section *sec;
-	int i;
-
-	for_each_section(i, sec, table)
-		if (sec->index == index)
-			return sec;
-
-	return NULL;
+	if (index == 0 || index >= table->nr)
+		return NULL;
+	return &((struct section *)(table->data))[index-1];
 }
 
 struct section *find_section_by_name(struct table *table, const char *name)
@@ -197,14 +192,9 @@ struct section *find_section_by_name(struct table *table, const char *name)
 
 struct symbol *find_symbol_by_index(struct table *table, size_t index)
 {
-	struct symbol *sym;
-	int i;
-
-	for_each_symbol_zero(i, sym, table)
-		if (sym->index == index)
-			return sym;
-
-	return NULL;
+	if (index >= table->nr)
+		return NULL;
+	return &((struct symbol *)(table->data))[index];
 }
 
 struct symbol *find_symbol_by_name(struct table *table, const char *name)
