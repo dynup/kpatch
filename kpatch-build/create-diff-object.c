@@ -120,7 +120,6 @@ struct symbol {
 };
 
 struct rela {
-	struct rela *twin;
 	GElf_Rela rela;
 	struct symbol *sym;
 	unsigned char type;
@@ -597,8 +596,6 @@ void kpatch_correlate_relas(struct section *sec)
 	for_each_rela(i, rela1, &sec->relas) {
 		for_each_rela(j, rela2, &sec->twin->relas) {
 			    if (rela_equal(rela1, rela2)) {
-				rela1->twin = rela2;
-				rela2->twin = rela1;
 				rela1->status = rela2->status = SAME;
 				break;
 			}
