@@ -1,0 +1,37 @@
+.\" Manpage for kpatch-build.
+.\" Contact udoseidel@gmx.de to correct errors or typos.
+.TH man 1 "23 Mar 2014" "1.0" "kpatch-build man page"
+.SH NAME
+kpatch-build \- build script
+.SH SYNOPSIS
+kpatch-build [options] <patch file>
+.SH DESCRIPTION
+This script takes a patch based on the version of the kernel 
+currently running and creates a kernel module that will replace 
+modified functions in the kernel such that the patched code takes 
+effect.
+
+This script currently only works on Fedora and will need to be adapted 
+to work on other distros.  
+
+.SH OPTIONS
+
+-h|--help
+   Show this help message
+ 
+-s|--sourcedir
+   Specify kernel source directory
+
+-c|--config
+   Specify kernel config file
+
+.SH SEE ALSO
+kpatch(1)
+.SH BUGS
+No known bugs.
+.SH AUTHOR
+Udo Seidel (udoseidel@gmx.de)
+.SH COPYWRIGHT
+Copyright (C) 2014: Seth Jennings <sjenning@redhat.com>, Copyright (C) 
+2013,2014:  Josh Poimboeuf <jpoimboe@redhat.com>
+

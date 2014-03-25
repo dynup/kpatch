@@ -4,7 +4,7 @@ Version: 0.0.1
 License: GPLv2 
 Group: System Environment/Kernel
 URL: http://github.com/dynup/kpatch
-Release: 1%{?dist}
+Release: 2%{?dist}
 Source0: %{name}-%{version}.tar.gz
 
 Requires: kmod bash
@@ -79,6 +79,7 @@ rm -rf %{buildroot}
 %defattr(-,root,root,-)
 %doc COPYING README.md
 %{_sbindir}/kpatch
+%{_mandir}/man1/kpatch.1*
 
 %files %{KVER}
 %defattr(-,root,root,-)
@@ -89,7 +90,11 @@ rm -rf %{buildroot}
 %{_bindir}/*
 %{_libexecdir}/*
 %{_datadir}/%{name}
+%{_mandir}/man1/kpatch-build.1*
 
 %changelog
+* Tue Mar 25 2014 Udo Seidel <udoseidel@gmx.de> - 0.0.1-2
+- added man pages
+
 * Sat Mar 22 2014 Udo Seidel <udoseidel@gmx.de> - 0.0.1-1
 - initial release

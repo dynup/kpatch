@@ -1,0 +1,50 @@
+.\" Manpage for kpatch.
+.\" Contact udoseidel@gmx.de to correct errors or typos.
+.TH man 1 "23 Mar 2014" "1.0" "kpatch man page"
+.SH NAME
+kpatch \- hot patch module management
+.SH SYNOPSIS
+kpatch <command> [<args>]
+.SH DESCRIPTION
+kpatch is a user script that manages installing, applying, and 
+displaying information about kernel patch modules installed on
+the system. 
+.SH OPTIONS
+
+install <file>
+       install hotpatch module to the kpatch DB
+
+uninstall <hotpatch>
+       uninstall hotpatch module from the kpatch DB
+
+apply --all
+       apply all enabled hotpatch modules to the running kernel
+
+apply <hotpatch>     
+       apply installed hotpatch module to the running kernel
+
+remove <hotpatch>
+       remove hotpatch module from the running kernel
+
+enable <hotpatch>
+       automatically apply hotpatch module during boot
+
+disable <hotpatch>
+       don't automatically apply hotpatch module during boot
+
+info <hotpatch>
+       show information about an installed hotpatch module
+
+list
+       list installed hotpatch modules
+
+.SH SEE ALSO
+kpatch-build(1)
+.SH BUGS
+No known bugs.
+.SH AUTHOR
+Udo Seidel (udoseidel@gmx.de)
+.SH COPYWRIGHT
+Copyright (C) 2014: Seth Jennings <sjenning@redhat.com> and 
+Josh Poimboeuf <jpoimboe@redhat.com>
+
