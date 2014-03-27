@@ -4,9 +4,9 @@ all:
 
 install: all
 	$(INSTALL) -d $(MANDIR)
-	gzip -9 kpatch.1
+	gzip -k -9 kpatch.1
 	$(INSTALL) -m 644 kpatch.1.gz $(MANDIR)
-	gzip -9 kpatch-build.1
+	gzip -k -9 kpatch-build.1
 	$(INSTALL) -m 644 kpatch-build.1.gz $(MANDIR)
 
 uninstall:
