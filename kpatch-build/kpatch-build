@@ -50,6 +50,7 @@ OBJDIR2="$CACHEDIR/$ARCHVERSION/obj2"
 TEMPDIR=
 STRIPCMD="strip -d --keep-file-symbols"
 APPLIEDPATCHFILE="applied-patch"
+DEBUG=0
 
 die() {
 	if [[ -z $1 ]]; then
@@ -61,7 +62,7 @@ die() {
 }
 
 cleanup() {
-	rm -rf "$TEMPDIR"
+	[[ "$DEBUG" -eq 0 ]] && rm -rf "$TEMPDIR"
 	if [[ -e "$SRCDIR/$APPLIEDPATCHFILE" ]]; then
 		patch -p1 -R -d "$SRCDIR" < "$SRCDIR/$APPLIEDPATCHFILE" &> /dev/null
 		rm -f "$SRCDIR/$APPLIEDPATCHFILE"
@@ -97,9 +98,10 @@ usage() {
 	echo "		-h, --help	Show this help message" >&2
 	echo "		-s, --sourcedir	Specify kernel source directory" >&2
 	echo "		-c, --config	Specify kernel config file" >&2
+	echo "		-d, --debug	Keep scratch files in /tmp" >&2
 }
 
-PARSED_OPT_ARRAY=($(getopt -u -n "$0" -o hs:c: -l "help,sourcedir:,config:" -- "$@")) || die "getopt failed"
+PARSED_OPT_ARRAY=($(getopt -u -n "$0" -o hs:c:d -l "help,sourcedir:,config:,debug" -- "$@")) || die "getopt failed"
 
 for index in ${!PARSED_OPT_ARRAY[*]}; do
 	case "${PARSED_OPT_ARRAY[$index]}" in
@@ -114,6 +116,10 @@ for index in ${!PARSED_OPT_ARRAY[*]}; do
 	-c|--config)
 		CONFIGFILE="$(readlink -f ${PARSED_OPT_ARRAY[$(( $index+1 ))]})"
 		[[ ! -f "$CONFIGFILE" ]] && die "config file $CONFIGFILE not found"
+		;;
+	-d|--debug)
+		echo "DEBUG mode enabled"
+		DEBUG=1
 		;;
 	--)
 		PATCHFILE="$(readlink -f ${PARSED_OPT_ARRAY[$(( $index+1 ))]})"
