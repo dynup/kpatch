@@ -173,7 +173,7 @@ int is_rela_section(struct section *sec)
 
 struct section *find_section_by_index(struct table *table, unsigned int index)
 {
-	if (index == 0 || index >= table->nr)
+	if (index == 0 || index > table->nr)
 		return NULL;
 	return &((struct section *)(table->data))[index-1];
 }
