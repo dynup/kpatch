@@ -1,6 +1,6 @@
 include ../Makefile.inc
 
-all:
+all: clean
 	$(MAKE) -C core
 
 install:
