@@ -720,6 +720,16 @@ void kpatch_dump_kelf(struct kpatch_elf *kelf)
 	}
 }
 
+void kpatch_verify_patchability(struct kpatch_elf *kelf)
+{
+	struct section *sec;
+	int i;
+
+	for_each_section(i, sec, &kelf->sections)
+		if (sec->status == CHANGED && !sec->include)
+			DIFF_FATAL("changed section %s not selected for inclusion", sec->name);
+}
+
 int kpatch_find_changed_functions(struct kpatch_elf *kelf)
 {
 	struct symbol *sym;
@@ -780,6 +790,20 @@ void kpatch_include_symbol(struct symbol *sym, int recurselevel)
 out:
 	inc_printf("end include_symbol(%s)\n", sym->name);
 	return;
+}
+
+void kpatch_include_standard_sections(struct kpatch_elf *kelf)
+{
+	struct section *sec;
+	int i;
+
+	for_each_section(i, sec, &kelf->sections) {
+		/* include these sections even if they haven't changed */
+		if (!strcmp(sec->name, ".shstrtab") ||
+		     !strcmp(sec->name, ".strtab") ||
+		     !strcmp(sec->name, ".symtab"))
+			sec->include = 1;
+	}
 }
 
 int kpatch_include_changed_functions(struct kpatch_elf *kelf)
@@ -858,16 +882,9 @@ void kpatch_generate_output(struct kpatch_elf *kelf, struct kpatch_elf **kelfout
 	struct kpatch_elf *out;
 
 	/* count output sections */
-	for_each_section(i, sec, &kelf->sections) {
-		/* include these sections even if they haven't changed */
-		if (!strcmp(sec->name, ".shstrtab") ||
-		     !strcmp(sec->name, ".strtab") ||
-		     !strcmp(sec->name, ".symtab"))
-			sec->include = 1;
-
+	for_each_section(i, sec, &kelf->sections)
 		if (sec->include)
 			sections_nr++;
-	}
 
 	log_debug("outputting %d sections\n",sections_nr);
 
@@ -1312,11 +1329,13 @@ int main(int argc, char *argv[])
 	 */
 	kpatch_replace_sections_syms(kelf_patched);
 
+	kpatch_include_standard_sections(kelf_patched);
 	if (!kpatch_include_changed_functions(kelf_patched)) {
 		log_normal("no changed functions were found\n");
 		return 3; /* 1 is ERROR, 2 is DIFF_FATAL */
 	}
 	kpatch_dump_kelf(kelf_patched);
+	kpatch_verify_patchability(kelf_patched);
 
 	/* Generate the output elf */
 	kpatch_generate_output(kelf_patched, &kelf_out);
