@@ -141,6 +141,7 @@ case "$1" in
 	PATCH="$2"
 	[[ -e "$PATCH" ]] || die "$PATCH doesn't exist"
 	[[ ${PATCH: -3} == ".ko" ]] || "$PATCH isn't a .ko file"
+	mkdir -p "$USERDIR" || die "failed to create install directory"
 	cp -f "$PATCH" "$USERDIR" || die "failed to install patch $PATCH"
 	;;
 
