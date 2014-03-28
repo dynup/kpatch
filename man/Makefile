@@ -1,12 +1,16 @@
 include ../Makefile.inc
 
-all:
+all: kpatch.1.gz kpatch-build.1.gz
+
+kpatch.1.gz: kpatch.1
+	gzip -k -9 kpatch.1
+
+kpatch-build.1.gz: kpatch-build.1
+	gzip -k -9 kpatch-build.1
 
 install: all
 	$(INSTALL) -d $(MANDIR)
-	gzip -k -9 kpatch.1
 	$(INSTALL) -m 644 kpatch.1.gz $(MANDIR)
-	gzip -k -9 kpatch-build.1
 	$(INSTALL) -m 644 kpatch-build.1.gz $(MANDIR)
 
 uninstall:
@@ -14,3 +18,5 @@ uninstall:
 	$(RM) $(MANDIR)/kpatch-build.1*
 
 clean:
+	$(RM) kpatch.1.gz
+	$(RM) kpatch-build.1.gz
