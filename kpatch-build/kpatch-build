@@ -68,26 +68,20 @@ cleanup() {
 	fi
 }
 
-find_data_dir() {
-	# git repo
-	DATADIR="$(readlink -f $SCRIPTDIR/../kmod)"
-	[[ -e "$DATADIR" ]] && return
-
-	# installation path
-	DATADIR="$(readlink -f $SCRIPTDIR/../share/kpatch)"
-	[[ -e "$DATADIR" ]] && return
-
-	return 1
-}
-
-find_tools_dir() {
-	#git repo
-	TOOLSDIR="$SCRIPTDIR"
-	[[ -e "$TOOLSDIR/create-diff-object" ]] && return
-
-	#installation path
-	TOOLSDIR="$(readlink -f $SCRIPTDIR/../libexec/kpatch)"
-	[[ -e "$TOOLSDIR/create-diff-object" ]] && return
+find_dirs() {
+	if [[ -e "$SCRIPTDIR/create-diff-object" ]]; then
+		# git repo
+		TOOLSDIR="$SCRIPTDIR"
+		DATADIR="$(readlink -f $SCRIPTDIR/../kmod)"
+		SYMVERSFILE="$DATADIR/core/Module.symvers"
+		return
+	elif [[ -e "$SCRIPTDIR/../libexec/kpatch/create-diff-object" ]]; then
+		# installation path
+		TOOLSDIR="$(readlink -f $SCRIPTDIR/../libexec/kpatch)"
+		DATADIR="$(readlink -f $SCRIPTDIR/../share/kpatch)"
+		SYMVERSFILE="$(readlink -f $SCRIPTDIR/../lib/modules/$(uname -r)/kpatch/Module.symvers)"
+		return
+	fi
 
 	return 1
 }
@@ -137,8 +131,9 @@ TEMPDIR="$(mktemp -d)" || die "mktemp failed"
 
 trap cleanup EXIT INT TERM
 
-find_data_dir || (echo "can't find data dir" >&2 && die)
-find_tools_dir || (echo "can't find tools dir" >&2 && die)
+find_dirs || die "can't find supporting tools"
+
+[[ -e "$SYMVERSFILE" ]] || die "can't find core module Module.symvers"
 
 if [[ -d "$SRCDIR" ]] || [[ -n "$USERSRCDIR" ]]; then
 	if [[ -n "$USERSRCDIR" ]]; then
@@ -244,7 +239,7 @@ cd "$TEMPDIR/output"
 ld -r -o ../patch/output.o $FILES >> "$LOGFILE" 2>&1 || die
 cd "$TEMPDIR/patch"
 "$TOOLSDIR"/add-patches-section output.o ../vmlinux >> "$LOGFILE" 2>&1 || die
-KPATCH_BUILD="$SRCDIR" KPATCH_NAME="$PATCHNAME" make "O=$OBJDIR" >> "$LOGFILE" 2>&1 || die
+KPATCH_BUILD="$SRCDIR" KPATCH_NAME="$PATCHNAME" KBUILD_EXTRA_SYMBOLS="$SYMVERSFILE" make "O=$OBJDIR" >> "$LOGFILE" 2>&1 || die
 $STRIPCMD "kpatch-$PATCHNAME.ko" >> "$LOGFILE" 2>&1 || die
 "$TOOLSDIR"/link-vmlinux-syms "kpatch-$PATCHNAME.ko" ../vmlinux >> "$LOGFILE" 2>&1 || die
 
