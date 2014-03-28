@@ -3,10 +3,10 @@ include ../Makefile.inc
 all: kpatch.1.gz kpatch-build.1.gz
 
 kpatch.1.gz: kpatch.1
-	gzip -k -9 kpatch.1
+	gzip -c -9 $< > $@
 
 kpatch-build.1.gz: kpatch-build.1
-	gzip -k -9 kpatch-build.1
+	gzip -c -9 $< > $@
 
 install: all
 	$(INSTALL) -d $(MANDIR)
