@@ -29,7 +29,6 @@
 KERNELRELEASE="$(uname -r)"
 SYSDIR="/usr/lib/kpatch/$KERNELRELEASE"
 USERDIR="/var/lib/kpatch/$KERNELRELEASE"
-ENABLEDDIR="$USERDIR/enabled"
 
 usage () {
 	echo "usage: kpatch <command> [<args>]" >&2
@@ -38,12 +37,10 @@ usage () {
 	printf '   %-20s %s\n' "install <file>"       "install hotpatch module to the kpatch DB" >&2
 	printf '   %-20s %s\n' "uninstall <hotpatch>" "uninstall hotpatch module from the kpatch DB" >&2
 	echo >&2
-	printf '   %-20s %s\n' "apply --all"          "apply all enabled hotpatch modules to the running kernel" >&2
+	printf '   %-20s %s\n' "apply --all"          "apply all installed hotpatch modules to the running kernel" >&2
 	printf '   %-20s %s\n' "apply <hotpatch>"     "apply installed hotpatch module to the running kernel" >&2
 	printf '   %-20s %s\n' "remove <hotpatch>"    "remove hotpatch module from the running kernel" >&2
 	echo >&2
-	printf '   %-20s %s\n' "enable <hotpatch>"    "automatically apply hotpatch module during boot" >&2
-	printf '   %-20s %s\n' "disable <hotpatch>"   "don't automatically apply hotpatch module during boot" >&2
 	echo >&2
 	printf '   %-20s %s\n' "info <hotpatch>"      "show information about an installed hotpatch module" >&2
 	echo >&2
@@ -83,10 +80,6 @@ unload_module () {
 	/usr/sbin/rmmod "$(basename $1)"
 }
 
-module_enabled() {
-	[[ -e "$ENABLEDDIR/$(basename $1)" ]]
-}
-
 echo_patch_name() {
 	NAME="$(basename $1)"
 	echo $NAME
@@ -95,28 +88,15 @@ echo_patch_name() {
 unset MODULE
 [[ "$#" -gt 2 ]] || [[ "$#" -lt 1 ]] && usage
 case "$1" in
-"enable")
-	[[ "$#" -ne 2 ]] && usage
-	PATCH="$2"
-	find_module "$PATCH" || die "$PATCH is not installed"
-	module_enabled $MODULE && die "$PATCH is already enabled"
-	mkdir -p $ENABLEDDIR
-	ln -s "$MODULE" "$ENABLEDDIR" || die "failed to enable patch $PATCH"
-	;;
-
-"disable")
-	[[ "$#" -ne 2 ]] && usage
-	PATCH="$2"
-	find_module "$PATCH" || die "$PATCH is not installed"
-	module_enabled $MODULE || die "$PATCH is already disabled"
-	rm -f "$ENABLEDDIR/$(basename $MODULE)" || die "failed to disable patch $PATCH"
-	;;
-
 "apply")
 	[[ "$#" -ne 2 ]] && usage
 	case "$2" in
 	"--all")
-		for i in "$ENABLEDDIR"/*.ko; do
+		for i in "$SYSDIR"/*.ko; do
+			[[ -e "$i" ]] || continue
+			load_module "$i" || die "failed to load module $i"
+		done
+		for i in "$USERDIR"/*.ko; do
 			[[ -e "$i" ]] || continue
 			load_module "$i" || die "failed to load module $i"
 		done
@@ -166,11 +146,6 @@ case "$1" in
 		echo_patch_name $i
 	done
 	echo ""
-	echo "Enabled patches:"
-	for i in "$ENABLEDDIR"/*.ko; do
-		[[ -e "$i" ]] || continue
-		echo_patch_name $i
-	done
 	;;
 
 "info")
