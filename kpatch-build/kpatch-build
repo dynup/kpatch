@@ -95,20 +95,24 @@ usage() {
 	echo "		-d, --debug	Keep scratch files in /tmp" >&2
 }
 
-PARSED_OPT_ARRAY=($(getopt -u -n "$0" -o hs:c:d -l "help,sourcedir:,config:,debug" -- "$@")) || die "getopt failed"
+options=$(getopt -o hs:c:d -l "help,sourcedir:,config:,debug" -- "$@") || die "getopt failed"
 
-for index in ${!PARSED_OPT_ARRAY[*]}; do
-	case "${PARSED_OPT_ARRAY[$index]}" in
+eval set -- "$options"
+
+while [[ $# -gt 0 ]]; do
+	case "$1" in
 	-h|--help)
 		usage
 		exit 0
 		;;
 	-s|--sourcedir)
-		USERSRCDIR="$(readlink -f ${PARSED_OPT_ARRAY[$(( $index+1 ))]})"
+		USERSRCDIR=$(readlink -f "$2")
+		shift
 		[[ ! -d "$USERSRCDIR" ]] && die "source dir $USERSRCDIR not found"
 		;;
 	-c|--config)
-		CONFIGFILE="$(readlink -f ${PARSED_OPT_ARRAY[$(( $index+1 ))]})"
+		CONFIGFILE=$(readlink -f "$2")
+		shift
 		[[ ! -f "$CONFIGFILE" ]] && die "config file $CONFIGFILE not found"
 		;;
 	-d|--debug)
@@ -116,17 +120,17 @@ for index in ${!PARSED_OPT_ARRAY[*]}; do
 		DEBUG=1
 		;;
 	--)
-		PATCHFILE="$(readlink -f ${PARSED_OPT_ARRAY[$(( $index+1 ))]})"
+		if [[ -z "$2" ]]; then
+			usage
+			exit 1
+		fi
+		PATCHFILE=$(readlink -f "$2")
 		[[ ! -f "$PATCHFILE" ]] && die "patch file $PATCHFILE not found"
 		break
 		;;
 	esac
+	shift
 done
-
-if [[ -z "$PATCHFILE" ]]; then
-	usage
-	exit 1
-fi
 
 PATCHNAME="$(basename $PATCHFILE)"
 if [[ "$PATCHNAME" =~ \.patch ]] || [[ "$PATCHNAME" =~ \.diff ]]; then
