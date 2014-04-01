@@ -1,6 +1,6 @@
 include Makefile.inc
 
-SUBDIRS     = kpatch-build kpatch kmod man
+SUBDIRS     = kpatch-build kpatch kmod man contrib
 BUILD_DIRS   = $(SUBDIRS:%=build-%)
 INSTALL_DIRS = $(SUBDIRS:%=install-%)
 UNINSTALL_DIRS = $(SUBDIRS:%=uninstall-%)

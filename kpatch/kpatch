@@ -120,6 +120,7 @@ case "$1" in
 	[[ ${PATCH: -3} == ".ko" ]] || die "$PATCH isn't a .ko file"
 	mkdir -p "$USERDIR" || die "failed to create install directory"
 	cp -f "$PATCH" "$USERDIR" || die "failed to install patch $PATCH"
+	dracut -f || die "dracut failed"
 	;;
 
 "uninstall")
@@ -127,6 +128,7 @@ case "$1" in
 	PATCH="$2"
 	find_module "$PATCH" || die "$PATCH is not installed"
 	rm -f "$USERDIR/$(basename $MODULE)" || die "failed to uninstall patch $PATCH"
+	dracut -f || die "dracut failed"
 	;;
 
 "list")
