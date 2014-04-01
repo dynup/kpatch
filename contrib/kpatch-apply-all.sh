@@ -7,5 +7,4 @@
 # Copyright 2014 Red Hat, Inc.
 # Josh Poimboeuf <jpoimboe@redhat.com>
 
-insmod /usr/lib/modules/$(uname -r)/kpatch/kpatch.ko
 kpatch apply --all
