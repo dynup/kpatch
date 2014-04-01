@@ -154,27 +154,27 @@ find_dirs || die "can't find supporting tools"
 
 [[ -e "$SYMVERSFILE" ]] || die "can't find core module Module.symvers"
 
-if [[ -d "$SRCDIR" ]] || [[ -n "$USERSRCDIR" ]]; then
-	if [[ -n "$USERSRCDIR" ]]; then
-		SRCDIR="$CACHEDIR/src"
-		OBJDIR="$CACHEDIR/obj"
-		OBJDIR2="$CACHEDIR/obj2"
+if [[ -n "$USERSRCDIR" ]]; then
+	SRCDIR="$CACHEDIR/src"
+	OBJDIR="$CACHEDIR/obj"
+	OBJDIR2="$CACHEDIR/obj2"
 
-		rm -rf "$CACHEDIR"
-		mkdir -p "$CACHEDIR"
-		mkdir -p "$OBJDIR" "$OBJDIR2"
+	rm -rf "$CACHEDIR"
+	mkdir -p "$CACHEDIR"
+	mkdir -p "$OBJDIR" "$OBJDIR2"
 
-		if [[ -n "$CONFIGFILE" ]]; then
-			cp "$CONFIGFILE" "$OBJDIR/.config" || die "config file is missing"
-		else
-			cp "$USERSRCDIR/.config" "$OBJDIR" || die "source dir is missing a .config file"
-		fi
-
-		echo "Copying source to $SRCDIR"
-		cp -a "$USERSRCDIR" "$SRCDIR" || die "copy failed"
+	if [[ -n "$CONFIGFILE" ]]; then
+		cp "$CONFIGFILE" "$OBJDIR/.config" || die "config file is missing"
 	else
-		echo "Using cache at $SRCDIR"
+		cp "$USERSRCDIR/.config" "$OBJDIR" || die "source dir is missing a .config file"
 	fi
+
+	echo "Copying source to $SRCDIR"
+	cp -a "$USERSRCDIR" "$SRCDIR" || die "copy failed"
+
+elif [[ -d "$SRCDIR" ]]; then
+	echo "Using cache at $SRCDIR"
+
 else
 	rpm -q --quiet rpmdevtools || die "rpmdevtools not installed"
 
