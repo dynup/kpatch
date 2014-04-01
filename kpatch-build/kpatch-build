@@ -40,13 +40,8 @@ BASE="$PWD"
 LOGFILE="/tmp/kpatch-build-$(date +%s).log"
 SCRIPTDIR="$(readlink -f $(dirname $(type -p $0)))"
 ARCHVERSION="$(uname -r)"
-DISTROVERSION="${ARCHVERSION%*.*}"
-LOCALVERSION="-${ARCHVERSION##*-}"
 CPUS="$(grep -c ^processor /proc/cpuinfo)"
 CACHEDIR="$HOME/.kpatch"
-SRCDIR="$CACHEDIR/$ARCHVERSION/src"
-OBJDIR="$CACHEDIR/$ARCHVERSION/obj"
-OBJDIR2="$CACHEDIR/$ARCHVERSION/obj2"
 TEMPDIR=
 STRIPCMD="strip -d --keep-file-symbols"
 APPLIEDPATCHFILE="applied-patch"
@@ -90,12 +85,13 @@ find_dirs() {
 usage() {
 	echo "usage: $0 [options] <patch file>" >&2
 	echo "		-h, --help	Show this help message" >&2
+	echo "		-r, --sourcerpm	Specify kernel source RPM" >&2
 	echo "		-s, --sourcedir	Specify kernel source directory" >&2
 	echo "		-c, --config	Specify kernel config file" >&2
 	echo "		-d, --debug	Keep scratch files in /tmp" >&2
 }
 
-options=$(getopt -o hs:c:d -l "help,sourcedir:,config:,debug" -- "$@") || die "getopt failed"
+options=$(getopt -o hr:s:c:d -l "help,sourcerpm:,sourcedir:,config:,debug" -- "$@") || die "getopt failed"
 
 eval set -- "$options"
 
@@ -104,6 +100,14 @@ while [[ $# -gt 0 ]]; do
 	-h|--help)
 		usage
 		exit 0
+		;;
+	-r|--sourcerpm)
+		SRCRPM=$(readlink -f "$2")
+		shift
+		[[ ! -f "$SRCRPM" ]] && die "source rpm $SRCRPM not found"
+		rpmname=$(basename "$SRCRPM")
+		ARCHVERSION=${rpmname%.src.rpm}.$(uname -m)
+		ARCHVERSION=${ARCHVERSION#kernel-}
 		;;
 	-s|--sourcedir)
 		USERSRCDIR=$(readlink -f "$2")
@@ -132,6 +136,10 @@ while [[ $# -gt 0 ]]; do
 	esac
 	shift
 done
+
+SRCDIR="$CACHEDIR/$ARCHVERSION/src"
+OBJDIR="$CACHEDIR/$ARCHVERSION/obj"
+OBJDIR2="$CACHEDIR/$ARCHVERSION/obj2"
 
 PATCHNAME="$(basename $PATCHFILE)"
 if [[ "$PATCHNAME" =~ \.patch ]] || [[ "$PATCHNAME" =~ \.diff ]]; then
@@ -169,14 +177,18 @@ if [[ -d "$SRCDIR" ]] || [[ -n "$USERSRCDIR" ]]; then
 	fi
 else
 	rpm -q --quiet rpmdevtools || die "rpmdevtools not installed"
-	rpm -q --quiet yum-utils || die "yum-utils not installed"
 
-	echo "Downloading kernel source for $ARCHVERSION"
-	yumdownloader --source --destdir "$TEMPDIR" "kernel-$ARCHVERSION" >> "$LOGFILE" 2>&1 || die
+	if [[ -z "$SRCRPM" ]]; then
+		rpm -q --quiet yum-utils || die "yum-utils not installed"
+
+		echo "Downloading kernel source for $ARCHVERSION"
+		yumdownloader --source --destdir "$TEMPDIR" "kernel-$ARCHVERSION" >> "$LOGFILE" 2>&1 || die
+		SRCRPM="$TEMPDIR/kernel-${ARCHVERSION%*.*}.src.rpm"
+	fi
 
 	echo "Unpacking kernel source"
 	rpmdev-setuptree >> "$LOGFILE" 2>&1 || die
-	rpm -ivh "$TEMPDIR/kernel-$DISTROVERSION.src.rpm" >> "$LOGFILE" 2>&1 || die
+	rpm -ivh "$SRCRPM" >> "$LOGFILE" 2>&1 || die
 	rpmbuild -bp "--target=$(uname -m)" "$HOME/rpmbuild/SPECS/kernel.spec" >> "$LOGFILE" 2>&1 ||
 		die "rpmbuild -bp failed.  you may need to run 'yum-builddep kernel' first."
 	rm -rf "$CACHEDIR"
@@ -184,7 +196,7 @@ else
 	mv "$HOME"/rpmbuild/BUILD/kernel-*/linux-"$ARCHVERSION" "$SRCDIR" >> "$LOGFILE" 2>&1 || die
 
 	cp "$SRCDIR/.config" "$OBJDIR" || die
-	echo "$LOCALVERSION" > "$SRCDIR/localversion" || die
+	echo "-${ARCHVERSION##*-}" > "$SRCDIR/localversion" || die
 fi
 
 echo "Testing patch file"
