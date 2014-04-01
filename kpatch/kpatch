@@ -23,9 +23,6 @@
 # This is the kpatch user script that manages installing, applying, and
 # displaying information about kernel patch modules installed on the system.
 
-# TODO: add kernelrelease option to manage releases other than the
-# currently running one
-
 KERNELRELEASE="$(uname -r)"
 SYSDIR="/usr/lib/kpatch/$KERNELRELEASE"
 USERDIR="/var/lib/kpatch/$KERNELRELEASE"
