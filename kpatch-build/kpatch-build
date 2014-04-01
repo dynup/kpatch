@@ -121,6 +121,7 @@ while [[ $# -gt 0 ]]; do
 		;;
 	--)
 		if [[ -z "$2" ]]; then
+			echo "ERROR: no patch file specified" >&2
 			usage
 			exit 1
 		fi
