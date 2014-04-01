@@ -60,11 +60,11 @@ Make a source patch against the kernel tree:
     # from a kernel git tree:
     git diff > /path/to/foo.patch
 
-Build the hot patch kernel module:
+Build the patch module:
 
     kpatch-build /path/to/foo.patch
 
-This outputs a hot patch module named `kpatch-foo.ko` in the current
+This outputs a patch module named `kpatch-foo.ko` in the current
 directory.  Now apply it to the running kernel:
 
     sudo insmod kpatch-foo.ko
@@ -79,29 +79,29 @@ kpatch works at a function granularity: old functions are replaced with new
 ones.  It has four main components:
 
 - **kpatch-build**: a collection of tools which convert a source diff patch to
-  a hot patch module.  They work by compiling the kernel both with and without
-  the source patch, comparing the binaries, and generating a hot patch module
+  a patch module.  They work by compiling the kernel both with and without
+  the source patch, comparing the binaries, and generating a patch module
   which includes new binary versions of the functions to be replaced.
 
-- **hot patch module**: a kernel module (.ko file) which includes the
+- **patch module**: a kernel module (.ko file) which includes the
   replacement functions and metadata about the original functions.
 
 - **kpatch core module**: a kernel module (.ko file) which provides an
-  interface for the hot patch modules to register new functions for
+  interface for the patch modules to register new functions for
   replacement.  It uses the kernel ftrace subsystem to hook into the original
   function's mcount call instruction, so that a call to the original function
   is redirected to the replacement function.
 
 - **kpatch utility:** a command-line tool which allows a user to manage a
-  collection of hot patch modules.  One or more hot patch modules may be
+  collection of patch modules.  One or more patch modules may be
   configured to load at boot time, so that a system can remain patched
   even after a reboot into the same version of the kernel.
 
 
 ### kpatch-build
 
-The "kpatch-build" command converts a source-level diff patch file to a hot
-patch kernel module.  Most of its work is performed by the kpatch-build script
+The "kpatch-build" command converts a source-level diff patch file to a kernel
+patch module.  Most of its work is performed by the kpatch-build script
 which uses a collection of utilities: `create-diff-object`,
 `add-patch-section`, and `link-vmlinux-syms`.
 
@@ -120,19 +120,19 @@ The primary steps in kpatch-build are:
   sections
 - Link all the output objects into a cumulative object
 - Use `add-patches-section` to add the .patches section that the
-  core kpatch module uses to determine the list of functions that need
+  kpatch core module uses to determine the list of functions that need
   to be redirected using ftrace
-- Generate the patch kernel module
+- Generate the patch module
 - Use `link-vmlinux-syms` to hardcode non-exported kernel symbols
-  into the symbol table of the patch kernel module
+  into the symbol table of the patch module
 
 ### Patching
 
-The hot patch kernel modules register with the core module (`kpatch.ko`).
+The patch modules register with the core module (`kpatch.ko`).
 They provide information about original functions that need to be replaced, and
 corresponding function pointers to the replacement functions.
 
-The kpatch core module registers a trampoline function with ftrace.  The
+The core module registers a trampoline function with ftrace.  The
 trampoline function is called by ftrace immediately before the original
 function begins executing.  This occurs with the help of the reserved mcount
 call at the beginning of every function, created by the gcc `-mfentry` flag.
@@ -160,7 +160,7 @@ Limitations
 - Patches which modify statically allocated data are not supported.
   kpatch-build will detect that and return an error.  (In the future
   we will add a facility to support it.  It will probably require the
-  user to write code which runs at module loading time which manually
+  user to write code which runs at patch module loading time which manually
   updates the data.)
 
 - Patches which change the way a function interacts with dynamically
@@ -183,7 +183,7 @@ ability to arbitrarily modify the kernel, with or without kpatch.
 
 **Q. How can I detect if somebody has patched the kernel?**
 
-We hope to create a new kernel TAINT flag which will get set whenever a kpatch
+We hope to create a new kernel TAINT flag which will get set whenever a patch
 module is loaded.
 
 Also, many distros ship with cryptographically signed kernel modules, and will
