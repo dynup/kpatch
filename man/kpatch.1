@@ -11,23 +11,23 @@ displaying information about kernel patch modules installed on
 the system. 
 .SH OPTIONS
 
-install <file>
-       install patch module to the kpatch DB
+install <module>
+       install patch module to the initrd to be loaded at boot
 
-uninstall <patch>
-       uninstall patch module from the kpatch DB
+uninstall <module>
+       uninstall patch module from the initrd
 
 load --all
        load all installed patch modules into the running kernel
 
-load <patch>
-       load installed patch module into the running kernel
+load <module>
+       load patch module into the running kernel
 
-unload <patch>
+unload <module>
        unload patch module from the running kernel
 
-info <patch>
-       show information about an installed patch module
+info <module>
+       show information about a patch module
 
 list
        list installed patch modules

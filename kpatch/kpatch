@@ -31,15 +31,14 @@ usage () {
 	echo "usage: kpatch <command> [<args>]" >&2
 	echo >&2
 	echo "Valid commands:" >&2
-	printf '   %-20s %s\n' "install <file>"       "install patch module to the kpatch DB" >&2
-	printf '   %-20s %s\n' "uninstall <patch>"    "uninstall patch module from the kpatch DB" >&2
+	printf '   %-20s %s\n' "install <module>"     "install patch module to the initrd to be loaded at boot" >&2
+	printf '   %-20s %s\n' "uninstall <module>"   "uninstall patch module from the initrd" >&2
 	echo >&2
 	printf '   %-20s %s\n' "load --all"           "load all installed patch modules into the running kernel" >&2
-	printf '   %-20s %s\n' "load <patch>"         "load installed patch module into the running kernel" >&2
-	printf '   %-20s %s\n' "unload <patch>"       "unload patch module from the running kernel" >&2
+	printf '   %-20s %s\n' "load <module>"        "load patch module into the running kernel" >&2
+	printf '   %-20s %s\n' "unload <module>"      "unload patch module from the running kernel" >&2
 	echo >&2
-	echo >&2
-	printf '   %-20s %s\n' "info <patch>"         "show information about an installed patch module" >&2
+	printf '   %-20s %s\n' "info <module>"        "show information about a patch module" >&2
 	echo >&2
 	printf '   %-20s %s\n' "list"                 "list installed patch modules" >&2
 	exit 1
@@ -55,6 +54,9 @@ die() {
 }
 
 __find_module () {
+	MODULE="$1"
+	[[ -f "$MODULE" ]] && return
+
 	MODULE="$USERDIR/$1"
 	[[ -f "$MODULE" ]] && return
 
@@ -121,7 +123,7 @@ case "$1" in
 		;;
 	*)
 		PATCH="$2"
-		find_module "$PATCH" || die "$PATCH is not installed"
+		find_module "$PATCH" || die "can't find $PATCH"
 		load_module "$MODULE" || die "failed to load patch $PATCH"
 		;;
 	esac
@@ -130,7 +132,7 @@ case "$1" in
 "unload")
 	[[ "$#" -ne 2 ]] && usage
 	PATCH="$2"
-	find_module "$PATCH" || die "$PATCH is not installed"
+	find_module "$PATCH" || die "can't find $PATCH"
 	unload_module "$MODULE" || die "failed to unload patch $PATCH"
 	;;
 
@@ -179,7 +181,7 @@ case "$1" in
 "info")
 	[[ "$#" -ne 2 ]] && usage
 	PATCH="$2"
-	find_module "$PATCH" || die "$PATCH is not installed"
+	find_module "$PATCH" || die "can't find $PATCH"
 	echo "Patch information for $PATCH:"
 	/usr/sbin/modinfo "$MODULE" || die "failed to get info for patch $PATCH"
 	;;
