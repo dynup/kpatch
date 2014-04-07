@@ -9,6 +9,6 @@ install: all
 	$(INSTALL) module-setup.sh kpatch-apply-all.sh $(DRACUTDIR)
 
 uninstall:
-	$(RM) $(DRACUTDIR)
+	$(RM) -R $(DRACUTDIR)
 
 clean:
