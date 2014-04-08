@@ -497,13 +497,16 @@ void kpatch_compare_correlated_section(struct section *sec)
 	if (sec1->sh.sh_size != sec2->sh.sh_size ||
 	    sec1->data->d_size != sec2->data->d_size) {
 		sec->status = CHANGED;
-		return;
+		goto out;
 	}
 
 	if (is_rela_section(sec))
 		kpatch_compare_correlated_rela_section(sec);
 	else
 		kpatch_compare_correlated_nonrela_section(sec);
+out:
+	if (sec->status == CHANGED)
+		log_debug("section %s has changed\n", sec->name);
 }
 
 void kpatch_compare_sections(struct table *table)
