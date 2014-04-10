@@ -4,7 +4,7 @@ Version: 0.0.1
 License: GPLv2 
 Group: System Environment/Kernel
 URL: http://github.com/dynup/kpatch
-Release: 2%{?dist}
+Release: 3%{?dist}
 Source0: %{name}-%{version}.tar.gz
 
 Requires: kmod bash
@@ -80,6 +80,8 @@ rm -rf %{buildroot}
 %doc COPYING README.md
 %{_sbindir}/kpatch
 %{_mandir}/man1/kpatch.1*
+%{_usr}/lib/dracut/modules.d/99%{name}/*
+
 
 %files %{KVER}
 %defattr(-,root,root,-)
