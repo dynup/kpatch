@@ -10,6 +10,7 @@ MODULESDIR = $(DESTDIR)$(PREFIX)/lib/modules
 LIBEXECDIR = $(DESTDIR)$(PREFIX)/libexec/kpatch
 DATADIR    = $(DESTDIR)$(PREFIX)/share/kpatch
 MANDIR     = $(DESTDIR)$(PREFIX)/share/man/man1
+DRACUTDIR  = $(DESTDIR)$(PREFIX)/lib/dracut/modules.d/99kpatch
 
 .PHONY: all install clean
 .DEFAULT: all

@@ -1,7 +1,5 @@
 include ../Makefile.inc
 
-DRACUTDIR=/usr/lib/dracut/modules.d/99kpatch
-
 all:
 
 install: all
