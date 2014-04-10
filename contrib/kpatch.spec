@@ -95,6 +95,9 @@ rm -rf %{buildroot}
 %{_mandir}/man1/kpatch-build.1*
 
 %changelog
+* Tue Apr 10 2014 Udo Seidel <udoseidel@gmx.de> - 0.0.1-3
+- added dracut module
+
 * Tue Mar 25 2014 Udo Seidel <udoseidel@gmx.de> - 0.0.1-2
 - added man pages
 
