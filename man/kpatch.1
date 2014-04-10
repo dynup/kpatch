@@ -6,7 +6,7 @@ kpatch \- hot patch module management
 .SH SYNOPSIS
 kpatch <command> [<args>]
 .SH DESCRIPTION
-kpatch is a user script that manages installing, applying, and 
+kpatch is a user script that manages installing, loading, and 
 displaying information about kernel patch modules installed on
 the system. 
 .SH OPTIONS
@@ -17,14 +17,14 @@ install <file>
 uninstall <hotpatch>
        uninstall hotpatch module from the kpatch DB
 
-apply --all
-       apply all enabled hotpatch modules to the running kernel
+load --all
+       load all enabled hotpatch modules to the running kernel
 
-apply <hotpatch>     
-       apply installed hotpatch module to the running kernel
+load <hotpatch>     
+       load installed hotpatch module to the running kernel
 
-remove <hotpatch>
-       remove hotpatch module from the running kernel
+unload <hotpatch>
+       unload hotpatch module from the running kernel
 
 info <hotpatch>
        show information about an installed hotpatch module

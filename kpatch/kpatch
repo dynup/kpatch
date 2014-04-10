@@ -20,7 +20,7 @@
 # Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA,
 # 02110-1301, USA.
 
-# This is the kpatch user script that manages installing, applying, and
+# This is the kpatch user script that manages installing, loading, and
 # displaying information about kernel patch modules installed on the system.
 
 KERNELRELEASE="$(uname -r)"
@@ -34,9 +34,9 @@ usage () {
 	printf '   %-20s %s\n' "install <file>"       "install hotpatch module to the kpatch DB" >&2
 	printf '   %-20s %s\n' "uninstall <hotpatch>" "uninstall hotpatch module from the kpatch DB" >&2
 	echo >&2
-	printf '   %-20s %s\n' "apply --all"          "apply all installed hotpatch modules to the running kernel" >&2
-	printf '   %-20s %s\n' "apply <hotpatch>"     "apply installed hotpatch module to the running kernel" >&2
-	printf '   %-20s %s\n' "remove <hotpatch>"    "remove hotpatch module from the running kernel" >&2
+	printf '   %-20s %s\n' "load --all"          "load all installed hotpatch modules to the running kernel" >&2
+	printf '   %-20s %s\n' "load <hotpatch>"     "load installed hotpatch module to the running kernel" >&2
+	printf '   %-20s %s\n' "unload <hotpatch>"    "unload hotpatch module from the running kernel" >&2
 	echo >&2
 	echo >&2
 	printf '   %-20s %s\n' "info <hotpatch>"      "show information about an installed hotpatch module" >&2
@@ -106,7 +106,7 @@ echo_patch_name() {
 unset MODULE
 [[ "$#" -gt 2 ]] || [[ "$#" -lt 1 ]] && usage
 case "$1" in
-"apply")
+"load")
 	[[ "$#" -ne 2 ]] && usage
 	case "$2" in
 	"--all")
