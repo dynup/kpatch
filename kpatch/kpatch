@@ -34,7 +34,7 @@ usage () {
 	printf '   %-20s %s\n' "install <file>"       "install hotpatch module to the kpatch DB" >&2
 	printf '   %-20s %s\n' "uninstall <hotpatch>" "uninstall hotpatch module from the kpatch DB" >&2
 	echo >&2
-	printf '   %-20s %s\n' "load --all"          "load all installed hotpatch modules to the running kernel" >&2
+	printf '   %-20s %s\n' "load --all"          "load all installed hotpatch modules into the running kernel" >&2
 	printf '   %-20s %s\n' "load <hotpatch>"     "load installed hotpatch module to the running kernel" >&2
 	printf '   %-20s %s\n' "unload <hotpatch>"    "unload hotpatch module from the running kernel" >&2
 	echo >&2
