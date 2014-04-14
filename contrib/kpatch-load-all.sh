@@ -5,4 +5,4 @@
 # Copyright 2014 Red Hat, Inc.
 # Josh Poimboeuf <jpoimboe@redhat.com>
 
-kpatch apply --all
+kpatch load --all
