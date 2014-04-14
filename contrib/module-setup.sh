@@ -42,5 +42,5 @@ install() {
     fi
 
     # install hook script
-    inst_hook pre-udev 00 "$moddir/kpatch-apply-all.sh"
+    inst_hook pre-udev 00 "$moddir/kpatch-load-all.sh"
 }
