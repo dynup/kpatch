@@ -248,13 +248,11 @@ cd "$TEMPDIR/orig"
 FILES="$(find * -type f)"
 cd "$TEMPDIR"
 mkdir output
-changed=0
 for i in $FILES; do
 	mkdir -p "output/$(dirname $i)"
 	"$TOOLSDIR"/create-diff-object "orig/$i" "patched/$i" "output/$i" 2>&1 |tee -a "$LOGFILE"
-	[[ "${PIPESTATUS[0]}" -eq 0 ]] && changed=$((changed+1))
+	[[ "${PIPESTATUS[0]}" -eq 0 ]] || die
 done
-[[ "$changed" -gt 0 ]] || die "Fatal: all generated objects has no changed function."
 
 echo "Building patch module: kpatch-$PATCHNAME.ko"
 cp "$OBJDIR/.config" "$SRCDIR"
