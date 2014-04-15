@@ -127,7 +127,7 @@ case "$1" in
 	esac
 	;;
 
-"remove")
+"unload")
 	[[ "$#" -ne 2 ]] && usage
 	PATCH="$2"
 	find_module "$PATCH" || die "$PATCH is not installed"
