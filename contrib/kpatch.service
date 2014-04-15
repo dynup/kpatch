@@ -1,9 +1,0 @@
-[Unit]
-Description=kpatch -- apply all enabled dynamic kernel patches
-Before=
-OnFailure=
-
-[Service]
-Type=oneshot
-RemainAfterExit=yes
-ExecStart=/usr/bin/kpatch load --all
