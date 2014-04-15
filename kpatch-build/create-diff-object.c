@@ -738,26 +738,6 @@ void kpatch_verify_patchability(struct kpatch_elf *kelf)
 			DIFF_FATAL("changed section %s not selected for inclusion", sec->name);
 }
 
-int kpatch_find_changed_functions(struct kpatch_elf *kelf)
-{
-	struct symbol *sym;
-	int i, changed = 0;
-
-	for_each_symbol(i, sym, &kelf->symbols) {
-		if (sym->type != STT_FUNC)
-			continue;
-		if (sym->status == CHANGED) {
-			changed = 1;
-			printf("function %s has changed\n",sym->name);
-		}
-	}
-
-	if (!changed)
-		printf("no changes found\n");
-			
-	return changed;
-}
-
 #define inc_printf(fmt, ...) \
 	log_debug("%*s" fmt, recurselevel, "", ##__VA_ARGS__);
 
