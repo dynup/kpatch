@@ -266,8 +266,11 @@ int kpatch_register(struct module *mod, struct kpatch_func *funcs,
 		goto out;
 	}
 
-	pr_notice("loaded patch module \"%s\"\n", mod->name);
+	/* TODO: need TAINT_KPATCH */
+	pr_notice_once("tainting kernel with TAINT_USER\n");
+	add_taint(TAINT_USER, LOCKDEP_STILL_OK);
 
+	pr_notice("loaded patch module \"%s\"\n", mod->name);
 out:
 	up(&kpatch_mutex);
 	return ret;
