@@ -31,17 +31,17 @@ usage () {
 	echo "usage: kpatch <command> [<args>]" >&2
 	echo >&2
 	echo "Valid commands:" >&2
-	printf '   %-20s %s\n' "install <file>"       "install hotpatch module to the kpatch DB" >&2
-	printf '   %-20s %s\n' "uninstall <hotpatch>" "uninstall hotpatch module from the kpatch DB" >&2
+	printf '   %-20s %s\n' "install <file>"       "install patch module to the kpatch DB" >&2
+	printf '   %-20s %s\n' "uninstall <patch>"    "uninstall patch module from the kpatch DB" >&2
 	echo >&2
-	printf '   %-20s %s\n' "load --all"          "load all installed hotpatch modules into the running kernel" >&2
-	printf '   %-20s %s\n' "load <hotpatch>"     "load installed hotpatch module to the running kernel" >&2
-	printf '   %-20s %s\n' "unload <hotpatch>"    "unload hotpatch module from the running kernel" >&2
+	printf '   %-20s %s\n' "load --all"           "load all installed patch modules into the running kernel" >&2
+	printf '   %-20s %s\n' "load <patch>"         "load installed patch module into the running kernel" >&2
+	printf '   %-20s %s\n' "unload <patch>"       "unload patch module from the running kernel" >&2
 	echo >&2
 	echo >&2
-	printf '   %-20s %s\n' "info <hotpatch>"      "show information about an installed hotpatch module" >&2
+	printf '   %-20s %s\n' "info <patch>"         "show information about an installed patch module" >&2
 	echo >&2
-	printf '   %-20s %s\n' "list"                 "list installed hotpatch modules" >&2
+	printf '   %-20s %s\n' "list"                 "list installed patch modules" >&2
 	exit 1
 }
 
