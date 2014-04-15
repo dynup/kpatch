@@ -146,7 +146,7 @@ if [[ "$PATCHNAME" =~ \.patch ]] || [[ "$PATCHNAME" =~ \.diff ]]; then
 	PATCHNAME="${PATCHNAME%.*}"
 fi
 
-TEMPDIR="$(mktemp -d)" || die "mktemp failed"
+TEMPDIR="$(mktemp -d /tmp/kpatch-build-XXXXXX)" || die "mktemp failed"
 
 trap cleanup EXIT INT TERM
 
