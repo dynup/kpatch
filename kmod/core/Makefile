@@ -19,5 +19,7 @@ clean:
 
 
 # kbuild rules
+ifdef CONFIG_HAVE_FENTRY
 obj-m := kpatch.o
 kpatch-y := core.o
+endif
