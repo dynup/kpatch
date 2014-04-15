@@ -72,9 +72,8 @@ void kpatch_backtrace_address_verify(void *data, unsigned long address,
 
 		if (address >= func->old_addr &&
 		    address < func->old_addr + func->old_size) {
-			printk("kpatch: activeness safety check failed for "
-			       "function at address " "'%lx()'\n",
-			       func->old_addr);
+			pr_err("activeness safety check failed for function "
+			       "at address 0x%lx\n", func->old_addr);
 			args->ret = -EBUSY;
 			return;
 		}
@@ -234,9 +233,8 @@ int kpatch_register(struct module *mod, struct kpatch_func *funcs,
 		ret = ftrace_set_filter_ip(&kpatch_ftrace_ops, func->old_addr,
 					   0, 0);
 		if (ret) {
-			printk("kpatch: can't set ftrace filter at address "
-				"0x%lx (%d)\n",
-				func->old_addr, ret);
+			pr_err("can't set ftrace filter at address 0x%lx\n",
+			       func->old_addr);
 			goto out;
 		}
 	}
@@ -245,7 +243,7 @@ int kpatch_register(struct module *mod, struct kpatch_func *funcs,
 	if (!kpatch_num_registered++) {
 		ret = register_ftrace_function(&kpatch_ftrace_ops);
 		if (ret) {
-			printk("kpatch: can't register ftrace function \n");
+			pr_err("can't register ftrace handler\n");
 			goto out;
 		}
 	}
@@ -259,8 +257,7 @@ int kpatch_register(struct module *mod, struct kpatch_func *funcs,
 		if (!--kpatch_num_registered) {
 			ret2 = unregister_ftrace_function(&kpatch_ftrace_ops);
 			if (ret2)
-				printk("kpatch: unregister failed (%d)\n",
-				       ret2);
+				pr_err("ftrace unregister failed (%d)\n", ret2);
 		}
 
 		goto out;
@@ -295,7 +292,7 @@ int kpatch_unregister(struct module *mod, struct kpatch_func *funcs,
 	if (!--kpatch_num_registered) {
 		ret = unregister_ftrace_function(&kpatch_ftrace_ops);
 		if (ret) {
-			printk("kpatch: can't unregister ftrace function\n");
+			pr_err("can't unregister ftrace handler\n");
 			goto out;
 		}
 	}
@@ -322,9 +319,8 @@ int kpatch_unregister(struct module *mod, struct kpatch_func *funcs,
 		ret = ftrace_set_filter_ip(&kpatch_ftrace_ops, func->old_addr,
 					   1, 0);
 		if (ret) {
-			printk("kpatch: can't remove ftrace filter at address "
-			       "0x%lx (%d)\n",
-			       func->old_addr, ret);
+			pr_err("can't remove ftrace filter at address 0x%lx\n",
+			       func->old_addr);
 			goto out;
 		}
 	}
