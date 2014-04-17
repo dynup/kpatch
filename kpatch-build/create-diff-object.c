@@ -2,7 +2,7 @@
  * create-diff-object.c
  *
  * Copyright (C) 2014 Seth Jennings <sjenning@redhat.com>
- * Copyright (C) 2013 Josh Poimboeuf <jpoimboe@redhat.com>
+ * Copyright (C) 2013-2014 Josh Poimboeuf <jpoimboe@redhat.com>
  *
  * This program is free software; you can redistribute it and/or
  * modify it under the terms of the GNU General Public License
@@ -43,18 +43,19 @@
 #include <error.h>
 #include <gelf.h>
 #include <argp.h>
+#include <libgen.h>
 
 #define ERROR(format, ...) \
 	error(1, 0, "%s: %d: " format, __FUNCTION__, __LINE__, ##__VA_ARGS__)
 
 #define DIFF_FATAL(format, ...) \
 ({ \
-	printf("%s:%d: " format "\n", __FUNCTION__, __LINE__, ##__VA_ARGS__); \
+	printf("%s: " format "\n", objname, ##__VA_ARGS__); \
 	error(2, 0, "unreconcilable difference"); \
 })
 
 #define log_debug(format, ...) log(DEBUG, format, ##__VA_ARGS__)
-#define log_normal(format, ...) log(NORMAL, format, ##__VA_ARGS__)
+#define log_normal(format, ...) log(NORMAL, "%s: " format, objname, ##__VA_ARGS__)
 
 #define log(level, format, ...) \
 ({ \
@@ -62,6 +63,7 @@
 		printf(format, ##__VA_ARGS__); \
 })
 
+char *objname;
 
 enum loglevel {
 	DEBUG,
@@ -736,26 +738,6 @@ void kpatch_verify_patchability(struct kpatch_elf *kelf)
 			DIFF_FATAL("changed section %s not selected for inclusion", sec->name);
 }
 
-int kpatch_find_changed_functions(struct kpatch_elf *kelf)
-{
-	struct symbol *sym;
-	int i, changed = 0;
-
-	for_each_symbol(i, sym, &kelf->symbols) {
-		if (sym->type != STT_FUNC)
-			continue;
-		if (sym->status == CHANGED) {
-			changed = 1;
-			printf("function %s has changed\n",sym->name);
-		}
-	}
-
-	if (!changed)
-		printf("no changes found\n");
-			
-	return changed;
-}
-
 #define inc_printf(fmt, ...) \
 	log_debug("%*s" fmt, recurselevel, "", ##__VA_ARGS__);
 
@@ -1308,6 +1290,8 @@ int main(int argc, char *argv[])
 		loglevel = DEBUG;
 
 	elf_version(EV_CURRENT);
+
+	objname = basename(arguments.args[0]);
 
 	kelf_base = kpatch_elf_open(arguments.args[0]);
 	kelf_patched = kpatch_elf_open(arguments.args[1]);
