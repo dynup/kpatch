@@ -27,8 +27,7 @@
 
 extern char __kpatch_patches, __kpatch_patches_end;
 
-static struct kpatch_func *funcs;
-static int num_funcs;
+static struct kpatch_module kpmod;
 
 static int __init patch_init(void)
 {
@@ -36,26 +35,29 @@ static int __init patch_init(void)
 	int i, ret;
 
 	patches = (struct kpatch_patch *)&__kpatch_patches;
-	num_funcs = (&__kpatch_patches_end - &__kpatch_patches) /
-		    sizeof(*patches);
-	funcs = kmalloc(num_funcs * sizeof(*funcs), GFP_KERNEL);
-	if (!funcs)
+
+	kpmod.mod = THIS_MODULE;
+	kpmod.num_funcs = (&__kpatch_patches_end - &__kpatch_patches) /
+			  sizeof(*patches);
+	kpmod.funcs = kmalloc(kpmod.num_funcs * sizeof(struct kpatch_func),
+			      GFP_KERNEL);
+	if (!kpmod.funcs)
 		return -ENOMEM;
 
-	for (i = 0; i < num_funcs; i++) {
-		funcs[i].old_addr = patches[i].old_addr;
-		funcs[i].old_size = patches[i].old_size;
-		funcs[i].new_addr = patches[i].new_addr;
+	for (i = 0; i < kpmod.num_funcs; i++) {
+		kpmod.funcs[i].old_addr = patches[i].old_addr;
+		kpmod.funcs[i].old_size = patches[i].old_size;
+		kpmod.funcs[i].new_addr = patches[i].new_addr;
 	}
 
-	ret = kpatch_register(THIS_MODULE, funcs, num_funcs);
+	ret = kpatch_register(&kpmod);
 	if (ret)
 		goto err_free;
 
 	return 0;
 
 err_free:
-	kfree(funcs);
+	kfree(kpmod.funcs);
 	return ret;
 }
 
@@ -63,7 +65,7 @@ static void __exit patch_exit(void)
 {
 	int ret;
 
-	ret = kpatch_unregister(THIS_MODULE, funcs, num_funcs);
+	ret = kpatch_unregister(&kpmod);
 	if (ret) {
 		/*
 		 * TODO: If this happens, we're screwed.  We need a way to
@@ -77,7 +79,7 @@ static void __exit patch_exit(void)
 		panic("kpatch_unregister failed: %d", ret);
 	}
 
-	kfree(funcs);
+	kfree(kpmod.funcs);
 }
 
 module_init(patch_init);

@@ -53,8 +53,8 @@ DEFINE_SEMAPHORE(kpatch_mutex);
 static int kpatch_num_registered;
 
 struct kpatch_backtrace_args {
-	struct kpatch_func *funcs;
-	int num_funcs, ret;
+	struct kpatch_module *kpmod;
+	int ret;
 };
 
 enum {
@@ -88,14 +88,14 @@ void kpatch_backtrace_address_verify(void *data, unsigned long address,
 				     int reliable)
 {
 	struct kpatch_backtrace_args *args = data;
-	struct kpatch_func *funcs = args->funcs;
-	int i, num_funcs = args->num_funcs;
+	struct kpatch_module *kpmod = args->kpmod;
+	int i;
 
 	if (args->ret)
 		return;
 
-	for (i = 0; i < num_funcs; i++) {
-		struct kpatch_func *func = &funcs[i];
+	for (i = 0; i < kpmod->num_funcs; i++) {
+		struct kpatch_func *func = &kpmod->funcs[i];
 
 		if (address >= func->old_addr &&
 		    address < func->old_addr + func->old_size) {
@@ -124,15 +124,13 @@ struct stacktrace_ops kpatch_backtrace_ops = {
  *
  * This function is called from stop_machine() context.
  */
-static int kpatch_verify_activeness_safety(struct kpatch_func *funcs,
-					   int num_funcs)
+static int kpatch_verify_activeness_safety(struct kpatch_module *kpmod)
 {
 	struct task_struct *g, *t;
 	int ret = 0;
 
 	struct kpatch_backtrace_args args = {
-		.funcs = funcs,
-		.num_funcs = num_funcs,
+		.kpmod = kpmod,
 		.ret = 0
 	};
 
@@ -149,20 +147,15 @@ out:
 	return ret;
 }
 
-struct kpatch_stop_machine_args {
-	struct kpatch_func *funcs;
-	int num_funcs;
-};
-
 /* Called from stop_machine */
 static int kpatch_apply_patch(void *data)
 {
-	struct kpatch_stop_machine_args *args = data;
-	struct kpatch_func *funcs = args->funcs;
-	int num_funcs = args->num_funcs;
+	struct kpatch_module *kpmod = data;
+	struct kpatch_func *funcs = kpmod->funcs;
+	int num_funcs = kpmod->num_funcs;
 	int i, ret;
 
-	ret = kpatch_verify_activeness_safety(funcs, num_funcs);
+	ret = kpatch_verify_activeness_safety(kpmod);
 	if (ret)
 		goto out;
 
@@ -194,12 +187,12 @@ out:
 /* Called from stop_machine */
 static int kpatch_remove_patch(void *data)
 {
-	struct kpatch_stop_machine_args *args = data;
-	struct kpatch_func *funcs = args->funcs;
-	int num_funcs = args->num_funcs;
+	struct kpatch_module *kpmod = data;
+	struct kpatch_func *funcs = kpmod->funcs;
+	int num_funcs = kpmod->num_funcs;
 	int ret, i;
 
-	ret = kpatch_verify_activeness_safety(funcs, num_funcs);
+	ret = kpatch_verify_activeness_safety(kpmod);
 	if (ret)
 		goto out;
 
@@ -343,21 +336,20 @@ static int kpatch_remove_funcs_from_filter(struct kpatch_func *funcs,
 	return ret;
 }
 
-int kpatch_register(struct module *mod, struct kpatch_func *funcs,
-		    int num_funcs)
+int kpatch_register(struct kpatch_module *kpmod)
 {
 	int ret, i;
-	struct kpatch_stop_machine_args args = {
-		.funcs = funcs,
-		.num_funcs = num_funcs,
-	};
+	struct kpatch_func *funcs = kpmod->funcs;
+	int num_funcs = kpmod->num_funcs;
+
+	if (!kpmod->mod || !funcs || !num_funcs)
+		return -EINVAL;
 
 	down(&kpatch_mutex);
 
 	for (i = 0; i < num_funcs; i++) {
 		struct kpatch_func *func = &funcs[i];
 
-		func->mod = mod;
 		func->updating = true;
 
 		/*
@@ -399,7 +391,7 @@ int kpatch_register(struct module *mod, struct kpatch_func *funcs,
 	 * Idle the CPUs, verify activeness safety, and atomically make the new
 	 * functions visible to the trampoline.
 	 */
-	ret = stop_machine(kpatch_apply_patch, &args, NULL);
+	ret = stop_machine(kpatch_apply_patch, kpmod, NULL);
 	if (ret) {
 		/*
 		 * This synchronize_rcu is to ensure any other kpatch_get_func
@@ -414,7 +406,7 @@ int kpatch_register(struct module *mod, struct kpatch_func *funcs,
 	pr_notice_once("tainting kernel with TAINT_USER\n");
 	add_taint(TAINT_USER, LOCKDEP_STILL_OK);
 
-	pr_notice("loaded patch module \"%s\"\n", mod->name);
+	pr_notice("loaded patch module \"%s\"\n", kpmod->mod->name);
 
 out:
 	atomic_set(&kpatch_operation, KPATCH_OP_NONE);
@@ -436,14 +428,11 @@ err_rollback:
 }
 EXPORT_SYMBOL(kpatch_register);
 
-int kpatch_unregister(struct module *mod, struct kpatch_func *funcs,
-		      int num_funcs)
+int kpatch_unregister(struct kpatch_module *kpmod)
 {
+	struct kpatch_func *funcs = kpmod->funcs;
+	int num_funcs = kpmod->num_funcs;
 	int i, ret;
-	struct kpatch_stop_machine_args args = {
-		.funcs = funcs,
-		.num_funcs = num_funcs,
-	};
 
 	down(&kpatch_mutex);
 
@@ -458,7 +447,7 @@ int kpatch_unregister(struct module *mod, struct kpatch_func *funcs,
 	for (i = 0; i < num_funcs; i++)
 		funcs[i].updating = true;
 
-	ret = stop_machine(kpatch_remove_patch, &args, NULL);
+	ret = stop_machine(kpatch_remove_patch, kpmod, NULL);
 	if (ret)
 		goto out;
 
@@ -482,7 +471,7 @@ int kpatch_unregister(struct module *mod, struct kpatch_func *funcs,
 	if (ret)
 		goto out;
 
-	pr_notice("unloaded patch module \"%s\"\n", mod->name);
+	pr_notice("unloaded patch module \"%s\"\n", kpmod->mod->name);
 
 out:
 	atomic_set(&kpatch_operation, KPATCH_OP_NONE);
