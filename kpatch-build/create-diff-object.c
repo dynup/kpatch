@@ -971,6 +971,63 @@ void kpatch_write_inventory_file(struct kpatch_elf *kelf, char *outfile)
 	fclose(out);
 }
 
+void kpatch_regenerate_bug_table(struct kpatch_elf *kelf)
+{
+	struct section *sec;
+	struct table table;
+	struct rela *rela, *dstrela;
+	int i, nr = 0, copynext = 0;
+
+	sec = find_section_by_name(&kelf->sections, ".rela__bug_table");
+	if (!sec || sec->status == SAME)
+		return;
+
+	/* alloc buffer of original size (probably won't use it all) */
+	alloc_table(&table, sizeof(struct rela), sec->relas.nr);
+	dstrela = table.data;
+
+	for_each_rela(i, rela, &sec->relas) {
+		if (i % 2) { /* filename reloc */
+			if (!copynext)
+				continue;
+			rela->sym->include = 1;
+			rela->sym->sec->include = 1;
+			*dstrela++ = *rela;
+			nr++;
+			copynext = 0;
+		}
+		else if (rela->sym->sec->status != SAME) { /* IP reloc */
+			log_debug("new/changed symbol %s found in bug table\n",
+			          rela->sym->name);
+			/* copy BOTH relocs for this bug_entry */
+			*dstrela++ = *rela;
+			nr++;
+			/* tell the next loop to copy the filename reloc */
+			copynext = 1;
+		}
+	}
+
+	if (!nr) {
+		/* no changed functions references by bug table */
+		sec->status = SAME;
+		sec->base->status = SAME;
+		return;
+	}
+
+	/* overwrite with new relas table */
+	table.nr = nr;
+	sec->relas = table;
+	sec->include = 1;
+	sec->base->include = 1;
+	/*
+	 * Adjust d_size but not d_buf. d_buf is overwritten in
+	 * kpatch_create_rela_section() from the relas table. No
+	 * point in regen'ing the buffer here just to be discarded
+	 * later.
+	 */
+	sec->data->d_size = sec->sh.sh_entsize * nr;
+}
+
 void kpatch_create_rela_section(struct section *sec, int link)
 {
 	struct rela *rela;
@@ -1323,6 +1380,7 @@ int main(int argc, char *argv[])
 	 * in vmlinux can be linked to.
 	 */
 	kpatch_replace_sections_syms(kelf_patched);
+	kpatch_regenerate_bug_table(kelf_patched);
 
 	kpatch_include_standard_sections(kelf_patched);
 	if (!kpatch_include_changed_functions(kelf_patched)) {
