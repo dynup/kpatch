@@ -336,6 +336,11 @@ int is_bundleable(struct symbol *sym)
 	   !strcmp(sym->sec->name + 6, sym->name))
 		return 1;
 
+	if (sym->type == STT_OBJECT &&
+	   !strncmp(sym->sec->name, ".bss.",5) &&
+	   !strcmp(sym->sec->name + 5, sym->name))
+		return 1;
+
 	return 0;
 }
 
