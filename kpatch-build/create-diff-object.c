@@ -979,7 +979,7 @@ void kpatch_create_rela_section(struct section *sec, int link)
 	size_t size;
 
 	/* create new rela data buffer */
-	size = sec->sh.sh_size;
+	size = sec->data->d_size;
 	buf = malloc(size);
 	if (!buf)
 		ERROR("malloc");
