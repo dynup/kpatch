@@ -1045,7 +1045,8 @@ void kpatch_create_rela_section(struct section *sec, int link)
 	/* reindex and copy into buffer */
 	for_each_rela(i, rela, &sec->relas) {
 		if (!rela->sym || !rela->sym->twino)
-			ERROR("expected rela symbol");
+			ERROR("expected rela symbol in rela section %s entry %d",
+			      sec->name, i);
 		symndx = rela->sym->twino->index;
 		type = GELF_R_TYPE(rela->rela.r_info);
 		rela->rela.r_info = GELF_R_INFO(symndx, type);
