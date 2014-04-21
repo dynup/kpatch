@@ -118,12 +118,24 @@ void kpatch_backtrace_address_verify(void *data, unsigned long address,
 		return;
 
 	for (i = 0; i < kpmod->num_funcs; i++) {
-		struct kpatch_func *func = &kpmod->funcs[i];
+		unsigned long func_addr, func_size;
+		struct kpatch_func *func, *active_func;
 
-		if (address >= func->old_addr &&
-		    address < func->old_addr + func->old_size) {
+		func = &kpmod->funcs[i];
+		active_func = kpatch_get_func(func->old_addr);
+		if (!active_func) {
+			/* patching an unpatched func */
+			func_addr = func->old_addr;
+			func_size = func->old_size;
+		} else {
+			/* repatching or unpatching */
+			func_addr = active_func->new_addr;
+			func_size = active_func->new_size;
+		}
+
+		if (address >= func_addr && address < func_addr + func_size) {
 			pr_err("activeness safety check failed for function "
-			       "at address 0x%lx\n", func->old_addr);
+			       "at address 0x%lx\n", func_addr);
 			args->ret = -EBUSY;
 			return;
 		}

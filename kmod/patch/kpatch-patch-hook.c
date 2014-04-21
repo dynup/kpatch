@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2013 Josh Poimboeuf <jpoimboe@redhat.com>
+ * Copyright (C) 2013-2014 Josh Poimboeuf <jpoimboe@redhat.com>
  *
  * This program is free software; you can redistribute it and/or
  * modify it under the terms of the GNU General Public License
@@ -48,6 +48,7 @@ static int __init patch_init(void)
 		kpmod.funcs[i].old_addr = patches[i].old_addr;
 		kpmod.funcs[i].old_size = patches[i].old_size;
 		kpmod.funcs[i].new_addr = patches[i].new_addr;
+		kpmod.funcs[i].new_size = patches[i].new_size;
 	}
 
 	ret = kpatch_register(&kpmod);

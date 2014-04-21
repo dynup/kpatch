@@ -29,6 +29,7 @@
 
 struct kpatch_func {
 	unsigned long new_addr;
+	unsigned long new_size;
 	unsigned long old_addr;
 	unsigned long old_size;
 	struct hlist_node node;
