@@ -33,7 +33,7 @@ static int num_funcs;
 static int __init patch_init(void)
 {
 	struct kpatch_patch *patches;
-	int i;
+	int i, ret;
 
 	patches = (struct kpatch_patch *)&__kpatch_patches;
 	num_funcs = (&__kpatch_patches_end - &__kpatch_patches) /
@@ -48,7 +48,15 @@ static int __init patch_init(void)
 		funcs[i].new_addr = patches[i].new_addr;
 	}
 
-	return kpatch_register(THIS_MODULE, funcs, num_funcs);
+	ret = kpatch_register(THIS_MODULE, funcs, num_funcs);
+	if (ret)
+		goto err_free;
+
+	return 0;
+
+err_free:
+	kfree(funcs);
+	return ret;
 }
 
 static void __exit patch_exit(void)

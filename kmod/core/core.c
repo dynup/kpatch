@@ -172,6 +172,7 @@ static int kpatch_apply_patch(void *data)
 		/* update the global list and go live */
 		hash_add_rcu(kpatch_func_hash, &func->node, func->old_addr);
 	}
+
 	/* Check if any inconsistent NMI has happened while updating */
 	ret = kpatch_finish_status(KPATCH_STATUS_SUCCESS);
 	if (ret == KPATCH_STATUS_FAILURE) {
@@ -179,12 +180,13 @@ static int kpatch_apply_patch(void *data)
 		for (i = 0; i < num_funcs; i++)
 			hash_del_rcu(&funcs[i].node);
 		ret = -EBUSY;
-	} else {
-		/* Succeeded, clear updating flags */
-		for (i = 0; i < num_funcs; i++)
-			funcs[i].updating = false;
-		ret = 0;
+		goto out;
 	}
+	ret = 0;
+
+	/* Succeeded, clear updating flags */
+	for (i = 0; i < num_funcs; i++)
+		funcs[i].updating = false;
 out:
 	return ret;
 }
@@ -208,12 +210,13 @@ static int kpatch_remove_patch(void *data)
 		for (i = 0; i < num_funcs; i++)
 			funcs[i].updating = false;
 		ret = -EBUSY;
-	} else {
-		/* Succeeded, remove all updating funcs from hash table */
-		for (i = 0; i < num_funcs; i++)
-			hash_del_rcu(&funcs[i].node);
-		ret = 0;
+		goto out;
 	}
+
+	/* Succeeded, remove all updating funcs from hash table */
+	for (i = 0; i < num_funcs; i++)
+		hash_del_rcu(&funcs[i].node);
+	ret = 0;
 out:
 	return ret;
 }
@@ -241,6 +244,14 @@ static struct kpatch_func *kpatch_get_committed_func(struct kpatch_func *f,
 	return NULL;
 }
 
+/*
+ * This is where the magic happens.  Update regs->ip to tell ftrace to return
+ * to the new function.
+ *
+ * If there are multiple patch modules that have registered to patch the same
+ * function, the last one to register wins, as it'll be first in the hash
+ * bucket.
+ */
 void notrace kpatch_ftrace_handler(unsigned long ip, unsigned long parent_ip,
 				   struct ftrace_ops *fops,
 				   struct pt_regs *regs)
@@ -248,14 +259,6 @@ void notrace kpatch_ftrace_handler(unsigned long ip, unsigned long parent_ip,
 	struct kpatch_func *func;
 	int ret, op;
 
-	/*
-	 * This is where the magic happens.  Update regs->ip to tell ftrace to
-	 * return to the new function.
-	 *
-	 * If there are multiple patch modules that have registered to patch
-	 * the same function, the last one to register wins, as it'll be first
-	 * in the hash bucket.
-	 */
 	preempt_disable_notrace();
 retry:
 	func = kpatch_get_func(ip);
@@ -343,7 +346,7 @@ static int kpatch_remove_funcs_from_filter(struct kpatch_func *funcs,
 int kpatch_register(struct module *mod, struct kpatch_func *funcs,
 		    int num_funcs)
 {
-	int ret, ret2, i;
+	int ret, i;
 	struct kpatch_stop_machine_args args = {
 		.funcs = funcs,
 		.num_funcs = num_funcs,
@@ -371,20 +374,19 @@ int kpatch_register(struct module *mod, struct kpatch_func *funcs,
 			pr_err("can't set ftrace filter at address 0x%lx\n",
 			       func->old_addr);
 			num_funcs = i;
-			goto out;
+			goto err_rollback;
 		}
 	}
 
 	/* Register the ftrace trampoline if it hasn't been done already. */
-	if (!kpatch_num_registered++) {
+	if (!kpatch_num_registered) {
 		ret = register_ftrace_function(&kpatch_ftrace_ops);
 		if (ret) {
 			pr_err("can't register ftrace handler\n");
-			/* For the next time, the counter should be unrolled */
-			--kpatch_num_registered;
-			goto out;
+			goto err_rollback;
 		}
 	}
+	kpatch_num_registered++;
 
 	kpatch_start_status();
 	/*
@@ -399,35 +401,38 @@ int kpatch_register(struct module *mod, struct kpatch_func *funcs,
 	 */
 	ret = stop_machine(kpatch_apply_patch, &args, NULL);
 	if (ret) {
-		if (!--kpatch_num_registered) {
-			ret2 = unregister_ftrace_function(&kpatch_ftrace_ops);
-			if (ret2)
-				pr_err("ftrace unregister failed (%d)\n", ret2);
-		}
 		/*
 		 * This synchronize_rcu is to ensure any other kpatch_get_func
 		 * user exits the rcu locked(preemt_disabled) critical section
 		 * and hash_del_rcu() is correctly finished.
 		 */
 		synchronize_rcu();
+		goto err_unregister;
 	}
+
+	/* TODO: need TAINT_KPATCH */
+	pr_notice_once("tainting kernel with TAINT_USER\n");
+	add_taint(TAINT_USER, LOCKDEP_STILL_OK);
+
+	pr_notice("loaded patch module \"%s\"\n", mod->name);
 
 out:
-	/* Rollback the filter if we get any error */
-	if (ret)
-		kpatch_remove_funcs_from_filter(funcs, num_funcs);
-	else {
-		/* TODO: need TAINT_KPATCH */
-		pr_notice_once("tainting kernel with TAINT_USER\n");
-		add_taint(TAINT_USER, LOCKDEP_STILL_OK);
-
-		pr_notice("loaded patch module \"%s\"\n", mod->name);
-	}
-
 	atomic_set(&kpatch_operation, KPATCH_OP_NONE);
 	up(&kpatch_mutex);
 	return ret;
 
+err_unregister:
+	if (kpatch_num_registered == 1) {
+		int ret2 = unregister_ftrace_function(&kpatch_ftrace_ops);
+		if (ret2) {
+			pr_err("ftrace unregister failed (%d)\n", ret2);
+			goto err_rollback;
+		}
+	}
+	kpatch_num_registered--;
+err_rollback:
+	kpatch_remove_funcs_from_filter(funcs, num_funcs);
+	goto out;
 }
 EXPORT_SYMBOL(kpatch_register);
 
@@ -457,13 +462,15 @@ int kpatch_unregister(struct module *mod, struct kpatch_func *funcs,
 	if (ret)
 		goto out;
 
-	if (!--kpatch_num_registered) {
+	if (kpatch_num_registered == 1) {
 		ret = unregister_ftrace_function(&kpatch_ftrace_ops);
 		if (ret) {
 			pr_err("can't unregister ftrace handler\n");
 			goto out;
 		}
 	}
+	kpatch_num_registered--;
+
 	/*
 	 * This synchronize_rcu is to ensure any other kpatch_get_func
 	 * user exits the rcu locked(preemt_disabled) critical section
@@ -472,8 +479,10 @@ int kpatch_unregister(struct module *mod, struct kpatch_func *funcs,
 	synchronize_rcu();
 
 	ret = kpatch_remove_funcs_from_filter(funcs, num_funcs);
-	if (ret == 0)
-		pr_notice("unloaded patch module \"%s\"\n", mod->name);
+	if (ret)
+		goto out;
+
+	pr_notice("unloaded patch module \"%s\"\n", mod->name);
 
 out:
 	atomic_set(&kpatch_operation, KPATCH_OP_NONE);
