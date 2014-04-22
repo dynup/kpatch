@@ -39,9 +39,12 @@ Compile kpatch:
 
     make
 
-Install kpatch to /usr/local:
+OPTIONAL: Install kpatch to /usr/local:
 
     sudo make install
+
+Alternatively, the kpatch and kpatch-build scripts can be run directly from the
+git tree.
 
 
 Quick start
@@ -50,10 +53,6 @@ Quick start
 *NOTE: While kpatch is designed to work with any recent Linux
 kernel on any distribution, the "kpatch-build" command currently
 only works on Fedora.*
-
-Load the kpatch core module:
-
-    sudo insmod /usr/local/lib/modules/$(uname -r)/kpatch/kpatch.ko
 
 Make a source patch against the kernel tree:
 
@@ -67,7 +66,7 @@ Build the patch module:
 This outputs a patch module named `kpatch-foo.ko` in the current
 directory.  Now apply it to the running kernel:
 
-    sudo insmod kpatch-foo.ko
+    sudo kpatch load kpatch-foo.ko
 
 Done!  The kernel is now patched.
 

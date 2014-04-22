@@ -26,6 +26,7 @@
 KERNELRELEASE="$(uname -r)"
 SYSDIR="/usr/lib/kpatch/$KERNELRELEASE"
 USERDIR="/var/lib/kpatch/$KERNELRELEASE"
+SCRIPTDIR="$(readlink -f $(dirname $(type -p $0)))"
 
 usage () {
 	echo "usage: kpatch <command> [<args>]" >&2
@@ -72,6 +73,9 @@ find_module () {
 }
 
 find_core_module() {
+	COREMOD="$SCRIPTDIR"/../kmod/core/kpatch.ko
+	[[ -f "$COREMOD" ]] && return
+
 	COREMOD="/usr/local/lib/modules/$(uname -r)/kpatch/kpatch.ko"
 	[[ -f "$COREMOD" ]] && return
 
