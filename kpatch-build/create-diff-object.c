@@ -971,7 +971,32 @@ void kpatch_write_inventory_file(struct kpatch_elf *kelf, char *outfile)
 	fclose(out);
 }
 
-void kpatch_regenerate_bug_table(struct kpatch_elf *kelf)
+/*
+ * The format of section __bug_table is a table of struct bug_entry.  Each
+ * bug_entry has three fields:
+ * - relocated address of instruction pointer at BUG
+ * - relocated address of string with filename
+ * - line number of the BUG
+ *
+ * Therefore, .rela__bug_table has two relocations per entry. The first
+ * relocation is that of the instruction pointer at the BUG. The second is the
+ * pointer to the filename string in .rodata.str1.1. These two related
+ * relocations we will call a "pair".
+ *
+ * This function goes through .rela__bug_table and finds pairs the refer to
+ * functions that have been marked as changed.  If one is found, that pair is
+ * copied into the new version of the .rela__bug_table section.  If no pairs
+ * are found, the bug table (both the __bug_table and .rela__bug_table
+ * sections) are considered unchanged and not copied into the final output.
+ *
+ * The __bug_table section is not modified and therefore will contains "blank"
+ * bug_entry slots i.e. ones that do not get relocated and therefore the IP
+ * fields are zero.  While this wastes space, it doesn't hurt anything and
+ * keeps the code cleaner by not having to regenerate the __bug_table section
+ * as well.
+ */
+
+void kpatch_regenerate_bug_table_rela_section(struct kpatch_elf *kelf)
 {
 	struct section *sec;
 	struct table table;
@@ -979,7 +1004,7 @@ void kpatch_regenerate_bug_table(struct kpatch_elf *kelf)
 	int i, nr = 0, copynext = 0;
 
 	sec = find_section_by_name(&kelf->sections, ".rela__bug_table");
-	if (!sec || sec->status == SAME)
+	if (!sec)
 		return;
 
 	/* alloc buffer of original size (probably won't use it all) */
@@ -1008,7 +1033,7 @@ void kpatch_regenerate_bug_table(struct kpatch_elf *kelf)
 	}
 
 	if (!nr) {
-		/* no changed functions references by bug table */
+		/* no changed functions referenced by bug table */
 		sec->status = SAME;
 		sec->base->status = SAME;
 		return;
@@ -1381,7 +1406,7 @@ int main(int argc, char *argv[])
 	 * in vmlinux can be linked to.
 	 */
 	kpatch_replace_sections_syms(kelf_patched);
-	kpatch_regenerate_bug_table(kelf_patched);
+	kpatch_regenerate_bug_table_rela_section(kelf_patched);
 
 	kpatch_include_standard_sections(kelf_patched);
 	if (!kpatch_include_changed_functions(kelf_patched)) {
