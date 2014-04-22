@@ -336,6 +336,11 @@ int is_bundleable(struct symbol *sym)
 	   !strcmp(sym->sec->name + 6, sym->name))
 		return 1;
 
+	if (sym->type == STT_OBJECT &&
+	   !strncmp(sym->sec->name, ".bss.",5) &&
+	   !strcmp(sym->sec->name + 5, sym->name))
+		return 1;
+
 	return 0;
 }
 
@@ -966,6 +971,88 @@ void kpatch_write_inventory_file(struct kpatch_elf *kelf, char *outfile)
 	fclose(out);
 }
 
+/*
+ * The format of section __bug_table is a table of struct bug_entry.  Each
+ * bug_entry has three fields:
+ * - relocated address of instruction pointer at BUG
+ * - relocated address of string with filename
+ * - line number of the BUG
+ *
+ * Therefore, .rela__bug_table has two relocations per entry. The first
+ * relocation is that of the instruction pointer at the BUG. The second is the
+ * pointer to the filename string in .rodata.str1.1. These two related
+ * relocations we will call a "pair".
+ *
+ * This function goes through .rela__bug_table and finds pairs the refer to
+ * functions that have been marked as changed.  If one is found, that pair is
+ * copied into the new version of the .rela__bug_table section.  If no pairs
+ * are found, the bug table (both the __bug_table and .rela__bug_table
+ * sections) are considered unchanged and not copied into the final output.
+ *
+ * The __bug_table section is not modified and therefore will contains "blank"
+ * bug_entry slots i.e. ones that do not get relocated and therefore the IP
+ * fields are zero.  While this wastes space, it doesn't hurt anything and
+ * keeps the code cleaner by not having to regenerate the __bug_table section
+ * as well.
+ */
+
+void kpatch_regenerate_bug_table_rela_section(struct kpatch_elf *kelf)
+{
+	struct section *sec;
+	struct table table;
+	struct rela *rela, *dstrela;
+	int i, nr = 0, copynext = 0;
+
+	sec = find_section_by_name(&kelf->sections, ".rela__bug_table");
+	if (!sec)
+		return;
+
+	/* alloc buffer of original size (probably won't use it all) */
+	alloc_table(&table, sizeof(struct rela), sec->relas.nr);
+	dstrela = table.data;
+
+	for_each_rela(i, rela, &sec->relas) {
+		if (i % 2) { /* filename reloc */
+			if (!copynext)
+				continue;
+			rela->sym->include = 1;
+			rela->sym->sec->include = 1;
+			*dstrela++ = *rela;
+			nr++;
+			copynext = 0;
+		}
+		else if (rela->sym->sec->status != SAME) { /* IP reloc */
+			log_debug("new/changed symbol %s found in bug table\n",
+			          rela->sym->name);
+			/* copy BOTH relocs for this bug_entry */
+			*dstrela++ = *rela;
+			nr++;
+			/* tell the next loop to copy the filename reloc */
+			copynext = 1;
+		}
+	}
+
+	if (!nr) {
+		/* no changed functions referenced by bug table */
+		sec->status = SAME;
+		sec->base->status = SAME;
+		return;
+	}
+
+	/* overwrite with new relas table */
+	table.nr = nr;
+	sec->relas = table;
+	sec->include = 1;
+	sec->base->include = 1;
+	/*
+	 * Adjust d_size but not d_buf. d_buf is overwritten in
+	 * kpatch_create_rela_section() from the relas table. No
+	 * point in regen'ing the buffer here just to be discarded
+	 * later.
+	 */
+	sec->data->d_size = sec->sh.sh_entsize * nr;
+}
+
 void kpatch_create_rela_section(struct section *sec, int link)
 {
 	struct rela *rela;
@@ -974,7 +1061,7 @@ void kpatch_create_rela_section(struct section *sec, int link)
 	size_t size;
 
 	/* create new rela data buffer */
-	size = sec->sh.sh_size;
+	size = sec->data->d_size;
 	buf = malloc(size);
 	if (!buf)
 		ERROR("malloc");
@@ -983,7 +1070,8 @@ void kpatch_create_rela_section(struct section *sec, int link)
 	/* reindex and copy into buffer */
 	for_each_rela(i, rela, &sec->relas) {
 		if (!rela->sym || !rela->sym->twino)
-			ERROR("expected rela symbol");
+			ERROR("expected rela symbol in rela section %s entry %d",
+			      sec->name, i);
 		symndx = rela->sym->twino->index;
 		type = GELF_R_TYPE(rela->rela.r_info);
 		rela->rela.r_info = GELF_R_INFO(symndx, type);
@@ -1318,6 +1406,7 @@ int main(int argc, char *argv[])
 	 * in vmlinux can be linked to.
 	 */
 	kpatch_replace_sections_syms(kelf_patched);
+	kpatch_regenerate_bug_table_rela_section(kelf_patched);
 
 	kpatch_include_standard_sections(kelf_patched);
 	if (!kpatch_include_changed_functions(kelf_patched)) {
