@@ -84,6 +84,29 @@ enum {
 };
 static atomic_t kpatch_operation;
 
+static struct kpatch_func *kpatch_get_func(unsigned long ip)
+{
+	struct kpatch_func *f;
+
+	/* Here, we have to use rcu safe hlist because of NMI concurrency */
+	hash_for_each_possible_rcu(kpatch_func_hash, f, node, ip)
+		if (f->old_addr == ip)
+			return f;
+	return NULL;
+}
+
+static struct kpatch_func *kpatch_get_committed_func(struct kpatch_func *f,
+						     unsigned long ip)
+{
+	/* Continuing on the same hlist to find commited (!updating) func */
+	if (f) {
+		hlist_for_each_entry_continue_rcu(f, node)
+			if (f->old_addr == ip && !f->updating)
+				return f;
+	}
+	return NULL;
+}
+
 void kpatch_backtrace_address_verify(void *data, unsigned long address,
 				     int reliable)
 {
@@ -212,29 +235,6 @@ static int kpatch_remove_patch(void *data)
 	ret = 0;
 out:
 	return ret;
-}
-
-static struct kpatch_func *kpatch_get_func(unsigned long ip)
-{
-	struct kpatch_func *f;
-
-	/* Here, we have to use rcu safe hlist because of NMI concurrency */
-	hash_for_each_possible_rcu(kpatch_func_hash, f, node, ip)
-		if (f->old_addr == ip)
-			return f;
-	return NULL;
-}
-
-static struct kpatch_func *kpatch_get_committed_func(struct kpatch_func *f,
-						     unsigned long ip)
-{
-	/* Continuing on the same hlist to find commited (!updating) func */
-	if (f) {
-		hlist_for_each_entry_continue_rcu(f, node)
-			if (f->old_addr == ip && !f->updating)
-				return f;
-	}
-	return NULL;
 }
 
 /*
