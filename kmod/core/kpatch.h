@@ -33,6 +33,7 @@ struct kpatch_func {
 	unsigned long old_size;
 	struct module *mod;
 	struct hlist_node node;
+	bool updating;
 };
 
 extern int kpatch_register(struct module *mod, struct kpatch_func *funcs,
