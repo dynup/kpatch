@@ -183,7 +183,7 @@ ability to arbitrarily modify the kernel, with or without kpatch.
 **Q. How can I detect if somebody has patched the kernel?**
 
 We hope to create a new kernel TAINT flag which will get set whenever a patch
-module is loaded.
+module is loaded.  We are currently using the `TAINT_USER` flag.
 
 Also, many distros ship with cryptographically signed kernel modules, and will
 taint the kernel anyway if you load an unsigned module.
@@ -210,12 +210,18 @@ so it looks like a normal function to the kernel.
 - **oops stack traces**: Yes.  If the replacement function is involved in an
   oops, the stack trace will show the function and kernel module name of the
   replacement function, just like any other kernel module function.  The oops
-  message will also show the taint flag. [TODO: taint flag]
+  message will also show the taint flag (currently `TAINT_USER`).
 - **kdump/crash**: Yes.  Replacement functions are normal functions, so crash
   will have no issues. [TODO: create patch module debuginfo symbols and crash
   warning message]
 - **ftrace**: Yes, see previous question.
-- **systemtap/kprobes**: TODO: try it out
+- **systemtap/kprobes**: Some incompatibilities exist.
+  - If you setup a kprobe module at the beginning of a function before loading
+    a kpatch module, and they both affect the same function, kprobes "wins"
+    until the kprobe has been unregistered.  This is tracked in issue
+    [#47](https://github.com/dynup/kpatch/issues/47).
+  - Setting a kretprobe before loading a kpatch module could be unsafe.  See
+    issue [#67](https://github.com/dynup/kpatch/issues/67).
 - **perf**: TODO: try it out
 
 **Q. Why not use something like kexec instead?**
@@ -259,6 +265,24 @@ Yes.  Just unload the patch module and the original function will be restored.
 
 Yes.  Also, a single function can even be patched multiple times if needed.
 
+**Q. Why did kpatch-build detect a changed function that wasn't touched by the
+source patch?**
+
+There could be a variety of reasons for this, such as:
+
+- The patch changed an inline function.
+- The compiler decided to inline a changed function, resulting in the outer
+  function getting recompiled.  This is common in the case where the inner
+  function is static and is only called once.
+- The function uses a WARN() or WARN_ON() macro.  These macros embed the source
+  code line number (`__LINE__`) into an instruction.  If a function was changed
+  higher up in the file, it will affect the line numbers for all subsequent
+  WARN calls in the file, resulting in recompilation of their functions.  If
+  this happens to you, you can usually just ignore it, as patching a few extra
+  functions isn't typically a problem.  If it becomes a problem for whatever
+  reason, you can change the source patch to redefine the WARN macro for the
+  affected files, such that it hard codes the old line number instead of using
+  `__LINE__`, for example.
 
 Demonstration
 -------------
