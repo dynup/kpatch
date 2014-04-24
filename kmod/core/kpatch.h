@@ -29,16 +29,20 @@
 
 struct kpatch_func {
 	unsigned long new_addr;
+	unsigned long new_size;
 	unsigned long old_addr;
 	unsigned long old_size;
-	struct module *mod;
 	struct hlist_node node;
 	bool updating;
 };
 
-extern int kpatch_register(struct module *mod, struct kpatch_func *funcs,
-			   int num_funcs);
-extern int kpatch_unregister(struct module *mod, struct kpatch_func *funcs,
-			     int num_funcs);
+struct kpatch_module {
+	struct module *mod;
+	struct kpatch_func *funcs;
+	int num_funcs;
+};
+
+extern int kpatch_register(struct kpatch_module *kpmod);
+extern int kpatch_unregister(struct kpatch_module *kpmod);
 
 #endif /* _KPATCH_H_ */

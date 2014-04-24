@@ -315,10 +315,18 @@ int main(int argc, char **argv)
 	for_each_sym(&symlist, cur) {
 		if (cur->action != PATCH)
 			continue;
+
 		patches_data[i].old_addr = cur->vm_addr;
 		patches_data[i].old_size = cur->vm_len;
+		patches_data[i].new_size = cur->sym.st_size;
+
+		/*
+		 * Use a relocation to set patches_data[i].new_addr at module
+		 * loading time.
+		 */
 		relas_data[i].r_offset = i * sizeof(struct kpatch_patch);
 		relas_data[i].r_info = GELF_R_INFO(cur->index, R_X86_64_64);
+
 		i++;
 	}
 
