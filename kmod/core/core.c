@@ -192,7 +192,7 @@ static int kpatch_apply_patch(void *data)
 
 	ret = kpatch_verify_activeness_safety(kpmod);
 	if (ret)
-		goto out;
+		return ret;
 
 	for (i = 0; i < num_funcs; i++) {
 		struct kpatch_func *func = &funcs[i];
@@ -207,16 +207,14 @@ static int kpatch_apply_patch(void *data)
 		/* Failed, we have to rollback patching process */
 		for (i = 0; i < num_funcs; i++)
 			hash_del_rcu(&funcs[i].node);
-		ret = -EBUSY;
-		goto out;
+		return -EBUSY;
 	}
-	ret = 0;
 
 	/* Succeeded, clear updating flags */
 	for (i = 0; i < num_funcs; i++)
 		funcs[i].updating = false;
-out:
-	return ret;
+
+	return 0;
 }
 
 /* Called from stop_machine */
@@ -229,7 +227,7 @@ static int kpatch_remove_patch(void *data)
 
 	ret = kpatch_verify_activeness_safety(kpmod);
 	if (ret)
-		goto out;
+		return ret;
 
 	/* Check if any inconsistent NMI has happened while updating */
 	ret = kpatch_finish_status(KPATCH_STATUS_SUCCESS);
@@ -237,16 +235,14 @@ static int kpatch_remove_patch(void *data)
 		/* Failed, we must keep funcs on hash table */
 		for (i = 0; i < num_funcs; i++)
 			funcs[i].updating = false;
-		ret = -EBUSY;
-		goto out;
+		return -EBUSY;
 	}
 
 	/* Succeeded, remove all updating funcs from hash table */
 	for (i = 0; i < num_funcs; i++)
 		hash_del_rcu(&funcs[i].node);
-	ret = 0;
-out:
-	return ret;
+
+	return 0;
 }
 
 /*
@@ -420,12 +416,12 @@ int kpatch_register(struct kpatch_module *kpmod)
 
 	pr_notice("loaded patch module \"%s\"\n", kpmod->mod->name);
 
-out:
 	atomic_set(&kpatch_operation, KPATCH_OP_NONE);
 	up(&kpatch_mutex);
-	return ret;
+	return 0;
 
 err_unregister:
+	atomic_set(&kpatch_operation, KPATCH_OP_NONE);
 	if (kpatch_num_registered == 1) {
 		int ret2 = unregister_ftrace_function(&kpatch_ftrace_ops);
 		if (ret2) {
@@ -436,7 +432,8 @@ err_unregister:
 	kpatch_num_registered--;
 err_rollback:
 	kpatch_remove_funcs_from_filter(funcs, num_funcs);
-	goto out;
+	up(&kpatch_mutex);
+	return ret;
 }
 EXPORT_SYMBOL(kpatch_register);
 
