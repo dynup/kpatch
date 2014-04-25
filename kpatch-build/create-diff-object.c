@@ -1058,7 +1058,7 @@ void kpatch_regenerate_smp_locks_sections(struct kpatch_elf *kelf)
 	struct section *sec;
 	struct table table;
 	struct rela *rela, *dstrela;
-	int i, nr = 0;
+	int i, nr = 0, offset = 0;
 
 	sec = find_section_by_name(&kelf->sections, ".rela.smp_locks");
 	if (!sec)
@@ -1072,7 +1072,11 @@ void kpatch_regenerate_smp_locks_sections(struct kpatch_elf *kelf)
 		if (rela->sym->sec->status != SAME) {
 			log_debug("new/changed symbol %s found in smp locks table\n",
 			          rela->sym->name);
-			*dstrela++ = *rela;
+			*dstrela = *rela;
+			dstrela->offset = offset;
+			dstrela->rela.r_offset = offset;
+			dstrela++;
+			offset += 4;
 			nr++;
 		}
 	}
@@ -1098,7 +1102,7 @@ void kpatch_regenerate_smp_locks_sections(struct kpatch_elf *kelf)
 	sec->data->d_size = sec->sh.sh_entsize * nr;
 
 	/* truncate smp_locks section */
-	sec->base->data->d_size = 4 * nr;
+	sec->base->data->d_size = offset;
 }
 
 void kpatch_create_rela_section(struct section *sec, int link)
