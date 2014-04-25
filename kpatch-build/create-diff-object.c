@@ -1105,6 +1105,72 @@ void kpatch_regenerate_smp_locks_sections(struct kpatch_elf *kelf)
 	sec->base->data->d_size = offset;
 }
 
+void kpatch_regenerate_parainstructions_sections(struct kpatch_elf *kelf)
+{
+	struct section *sec;
+	struct table table;
+	struct rela *rela, *dstrela;
+	int i, nr = 0, offset = 0;
+	char *old, *new;
+
+	sec = find_section_by_name(&kelf->sections, ".rela.parainstructions");
+	if (!sec)
+		return;
+
+	/* alloc buffer of original size (probably won't use it all) */
+	alloc_table(&table, sizeof(struct rela), sec->relas.nr);
+	dstrela = table.data;
+
+	old = sec->base->data->d_buf;
+	/* alloc buffer for new text section */
+	new = malloc(sec->base->sh.sh_size);
+	if (!new)
+		ERROR("malloc");
+
+	for_each_rela(i, rela, &sec->relas) {
+		if (rela->sym->sec->status != SAME) {
+			log_debug("new/changed symbol %s found in parainstructions table\n",
+			          rela->sym->name);
+			/* copy rela entry into new table */
+			*dstrela = *rela;
+
+			/* adjust offset in both table entry and rela section */
+			dstrela->offset = offset;
+			dstrela->rela.r_offset = offset;
+
+			/* copy the entry to the new text section */
+			memcpy(new + offset, old, 16);
+
+			offset += 16;
+			dstrela++;
+			nr++;
+		}
+		old += 16;
+	}
+
+	if (!nr) {
+		/* no changed functions referenced by parainstructions table */
+		sec->status = SAME;
+		sec->base->status = SAME;
+		return;
+	}
+
+	/* overwrite with new relas table */
+	table.nr = nr;
+	sec->relas = table;
+
+	/* mark sections for inclusion */
+	sec->include = 1;
+	sec->base->include = 1;
+
+	/* update rela section data size */
+	sec->data->d_size = sec->sh.sh_entsize * nr;
+
+	/* update text section data buf and size */
+	sec->base->data->d_buf = new;
+	sec->base->data->d_size = offset;
+}
+
 void kpatch_create_rela_section(struct section *sec, int link)
 {
 	struct rela *rela;
@@ -1460,6 +1526,7 @@ int main(int argc, char *argv[])
 	kpatch_replace_sections_syms(kelf_patched);
 	kpatch_regenerate_bug_table_rela_section(kelf_patched);
 	kpatch_regenerate_smp_locks_sections(kelf_patched);
+	kpatch_regenerate_parainstructions_sections(kelf_patched);
 
 	kpatch_include_standard_sections(kelf_patched);
 	if (!kpatch_include_changed_functions(kelf_patched)) {
