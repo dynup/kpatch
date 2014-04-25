@@ -1053,6 +1053,54 @@ void kpatch_regenerate_bug_table_rela_section(struct kpatch_elf *kelf)
 	sec->data->d_size = sec->sh.sh_entsize * nr;
 }
 
+void kpatch_regenerate_smp_locks_sections(struct kpatch_elf *kelf)
+{
+	struct section *sec;
+	struct table table;
+	struct rela *rela, *dstrela;
+	int i, nr = 0;
+
+	sec = find_section_by_name(&kelf->sections, ".rela.smp_locks");
+	if (!sec)
+		return;
+
+	/* alloc buffer of original size (probably won't use it all) */
+	alloc_table(&table, sizeof(struct rela), sec->relas.nr);
+	dstrela = table.data;
+
+	for_each_rela(i, rela, &sec->relas) {
+		if (rela->sym->sec->status != SAME) {
+			log_debug("new/changed symbol %s found in smp locks table\n",
+			          rela->sym->name);
+			*dstrela++ = *rela;
+			nr++;
+		}
+	}
+
+	if (!nr) {
+		/* no changed functions referenced by bug table */
+		sec->status = SAME;
+		sec->base->status = SAME;
+		return;
+	}
+
+	/* overwrite with new relas table */
+	table.nr = nr;
+	sec->relas = table;
+	sec->include = 1;
+	sec->base->include = 1;
+	/*
+	 * Adjust d_size but not d_buf. d_buf is overwritten in
+	 * kpatch_create_rela_section() from the relas table. No
+	 * point in regen'ing the buffer here just to be discarded
+	 * later.
+	 */
+	sec->data->d_size = sec->sh.sh_entsize * nr;
+
+	/* truncate smp_locks section */
+	sec->base->data->d_size = 4 * nr;
+}
+
 void kpatch_create_rela_section(struct section *sec, int link)
 {
 	struct rela *rela;
@@ -1407,6 +1455,7 @@ int main(int argc, char *argv[])
 	 */
 	kpatch_replace_sections_syms(kelf_patched);
 	kpatch_regenerate_bug_table_rela_section(kelf_patched);
+	kpatch_regenerate_smp_locks_sections(kelf_patched);
 
 	kpatch_include_standard_sections(kelf_patched);
 	if (!kpatch_include_changed_functions(kelf_patched)) {
