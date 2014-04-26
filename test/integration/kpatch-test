@@ -1,0 +1,178 @@
+#!/bin/bash
+#
+# kpatch integration test framework
+#
+# Copyright (C) 2014 Josh Poimboeuf <jpoimboe@redhat.com>
+#
+# This program is free software; you can redistribute it and/or
+# modify it under the terms of the GNU General Public License
+# as published by the Free Software Foundation; either version 2
+# of the License, or (at your option) any later version.
+#
+# This program is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU General Public License for more details.
+#
+# You should have received a copy of the GNU General Public License
+# along with this program; if not, write to the Free Software
+# Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA,
+# 02110-1301, USA.
+#
+#
+# This is a basic integration test framework for kpatch, which tests building,
+# loading, and unloading patches, as well as any other related custom tests.
+#
+# This script looks for test input files in the current directory.  It expects
+# certain file naming conventions:
+#
+# - foo.patch: patch that should build successfully
+#
+# - bar-FAIL.patch: patch that should fail to build
+#
+# - foo-LOADED.test: executable which tests whether the foo.patch module is
+#   loaded.  It will be used to test that loading/unloading the patch module
+#   works as expected.
+#
+# Any other *.test files will be executed after all the patch modules have been
+# built from the *.patch files.  They can be used for more custom tests above
+# and beyond the simple loading and unloading tests.
+
+SCRIPTDIR="$(readlink -f $(dirname $(type -p $0)))"
+ROOTDIR="$(readlink -f $SCRIPTDIR/../..)"
+# TODO: option to use system-installed binaries instead
+KPATCH="sudo $ROOTDIR/kpatch/kpatch"
+KPATCHBUILD="$ROOTDIR"/kpatch-build/kpatch-build
+ERROR=0
+LOG=test.log
+rm -f $LOG
+
+usage() {
+	echo "usage: $0 [options]" >&2
+	echo "		-h, --help	Show this help message" >&2
+	echo "		-s, --skipbuild Don't rebuild patch modules" >&2
+}
+
+options=$(getopt -o hs -l "help,skipbuild" -- "$@") || exit 1
+
+eval set -- "$options"
+
+while [[ $# -gt 0 ]]; do
+	case "$1" in
+	-h|--help)
+		usage
+		exit 0
+		;;
+	-s|--skipbuild)
+		SKIPBUILD=1
+		;;
+	esac
+	shift
+done
+
+
+error() {
+	echo "ERROR: $@" >&2
+	ERROR=$((ERROR + 1))
+}
+
+build_module() {
+	file=$1
+	prefix=${file%%.patch}
+	module=kpatch-$prefix.ko
+
+	if [[ $prefix = *-FAIL ]]; then
+		shouldfail=1
+	else
+		shouldfail=0
+	fi
+
+	if [[ $SKIPBUILD -eq 1 ]]; then
+		[[ $shouldfail -eq 1 ]] && skip=1
+		[[ -e $module ]] && skip=1
+		[[ $skip -eq 1 ]] && echo "$prefix: skipping build" && return
+	fi
+
+	echo "$prefix: building"
+
+	if ! $KPATCHBUILD $file >> $LOG 2>&1; then
+		[[ $shouldfail -eq 0 ]] && error "$prefix: build failed"
+	else
+		[[ $shouldfail -eq 1 ]] && error "$prefix: build succeeded when it should have failed"
+	fi
+}
+
+run_load_test() {
+	file=$1
+	prefix=${file%%.patch}
+	module=kpatch-$prefix.ko
+	testprog=$prefix-LOADED.test
+
+	[[ ! -e $testprog ]] && return
+
+	echo "$prefix: running load test"
+
+	if ./$testprog >> $LOG 2>&1; then
+		error "$prefix: $testprog succeeded before kpatch load"
+	fi
+
+	if [[ ! -e $module ]]; then
+		error "$prefix: can't find $module"
+		return
+	fi
+
+	# TODO: once we have "kpatch load --replace" we can do more tests here:
+	# test
+	# kpatch load --replace
+	# test
+	# kpatch unload
+	# test
+	# kpatch load
+	# test
+	if ! $KPATCH load $module >> $LOG 2>&1; then
+		error "$prefix: kpatch load failed"
+	fi
+
+	if ! ./$testprog >> $LOG 2>&1; then
+		error "$prefix: $testprog failed after kpatch load"
+	fi
+
+	if ! $KPATCH unload $module >> $LOG 2>&1; then
+		error "$prefix: kpatch unload failed"
+	fi
+
+	if ./$testprog >> $LOG 2>&1; then
+		error "$prefix: $testprog succeeded after kpatch unload"
+	fi
+}
+
+run_custom_test() {
+	testprog=$1
+	prefix=${file%%.test}
+
+	[[ $testprog = *-LOADED.test ]] && return
+
+	echo "$prefix: running test"
+
+	if ./$testprog >> $LOG 2>&1; then
+		error "$prefix: test failed"
+	fi
+}
+
+cd "$SCRIPTDIR"
+
+for file in *.patch; do
+	build_module $file
+done
+
+for file in *.patch; do
+	run_load_test $file
+done
+
+for file in *.test; do
+	run_custom_test $file
+done
+
+echo "$ERROR errors encountered"
+
+exit $ERROR
