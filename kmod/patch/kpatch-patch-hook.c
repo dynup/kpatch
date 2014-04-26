@@ -28,6 +28,43 @@
 extern char __kpatch_patches, __kpatch_patches_end;
 
 static struct kpatch_module kpmod;
+static struct kobject *patch_kobj;
+
+static ssize_t patch_enabled_show(struct kobject *kobj,
+				  struct kobj_attribute *attr, char *buf)
+{
+	return sprintf(buf, "%d\n", kpmod.enabled);
+}
+
+static ssize_t patch_enabled_store(struct kobject *kobj,
+				   struct kobj_attribute *attr, char *buf,
+				   size_t count)
+{
+	int ret;
+	unsigned long val;
+
+	/* only disabling is supported */
+	if (!kpmod.enabled)
+		return -EINVAL;
+
+	ret = kstrtoul(buf, 10, &val);
+	if (ret)
+		return ret;
+
+	val = !!val;
+
+	/* only disabling is supported */
+	if (val)
+		return -EINVAL;
+
+	ret = kpatch_unregister(&kpmod);
+	if (ret)
+		return ret;
+
+	return count;
+}
+static struct kobj_attribute patch_enabled_attr =
+	__ATTR(enabled, 0644, patch_enabled_show, patch_enabled_store);
 
 static int __init patch_init(void)
 {
@@ -51,12 +88,27 @@ static int __init patch_init(void)
 		kpmod.funcs[i].new_size = patches[i].new_size;
 	}
 
+	patch_kobj = kobject_create_and_add(THIS_MODULE->name,
+					    kpatch_patches_kobj);
+	if (!patch_kobj) {
+		ret = -ENOMEM;
+		goto err_free;
+	}
+
+	ret = sysfs_create_file(patch_kobj, &patch_enabled_attr.attr);
+	if (ret)
+		goto err_put;
+
 	ret = kpatch_register(&kpmod);
 	if (ret)
-		goto err_free;
+		goto err_sysfs;
 
 	return 0;
 
+err_sysfs:
+	sysfs_remove_file(patch_kobj, &patch_enabled_attr.attr);
+err_put:
+	kobject_put(patch_kobj);
 err_free:
 	kfree(kpmod.funcs);
 	return ret;
@@ -64,22 +116,9 @@ err_free:
 
 static void __exit patch_exit(void)
 {
-	int ret;
-
-	ret = kpatch_unregister(&kpmod);
-	if (ret) {
-		/*
-		 * TODO: If this happens, we're screwed.  We need a way to
-		 * prevent the module from unloading if the activeness safety
-		 * check fails.
-		 *
-		 * Or alternatively we could keep trying the activeness safety
-		 * check in a loop, until it works or we timeout.  Then we
-		 * could panic.
-		 */
-		panic("kpatch_unregister failed: %d", ret);
-	}
-
+	WARN_ON(kpmod.enabled);
+	sysfs_remove_file(patch_kobj, &patch_enabled_attr.attr);
+	kobject_put(patch_kobj);
 	kfree(kpmod.funcs);
 }
 

@@ -237,7 +237,8 @@ int main(int argc, char **argv)
 		    GELF_ST_BIND(cur->sym.st_info) != STB_GLOBAL ||
 		    cur->sym.st_shndx != STN_UNDEF ||
 		    !strcmp(cur->name, "kpatch_register") ||
-		    !strcmp(cur->name, "kpatch_unregister"))
+		    !strcmp(cur->name, "kpatch_unregister") ||
+		    !strcmp(cur->name, "kpatch_patches_kobj"))
 			continue;
 
 		printf("found global symbol %s\n", cur->name);

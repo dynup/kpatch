@@ -53,6 +53,10 @@ DEFINE_SEMAPHORE(kpatch_mutex);
 
 static int kpatch_num_registered;
 
+static struct kobject *kpatch_root_kobj;
+struct kobject *kpatch_patches_kobj;
+EXPORT_SYMBOL_GPL(kpatch_patches_kobj);
+
 struct kpatch_backtrace_args {
 	struct kpatch_module *kpmod;
 	int ret;
@@ -354,7 +358,14 @@ int kpatch_register(struct kpatch_module *kpmod)
 	if (!kpmod->mod || !funcs || !num_funcs)
 		return -EINVAL;
 
+	kpmod->enabled = false;
+
 	down(&kpatch_mutex);
+
+	if (!try_module_get(kpmod->mod)) {
+		ret = -ENODEV;
+		goto err_up;
+	}
 
 	for (i = 0; i < num_funcs; i++) {
 		struct kpatch_func *func = &funcs[i];
@@ -418,6 +429,8 @@ int kpatch_register(struct kpatch_module *kpmod)
 	pr_notice("loaded patch module \"%s\"\n", kpmod->mod->name);
 
 	atomic_set(&kpatch_operation, KPATCH_OP_NONE);
+	kpmod->enabled = true;
+
 	up(&kpatch_mutex);
 	return 0;
 
@@ -433,6 +446,8 @@ err_unregister:
 	kpatch_num_registered--;
 err_rollback:
 	kpatch_remove_funcs_from_filter(funcs, num_funcs);
+	module_put(kpmod->mod);
+err_up:
 	up(&kpatch_mutex);
 	return ret;
 }
@@ -443,6 +458,8 @@ int kpatch_unregister(struct kpatch_module *kpmod)
 	struct kpatch_func *funcs = kpmod->funcs;
 	int num_funcs = kpmod->num_funcs;
 	int i, ret;
+
+	WARN_ON(!kpmod->enabled);
 
 	down(&kpatch_mutex);
 
@@ -483,6 +500,9 @@ int kpatch_unregister(struct kpatch_module *kpmod)
 
 	pr_notice("unloaded patch module \"%s\"\n", kpmod->mod->name);
 
+	kpmod->enabled = false;
+	module_put(kpmod->mod);
+
 out:
 	atomic_set(&kpatch_operation, KPATCH_OP_NONE);
 	up(&kpatch_mutex);
@@ -490,4 +510,26 @@ out:
 }
 EXPORT_SYMBOL(kpatch_unregister);
 
+static int kpatch_init(void)
+{
+	kpatch_root_kobj = kobject_create_and_add("kpatch", kernel_kobj);
+	if (!kpatch_root_kobj)
+		return -ENOMEM;
+
+	kpatch_patches_kobj = kobject_create_and_add("patches",
+						     kpatch_root_kobj);
+	if (!kpatch_patches_kobj)
+		return -ENOMEM;
+
+	return 0;
+}
+
+static void kpatch_exit(void)
+{
+	kobject_put(kpatch_patches_kobj);
+	kobject_put(kpatch_root_kobj);
+}
+
+module_init(kpatch_init);
+module_exit(kpatch_exit);
 MODULE_LICENSE("GPL");
