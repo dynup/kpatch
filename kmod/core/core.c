@@ -321,8 +321,8 @@ static struct ftrace_ops kpatch_ftrace_ops __read_mostly = {
 };
 
 /* Remove kpatch_funcs from ftrace filter */
-static int kpatch_remove_funcs_from_filter(struct kpatch_func *funcs,
-					   int num_funcs)
+static void kpatch_remove_funcs_from_filter(struct kpatch_func *funcs,
+					    int num_funcs)
 {
 	int i, ret = 0;
 
@@ -339,14 +339,8 @@ static int kpatch_remove_funcs_from_filter(struct kpatch_func *funcs,
 		/* Remove the ftrace handler for this function. */
 		ret = ftrace_set_filter_ip(&kpatch_ftrace_ops, func->old_addr,
 					   1, 0);
-		if (ret) {
-			pr_err("can't remove ftrace filter at address 0x%lx\n",
-			       func->old_addr);
-			break;
-		}
+		WARN_ON(ret);
 	}
-
-	return ret;
 }
 
 int kpatch_register(struct kpatch_module *kpmod)
@@ -480,12 +474,11 @@ int kpatch_unregister(struct kpatch_module *kpmod)
 
 	if (kpatch_num_registered == 1) {
 		ret = unregister_ftrace_function(&kpatch_ftrace_ops);
-		if (ret) {
-			pr_err("can't unregister ftrace handler\n");
-			goto out;
-		}
+		if (ret)
+			WARN_ON(1);
+		else
+			kpatch_num_registered--;
 	}
-	kpatch_num_registered--;
 
 	/*
 	 * This synchronize_rcu is to ensure any other kpatch_get_func
@@ -494,9 +487,7 @@ int kpatch_unregister(struct kpatch_module *kpmod)
 	 */
 	synchronize_rcu();
 
-	ret = kpatch_remove_funcs_from_filter(funcs, num_funcs);
-	if (ret)
-		goto out;
+	kpatch_remove_funcs_from_filter(funcs, num_funcs);
 
 	pr_notice("unloaded patch module \"%s\"\n", kpmod->mod->name);
 
