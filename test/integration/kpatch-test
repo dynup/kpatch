@@ -131,6 +131,7 @@ run_load_test() {
 	# test
 	if ! $KPATCH load $module >> $LOG 2>&1; then
 		error "$prefix: kpatch load failed"
+		return
 	fi
 
 	if ! ./$testprog >> $LOG 2>&1; then
@@ -139,6 +140,7 @@ run_load_test() {
 
 	if ! $KPATCH unload $module >> $LOG 2>&1; then
 		error "$prefix: kpatch unload failed"
+		return
 	fi
 
 	if ./$testprog >> $LOG 2>&1; then
