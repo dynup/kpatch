@@ -100,6 +100,19 @@ load_module () {
 }
 
 unload_module () {
+	# strip leading path, .ko suffix and convert '-' to '_' so we can find
+	# the module name in sysfs
+	PATCH="$(basename $1)"
+	PATCH="${PATCH%.ko}"
+	PATCH="${PATCH//-/_}"
+
+	ENABLED=/sys/kernel/kpatch/patches/"$PATCH"/enabled
+
+	if [[ -e "$ENABLED" ]] && [[ $(cat "$ENABLED") -eq 1 ]]; then
+		echo "disabling patch module: $1"
+		echo 0 > $ENABLED || die "can't disable $PATCH"
+	fi
+
 	echo "unloading patch module: $1"
 	/usr/sbin/rmmod "$(basename $1)"
 }
@@ -135,9 +148,7 @@ case "$1" in
 
 "unload")
 	[[ "$#" -ne 2 ]] && usage
-	PATCH="$2"
-	find_module "$PATCH" || die "can't find $PATCH"
-	unload_module "$MODULE" || die "failed to unload patch $PATCH"
+	unload_module "$2" || die "failed to unload patch $2"
 	;;
 
 "install")

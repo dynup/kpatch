@@ -259,7 +259,8 @@ kpatch needs gcc >= 4.6 and Linux >= 3.7 for use of the -mfentry flag.
 
 **Q. Is it possible to remove a patch?**
 
-Yes.  Just unload the patch module and the original function will be restored.
+Yes.  Just run `kpatch unload` which will disable and unload the patch module
+and restore the function to its original state.
 
 **Q. Can you apply multiple patches?**
 

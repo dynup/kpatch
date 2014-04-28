@@ -26,6 +26,7 @@
 #define _KPATCH_H_
 
 #include <linux/types.h>
+#include <linux/module.h>
 
 struct kpatch_func {
 	unsigned long new_addr;
@@ -40,7 +41,11 @@ struct kpatch_module {
 	struct module *mod;
 	struct kpatch_func *funcs;
 	int num_funcs;
+
+	bool enabled;
 };
+
+extern struct kobject *kpatch_patches_kobj;
 
 extern int kpatch_register(struct kpatch_module *kpmod);
 extern int kpatch_unregister(struct kpatch_module *kpmod);
