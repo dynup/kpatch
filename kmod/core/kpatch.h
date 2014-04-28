@@ -26,6 +26,7 @@
 #define _KPATCH_H_
 
 #include <linux/types.h>
+#include <linux/module.h>
 
 struct kpatch_func {
 	unsigned long new_addr;
