@@ -9,7 +9,7 @@ kpatch <command> [<args>]
 kpatch is a user script that manages installing, loading, and 
 displaying information about kernel patch modules installed on
 the system. 
-.SH OPTIONS
+.SH COMMANDS
 
 install <module>
        install patch module to the initrd to be loaded at boot
@@ -22,6 +22,9 @@ load --all
 
 load <module>
        load patch module into the running kernel
+
+replace <module>
+       load patch module into the running kernel, replacing all other modules
 
 unload <module>
        unload patch module from the running kernel

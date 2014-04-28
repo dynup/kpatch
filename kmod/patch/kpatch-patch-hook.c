@@ -25,6 +25,10 @@
 #include "kpatch.h"
 #include "kpatch-patch.h"
 
+static bool replace;
+module_param(replace, bool, S_IRUGO);
+MODULE_PARM_DESC(replace, "replace all previously loaded patch modules");
+
 extern char __kpatch_patches, __kpatch_patches_end;
 
 static struct kpatch_module kpmod;
@@ -99,7 +103,7 @@ static int __init patch_init(void)
 	if (ret)
 		goto err_put;
 
-	ret = kpatch_register(&kpmod);
+	ret = kpatch_register(&kpmod, replace);
 	if (ret)
 		goto err_sysfs;
 

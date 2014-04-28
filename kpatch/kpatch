@@ -33,6 +33,8 @@ usage_cmd() {
 }
 
 usage () {
+	# ATTENTION ATTENTION ATTENTION ATTENTION ATTENTION ATTENTION
+	# When changing this, please also update the man page.  Thanks!
 	echo "usage: kpatch <command> [<args>]" >&2
 	echo >&2
 	echo "Valid commands:" >&2
@@ -41,6 +43,7 @@ usage () {
 	echo >&2
 	usage_cmd "load --all" "load all installed patch modules into the running kernel"
 	usage_cmd "load <module>" "load patch module into the running kernel"
+	usage_cmd "replace <module>" "load patch module into the running kernel, replacing all other modules"
 	usage_cmd "unload <module>" "unload patch module from the running kernel"
 	echo >&2
 	usage_cmd "info <module>" "show information about a patch module"
@@ -100,7 +103,7 @@ load_module () {
 		/usr/sbin/insmod "$COREMOD" || die "failed to load core module"
 	fi
 	echo "loading patch module: $1"
-	/usr/sbin/insmod "$1"
+	/usr/sbin/insmod "$1" "$2"
 }
 
 unload_module () {
@@ -113,12 +116,20 @@ unload_module () {
 	ENABLED=/sys/kernel/kpatch/patches/"$PATCH"/enabled
 
 	if [[ -e "$ENABLED" ]] && [[ $(cat "$ENABLED") -eq 1 ]]; then
-		echo "disabling patch module: $1"
+		echo "disabling patch module: $PATCH"
 		echo 0 > $ENABLED || die "can't disable $PATCH"
 	fi
 
-	echo "unloading patch module: $1"
+	echo "unloading patch module: $PATCH"
 	/usr/sbin/rmmod "$(basename $1)"
+}
+
+unload_disabled_modules() {
+	for module in /sys/kernel/kpatch/patches/*; do
+		if [[ $(cat $module/enabled) -eq 0 ]]; then
+			unload_module $module || die "failed to unload $module"
+		fi
+	done
 }
 
 echo_patch_name() {
@@ -148,6 +159,14 @@ case "$1" in
 		load_module "$MODULE" || die "failed to load patch $PATCH"
 		;;
 	esac
+	;;
+
+"replace")
+	[[ "$#" -ne 2 ]] && usage
+	PATCH="$2"
+	find_module "$PATCH" || die "can't find $PATCH"
+	load_module "$MODULE" replace=1 || die "failed to load patch $PATCH"
+	unload_disabled_modules || die "failed to unload old modules"
 	;;
 
 "unload")
