@@ -11,3 +11,4 @@ kpatch-build/create-diff-object
 kpatch-build/link-vmlinux-syms
 man/kpatch.1.gz
 man/kpatch-build.1.gz
+test/integration/test.log
