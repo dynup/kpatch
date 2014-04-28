@@ -29,12 +29,15 @@
 #include <linux/module.h>
 
 struct kpatch_func {
+	/* public */
 	unsigned long new_addr;
 	unsigned long new_size;
 	unsigned long old_addr;
 	unsigned long old_size;
+
+	/* private */
 	struct hlist_node node;
-	bool updating;
+	int op;
 };
 
 struct kpatch_module {
