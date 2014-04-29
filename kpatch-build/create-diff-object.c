@@ -512,11 +512,8 @@ void kpatch_compare_correlated_section(struct section *sec)
 	else
 		kpatch_compare_correlated_nonrela_section(sec);
 out:
-	if (sec->status == CHANGED) {
+	if (sec->status == CHANGED)
 		log_debug("section %s has changed\n", sec->name);
-		if (!strcmp(sec->name, ".init.text"))
-			DIFF_FATAL("init section has changed");
-	}
 }
 
 void kpatch_compare_sections(struct table *table)
