@@ -176,27 +176,48 @@ elif [[ -d "$SRCDIR" ]]; then
 	echo "Using cache at $SRCDIR"
 
 else
-	rpm -q --quiet rpmdevtools || die "rpmdevtools not installed"
+	if grep -q "Fedora" "/etc/issue" || grep -q "Red Hat" "/etc/issue"; then
 
-	if [[ -z "$SRCRPM" ]]; then
-		rpm -q --quiet yum-utils || die "yum-utils not installed"
+		echo "Fedora/Red Hat distribution detected"
+		rpm -q --quiet rpmdevtools || die "rpmdevtools not installed"
 
-		echo "Downloading kernel source for $ARCHVERSION"
-		yumdownloader --source --destdir "$TEMPDIR" "kernel-$ARCHVERSION" >> "$LOGFILE" 2>&1 || die
-		SRCRPM="$TEMPDIR/kernel-${ARCHVERSION%*.*}.src.rpm"
+		if [[ -z "$SRCRPM" ]]; then
+			rpm -q --quiet yum-utils || die "yum-utils not installed"
+
+			echo "Downloading kernel source for $ARCHVERSION"
+			yumdownloader --source --destdir "$TEMPDIR" "kernel-$ARCHVERSION" >> "$LOGFILE" 2>&1 || die
+			SRCRPM="$TEMPDIR/kernel-${ARCHVERSION%*.*}.src.rpm"
+		fi
+
+		echo "Unpacking kernel source"
+		rpmdev-setuptree >> "$LOGFILE" 2>&1 || die
+		rpm -ivh "$SRCRPM" >> "$LOGFILE" 2>&1 || die
+		rpmbuild -bp "--target=$(uname -m)" "$HOME/rpmbuild/SPECS/kernel.spec" >> "$LOGFILE" 2>&1 ||
+			die "rpmbuild -bp failed.  you may need to run 'yum-builddep kernel' first."
+		rm -rf "$CACHEDIR"
+		mkdir -p "$OBJDIR"
+		mv "$HOME"/rpmbuild/BUILD/kernel-*/linux-"$ARCHVERSION" "$SRCDIR" >> "$LOGFILE" 2>&1 || die
+
+		cp "$SRCDIR/.config" "$OBJDIR" || die
+		echo "-${ARCHVERSION##*-}" > "$SRCDIR/localversion" || die
+
+	elif grep -q "Ubuntu" "/etc/issue"; then
+
+		echo "Debian/Ubuntu distribution detected"
+		cd $TEMPDIR
+		echo "Downloading and unpacking kernel source for $ARCHVERSION"
+		apt-get source linux || die "'apt-get source linux' failed. you may need to run 'apt-get install dpkg-dev'"
+		mkdir -p "$OBJDIR"
+		mv linux-${ARCHVERSION%%-*} "$SRCDIR" || die
+		cp "/boot/config-${ARCHVERSION}" "$OBJDIR/.config" || die
+		echo "-${ARCHVERSION#*-}" > "$SRCDIR/localversion" || die
+		# for some reason the Ubuntu kernel versions don't follow the
+		# upstream SUBLEVEL; they are always at SUBLEVEL 0
+		sed -i "s/^SUBLEVEL.*/SUBLEVEL = 0/" "$SRCDIR/Makefile" || die
+
+	else
+		die "Unsupported distribution"
 	fi
-
-	echo "Unpacking kernel source"
-	rpmdev-setuptree >> "$LOGFILE" 2>&1 || die
-	rpm -ivh "$SRCRPM" >> "$LOGFILE" 2>&1 || die
-	rpmbuild -bp "--target=$(uname -m)" "$HOME/rpmbuild/SPECS/kernel.spec" >> "$LOGFILE" 2>&1 ||
-		die "rpmbuild -bp failed.  you may need to run 'yum-builddep kernel' first."
-	rm -rf "$CACHEDIR"
-	mkdir -p "$OBJDIR"
-	mv "$HOME"/rpmbuild/BUILD/kernel-*/linux-"$ARCHVERSION" "$SRCDIR" >> "$LOGFILE" 2>&1 || die
-
-	cp "$SRCDIR/.config" "$OBJDIR" || die
-	echo "-${ARCHVERSION##*-}" > "$SRCDIR/localversion" || die
 fi
 
 echo "Testing patch file"
