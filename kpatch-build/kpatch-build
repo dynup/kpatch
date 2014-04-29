@@ -201,9 +201,8 @@ fi
 
 echo "Testing patch file"
 cd "$SRCDIR" || die
-patch -N -p1 < "$PATCHFILE" || die "source patch file failed to apply"
+patch -N -p1 --dry-run < "$PATCHFILE" || die "source patch file failed to apply"
 cp "$PATCHFILE" "$APPLIEDPATCHFILE" || die
-patch -p1 -R < "$APPLIEDPATCHFILE" &> /dev/null || die "reverse patch apply failed"
 
 echo "Building original kernel"
 make mrproper >> "$LOGFILE" 2>&1 || die
