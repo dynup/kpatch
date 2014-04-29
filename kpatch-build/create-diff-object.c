@@ -737,10 +737,16 @@ void kpatch_verify_patchability(struct kpatch_elf *kelf)
 {
 	struct section *sec;
 	int i;
+	int errs = 0;
 
 	for_each_section(i, sec, &kelf->sections)
-		if (sec->status == CHANGED && !sec->include)
-			DIFF_FATAL("changed section %s not selected for inclusion", sec->name);
+		if (sec->status == CHANGED && !sec->include) {
+			log_normal("%s: changed section %s not selected for inclusion\n",
+				   objname, sec->name);
+			errs++;
+		}
+	if (errs)
+		DIFF_FATAL("%d unsupported section change(s)", errs);
 }
 
 #define inc_printf(fmt, ...) \
@@ -1488,6 +1494,7 @@ int main(int argc, char *argv[])
 	struct kpatch_elf *kelf_base, *kelf_patched, *kelf_out;
 	char *outfile;
 	struct arguments arguments;
+	int num_changed;
 
 	arguments.debug = 0;
 	arguments.inventory = 0;
@@ -1529,12 +1536,14 @@ int main(int argc, char *argv[])
 	kpatch_regenerate_parainstructions_sections(kelf_patched);
 
 	kpatch_include_standard_sections(kelf_patched);
-	if (!kpatch_include_changed_functions(kelf_patched)) {
+	num_changed = kpatch_include_changed_functions(kelf_patched);
+	kpatch_dump_kelf(kelf_patched);
+	kpatch_verify_patchability(kelf_patched);
+
+	if (!num_changed) {
 		log_normal("no changed functions were found\n");
 		return 3; /* 1 is ERROR, 2 is DIFF_FATAL */
 	}
-	kpatch_dump_kelf(kelf_patched);
-	kpatch_verify_patchability(kelf_patched);
 
 	/* Generate the output elf */
 	kpatch_generate_output(kelf_patched, &kelf_out);
