@@ -300,8 +300,8 @@ by the "kpatch-build" command.
 Get involved
 ------------
 
-If you have questions or feedback, join the
-[mailing list](https://www.redhat.com/mailman/listinfo/kpatch) and say hi.
+If you have questions or feedback, join the #kpatch IRC channel on freenode and
+say hi.  We also have a [mailing list](https://www.redhat.com/mailman/listinfo/kpatch).
 
 Contributions are very welcome.  Feel free to open issues or PRs on github.
 For big PRs, it's a good idea to discuss them first in github issues or on the
