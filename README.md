@@ -14,12 +14,12 @@ in production environments.
 **WARNING: Use with caution!  Kernel crashes, spontaneous reboots, and data loss
 may occur!**
 
-
 Installation
 ------------
 
-*NOTE: These installation instructions are currently Fedora-specific.  Support
-for other distributions is planned soon.*
+###Prerequisites
+
+####Fedora 20
 
 Install the dependencies for compiling kpatch:
 
@@ -35,9 +35,32 @@ Install the dependencies for the "kpatch-build" command:
     # optional, but highly recommended
     sudo yum install ccache
 
+####Ubuntu 14.04
+
+Install the dependencies for compiling kpatch:
+
+    apt-get install make gcc libelf-dev
+
+*NOTE: Ensure you have libelf-dev version 0.158 or newer*
+
+Install the dependencies for the "kpatch-build" command:
+
+    apt-get install dpkg-dev
+    apt-get build-dep linux
+
+    # optional, but highly recommended
+    apt-get install ccache
+
+NOTE: While kpatch-build will build a module on Ubuntu, currently
+the hot patch can't be loaded due to issue #156.
+
+###Build
+
 Compile kpatch:
 
     make
+
+###Install
 
 OPTIONAL: Install kpatch to /usr/local:
 
