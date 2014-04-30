@@ -100,13 +100,6 @@ enum {
 };
 static atomic_t kpatch_state;
 
-/* values for func->op */
-enum {
-	KPATCH_OP_NONE,
-	KPATCH_OP_PATCH,
-	KPATCH_OP_UNPATCH,
-};
-
 
 static inline void kpatch_state_idle(void)
 {
