@@ -62,32 +62,66 @@ struct kpatch_backtrace_args {
 	int ret;
 };
 
+/*
+ * The kpatch core module has a state machine which allows for proper
+ * synchronization with kpatch_ftrace_handler() when it runs in NMI context.
+ *
+ *         +-----------------------------------------------------+
+ *         |                                                     |
+ *         |                                                     +
+ *         v                                     +---> KPATCH_STATE_SUCCESS
+ * KPATCH_STATE_IDLE +---> KPATCH_STATE_UPDATING |
+ *         ^                                     +---> KPATCH_STATE_FAILURE
+ *         |                                                     +
+ *         |                                                     |
+ *         +-----------------------------------------------------+
+ *
+ * KPATCH_STATE_IDLE: No updates are pending.  The func hash is valid, and the
+ * reader doesn't need to check func->op.
+ *
+ * KPATCH_STATE_UPDATING: An update is in progress.  The reader must call
+ * kpatch_state_finish(KPATCH_STATE_FAILURE) before accessing the func hash.
+ *
+ * KPATCH_STATE_FAILURE: An update failed, and the func hash might be
+ * inconsistent (pending patched funcs might not have been removed yet).  If
+ * func->op is KPATCH_OP_PATCH, then rollback to the previous version of the
+ * func.
+ *
+ * KPATCH_STATE_SUCCESS: An update succeeded, but the func hash might be
+ * inconsistent (pending unpatched funcs might not have been removed yet).  If
+ * func->op is KPATCH_OP_UNPATCH, then rollback to the previous version of the
+ * func.
+ */
 enum {
-	KPATCH_STATUS_START,
-	KPATCH_STATUS_SUCCESS,
-	KPATCH_STATUS_FAILURE,
+	KPATCH_STATE_IDLE,
+	KPATCH_STATE_UPDATING,
+	KPATCH_STATE_SUCCESS,
+	KPATCH_STATE_FAILURE,
 };
-static atomic_t kpatch_status;
+static atomic_t kpatch_state;
 
-static inline void kpatch_start_status(void)
+
+static inline void kpatch_state_idle(void)
 {
-	atomic_set(&kpatch_status, KPATCH_STATUS_START);
+	int state = atomic_read(&kpatch_state);
+	WARN_ON(state != KPATCH_STATE_SUCCESS && state != KPATCH_STATE_FAILURE);
+	atomic_set(&kpatch_state, KPATCH_STATE_IDLE);
 }
 
-/* Try to set a finish status, and return the result status */
-static inline int kpatch_finish_status(int status)
+static inline void kpatch_state_updating(void)
+{
+	WARN_ON(atomic_read(&kpatch_state) != KPATCH_STATE_IDLE);
+	atomic_set(&kpatch_state, KPATCH_STATE_UPDATING);
+}
+
+/* If state is updating, change it to success or failure and return new state */
+static inline int kpatch_state_finish(int state)
 {
 	int result;
-	result = atomic_cmpxchg(&kpatch_status, KPATCH_STATUS_START, status);
-	return result == KPATCH_STATUS_START ? status : result;
+	WARN_ON(state != KPATCH_STATE_SUCCESS && state != KPATCH_STATE_FAILURE);
+	result = atomic_cmpxchg(&kpatch_state, KPATCH_STATE_UPDATING, state);
+	return result == KPATCH_STATE_UPDATING ? state : result;
 }
-
-enum {
-	KPATCH_OP_NONE,
-	KPATCH_OP_PATCH,
-	KPATCH_OP_UNPATCH,
-};
-static atomic_t kpatch_operation;
 
 static struct kpatch_func *kpatch_get_func(unsigned long ip)
 {
@@ -100,15 +134,12 @@ static struct kpatch_func *kpatch_get_func(unsigned long ip)
 	return NULL;
 }
 
-static struct kpatch_func *kpatch_get_committed_func(struct kpatch_func *f,
-						     unsigned long ip)
+static struct kpatch_func *kpatch_get_prev_func(struct kpatch_func *f,
+						unsigned long ip)
 {
-	/* Continuing on the same hlist to find commited (!updating) func */
-	if (f) {
-		hlist_for_each_entry_continue_rcu(f, node)
-			if (f->old_addr == ip && !f->updating)
-				return f;
-	}
+	hlist_for_each_entry_continue_rcu(f, node)
+		if (f->old_addr == ip)
+			return f;
 	return NULL;
 }
 
@@ -196,28 +227,33 @@ static int kpatch_apply_patch(void *data)
 	int i, ret;
 
 	ret = kpatch_verify_activeness_safety(kpmod);
-	if (ret)
+	if (ret) {
+		kpatch_state_finish(KPATCH_STATE_FAILURE);
 		return ret;
-
-	for (i = 0; i < num_funcs; i++) {
-		struct kpatch_func *func = &funcs[i];
-
-		/* update the global list and go live */
-		hash_add_rcu(kpatch_func_hash, &func->node, func->old_addr);
 	}
 
-	/* Check if any inconsistent NMI has happened while updating */
-	ret = kpatch_finish_status(KPATCH_STATUS_SUCCESS);
-	if (ret == KPATCH_STATUS_FAILURE) {
+	/* tentatively add the new funcs to the global func hash */
+	for (i = 0; i < num_funcs; i++)
+		hash_add_rcu(kpatch_func_hash, &funcs[i].node,
+			     funcs[i].old_addr);
+
+	/* memory barrier between func hash add and state change */
+	smp_wmb();
+
+	/*
+	 * Check if any inconsistent NMI has happened while updating.  If not,
+	 * move to success state.
+	 */
+	ret = kpatch_state_finish(KPATCH_STATE_SUCCESS);
+	if (ret == KPATCH_STATE_FAILURE) {
+		pr_err("NMI activeness safety check failed\n");
+
 		/* Failed, we have to rollback patching process */
 		for (i = 0; i < num_funcs; i++)
 			hash_del_rcu(&funcs[i].node);
+
 		return -EBUSY;
 	}
-
-	/* Succeeded, clear updating flags */
-	for (i = 0; i < num_funcs; i++)
-		funcs[i].updating = false;
 
 	return 0;
 }
@@ -231,17 +267,15 @@ static int kpatch_remove_patch(void *data)
 	int ret, i;
 
 	ret = kpatch_verify_activeness_safety(kpmod);
-	if (ret)
+	if (ret) {
+		kpatch_state_finish(KPATCH_STATE_FAILURE);
 		return ret;
+	}
 
 	/* Check if any inconsistent NMI has happened while updating */
-	ret = kpatch_finish_status(KPATCH_STATUS_SUCCESS);
-	if (ret == KPATCH_STATUS_FAILURE) {
-		/* Failed, we must keep funcs on hash table */
-		for (i = 0; i < num_funcs; i++)
-			funcs[i].updating = false;
+	ret = kpatch_state_finish(KPATCH_STATE_SUCCESS);
+	if (ret == KPATCH_STATE_FAILURE)
 		return -EBUSY;
-	}
 
 	/* Succeeded, remove all updating funcs from hash table */
 	for (i = 0; i < num_funcs; i++)
@@ -263,49 +297,38 @@ void notrace kpatch_ftrace_handler(unsigned long ip, unsigned long parent_ip,
 				   struct pt_regs *regs)
 {
 	struct kpatch_func *func;
-	int ret, op;
+	int state;
 
 	preempt_disable_notrace();
-retry:
-	func = kpatch_get_func(ip);
-	if (unlikely(in_nmi())) {
-		op = atomic_read(&kpatch_operation);
-		if (likely(op == KPATCH_OP_NONE))
-			goto done;
-		/*
-		 * Make sure no memory reordering between
-		 * kpatch_operation and kpatch_status
-		 */
+
+	if (likely(!in_nmi()))
+		func = kpatch_get_func(ip);
+	else {
+		/* Checking for NMI inconsistency */
+		state = kpatch_state_finish(KPATCH_STATE_FAILURE);
+
+		/* no memory reordering between state and func hash read */
 		smp_rmb();
-		/*
-		 * Checking for NMI inconsistency.
-		 * If this can set the KPATCH_STATUS_FAILURE here, it means an
-		 * NMI occures in updating process. In that case, we should
-		 * rollback the process.
-		 */
-		ret = kpatch_finish_status(KPATCH_STATUS_FAILURE);
-		if (ret == KPATCH_STATUS_FAILURE) {
+
+		func = kpatch_get_func(ip);
+
+		if (likely(state == KPATCH_STATE_IDLE))
+			goto done;
+
+		if (state == KPATCH_STATE_SUCCESS) {
 			/*
-			 * Inconsistency happens here, Newly added funcs have
-			 * to be ignored.
+			 * Patching succeeded.  If the function was being
+			 * unpatched, roll back to the previous version.
 			 */
-			if (op == KPATCH_OP_PATCH)
-				func = kpatch_get_committed_func(func, ip);
+			if (func && func->op == KPATCH_OP_UNPATCH)
+				func = kpatch_get_prev_func(func, ip);
 		} else {
 			/*
-			 * Here, the updating process has been finished
-			 * successfully. Unpatched funcs have to be ignored.
+			 * Patching failed.  If the function was being patched,
+			 * roll back to the previous version.
 			 */
-			if (op == KPATCH_OP_UNPATCH)
-				func = kpatch_get_committed_func(func, ip);
-			/*
-			 * This is a very rare case but possible if the func
-			 * is added in the hash table right after calling
-			 * kpatch_get_func(ip) and before calling
-			 * kpatch_finish_status(KPATCH_STATUS_FAILURE).
-			 */
-			else if (!func)
-				goto retry;
+			if (func && func->op == KPATCH_OP_PATCH)
+				func = kpatch_get_prev_func(func, ip);
 		}
 	}
 done:
@@ -321,8 +344,8 @@ static struct ftrace_ops kpatch_ftrace_ops __read_mostly = {
 };
 
 /* Remove kpatch_funcs from ftrace filter */
-static int kpatch_remove_funcs_from_filter(struct kpatch_func *funcs,
-					   int num_funcs)
+static void kpatch_remove_funcs_from_filter(struct kpatch_func *funcs,
+					    int num_funcs)
 {
 	int i, ret = 0;
 
@@ -339,14 +362,10 @@ static int kpatch_remove_funcs_from_filter(struct kpatch_func *funcs,
 		/* Remove the ftrace handler for this function. */
 		ret = ftrace_set_filter_ip(&kpatch_ftrace_ops, func->old_addr,
 					   1, 0);
-		if (ret) {
-			pr_err("can't remove ftrace filter at address 0x%lx\n",
-			       func->old_addr);
-			break;
-		}
-	}
 
-	return ret;
+		WARN(ret, "can't remove ftrace filter at address 0x%lx (rc=%d)",
+		     func->old_addr, ret);
+	}
 }
 
 int kpatch_register(struct kpatch_module *kpmod)
@@ -370,7 +389,7 @@ int kpatch_register(struct kpatch_module *kpmod)
 	for (i = 0; i < num_funcs; i++) {
 		struct kpatch_func *func = &funcs[i];
 
-		func->updating = true;
+		func->op = KPATCH_OP_PATCH;
 
 		/*
 		 * If any other modules have also patched this function, it
@@ -400,27 +419,34 @@ int kpatch_register(struct kpatch_module *kpmod)
 	}
 	kpatch_num_registered++;
 
-	kpatch_start_status();
-	/*
-	 * Make sure no memory reordering between kpatch_operation and
-	 * kpatch_status. kpatch_ftrace_handler() has corresponding smp_rmb().
-	 */
+	/* memory barrier between func hash and state write */
 	smp_wmb();
-	atomic_set(&kpatch_operation, KPATCH_OP_PATCH);
+
+	kpatch_state_updating();
+
 	/*
 	 * Idle the CPUs, verify activeness safety, and atomically make the new
 	 * functions visible to the trampoline.
 	 */
 	ret = stop_machine(kpatch_apply_patch, kpmod, NULL);
-	if (ret) {
-		/*
-		 * This synchronize_rcu is to ensure any other kpatch_get_func
-		 * user exits the rcu locked(preemt_disabled) critical section
-		 * and hash_del_rcu() is correctly finished.
-		 */
-		synchronize_rcu();
+
+	/* NMI handlers can return to normal now */
+	kpatch_state_idle();
+
+	/*
+	 * Wait for all existing NMI handlers to complete so that they don't
+	 * see any changes to funcs or funcs->op that might occur after this
+	 * point.
+	 *
+	 * Any NMI handlers starting after this point will see the IDLE state.
+	 */
+	synchronize_rcu();
+
+	if (ret)
 		goto err_unregister;
-	}
+
+	for (i = 0; i < num_funcs; i++)
+		funcs[i].op = KPATCH_OP_NONE;
 
 	/* TODO: need TAINT_KPATCH */
 	pr_notice_once("tainting kernel with TAINT_USER\n");
@@ -428,14 +454,12 @@ int kpatch_register(struct kpatch_module *kpmod)
 
 	pr_notice("loaded patch module \"%s\"\n", kpmod->mod->name);
 
-	atomic_set(&kpatch_operation, KPATCH_OP_NONE);
 	kpmod->enabled = true;
 
 	up(&kpatch_mutex);
 	return 0;
 
 err_unregister:
-	atomic_set(&kpatch_operation, KPATCH_OP_NONE);
 	if (kpatch_num_registered == 1) {
 		int ret2 = unregister_ftrace_function(&kpatch_ftrace_ops);
 		if (ret2) {
@@ -463,40 +487,43 @@ int kpatch_unregister(struct kpatch_module *kpmod)
 
 	down(&kpatch_mutex);
 
-	/* Start unpatching operation */
-	kpatch_start_status();
-	/*
-	 * Make sure no memory reordering between kpatch_operation and
-	 * kpatch_status. kpatch_ftrace_handler() has corresponding smp_rmb().
-	 */
-	smp_wmb();
-	atomic_set(&kpatch_operation, KPATCH_OP_UNPATCH);
 	for (i = 0; i < num_funcs; i++)
-		funcs[i].updating = true;
+		funcs[i].op = KPATCH_OP_UNPATCH;
+
+	/* memory barrier between func hash and state write */
+	smp_wmb();
+
+	kpatch_state_updating();
 
 	ret = stop_machine(kpatch_remove_patch, kpmod, NULL);
-	if (ret)
-		goto out;
 
-	if (kpatch_num_registered == 1) {
-		ret = unregister_ftrace_function(&kpatch_ftrace_ops);
-		if (ret) {
-			pr_err("can't unregister ftrace handler\n");
-			goto out;
-		}
-	}
-	kpatch_num_registered--;
+	/* NMI handlers can return to normal now */
+	kpatch_state_idle();
 
 	/*
-	 * This synchronize_rcu is to ensure any other kpatch_get_func
-	 * user exits the rcu locked(preemt_disabled) critical section
-	 * and hash_del_rcu() is correctly finished.
+	 * Wait for all existing NMI handlers to complete so that they don't
+	 * see any changes to funcs or funcs->op that might occur after this
+	 * point.
+	 *
+	 * Any NMI handlers starting after this point will see the IDLE state.
 	 */
 	synchronize_rcu();
 
-	ret = kpatch_remove_funcs_from_filter(funcs, num_funcs);
-	if (ret)
+	if (ret) {
+		for (i = 0; i < num_funcs; i++)
+			funcs[i].op = KPATCH_OP_NONE;
 		goto out;
+	}
+
+	if (kpatch_num_registered == 1) {
+		ret = unregister_ftrace_function(&kpatch_ftrace_ops);
+		if (ret)
+			WARN(1, "can't unregister ftrace handler");
+		else
+			kpatch_num_registered--;
+	}
+
+	kpatch_remove_funcs_from_filter(funcs, num_funcs);
 
 	pr_notice("unloaded patch module \"%s\"\n", kpmod->mod->name);
 
@@ -504,7 +531,6 @@ int kpatch_unregister(struct kpatch_module *kpmod)
 	module_put(kpmod->mod);
 
 out:
-	atomic_set(&kpatch_operation, KPATCH_OP_NONE);
 	up(&kpatch_mutex);
 	return ret;
 }

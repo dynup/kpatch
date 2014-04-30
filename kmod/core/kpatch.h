@@ -28,13 +28,22 @@
 #include <linux/types.h>
 #include <linux/module.h>
 
+enum kpatch_op {
+	KPATCH_OP_NONE,
+	KPATCH_OP_PATCH,
+	KPATCH_OP_UNPATCH,
+};
+
 struct kpatch_func {
+	/* public */
 	unsigned long new_addr;
 	unsigned long new_size;
 	unsigned long old_addr;
 	unsigned long old_size;
+
+	/* private */
 	struct hlist_node node;
-	bool updating;
+	enum kpatch_op op;
 };
 
 struct kpatch_module {
