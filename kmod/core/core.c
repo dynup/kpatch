@@ -362,7 +362,9 @@ static void kpatch_remove_funcs_from_filter(struct kpatch_func *funcs,
 		/* Remove the ftrace handler for this function. */
 		ret = ftrace_set_filter_ip(&kpatch_ftrace_ops, func->old_addr,
 					   1, 0);
-		WARN_ON(ret);
+
+		WARN(ret, "can't remove ftrace filter at address 0x%lx (rc=%d)",
+		     func->old_addr, ret);
 	}
 }
 
@@ -516,7 +518,7 @@ int kpatch_unregister(struct kpatch_module *kpmod)
 	if (kpatch_num_registered == 1) {
 		ret = unregister_ftrace_function(&kpatch_ftrace_ops);
 		if (ret)
-			WARN_ON(1);
+			WARN(1, "can't unregister ftrace handler");
 		else
 			kpatch_num_registered--;
 	}
