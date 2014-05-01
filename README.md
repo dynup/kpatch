@@ -211,7 +211,7 @@ OR'ed in.
 
 Eventually we hope to have a dedicated `TAINT_KPATCH` flag instead.
 
-Note that the `TAINT_OOT_MODULE` flag (64) will also be set, since the patch
+Note that the `TAINT_OOT_MODULE` flag (4096) will also be set, since the patch
 module is built outside the Linux kernel source tree.
 
 If your patch module is unsigned, the `TAINT_FORCED_MODULE` flag (2) will also

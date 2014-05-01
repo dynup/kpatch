@@ -13,9 +13,7 @@
  * GNU General Public License for more details.
  *
  * You should have received a copy of the GNU General Public License
- * along with this program; if not, write to the Free Software
- * Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA,
- * 02110-1301, USA.
+ * along with this program; if not, see <http://www.gnu.org/licenses/>.
  */
 
 /* Contains the code for the core kpatch module.  Each patch module registers
@@ -47,9 +45,9 @@
 #include "kpatch.h"
 
 #define KPATCH_HASH_BITS 8
-DEFINE_HASHTABLE(kpatch_func_hash, KPATCH_HASH_BITS);
+static DEFINE_HASHTABLE(kpatch_func_hash, KPATCH_HASH_BITS);
 
-DEFINE_SEMAPHORE(kpatch_mutex);
+static DEFINE_SEMAPHORE(kpatch_mutex);
 
 static int kpatch_num_registered;
 
@@ -143,8 +141,8 @@ static struct kpatch_func *kpatch_get_prev_func(struct kpatch_func *f,
 	return NULL;
 }
 
-void kpatch_backtrace_address_verify(void *data, unsigned long address,
-				     int reliable)
+static void kpatch_backtrace_address_verify(void *data, unsigned long address,
+					    int reliable)
 {
 	struct kpatch_backtrace_args *args = data;
 	struct kpatch_module *kpmod = args->kpmod;
@@ -170,8 +168,8 @@ void kpatch_backtrace_address_verify(void *data, unsigned long address,
 		}
 
 		if (address >= func_addr && address < func_addr + func_size) {
-			pr_err("activeness safety check failed for function "
-			       "at address 0x%lx\n", func_addr);
+			pr_err("activeness safety check failed for function at address 0x%lx\n",
+			       func_addr);
 			args->ret = -EBUSY;
 			return;
 		}
@@ -183,10 +181,10 @@ static int kpatch_backtrace_stack(void *data, char *name)
 	return 0;
 }
 
-struct stacktrace_ops kpatch_backtrace_ops = {
+static const struct stacktrace_ops kpatch_backtrace_ops = {
 	.address	= kpatch_backtrace_address_verify,
 	.stack		= kpatch_backtrace_stack,
-	.walk_stack 	= print_context_stack_bp,
+	.walk_stack	= print_context_stack_bp,
 };
 
 /*
@@ -292,9 +290,9 @@ static int kpatch_remove_patch(void *data)
  * function, the last one to register wins, as it'll be first in the hash
  * bucket.
  */
-void notrace kpatch_ftrace_handler(unsigned long ip, unsigned long parent_ip,
-				   struct ftrace_ops *fops,
-				   struct pt_regs *regs)
+static void notrace
+kpatch_ftrace_handler(unsigned long ip, unsigned long parent_ip,
+		      struct ftrace_ops *fops, struct pt_regs *regs)
 {
 	struct kpatch_func *func;
 	int state;
