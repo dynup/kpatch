@@ -205,11 +205,18 @@ ability to arbitrarily modify the kernel, with or without kpatch.
 
 **Q. How can I detect if somebody has patched the kernel?**
 
-We hope to create a new kernel TAINT flag which will get set whenever a patch
-module is loaded.  We are currently using the `TAINT_USER` flag.
+When a patch module is loaded, the `TAINT_USER` flag is set.  To test for it,
+`cat /proc/sys/kernel/tainted` and check to see if the value of 64 has been
+OR'ed in.
 
-Also, many distros ship with cryptographically signed kernel modules, and will
-taint the kernel anyway if you load an unsigned module.
+Eventually we hope to have a dedicated `TAINT_KPATCH` flag instead.
+
+Note that the `TAINT_OOT_MODULE` flag (64) will also be set, since the patch
+module is built outside the Linux kernel source tree.
+
+If your patch module is unsigned, the `TAINT_FORCED_MODULE` flag (2) will also
+be set.  Starting with Linux 3.15, this will be changed to the more specific
+`TAINT_UNSIGNED_MODULE` (8192).
 
 **Q. Will it destabilize my system?**
 
