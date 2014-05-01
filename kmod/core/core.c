@@ -16,19 +16,19 @@
  * along with this program; if not, see <http://www.gnu.org/licenses/>.
  */
 
-/* Contains the code for the core kpatch module.  Each patch module registers
- * with this module to redirect old functions to new functions.
+/*
+ * kpatch core module
  *
- * Each patch module can contain one or more new functions.  This information
- * is contained in the .patches section of the patch module.  For each function
- * patched by the module we must:
+ * Patch modules register with this module to redirect old functions to new
+ * functions.
+ *
+ * For each function patched by the module we must:
  * - Call stop_machine
- * - Ensure that no execution thread is currently in the old function (or has
- *   it in the call stack)
- * - Add the new function address to the kpatch_funcs table
+ * - Ensure that no task has the old function in its call stack
+ * - Add the new function address to kpatch_func_hash
  *
  * After that, each call to the old function calls into kpatch_ftrace_handler()
- * which finds the new function in the kpatch_funcs table and updates the
+ * which finds the new function in kpatch_func_hash table and updates the
  * return instruction pointer so that ftrace will return to the new function.
  */
 
@@ -407,7 +407,7 @@ int kpatch_register(struct kpatch_module *kpmod)
 		}
 	}
 
-	/* Register the ftrace trampoline if it hasn't been done already. */
+	/* Register the ftrace handler if it hasn't been done already. */
 	if (!kpatch_num_registered) {
 		ret = register_ftrace_function(&kpatch_ftrace_ops);
 		if (ret) {
@@ -424,7 +424,7 @@ int kpatch_register(struct kpatch_module *kpmod)
 
 	/*
 	 * Idle the CPUs, verify activeness safety, and atomically make the new
-	 * functions visible to the trampoline.
+	 * functions visible to the ftrace handler.
 	 */
 	ret = stop_machine(kpatch_apply_patch, kpmod, NULL);
 
