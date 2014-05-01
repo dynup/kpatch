@@ -13,24 +13,22 @@
  * GNU General Public License for more details.
  *
  * You should have received a copy of the GNU General Public License
- * along with this program; if not, write to the Free Software
- * Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA,
- * 02110-1301, USA.
+ * along with this program; if not, see <http://www.gnu.org/licenses/>.
  */
 
-/* Contains the code for the core kpatch module.  Each patch module registers
- * with this module to redirect old functions to new functions.
+/*
+ * kpatch core module
  *
- * Each patch module can contain one or more new functions.  This information
- * is contained in the .patches section of the patch module.  For each function
- * patched by the module we must:
+ * Patch modules register with this module to redirect old functions to new
+ * functions.
+ *
+ * For each function patched by the module we must:
  * - Call stop_machine
- * - Ensure that no execution thread is currently in the old function (or has
- *   it in the call stack)
- * - Add the new function address to the kpatch_funcs table
+ * - Ensure that no task has the old function in its call stack
+ * - Add the new function address to kpatch_func_hash
  *
  * After that, each call to the old function calls into kpatch_ftrace_handler()
- * which finds the new function in the kpatch_funcs table and updates the
+ * which finds the new function in kpatch_func_hash table and updates the
  * return instruction pointer so that ftrace will return to the new function.
  */
 
@@ -47,9 +45,9 @@
 #include "kpatch.h"
 
 #define KPATCH_HASH_BITS 8
-DEFINE_HASHTABLE(kpatch_func_hash, KPATCH_HASH_BITS);
+static DEFINE_HASHTABLE(kpatch_func_hash, KPATCH_HASH_BITS);
 
-DEFINE_SEMAPHORE(kpatch_mutex);
+static DEFINE_SEMAPHORE(kpatch_mutex);
 
 static int kpatch_num_registered;
 
@@ -143,8 +141,8 @@ static struct kpatch_func *kpatch_get_prev_func(struct kpatch_func *f,
 	return NULL;
 }
 
-void kpatch_backtrace_address_verify(void *data, unsigned long address,
-				     int reliable)
+static void kpatch_backtrace_address_verify(void *data, unsigned long address,
+					    int reliable)
 {
 	struct kpatch_backtrace_args *args = data;
 	struct kpatch_module *kpmod = args->kpmod;
@@ -170,8 +168,8 @@ void kpatch_backtrace_address_verify(void *data, unsigned long address,
 		}
 
 		if (address >= func_addr && address < func_addr + func_size) {
-			pr_err("activeness safety check failed for function "
-			       "at address 0x%lx\n", func_addr);
+			pr_err("activeness safety check failed for function at address 0x%lx\n",
+			       func_addr);
 			args->ret = -EBUSY;
 			return;
 		}
@@ -183,10 +181,10 @@ static int kpatch_backtrace_stack(void *data, char *name)
 	return 0;
 }
 
-struct stacktrace_ops kpatch_backtrace_ops = {
+static const struct stacktrace_ops kpatch_backtrace_ops = {
 	.address	= kpatch_backtrace_address_verify,
 	.stack		= kpatch_backtrace_stack,
-	.walk_stack 	= print_context_stack_bp,
+	.walk_stack	= print_context_stack_bp,
 };
 
 /*
@@ -292,9 +290,9 @@ static int kpatch_remove_patch(void *data)
  * function, the last one to register wins, as it'll be first in the hash
  * bucket.
  */
-void notrace kpatch_ftrace_handler(unsigned long ip, unsigned long parent_ip,
-				   struct ftrace_ops *fops,
-				   struct pt_regs *regs)
+static void notrace
+kpatch_ftrace_handler(unsigned long ip, unsigned long parent_ip,
+		      struct ftrace_ops *fops, struct pt_regs *regs)
 {
 	struct kpatch_func *func;
 	int state;
@@ -409,7 +407,7 @@ int kpatch_register(struct kpatch_module *kpmod)
 		}
 	}
 
-	/* Register the ftrace trampoline if it hasn't been done already. */
+	/* Register the ftrace handler if it hasn't been done already. */
 	if (!kpatch_num_registered) {
 		ret = register_ftrace_function(&kpatch_ftrace_ops);
 		if (ret) {
@@ -426,7 +424,7 @@ int kpatch_register(struct kpatch_module *kpmod)
 
 	/*
 	 * Idle the CPUs, verify activeness safety, and atomically make the new
-	 * functions visible to the trampoline.
+	 * functions visible to the ftrace handler.
 	 */
 	ret = stop_machine(kpatch_apply_patch, kpmod, NULL);
 
