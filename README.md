@@ -1,12 +1,12 @@
 kpatch: dynamic kernel patching
 ===============================
 
-kpatch is a Linux dynamic kernel patching tool which allows you to patch a
-running kernel without rebooting or restarting any processes.  It enables
-sysadmins to apply critical security patches to the kernel immediately, without
-having to wait for long-running tasks to complete, users to log off, or
-for scheduled reboot windows.  It gives more control over uptime without
-sacrificing security or stability.
+kpatch is a Linux dynamic kernel patching infrastructure which allows you to
+patch a running kernel without rebooting or restarting any processes.  It
+enables sysadmins to apply critical security patches to the kernel immediately,
+without having to wait for long-running tasks to complete, for users to log
+off, or for scheduled reboot windows.  It gives more control over uptime
+without sacrificing security or stability.
 
 kpatch is currently in active development.  For now, it should _not_ be used
 in production environments.
