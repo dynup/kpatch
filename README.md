@@ -29,7 +29,7 @@ Install the dependencies for compiling kpatch:
 
 Install the dependencies for the "kpatch-build" command:
 
-    sudo yum install rpmdevtools pesign
+    sudo yum install rpmdevtools pesign yum-utils
     sudo yum-builddep kernel
 
     # optional, but highly recommended
