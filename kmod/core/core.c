@@ -44,6 +44,13 @@
 #include <asm/cacheflush.h>
 #include "kpatch.h"
 
+#if !defined(CONFIG_FUNCTION_TRACER) || \
+	!defined(CONFIG_HAVE_FENTRY) || \
+	!defined(CONFIG_MODULES) || \
+	!defined(CONFIG_SYSFS)
+#error "CONFIG_FUNCTION_TRACER, CONFIG_HAVE_FENTRY, CONFIG_MODULES, and CONFIG_SYSFS kernel config options are required"
+#endif
+
 #define KPATCH_HASH_BITS 8
 static DEFINE_HASHTABLE(kpatch_func_hash, KPATCH_HASH_BITS);
 
