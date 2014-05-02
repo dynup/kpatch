@@ -141,19 +141,33 @@ static struct kpatch_func *kpatch_get_prev_func(struct kpatch_func *f,
 	return NULL;
 }
 
+static inline int kpatch_compare_addresses(unsigned long stack_addr,
+					   unsigned long func_addr,
+					   unsigned long func_size)
+{
+	if (stack_addr >= func_addr && stack_addr < func_addr + func_size) {
+		/* TODO: use kallsyms to print symbol name */
+		pr_err("activeness safety check failed for function at address 0x%lx\n", stack_addr);
+		return -EBUSY;
+	}
+	return 0;
+}
+
 static void kpatch_backtrace_address_verify(void *data, unsigned long address,
 					    int reliable)
 {
 	struct kpatch_backtrace_args *args = data;
 	struct kpatch_module *kpmod = args->kpmod;
+	struct kpatch_func *func;
 	int i;
 
 	if (args->ret)
 		return;
 
+	/* check kpmod funcs */
 	for (i = 0; i < kpmod->num_funcs; i++) {
 		unsigned long func_addr, func_size;
-		struct kpatch_func *func, *active_func;
+		struct kpatch_func *active_func;
 
 		func = &kpmod->funcs[i];
 		active_func = kpatch_get_func(func->old_addr);
@@ -167,11 +181,20 @@ static void kpatch_backtrace_address_verify(void *data, unsigned long address,
 			func_size = active_func->new_size;
 		}
 
-		if (address >= func_addr && address < func_addr + func_size) {
-			pr_err("activeness safety check failed for function at address 0x%lx\n",
-			       func_addr);
-			args->ret = -EBUSY;
+		args->ret = kpatch_compare_addresses(address, func_addr,
+						     func_size);
+		if (args->ret)
 			return;
+	}
+
+	/* in the replace case, need to check the func hash as well */
+	hash_for_each_rcu(kpatch_func_hash, i, func, node) {
+		if (func->op == KPATCH_OP_UNPATCH) {
+			args->ret = kpatch_compare_addresses(address,
+							     func->new_addr,
+							     func->new_size);
+			if (args->ret)
+				return;
 		}
 	}
 }
@@ -366,10 +389,11 @@ static void kpatch_remove_funcs_from_filter(struct kpatch_func *funcs,
 	}
 }
 
-int kpatch_register(struct kpatch_module *kpmod)
+int kpatch_register(struct kpatch_module *kpmod, bool replace)
 {
 	int ret, i;
 	struct kpatch_func *funcs = kpmod->funcs;
+	struct kpatch_func *func;
 	int num_funcs = kpmod->num_funcs;
 
 	if (!kpmod->mod || !funcs || !num_funcs)
@@ -385,9 +409,10 @@ int kpatch_register(struct kpatch_module *kpmod)
 	}
 
 	for (i = 0; i < num_funcs; i++) {
-		struct kpatch_func *func = &funcs[i];
+		func = &funcs[i];
 
 		func->op = KPATCH_OP_PATCH;
+		func->kpmod = kpmod;
 
 		/*
 		 * If any other modules have also patched this function, it
@@ -417,6 +442,10 @@ int kpatch_register(struct kpatch_module *kpmod)
 	}
 	kpatch_num_registered++;
 
+	if (replace)
+		hash_for_each_rcu(kpatch_func_hash, i, func, node)
+			func->op = KPATCH_OP_UNPATCH;
+
 	/* memory barrier between func hash and state write */
 	smp_wmb();
 
@@ -427,6 +456,29 @@ int kpatch_register(struct kpatch_module *kpmod)
 	 * functions visible to the ftrace handler.
 	 */
 	ret = stop_machine(kpatch_apply_patch, kpmod, NULL);
+
+	/*
+	 * For the replace case, remove any obsolete funcs from the hash and
+	 * the ftrace filter, and disable the owning patch module so that it
+	 * can be removed.
+	 */
+	if (!ret && replace)
+		hash_for_each_rcu(kpatch_func_hash, i, func, node) {
+			if (func->op != KPATCH_OP_UNPATCH)
+				continue;
+			hash_del_rcu(&func->node);
+			kpatch_remove_funcs_from_filter(func, 1);
+			if (func->kpmod->enabled) {
+				kpatch_num_registered--;
+				func->kpmod->enabled = false;
+				pr_notice("unloaded patch module \"%s\"\n",
+					  func->kpmod->mod->name);
+				module_put(func->kpmod->mod);
+			}
+		}
+
+	/* memory barrier between func hash and state write */
+	smp_wmb();
 
 	/* NMI handlers can return to normal now */
 	kpatch_state_idle();
@@ -458,6 +510,9 @@ int kpatch_register(struct kpatch_module *kpmod)
 	return 0;
 
 err_unregister:
+	if (replace)
+		hash_for_each_rcu(kpatch_func_hash, i, func, node)
+			func->op = KPATCH_OP_NONE;
 	if (kpatch_num_registered == 1) {
 		int ret2 = unregister_ftrace_function(&kpatch_ftrace_ops);
 		if (ret2) {
@@ -550,6 +605,7 @@ static int kpatch_init(void)
 
 static void kpatch_exit(void)
 {
+	WARN_ON(kpatch_num_registered != 0);
 	kobject_put(kpatch_patches_kobj);
 	kobject_put(kpatch_root_kobj);
 }

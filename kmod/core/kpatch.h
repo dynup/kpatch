@@ -41,6 +41,7 @@ struct kpatch_func {
 
 	/* private */
 	struct hlist_node node;
+	struct kpatch_module *kpmod;
 	enum kpatch_op op;
 };
 
@@ -54,7 +55,7 @@ struct kpatch_module {
 
 extern struct kobject *kpatch_patches_kobj;
 
-extern int kpatch_register(struct kpatch_module *kpmod);
+extern int kpatch_register(struct kpatch_module *kpmod, bool replace);
 extern int kpatch_unregister(struct kpatch_module *kpmod);
 
 #endif /* _KPATCH_H_ */
