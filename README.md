@@ -77,22 +77,53 @@ Quick start
 kernel on any distribution, the "kpatch-build" command currently
 only works on Fedora.*
 
-Make a source patch against the kernel tree:
+First, make a source code patch against the kernel tree using diff, git, or
+quilt.
 
-    # from a kernel git tree:
-    git diff > /path/to/foo.patch
+As a contrived example, let's patch /proc/meminfo to show VmallocChunk in ALL
+CAPS so we can see it better:
+
+    $ cat meminfo-string.patch
+    Index: src/fs/proc/meminfo.c
+    ===================================================================
+    --- src.orig/fs/proc/meminfo.c
+    +++ src/fs/proc/meminfo.c
+    @@ -95,7 +95,7 @@ static int meminfo_proc_show(struct seq_
+     		"Committed_AS:   %8lu kB\n"
+     		"VmallocTotal:   %8lu kB\n"
+     		"VmallocUsed:    %8lu kB\n"
+    -		"VmallocChunk:   %8lu kB\n"
+    +		"VMALLOCCHUNK:   %8lu kB\n"
+     #ifdef CONFIG_MEMORY_FAILURE
+     		"HardwareCorrupted: %5lu kB\n"
+     #endif
 
 Build the patch module:
 
-    kpatch-build /path/to/foo.patch
+    $ kpatch-build meminfo-string.patch
+    Using cache at /home/jpoimboe/.kpatch/3.13.10-200.fc20.x86_64/src
+    Testing patch file
+    checking file fs/proc/meminfo.c
+    Building original kernel
+    Building patched kernel
+    Detecting changed objects
+    Rebuilding changed objects
+    Extracting new and modified ELF sections
+    meminfo.o: changed function: meminfo_proc_show
+    Building patch module: kpatch-meminfo-string.ko
+    SUCCESS
 
-This outputs a patch module named `kpatch-foo.ko` in the current
+That outputs a patch module named `kpatch-meminfo-string.ko` in the current
 directory.  Now apply it to the running kernel:
 
-    sudo kpatch load kpatch-foo.ko
+    $ sudo kpatch load kpatch-meminfo-string.ko
+    loading core module: /usr/local/lib/modules/3.13.10-200.fc20.x86_64/kpatch/kpatch.ko
+    loading patch module: kpatch-meminfo-string.ko
 
 Done!  The kernel is now patched.
 
+    $ grep -i chunk /proc/meminfo
+    VMALLOCCHUNK:   34359337092 kB
 
 How it works
 ------------
