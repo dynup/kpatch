@@ -543,7 +543,8 @@ int kpatch_unregister(struct kpatch_module *kpmod)
 	int num_funcs = kpmod->num_funcs;
 	int i, ret;
 
-	WARN_ON(!kpmod->enabled);
+	if (!kpmod->enabled)
+		return -EINVAL;
 
 	down(&kpatch_mutex);
 
