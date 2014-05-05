@@ -104,10 +104,10 @@ build_module() {
 		skip=0
 		[[ $shouldfail -eq 1 ]] && skip=1
 		[[ -e $module ]] && skip=1
-		[[ $skip -eq 1 ]] && echo "$prefix: skipping build" && return
+		[[ $skip -eq 1 ]] && echo "skipping build: $prefix" && return
 	fi
 
-	echo "$prefix: building"
+	echo "build: $prefix"
 
 	if ! $KPATCHBUILD $file >> $LOG 2>&1; then
 		[[ $shouldfail -eq 0 ]] && error "$prefix: build failed"
@@ -124,7 +124,7 @@ run_load_test() {
 
 	[[ ! -e $testprog ]] && return
 
-	echo "$prefix: running load test"
+	echo "load test: $prefix"
 
 	if [[ ! -e $module ]]; then
 		error "$prefix: can't find $module"
@@ -168,7 +168,7 @@ run_custom_test() {
 
 	[[ $testprog = *-LOADED.test ]] && return
 
-	echo "$prefix: running test"
+	echo "custom test: $prefix"
 
 	if ./$testprog >> $LOG 2>&1; then
 		error "$prefix: test failed"
