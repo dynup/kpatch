@@ -154,7 +154,8 @@ static inline int kpatch_compare_addresses(unsigned long stack_addr,
 {
 	if (stack_addr >= func_addr && stack_addr < func_addr + func_size) {
 		/* TODO: use kallsyms to print symbol name */
-		pr_err("activeness safety check failed for function at address 0x%lx\n", stack_addr);
+		pr_err("activeness safety check failed for function at address 0x%lx\n",
+		       stack_addr);
 		return -EBUSY;
 	}
 	return 0;
