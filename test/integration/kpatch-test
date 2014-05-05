@@ -101,6 +101,7 @@ build_module() {
 	fi
 
 	if [[ $SKIPBUILD -eq 1 ]]; then
+		skip=0
 		[[ $shouldfail -eq 1 ]] && skip=1
 		[[ -e $module ]] && skip=1
 		[[ $skip -eq 1 ]] && echo "$prefix: skipping build" && return
