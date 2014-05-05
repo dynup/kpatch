@@ -1,0 +1,45 @@
+#!/bin/bash
+
+SCRIPTDIR="$(readlink -f $(dirname $(type -p $0)))"
+ROOTDIR="$(readlink -f $SCRIPTDIR/../..)"
+KPATCH="sudo $ROOTDIR/kpatch/kpatch"
+
+set -o errexit
+
+die() {
+	echo "ERROR: $@" >&2
+	exit 1
+}
+
+ko_to_test() {
+	tmp=${1%.ko}-LOADED.test
+	echo ${tmp#kpatch-}
+}
+
+# make sure any modules added here are disjoint
+declare -a modules=(kpatch-cmdline-string.ko kpatch-meminfo-string.ko)
+
+for mod in "${modules[@]}"; do
+	testprog=$(ko_to_test $mod)
+	./$testprog && die "./$testprog succeeded before loading any modules"
+done
+
+for mod in "${modules[@]}"; do
+	$KPATCH load $mod
+done
+
+for mod in "${modules[@]}"; do
+	testprog=$(ko_to_test $mod)
+	./$testprog || die "./$testprog failed after loading modules"
+done
+
+for mod in "${modules[@]}"; do
+	$KPATCH unload $mod
+done
+
+for mod in "${modules[@]}"; do
+	testprog=$(ko_to_test $mod)
+	./$testprog && die "./$testprog succeeded after unloading modules"
+done
+
+exit 0
