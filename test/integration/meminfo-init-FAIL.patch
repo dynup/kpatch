@@ -1,0 +1,12 @@
+Index: src/fs/proc/meminfo.c
+===================================================================
+--- src.orig/fs/proc/meminfo.c
++++ src/fs/proc/meminfo.c
+@@ -180,6 +180,7 @@ static const struct file_operations memi
+ 
+ static int __init proc_meminfo_init(void)
+ {
++	printk("a\n");
+ 	proc_create("meminfo", 0, NULL, &meminfo_proc_fops);
+ 	return 0;
+ }

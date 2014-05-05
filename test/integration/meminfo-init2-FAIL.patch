@@ -1,0 +1,20 @@
+Index: src/fs/proc/meminfo.c
+===================================================================
+--- src.orig/fs/proc/meminfo.c
++++ src/fs/proc/meminfo.c
+@@ -29,6 +29,7 @@ static int meminfo_proc_show(struct seq_
+ 	unsigned long pages[NR_LRU_LISTS];
+ 	int lru;
+ 
++	printk("a\n");
+ /*
+  * display in kilobytes.
+  */
+@@ -180,6 +181,7 @@ static const struct file_operations memi
+ 
+ static int __init proc_meminfo_init(void)
+ {
++	printk("a\n");
+ 	proc_create("meminfo", 0, NULL, &meminfo_proc_fops);
+ 	return 0;
+ }
