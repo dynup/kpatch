@@ -170,7 +170,7 @@ run_custom_test() {
 
 	echo "custom test: $prefix"
 
-	if ./$testprog >> $LOG 2>&1; then
+	if ! ./$testprog >> $LOG 2>&1; then
 		error "$prefix: test failed"
 	fi
 }
