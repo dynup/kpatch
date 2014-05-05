@@ -85,7 +85,6 @@ unload_all() {
 	for i in `lsmod |egrep '^kpatch' |awk '{print $1}'`; do
 		if [[ $i != kpatch ]]; then
 			$KPATCH unload $i >> $LOG 2>&1 || error "\"kpatch unload $i\" failed"
-			return
 		fi
 	done
 	if lsmod |egrep -q '^kpatch'; then
