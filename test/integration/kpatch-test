@@ -73,8 +73,12 @@ done
 
 
 error() {
-	echo "ERROR: $@" >&2
+	echo "ERROR: $@" |tee -a $LOG >&2
 	ERROR=$((ERROR + 1))
+}
+
+log() {
+	echo "$@" |tee -a $LOG
 }
 
 unload_all() {
@@ -104,10 +108,10 @@ build_module() {
 		skip=0
 		[[ $shouldfail -eq 1 ]] && skip=1
 		[[ -e $module ]] && skip=1
-		[[ $skip -eq 1 ]] && echo "skipping build: $prefix" && return
+		[[ $skip -eq 1 ]] && log "skipping build: $prefix" && return
 	fi
 
-	echo "build: $prefix"
+	log "build: $prefix"
 
 	if ! $KPATCHBUILD $file >> $LOG 2>&1; then
 		[[ $shouldfail -eq 0 ]] && error "$prefix: build failed"
@@ -124,7 +128,7 @@ run_load_test() {
 
 	[[ ! -e $testprog ]] && return
 
-	echo "load test: $prefix"
+	log "load test: $prefix"
 
 	if [[ ! -e $module ]]; then
 		error "$prefix: can't find $module"
@@ -168,7 +172,7 @@ run_custom_test() {
 
 	[[ $testprog = *-LOADED.test ]] && return
 
-	echo "custom test: $prefix"
+	log "custom test: $prefix"
 
 	if ! ./$testprog >> $LOG 2>&1; then
 		error "$prefix: test failed"
@@ -195,6 +199,6 @@ done
 
 unload_all
 
-echo "$ERROR errors encountered"
+log "$ERROR errors encountered"
 
 exit $ERROR
