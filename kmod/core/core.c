@@ -543,7 +543,8 @@ int kpatch_unregister(struct kpatch_module *kpmod)
 	int num_funcs = kpmod->num_funcs;
 	int i, ret;
 
-	WARN_ON(!kpmod->enabled);
+	if (!kpmod->enabled)
+		return -EINVAL;
 
 	down(&kpatch_mutex);
 
@@ -575,12 +576,13 @@ int kpatch_unregister(struct kpatch_module *kpmod)
 		goto out;
 	}
 
-	if (kpatch_num_registered == 1) {
+	kpatch_num_registered--;
+	if (!kpatch_num_registered) {
 		ret = unregister_ftrace_function(&kpatch_ftrace_ops);
-		if (ret)
+		if (ret) {
 			WARN(1, "can't unregister ftrace handler");
-		else
-			kpatch_num_registered--;
+			kpatch_num_registered++;
+		}
 	}
 
 	kpatch_remove_funcs_from_filter(funcs, num_funcs);
