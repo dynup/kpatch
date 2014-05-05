@@ -42,6 +42,7 @@ SCRIPTDIR="$(readlink -f $(dirname $(type -p $0)))"
 ROOTDIR="$(readlink -f $SCRIPTDIR/../..)"
 # TODO: option to use system-installed binaries instead
 KPATCH="sudo $ROOTDIR/kpatch/kpatch"
+RMMOD="sudo rmmod"
 KPATCHBUILD="$ROOTDIR"/kpatch-build/kpatch-build
 ERROR=0
 LOG=test.log
@@ -74,6 +75,18 @@ done
 error() {
 	echo "ERROR: $@" >&2
 	ERROR=$((ERROR + 1))
+}
+
+unload_all() {
+	for i in `lsmod |egrep '^kpatch' |awk '{print $1}'`; do
+		if [[ $i != kpatch ]]; then
+			$KPATCH unload $i >> $LOG 2>&1 || error "\"kpatch unload $i\" failed"
+			return
+		fi
+	done
+	if lsmod |egrep -q '^kpatch'; then
+		$RMMOD kpatch >> $LOG 2>&1 || error "\"rmmod kpatch\" failed"
+	fi
 }
 
 build_module() {
@@ -112,30 +125,19 @@ run_load_test() {
 
 	echo "$prefix: running load test"
 
-	if ./$testprog >> $LOG 2>&1; then
-		error "$prefix: $testprog succeeded before kpatch load"
-	fi
-
 	if [[ ! -e $module ]]; then
 		error "$prefix: can't find $module"
 		return
 	fi
 
-	# TODO: once we have "kpatch load --replace" we can do more tests here:
-	# test
-	# kpatch load --replace
-	# test
-	# kpatch unload
-	# test
-	# kpatch load
-	# test
-	if ! $KPATCH load $module >> $LOG 2>&1; then
-		error "$prefix: kpatch load failed"
+	if ! $KPATCH replace $module >> $LOG 2>&1; then
+		error "$prefix: kpatch replace failed"
 		return
 	fi
 
 	if ! ./$testprog >> $LOG 2>&1; then
-		error "$prefix: $testprog failed after kpatch load"
+		error "$prefix: $testprog failed after kpatch replace"
+		return
 	fi
 
 	if ! $KPATCH unload $module >> $LOG 2>&1; then
@@ -145,6 +147,17 @@ run_load_test() {
 
 	if ./$testprog >> $LOG 2>&1; then
 		error "$prefix: $testprog succeeded after kpatch unload"
+		return
+	fi
+
+	if ! $KPATCH load $module >> $LOG 2>&1; then
+		error "$prefix: kpatch load failed"
+		return
+	fi
+
+	if ! ./$testprog >> $LOG 2>&1; then
+		error "$prefix: $testprog failed after kpatch load"
+		return
 	fi
 }
 
@@ -167,13 +180,19 @@ for file in *.patch; do
 	build_module $file
 done
 
+unload_all
+
 for file in *.patch; do
 	run_load_test $file
+	lastmod=$file
 done
 
 for file in *.test; do
+	unload_all
 	run_custom_test $file
 done
+
+unload_all
 
 echo "$ERROR errors encountered"
 
