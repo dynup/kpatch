@@ -22,6 +22,9 @@ install() {
     # install insmod (needed by kpatch script)
     inst_symlink /usr/sbin/insmod
 
+    # install dirname (needed by kpatch script)
+    inst /usr/bin/dirname
+    
     # install core module
     inst_any -d /usr/lib/modules/$kernel/kpatch/kpatch.ko /usr/local/lib/modules/$kernel/kpatch/kpatch.ko /usr/lib/modules/$kernel/kpatch/kpatch.ko
 
