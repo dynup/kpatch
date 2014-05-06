@@ -11,6 +11,9 @@ all: $(TARGETS)
 %: %.c
 	$(CC) $(CFLAGS) $^ -o $@ $(LDFLAGS)
 
+create-diff-object: create-diff-object.c list.h
+	$(CC) $(CFLAGS) create-diff-object.c -o $@ $(LDFLAGS)
+
 install: all
 	$(INSTALL) -d $(LIBEXECDIR)
 	$(INSTALL) $(TARGETS) $(LIBEXECDIR)
