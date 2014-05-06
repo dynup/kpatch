@@ -202,18 +202,24 @@ case "$1" in
 
 "list")
 	[[ "$#" -ne 1 ]] && usage
-	echo "System installed patches:"
+	echo "Loaded patch modules:"
+	for module in /sys/kernel/kpatch/patches/*; do
+		if [[ -e $module ]] && [[ $(cat $module/enabled) -eq 1 ]]; then
+			echo_patch_name $module
+		fi
+	done
+	echo ""
+	echo "System installed patch modules:"
 	for i in "$SYSDIR"/*.ko; do
 		[[ -e "$i" ]] || continue
 		echo_patch_name $i
 	done
 	echo ""
-	echo "User installed patches:"
+	echo "User installed patch modules:"
 	for i in "$USERDIR"/*.ko; do
 		[[ -e "$i" ]] || continue
 		echo_patch_name $i
 	done
-	echo ""
 	;;
 
 "info")
