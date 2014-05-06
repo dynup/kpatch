@@ -1,0 +1,34 @@
+#!/bin/bash
+
+SCRIPTDIR="$(readlink -f $(dirname $(type -p $0)))"
+ROOTDIR="$(readlink -f $SCRIPTDIR/../..)"
+KPATCH="sudo $ROOTDIR/kpatch/kpatch"
+
+set -o errexit
+
+die() {
+	echo "ERROR: $@" >&2
+	exit 1
+}
+
+ko_to_test() {
+	tmp=${1%.ko}-LOADED.test
+	echo ${tmp##kpatch-}
+}
+
+test_replace() {
+	$KPATCH load $1
+	$KPATCH replace $2
+	test1=$(ko_to_test $1)
+	test2=$(ko_to_test $2)
+	./$test1 && die "./$test1 succeeded after $1 was replaced by $2"
+	./$test2 || die "./$test2 failed after $1 was replaced by $2"
+	$KPATCH unload $2
+}
+
+# subset
+test_replace kpatch-meminfo-cmdline.ko kpatch-cmdline-string.ko
+
+# disjoint
+test_replace kpatch-cmdline-string.ko kpatch-meminfo-string.ko
+test_replace kpatch-meminfo-string.ko kpatch-cmdline-string.ko

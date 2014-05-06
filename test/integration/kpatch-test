@@ -42,6 +42,7 @@ SCRIPTDIR="$(readlink -f $(dirname $(type -p $0)))"
 ROOTDIR="$(readlink -f $SCRIPTDIR/../..)"
 # TODO: option to use system-installed binaries instead
 KPATCH="sudo $ROOTDIR/kpatch/kpatch"
+RMMOD="sudo rmmod"
 KPATCHBUILD="$ROOTDIR"/kpatch-build/kpatch-build
 ERROR=0
 LOG=test.log
@@ -72,8 +73,23 @@ done
 
 
 error() {
-	echo "ERROR: $@" >&2
+	echo "ERROR: $@" |tee -a $LOG >&2
 	ERROR=$((ERROR + 1))
+}
+
+log() {
+	echo "$@" |tee -a $LOG
+}
+
+unload_all() {
+	for i in `lsmod |egrep '^kpatch' |awk '{print $1}'`; do
+		if [[ $i != kpatch ]]; then
+			$KPATCH unload $i >> $LOG 2>&1 || error "\"kpatch unload $i\" failed"
+		fi
+	done
+	if lsmod |egrep -q '^kpatch'; then
+		$RMMOD kpatch >> $LOG 2>&1 || error "\"rmmod kpatch\" failed"
+	fi
 }
 
 build_module() {
@@ -88,12 +104,13 @@ build_module() {
 	fi
 
 	if [[ $SKIPBUILD -eq 1 ]]; then
+		skip=0
 		[[ $shouldfail -eq 1 ]] && skip=1
 		[[ -e $module ]] && skip=1
-		[[ $skip -eq 1 ]] && echo "$prefix: skipping build" && return
+		[[ $skip -eq 1 ]] && log "skipping build: $prefix" && return
 	fi
 
-	echo "$prefix: building"
+	log "build: $prefix"
 
 	if ! $KPATCHBUILD $file >> $LOG 2>&1; then
 		[[ $shouldfail -eq 0 ]] && error "$prefix: build failed"
@@ -110,32 +127,21 @@ run_load_test() {
 
 	[[ ! -e $testprog ]] && return
 
-	echo "$prefix: running load test"
-
-	if ./$testprog >> $LOG 2>&1; then
-		error "$prefix: $testprog succeeded before kpatch load"
-	fi
+	log "load test: $prefix"
 
 	if [[ ! -e $module ]]; then
 		error "$prefix: can't find $module"
 		return
 	fi
 
-	# TODO: once we have "kpatch load --replace" we can do more tests here:
-	# test
-	# kpatch load --replace
-	# test
-	# kpatch unload
-	# test
-	# kpatch load
-	# test
-	if ! $KPATCH load $module >> $LOG 2>&1; then
-		error "$prefix: kpatch load failed"
+	if ! $KPATCH replace $module >> $LOG 2>&1; then
+		error "$prefix: kpatch replace failed"
 		return
 	fi
 
 	if ! ./$testprog >> $LOG 2>&1; then
-		error "$prefix: $testprog failed after kpatch load"
+		error "$prefix: $testprog failed after kpatch replace"
+		return
 	fi
 
 	if ! $KPATCH unload $module >> $LOG 2>&1; then
@@ -145,6 +151,17 @@ run_load_test() {
 
 	if ./$testprog >> $LOG 2>&1; then
 		error "$prefix: $testprog succeeded after kpatch unload"
+		return
+	fi
+
+	if ! $KPATCH load $module >> $LOG 2>&1; then
+		error "$prefix: kpatch load failed"
+		return
+	fi
+
+	if ! ./$testprog >> $LOG 2>&1; then
+		error "$prefix: $testprog failed after kpatch load"
+		return
 	fi
 }
 
@@ -154,9 +171,9 @@ run_custom_test() {
 
 	[[ $testprog = *-LOADED.test ]] && return
 
-	echo "$prefix: running test"
+	log "custom test: $prefix"
 
-	if ./$testprog >> $LOG 2>&1; then
+	if ! ./$testprog >> $LOG 2>&1; then
 		error "$prefix: test failed"
 	fi
 }
@@ -167,14 +184,20 @@ for file in *.patch; do
 	build_module $file
 done
 
+unload_all
+
 for file in *.patch; do
 	run_load_test $file
+	lastmod=$file
 done
 
 for file in *.test; do
+	unload_all
 	run_custom_test $file
 done
 
-echo "$ERROR errors encountered"
+unload_all
+
+log "$ERROR errors encountered"
 
 exit $ERROR

@@ -1,0 +1,26 @@
+Index: src/fs/proc/cmdline.c
+===================================================================
+--- src.orig/fs/proc/cmdline.c
++++ src/fs/proc/cmdline.c
+@@ -5,7 +5,7 @@
+ 
+ static int cmdline_proc_show(struct seq_file *m, void *v)
+ {
+-	seq_printf(m, "%s\n", saved_command_line);
++	seq_printf(m, "%s kpatch=1\n", saved_command_line);
+ 	return 0;
+ }
+ 
+Index: src/fs/proc/meminfo.c
+===================================================================
+--- src.orig/fs/proc/meminfo.c
++++ src/fs/proc/meminfo.c
+@@ -95,7 +95,7 @@ static int meminfo_proc_show(struct seq_
+ 		"Committed_AS:   %8lu kB\n"
+ 		"VmallocTotal:   %8lu kB\n"
+ 		"VmallocUsed:    %8lu kB\n"
+-		"VmallocChunk:   %8lu kB\n"
++		"VMALLOCCHUNK:   %8lu kB\n"
+ #ifdef CONFIG_MEMORY_FAILURE
+ 		"HardwareCorrupted: %5lu kB\n"
+ #endif
