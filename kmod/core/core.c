@@ -39,7 +39,7 @@
 #include <linux/stop_machine.h>
 #include <linux/ftrace.h>
 #include <linux/hashtable.h>
-#include <linux/preempt_mask.h>
+#include <linux/hardirq.h>
 #include <asm/stacktrace.h>
 #include <asm/cacheflush.h>
 #include "kpatch.h"
