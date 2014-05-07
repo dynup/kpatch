@@ -11,3 +11,4 @@ symbol a 0 1
 symbol test_func 2 1
 symbol printf 0 1
 symbol puts 0 1
+symbol  0 0
