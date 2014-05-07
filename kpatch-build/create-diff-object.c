@@ -906,7 +906,6 @@ void kpatch_generate_output(struct kpatch_elf *kelf, struct kpatch_elf **kelfout
 		if ((sym->type == STT_OBJECT ||
 		     sym->type == STT_FUNC) &&
 		    !sym->sec->include) {
-			printf("changing type for symbol %s\n", sym->name);
 			sym->type = STT_NOTYPE;
 			sym->bind = STB_GLOBAL;
 			sym->sym.st_info = GELF_ST_INFO(STB_GLOBAL, STT_NOTYPE);
