@@ -220,7 +220,7 @@ struct symbol *find_symbol_by_name(struct list_head *list, const char *name)
  * **********/
 void kpatch_create_rela_list(struct kpatch_elf *kelf, struct section *sec)
 {
-	int rela_nr, i = 0;
+	int rela_nr, index = 0;
 	struct rela *rela;
 	unsigned int symndx;
 
@@ -241,9 +241,9 @@ void kpatch_create_rela_list(struct kpatch_elf *kelf, struct section *sec)
 	while (rela_nr--) {
 		ALLOC_LINK(rela, &sec->relas);
 
-		if (!gelf_getrela(sec->data, i, &rela->rela))
+		if (!gelf_getrela(sec->data, index, &rela->rela))
 			ERROR("gelf_getrela");
-		i++;
+		index++;
 
 		rela->type = GELF_R_TYPE(rela->rela.r_info);
 		rela->addend = rela->rela.r_addend;
@@ -341,7 +341,7 @@ void kpatch_create_symbol_list(struct kpatch_elf *kelf)
 {
 	struct section *symtab;
 	struct symbol *sym;
-	int symbols_nr, i = 0;
+	int symbols_nr, index = 0;
 
 	symtab = find_section_by_name(&kelf->sections, ".symtab");
 	if (!symtab)
@@ -354,10 +354,10 @@ void kpatch_create_symbol_list(struct kpatch_elf *kelf)
 	while (symbols_nr--) {
 		ALLOC_LINK(sym, &kelf->symbols);
 
-		sym->index = i;
-		if (!gelf_getsym(symtab->data, i, &sym->sym))
+		sym->index = index;
+		if (!gelf_getsym(symtab->data, index, &sym->sym))
 			ERROR("gelf_getsym");
-		i++;
+		index++;
 
 		sym->name = elf_strptr(kelf->elf, symtab->sh.sh_link,
 				       sym->sym.st_name);
@@ -813,7 +813,7 @@ int kpatch_include_changed_functions(struct kpatch_elf *kelf)
 	return changed_nr;
 }
 
-int kpatch_copy_symbols(int startndx, struct kpatch_elf *src,
+int kpatch_migrate_included_symbols(int startndx, struct kpatch_elf *src,
                         struct kpatch_elf *dst,
                         int (*select)(struct symbol *))
 {
@@ -918,7 +918,7 @@ void kpatch_generate_output(struct kpatch_elf *kelf, struct kpatch_elf **kelfout
 	/*
 	 * Copy functions to the output kelf and reindex.  Once the symbol is
 	 * copied, its include field is set to zero so it isn't copied again
-	 * by a subsequent kpatch_copy_symbols() call.
+	 * by a subsequent kpatch_migrate_included_symbols() call.
 	 */
 
 	/* copy null symbol first */
@@ -928,13 +928,13 @@ void kpatch_generate_output(struct kpatch_elf *kelf, struct kpatch_elf **kelfout
 	index = 1;
 
 	/* copy (LOCAL) FILE sym */
-	index = kpatch_copy_symbols(index, kelf, out, is_file_sym);
+	index = kpatch_migrate_included_symbols(index, kelf, out, is_file_sym);
 	/* copy LOCAL FUNC syms */
-	index = kpatch_copy_symbols(index, kelf, out, is_local_func_sym);
+	index = kpatch_migrate_included_symbols(index, kelf, out, is_local_func_sym);
 	/* copy all other LOCAL syms */
-	index = kpatch_copy_symbols(index, kelf, out, is_local_sym);
+	index = kpatch_migrate_included_symbols(index, kelf, out, is_local_sym);
 	/* copy all other (GLOBAL) syms */
-	index = kpatch_copy_symbols(index, kelf, out, NULL);
+	index = kpatch_migrate_included_symbols(index, kelf, out, NULL);
 
 	*kelfout = out;
 }
