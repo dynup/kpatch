@@ -13,3 +13,4 @@ symbol test_func2 2 0
 symbol .text.test_func 3 0
 symbol puts 0 1
 symbol test_func 2 1
+symbol  0 0
