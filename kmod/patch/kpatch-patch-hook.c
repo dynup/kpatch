@@ -41,7 +41,7 @@ static ssize_t patch_enabled_show(struct kobject *kobj,
 }
 
 static ssize_t patch_enabled_store(struct kobject *kobj,
-				   struct kobj_attribute *attr, char *buf,
+				   struct kobj_attribute *attr, const char *buf,
 				   size_t count)
 {
 	int ret;
