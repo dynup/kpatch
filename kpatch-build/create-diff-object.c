@@ -460,13 +460,12 @@ void kpatch_compare_correlated_rela_section(struct section *sec)
 {
 	struct rela *rela1, *rela2 = NULL;
 
+	rela2 = list_entry(sec->twin->relas.next, struct rela, list);
 	list_for_each_entry(rela1, &sec->relas, list) {
-		if (rela2)
+		if (rela_equal(rela1, rela2)) {
 			rela2 = list_entry(rela2->list.next, struct rela, list);
-		else
-			rela2 = list_entry(sec->twin->relas.next, struct rela, list);
-		if (rela_equal(rela1, rela2))
 			continue;
+		}
 		sec->status = CHANGED;
 		return;
 	}
