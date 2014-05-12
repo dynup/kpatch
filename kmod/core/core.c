@@ -105,6 +105,28 @@ enum {
 };
 static atomic_t kpatch_state;
 
+enum kpatch_op {
+	KPATCH_OP_NONE,
+	KPATCH_OP_PATCH,
+	KPATCH_OP_UNPATCH,
+};
+
+struct kpatch_func {
+	struct kpatch_patch *patch;
+	struct hlist_node node;
+	struct kpatch_module *kpmod;
+	enum kpatch_op op;
+};
+
+/*
+ * This structure is allocated on a per registered module basis
+ * and is stored in the struct kpatch_module "internal" field.
+ * Any data associated with each registered module used internally
+ * by this core module can be added here.
+ */
+struct kpatch_internal {
+	struct kpatch_func *funcs;
+};
 
 static inline void kpatch_state_idle(void)
 {
@@ -134,7 +156,7 @@ static struct kpatch_func *kpatch_get_func(unsigned long ip)
 
 	/* Here, we have to use rcu safe hlist because of NMI concurrency */
 	hash_for_each_possible_rcu(kpatch_func_hash, f, node, ip)
-		if (f->old_addr == ip)
+		if (f->patch->old_addr == ip)
 			return f;
 	return NULL;
 }
@@ -143,7 +165,7 @@ static struct kpatch_func *kpatch_get_prev_func(struct kpatch_func *f,
 						unsigned long ip)
 {
 	hlist_for_each_entry_continue_rcu(f, node)
-		if (f->old_addr == ip)
+		if (f->patch->old_addr == ip)
 			return f;
 	return NULL;
 }
@@ -173,20 +195,20 @@ static void kpatch_backtrace_address_verify(void *data, unsigned long address,
 		return;
 
 	/* check kpmod funcs */
-	for (i = 0; i < kpmod->num_funcs; i++) {
+	for (i = 0; i < kpmod->patches_nr; i++) {
 		unsigned long func_addr, func_size;
 		struct kpatch_func *active_func;
 
-		func = &kpmod->funcs[i];
-		active_func = kpatch_get_func(func->old_addr);
+		func = &kpmod->internal->funcs[i];
+		active_func = kpatch_get_func(func->patch->old_addr);
 		if (!active_func) {
 			/* patching an unpatched func */
-			func_addr = func->old_addr;
-			func_size = func->old_size;
+			func_addr = func->patch->old_addr;
+			func_size = func->patch->old_size;
 		} else {
 			/* repatching or unpatching */
-			func_addr = active_func->new_addr;
-			func_size = active_func->new_size;
+			func_addr = active_func->patch->new_addr;
+			func_size = active_func->patch->new_size;
 		}
 
 		args->ret = kpatch_compare_addresses(address, func_addr,
@@ -199,8 +221,8 @@ static void kpatch_backtrace_address_verify(void *data, unsigned long address,
 	hash_for_each_rcu(kpatch_func_hash, i, func, node) {
 		if (func->op == KPATCH_OP_UNPATCH) {
 			args->ret = kpatch_compare_addresses(address,
-							     func->new_addr,
-							     func->new_size);
+			                        func->patch->new_addr,
+			                        func->patch->new_size);
 			if (args->ret)
 				return;
 		}
@@ -251,8 +273,8 @@ out:
 static int kpatch_apply_patch(void *data)
 {
 	struct kpatch_module *kpmod = data;
-	struct kpatch_func *funcs = kpmod->funcs;
-	int num_funcs = kpmod->num_funcs;
+	struct kpatch_func *funcs = kpmod->internal->funcs;
+	int num_funcs = kpmod->patches_nr;
 	int i, ret;
 
 	ret = kpatch_verify_activeness_safety(kpmod);
@@ -264,7 +286,7 @@ static int kpatch_apply_patch(void *data)
 	/* tentatively add the new funcs to the global func hash */
 	for (i = 0; i < num_funcs; i++)
 		hash_add_rcu(kpatch_func_hash, &funcs[i].node,
-			     funcs[i].old_addr);
+			     funcs[i].patch->old_addr);
 
 	/* memory barrier between func hash add and state change */
 	smp_wmb();
@@ -291,8 +313,8 @@ static int kpatch_apply_patch(void *data)
 static int kpatch_remove_patch(void *data)
 {
 	struct kpatch_module *kpmod = data;
-	struct kpatch_func *funcs = kpmod->funcs;
-	int num_funcs = kpmod->num_funcs;
+	struct kpatch_func *funcs = kpmod->internal->funcs;
+	int num_funcs = kpmod->patches_nr;
 	int ret, i;
 
 	ret = kpatch_verify_activeness_safety(kpmod);
@@ -362,7 +384,7 @@ kpatch_ftrace_handler(unsigned long ip, unsigned long parent_ip,
 	}
 done:
 	if (func)
-		regs->ip = func->new_addr;
+		regs->ip = func->patch->new_addr;
 
 	preempt_enable_notrace();
 }
@@ -385,29 +407,39 @@ static void kpatch_remove_funcs_from_filter(struct kpatch_func *funcs,
 		 * If any other modules have also patched this function, don't
 		 * remove its ftrace handler.
 		 */
-		if (kpatch_get_func(func->old_addr))
+		if (kpatch_get_func(func->patch->old_addr))
 			continue;
 
 		/* Remove the ftrace handler for this function. */
-		ret = ftrace_set_filter_ip(&kpatch_ftrace_ops, func->old_addr,
-					   1, 0);
+		ret = ftrace_set_filter_ip(&kpatch_ftrace_ops,
+		                  func->patch->old_addr, 1, 0);
 
 		WARN(ret, "can't remove ftrace filter at address 0x%lx (rc=%d)",
-		     func->old_addr, ret);
+		     func->patch->old_addr, ret);
 	}
 }
 
 int kpatch_register(struct kpatch_module *kpmod, bool replace)
 {
 	int ret, i;
-	struct kpatch_func *funcs = kpmod->funcs;
-	struct kpatch_func *func;
-	int num_funcs = kpmod->num_funcs;
+	struct kpatch_func *funcs, *func;
+	int num_funcs = kpmod->patches_nr;
 
-	if (!kpmod->mod || !funcs || !num_funcs)
+	if (!kpmod->mod || !kpmod->patches || !num_funcs)
 		return -EINVAL;
 
 	kpmod->enabled = false;
+
+	kpmod->internal = kmalloc(sizeof(*kpmod->internal), GFP_KERNEL);
+	if (!kpmod->internal)
+		return -ENOMEM;
+
+	funcs = kmalloc(sizeof(*funcs) * num_funcs, GFP_KERNEL);
+	if (!funcs) {
+		kfree(kpmod->internal);
+		return -ENOMEM;
+	}
+	kpmod->internal->funcs = funcs;
 
 	down(&kpatch_mutex);
 
@@ -421,20 +453,21 @@ int kpatch_register(struct kpatch_module *kpmod, bool replace)
 
 		func->op = KPATCH_OP_PATCH;
 		func->kpmod = kpmod;
+		func->patch = &kpmod->patches[i];
 
 		/*
 		 * If any other modules have also patched this function, it
 		 * already has an ftrace handler.
 		 */
-		if (kpatch_get_func(func->old_addr))
+		if (kpatch_get_func(func->patch->old_addr))
 			continue;
 
 		/* Add an ftrace handler for this function. */
-		ret = ftrace_set_filter_ip(&kpatch_ftrace_ops, func->old_addr,
-					   0, 0);
+		ret = ftrace_set_filter_ip(&kpatch_ftrace_ops,
+		                  func->patch->old_addr, 0, 0);
 		if (ret) {
 			pr_err("can't set ftrace filter at address 0x%lx\n",
-			       func->old_addr);
+			       func->patch->old_addr);
 			num_funcs = i;
 			goto err_rollback;
 		}
@@ -534,14 +567,16 @@ err_rollback:
 	module_put(kpmod->mod);
 err_up:
 	up(&kpatch_mutex);
+	kfree(kpmod->internal->funcs);
+	kfree(kpmod->internal);
 	return ret;
 }
 EXPORT_SYMBOL(kpatch_register);
 
 int kpatch_unregister(struct kpatch_module *kpmod)
 {
-	struct kpatch_func *funcs = kpmod->funcs;
-	int num_funcs = kpmod->num_funcs;
+	struct kpatch_func *funcs = kpmod->internal->funcs;
+	int num_funcs = kpmod->patches_nr;
 	int i, ret;
 
 	if (!kpmod->enabled)
@@ -587,6 +622,9 @@ int kpatch_unregister(struct kpatch_module *kpmod)
 	}
 
 	kpatch_remove_funcs_from_filter(funcs, num_funcs);
+
+	kfree(kpmod->internal->funcs);
+	kfree(kpmod->internal);
 
 	pr_notice("unloaded patch module \"%s\"\n", kpmod->mod->name);
 

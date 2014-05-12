@@ -23,7 +23,6 @@
 #include <linux/printk.h>
 #include <linux/slab.h>
 #include "kpatch.h"
-#include "kpatch-patch.h"
 
 static bool replace;
 module_param(replace, bool, S_IRUGO);
@@ -73,24 +72,12 @@ static struct kobj_attribute patch_enabled_attr =
 static int __init patch_init(void)
 {
 	struct kpatch_patch *patches;
-	int i, ret;
-
-	patches = (struct kpatch_patch *)&__kpatch_patches;
+	int ret;
 
 	kpmod.mod = THIS_MODULE;
-	kpmod.num_funcs = (&__kpatch_patches_end - &__kpatch_patches) /
+	kpmod.patches = (struct kpatch_patch *)&__kpatch_patches;
+	kpmod.patches_nr = (&__kpatch_patches_end - &__kpatch_patches) /
 			  sizeof(*patches);
-	kpmod.funcs = kmalloc(kpmod.num_funcs * sizeof(struct kpatch_func),
-			      GFP_KERNEL);
-	if (!kpmod.funcs)
-		return -ENOMEM;
-
-	for (i = 0; i < kpmod.num_funcs; i++) {
-		kpmod.funcs[i].old_addr = patches[i].old_addr;
-		kpmod.funcs[i].old_size = patches[i].old_size;
-		kpmod.funcs[i].new_addr = patches[i].new_addr;
-		kpmod.funcs[i].new_size = patches[i].new_size;
-	}
 
 	patch_kobj = kobject_create_and_add(THIS_MODULE->name,
 					    kpatch_patches_kobj);
@@ -114,7 +101,6 @@ err_sysfs:
 err_put:
 	kobject_put(patch_kobj);
 err_free:
-	kfree(kpmod.funcs);
 	return ret;
 }
 
@@ -123,7 +109,6 @@ static void __exit patch_exit(void)
 	WARN_ON(kpmod.enabled);
 	sysfs_remove_file(patch_kobj, &patch_enabled_attr.attr);
 	kobject_put(patch_kobj);
-	kfree(kpmod.funcs);
 }
 
 module_init(patch_init);

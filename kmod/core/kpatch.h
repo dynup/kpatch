@@ -23,39 +23,33 @@
 #ifndef _KPATCH_H_
 #define _KPATCH_H_
 
-#include <linux/types.h>
-#include <linux/module.h>
-
-enum kpatch_op {
-	KPATCH_OP_NONE,
-	KPATCH_OP_PATCH,
-	KPATCH_OP_UNPATCH,
-};
-
-struct kpatch_func {
-	/* public */
+struct kpatch_patch {
 	unsigned long new_addr;
 	unsigned long new_size;
 	unsigned long old_addr;
 	unsigned long old_size;
-
-	/* private */
-	struct hlist_node node;
-	struct kpatch_module *kpmod;
-	enum kpatch_op op;
 };
+
+#ifdef __KERNEL__
+
+#include <linux/types.h>
+#include <linux/module.h>
+
+struct kpatch_internal;
 
 struct kpatch_module {
 	struct module *mod;
-	struct kpatch_func *funcs;
-	int num_funcs;
-
+	struct kpatch_patch *patches;
+	int patches_nr;
 	bool enabled;
+	struct kpatch_internal *internal; /* used internally by core module */
 };
 
 extern struct kobject *kpatch_patches_kobj;
 
 extern int kpatch_register(struct kpatch_module *kpmod, bool replace);
 extern int kpatch_unregister(struct kpatch_module *kpmod);
+
+#endif /* __KERNEL__ */
 
 #endif /* _KPATCH_H_ */
