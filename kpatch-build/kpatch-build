@@ -180,7 +180,8 @@ elif [[ -d "$SRCDIR" ]]; then
 	echo "Using cache at $SRCDIR"
 
 else
-	if grep -q "Fedora" "/etc/issue" || grep -q "Red Hat" "/etc/issue"; then
+	source /etc/os-release
+	if [[ $ID = fedora ]] || [[ $ID = rhel ]]; then
 
 		echo "Fedora/Red Hat distribution detected"
 		rpm -q --quiet rpmdevtools || die "rpmdevtools not installed"
@@ -205,7 +206,7 @@ else
 		cp "$SRCDIR/.config" "$OBJDIR" || die
 		echo "-${ARCHVERSION##*-}" > "$SRCDIR/localversion" || die
 
-	elif grep -q "Ubuntu" "/etc/issue"; then
+	elif [[ $ID = ubuntu ]]; then
 
 		echo "Debian/Ubuntu distribution detected"
 		cd $TEMPDIR
