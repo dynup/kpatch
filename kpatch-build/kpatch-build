@@ -75,7 +75,7 @@ find_dirs() {
 		# installation path
 		TOOLSDIR="$(readlink -f $SCRIPTDIR/../libexec/kpatch)"
 		DATADIR="$(readlink -f $SCRIPTDIR/../share/kpatch)"
-		SYMVERSFILE="$(readlink -f $SCRIPTDIR/../lib/modules/$(uname -r)/kpatch/Module.symvers)"
+		SYMVERSFILE="$(readlink -f $SCRIPTDIR/../lib/modules/$(uname -r)/extra/kpatch/Module.symvers)"
 		return
 	fi
 
