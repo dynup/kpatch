@@ -297,7 +297,6 @@ ld -r -o ../patch/output.o $FILES >> "$LOGFILE" 2>&1 || die
 cd "$TEMPDIR/patch"
 KPATCH_BUILD="$SRCDIR" KPATCH_NAME="$PATCHNAME" KBUILD_EXTRA_SYMBOLS="$SYMVERSFILE" make "O=$OBJDIR" >> "$LOGFILE" 2>&1 || die
 $STRIPCMD "kpatch-$PATCHNAME.ko" >> "$LOGFILE" 2>&1 || die
-"$TOOLSDIR"/link-vmlinux-syms "kpatch-$PATCHNAME.ko" "$VMLINUX" >> "$LOGFILE" 2>&1 || die
 
 cp -f "$TEMPDIR/patch/kpatch-$PATCHNAME.ko" "$BASE" || die
 
