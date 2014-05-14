@@ -1392,7 +1392,7 @@ void kpatch_create_patches_sections(struct kpatch_elf *kelf,
 	patches = malloc(nr * sizeof(*patches));
 	if (!patches)
 		ERROR("malloc");
-	sec->name = ".patches";
+	sec->name = ".kpatch.patches";
 	sec->index = kelf->sections_nr++;
 
 	/* set data */
@@ -1414,7 +1414,7 @@ void kpatch_create_patches_sections(struct kpatch_elf *kelf,
 
 	/* allocate section resources */
 	ALLOC_LINK(relasec, &kelf->sections);
-	relasec->name = ".rela.patches";
+	relasec->name = ".rela.kpatch.patches";
 	relasec->index = kelf->sections_nr++;
 	relasec->base = sec;
 	INIT_LIST_HEAD(&relasec->relas);
