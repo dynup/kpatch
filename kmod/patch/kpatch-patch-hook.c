@@ -71,13 +71,12 @@ static struct kobj_attribute patch_enabled_attr =
 
 static int __init patch_init(void)
 {
-	struct kpatch_patch *patches;
 	int ret;
 
 	kpmod.mod = THIS_MODULE;
 	kpmod.patches = (struct kpatch_patch *)&__kpatch_patches;
 	kpmod.patches_nr = (&__kpatch_patches_end - &__kpatch_patches) /
-			  sizeof(*patches);
+			  sizeof(*kpmod.patches);
 
 	patch_kobj = kobject_create_and_add(THIS_MODULE->name,
 					    kpatch_patches_kobj);
