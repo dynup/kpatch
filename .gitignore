@@ -7,7 +7,8 @@
 *.swp
 .tmp_versions
 Module.symvers
-kpatch-build/add-patches-section
+kpatch-build/lookup.o
+kpatch-build/lookup
 kpatch-build/create-diff-object
 kpatch-build/link-vmlinux-syms
 man/kpatch.1.gz
