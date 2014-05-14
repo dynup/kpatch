@@ -3,7 +3,7 @@ include ../Makefile.inc
 CFLAGS  += -I../kmod/patch -Wall -g
 LDFLAGS = -lelf
 
-TARGETS = create-diff-object link-vmlinux-syms
+TARGETS = create-diff-object
 
 all: $(TARGETS)
 

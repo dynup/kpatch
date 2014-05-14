@@ -40,6 +40,7 @@
 #include <linux/ftrace.h>
 #include <linux/hashtable.h>
 #include <linux/hardirq.h>
+#include <linux/uaccess.h>
 #include <asm/stacktrace.h>
 #include <asm/cacheflush.h>
 #include "kpatch.h"
@@ -424,6 +425,10 @@ int kpatch_register(struct kpatch_module *kpmod, bool replace)
 	int ret, i;
 	struct kpatch_func *funcs, *func;
 	int num_funcs = kpmod->patches_nr;
+	struct kpatch_dynrela *dynrela;
+	void *loc;
+	u64 val;
+	int size;
 
 	if (!kpmod->mod || !kpmod->patches || !num_funcs)
 		return -EINVAL;
@@ -446,6 +451,34 @@ int kpatch_register(struct kpatch_module *kpmod, bool replace)
 	if (!try_module_get(kpmod->mod)) {
 		ret = -ENODEV;
 		goto err_up;
+	}
+
+	for (i = 0; i < kpmod->dynrelas_nr; i++) {
+		dynrela = &kpmod->dynrelas[i];
+		switch (dynrela->type) {
+			case R_X86_64_PC32:
+				loc = (void *)dynrela->dest;
+				val = (u32)(dynrela->src - dynrela->dest);
+				size = 4;
+				break;
+			case R_X86_64_32S:
+				loc = (void *)dynrela->dest;
+				val = (s32)dynrela->src;
+				size = 4;
+				break;
+			default:
+				printk("unsupported rela type %ld for "
+				       "0x%lx <- 0x%lx at index %d\n",
+				       dynrela->type, dynrela->dest,
+				       dynrela->src, i);
+				ret = -EINVAL;
+				goto err_up;
+		}
+		set_memory_rw((unsigned long)loc & PAGE_MASK, 1);
+		ret = probe_kernel_write(loc, &val, size);
+		set_memory_ro((unsigned long)loc & PAGE_MASK, 1);
+		if (ret)
+			goto err_up;
 	}
 
 	for (i = 0; i < num_funcs; i++) {
