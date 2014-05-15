@@ -7,7 +7,6 @@
 *.swp
 .tmp_versions
 Module.symvers
-kpatch-build/lookup.o
 kpatch-build/lookup
 kpatch-build/create-diff-object
 man/kpatch.1.gz

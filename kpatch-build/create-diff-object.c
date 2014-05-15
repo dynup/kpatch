@@ -1366,7 +1366,7 @@ void kpatch_create_patches_sections(struct kpatch_elf *kelf,
 	/* allocate section resources */
 	ALLOC_LINK(sec, &kelf->sections);
 	size = nr * sizeof(*patches);
-	patches = malloc(nr * sizeof(*patches));
+	patches = malloc(size);
 	if (!patches)
 		ERROR("malloc");
 	sec->name = ".kpatch.patches";
@@ -1410,7 +1410,7 @@ void kpatch_create_patches_sections(struct kpatch_elf *kelf,
 		find_section_by_name(&kelf->sections, ".symtab")->index;
 	relasec->sh.sh_info = sec->index;
 
-	/* populate text section */
+	/* populate sections */
 	index = 0;
 	list_for_each_entry(sym, &kelf->symbols, list) {
 		if (sym->type == STT_FUNC && sym->sec->include) {
@@ -1433,7 +1433,11 @@ void kpatch_create_patches_sections(struct kpatch_elf *kelf,
 			patches[index].old_size = result.size;
 			patches[index].new_size = sym->sym.st_size;
 
-			/* add entry in rela list */
+			/*
+			 * Add a relocation that will populate
+			 * the patches[index].new_addr field at
+			 * module load time.
+			 */
 			ALLOC_LINK(rela, &relasec->relas);
 			rela->sym = sym;
 			rela->type = R_X86_64_64;
@@ -1480,7 +1484,7 @@ void kpatch_create_dynamic_rela_sections(struct kpatch_elf *kelf,
 	/* allocate section resources */
 	ALLOC_LINK(sec, &kelf->sections);
 	size = nr * sizeof(*dynrelas);
-	dynrelas = malloc(nr * sizeof(*dynrelas));
+	dynrelas = malloc(size);
 	if (!dynrelas)
 		ERROR("malloc");
 	sec->name = ".kpatch.dynrelas";
@@ -1524,7 +1528,7 @@ void kpatch_create_dynamic_rela_sections(struct kpatch_elf *kelf,
 		find_section_by_name(&kelf->sections, ".symtab")->index;
 	relasec->sh.sh_info = sec->index;
 
-	/* populate text section (reuse sec for iterator here) */
+	/* populate sections (reuse sec for iterator here) */
 	index = 0;
 	list_for_each_entry(sec, &kelf->sections, list) {
 		if (!is_rela_section(sec))
@@ -1575,7 +1579,12 @@ void kpatch_create_dynamic_rela_sections(struct kpatch_elf *kelf,
 		ERROR("size mismatch in dynrelas sections");
 }
 
-void kpatch_strip_non_included_syms(struct lookup_table *table,
+/*
+ * This function strips out symbols that were referenced by changed rela
+ * sections, but the rela entries that referenced them were converted to
+ * dynrelas and are no longer needed.
+ */
+void kpatch_strip_unneeded_syms(struct lookup_table *table,
                                     struct kpatch_elf *kelf)
 {
 	struct symbol *sym, *safe;
@@ -1610,7 +1619,7 @@ void kpatch_rebuild_rela_section_data(struct section *sec)
 	relas = malloc(size);
 	if (!relas)
 		ERROR("malloc");
-	
+
 	sec->data->d_buf = relas;
 	sec->data->d_size = size;
 	/* d_type remains ELF_T_RELA */
@@ -1666,9 +1675,6 @@ void kpatch_write_output_elf(struct kpatch_elf *kelf, Elf *elf, char *outfile)
 
 	/* add changed sections */
 	list_for_each_entry(sec, &kelf->sections, list) {
-		if (is_rela_section(sec))
-			kpatch_rebuild_rela_section_data(sec);
-
 		scn = elf_newscn(elfout);
 		if (!scn)
 			ERROR("elf_newscn");
@@ -1756,6 +1762,7 @@ int main(int argc, char *argv[])
 	struct arguments arguments;
 	int num_changed;
 	struct lookup_table *vmlinux;
+	struct section *sec;
 	struct symbol *sym;
 	char *hint;
 
@@ -1825,7 +1832,7 @@ int main(int argc, char *argv[])
 	}
 	kpatch_create_patches_sections(kelf_out, vmlinux, hint);
 	kpatch_create_dynamic_rela_sections(kelf_out, vmlinux, hint);
-	kpatch_strip_non_included_syms(vmlinux, kelf_out);
+	kpatch_strip_unneeded_syms(vmlinux, kelf_out);
 
 	kpatch_create_shstrtab(kelf_out);
 	kpatch_create_strtab(kelf_out);
@@ -1834,6 +1841,12 @@ int main(int argc, char *argv[])
 
 	if (arguments.inventory)
 		kpatch_write_inventory_file(kelf_out, outfile);
+
+	/* rebuild the rela section data buffers from their relas lists */
+	list_for_each_entry(sec, &kelf_out->sections, list)
+		if (is_rela_section(sec))
+			kpatch_rebuild_rela_section_data(sec);
+
 	kpatch_write_output_elf(kelf_out, kelf_patched->elf, outfile);
 
 	return 0;
