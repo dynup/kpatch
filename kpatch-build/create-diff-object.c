@@ -1029,7 +1029,7 @@ void kpatch_regenerate_bug_table_rela_section(struct kpatch_elf *kelf)
 	}
 
 	/* overwrite with new relas list */
-	sec->relas = newrelas;
+	list_replace(&newrelas, &sec->relas);
 
 	/* include both rela and text sections */
 	sec->include = 1;
@@ -1076,7 +1076,7 @@ void kpatch_regenerate_smp_locks_sections(struct kpatch_elf *kelf)
 	}
 
 	/* overwrite with new relas list */
-	sec->relas = newrelas;
+	list_replace(&newrelas, &sec->relas);
 
 	/* include both rela and text sections */
 	sec->include = 1;
@@ -1141,7 +1141,7 @@ void kpatch_regenerate_parainstructions_sections(struct kpatch_elf *kelf)
 	}
 
 	/* overwrite with new relas table */
-	sec->relas = newrelas;
+	list_replace(&newrelas, &sec->relas);
 
 	/* mark sections for inclusion */
 	sec->include = 1;
