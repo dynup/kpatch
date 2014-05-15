@@ -472,13 +472,13 @@ int kpatch_register(struct kpatch_module *kpmod, bool replace)
 				       dynrela->type, dynrela->dest,
 				       dynrela->src, i);
 				ret = -EINVAL;
-				goto err_up;
+				goto err_put;
 		}
 		set_memory_rw((unsigned long)loc & PAGE_MASK, 1);
 		ret = probe_kernel_write(loc, &val, size);
 		set_memory_ro((unsigned long)loc & PAGE_MASK, 1);
 		if (ret)
-			goto err_up;
+			goto err_put;
 	}
 
 	for (i = 0; i < num_funcs; i++) {
@@ -597,6 +597,7 @@ err_unregister:
 	kpatch_num_registered--;
 err_rollback:
 	kpatch_remove_funcs_from_filter(funcs, num_funcs);
+err_put:
 	module_put(kpmod->mod);
 err_up:
 	up(&kpatch_mutex);

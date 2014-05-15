@@ -88,7 +88,7 @@ struct lookup_table *lookup_open(char *path)
 		name = elf_strptr(elf, shstrndx, sh.sh_name);
 		if (!name)
 			ERROR("elf_strptr scn");
-			
+
 		if (!strcmp(name, ".symtab"))
 			break;
 	}
@@ -140,7 +140,7 @@ void lookup_close(struct lookup_table *table)
 int lookup_local_symbol(struct lookup_table *table, char *name, char *hint,
                         struct lookup_result *result)
 {
-	struct symbol *sym;
+	struct symbol *sym, *match = NULL;
 	int i;
 	char *curfile = NULL;
 
@@ -151,18 +151,24 @@ int lookup_local_symbol(struct lookup_table *table, char *name, char *hint,
 				curfile = sym->name;
 				continue; /* begin hint file symbols */
 			} else if (curfile)
-				break; /* end hint file symbols */
+				curfile = NULL; /* end hint file symbols */
 		}
 		if (!curfile)
 			continue;
 		if (sym->bind == STB_LOCAL && !strcmp(sym->name, name)) {
-			result->value = sym->value;
-			result->size = sym->size;
-			return 0;
+			if (match)
+				/* dup file+symbol, unresolvable ambiguity */
+				return 1;
+			match = sym;
 		}
 	}
 
-	return 1;
+	if (!match)
+		return 1;
+
+	result->value = match->value;
+	result->size = match->size;
+	return 0;
 }
 
 int lookup_global_symbol(struct lookup_table *table, char *name,
@@ -203,7 +209,7 @@ static void find_this(struct lookup_table *table, char *sym, char *hint)
 {
 	struct lookup_result result;
 
-	if (hint) 
+	if (hint)
 		lookup_local_symbol(table, sym, hint, &result);
 	else
 		lookup_global_symbol(table, sym, &result);
