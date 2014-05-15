@@ -125,21 +125,26 @@ run_load_test() {
 	module=kpatch-$prefix.ko
 	testprog=$prefix-LOADED.test
 
-	[[ ! -e $testprog ]] && return
-
-	log "load test: $prefix"
+	[[ $prefix = *-FAIL ]] && return
 
 	if [[ ! -e $module ]]; then
-		error "$prefix: can't find $module"
+		log "can't find $module, skipping"
 		return
 	fi
+
+	if [[ -e $testprog ]]; then
+		log "load test: $prefix"
+	else
+		log "load test: $prefix (no test prog)"
+	fi
+
 
 	if ! $KPATCH replace $module >> $LOG 2>&1; then
 		error "$prefix: kpatch replace failed"
 		return
 	fi
 
-	if ! ./$testprog >> $LOG 2>&1; then
+	if [[ -e $testprog ]] && ! ./$testprog >> $LOG 2>&1; then
 		error "$prefix: $testprog failed after kpatch replace"
 		return
 	fi
@@ -149,7 +154,7 @@ run_load_test() {
 		return
 	fi
 
-	if ./$testprog >> $LOG 2>&1; then
+	if [[ -e $testprog ]] && ./$testprog >> $LOG 2>&1; then
 		error "$prefix: $testprog succeeded after kpatch unload"
 		return
 	fi
@@ -159,7 +164,7 @@ run_load_test() {
 		return
 	fi
 
-	if ! ./$testprog >> $LOG 2>&1; then
+	if [[ -e $testprog ]] && ! ./$testprog >> $LOG 2>&1; then
 		error "$prefix: $testprog failed after kpatch load"
 		return
 	fi
