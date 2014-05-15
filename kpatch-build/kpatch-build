@@ -275,7 +275,7 @@ cd "$TEMPDIR"
 mkdir output
 for i in $FILES; do
 	mkdir -p "output/$(dirname $i)"
-	"$TOOLSDIR"/create-diff-object "orig/$i" "patched/$i" "output/$i" 2>&1 |tee -a "$LOGFILE"
+	"$TOOLSDIR"/create-diff-object "orig/$i" "patched/$i" "$TEMPDIR/vmlinux" "output/$i" 2>&1 |tee -a "$LOGFILE"
 	[[ "${PIPESTATUS[0]}" -eq 0 ]] || die
 done
 
@@ -286,10 +286,8 @@ make prepare >> "$LOGFILE" 2>&1 || die
 cd "$TEMPDIR/output"
 ld -r -o ../patch/output.o $FILES >> "$LOGFILE" 2>&1 || die
 cd "$TEMPDIR/patch"
-"$TOOLSDIR"/add-patches-section output.o ../vmlinux >> "$LOGFILE" 2>&1 || die
 KPATCH_BUILD="$SRCDIR" KPATCH_NAME="$PATCHNAME" KBUILD_EXTRA_SYMBOLS="$SYMVERSFILE" make "O=$OBJDIR" >> "$LOGFILE" 2>&1 || die
 $STRIPCMD "kpatch-$PATCHNAME.ko" >> "$LOGFILE" 2>&1 || die
-"$TOOLSDIR"/link-vmlinux-syms "kpatch-$PATCHNAME.ko" ../vmlinux >> "$LOGFILE" 2>&1 || die
 
 cp -f "$TEMPDIR/patch/kpatch-$PATCHNAME.ko" "$BASE" || die
 

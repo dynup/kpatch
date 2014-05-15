@@ -29,6 +29,7 @@ module_param(replace, bool, S_IRUGO);
 MODULE_PARM_DESC(replace, "replace all previously loaded patch modules");
 
 extern char __kpatch_patches, __kpatch_patches_end;
+extern char __kpatch_dynrelas, __kpatch_dynrelas_end;
 
 static struct kpatch_module kpmod;
 static struct kobject *patch_kobj;
@@ -71,13 +72,15 @@ static struct kobj_attribute patch_enabled_attr =
 
 static int __init patch_init(void)
 {
-	struct kpatch_patch *patches;
 	int ret;
 
 	kpmod.mod = THIS_MODULE;
 	kpmod.patches = (struct kpatch_patch *)&__kpatch_patches;
 	kpmod.patches_nr = (&__kpatch_patches_end - &__kpatch_patches) /
-			  sizeof(*patches);
+			  sizeof(*kpmod.patches);
+	kpmod.dynrelas = (struct kpatch_dynrela *)&__kpatch_dynrelas;
+	kpmod.dynrelas_nr = (&__kpatch_dynrelas_end - &__kpatch_dynrelas) /
+			  sizeof(*kpmod.dynrelas);
 
 	patch_kobj = kobject_create_and_add(THIS_MODULE->name,
 					    kpatch_patches_kobj);
