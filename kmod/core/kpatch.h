@@ -30,12 +30,6 @@ struct kpatch_patch {
 	unsigned long old_size;
 };
 
-struct kpatch_dynrela {
-	unsigned long dest;
-	unsigned long src;
-	unsigned long type;
-};
-
 #ifdef __KERNEL__
 
 #include <linux/types.h>
@@ -46,9 +40,7 @@ struct kpatch_internal;
 struct kpatch_module {
 	struct module *mod;
 	struct kpatch_patch *patches;
-	struct kpatch_dynrela *dynrelas;
 	int patches_nr;
-	int dynrelas_nr;
 	bool enabled;
 	struct kpatch_internal *internal; /* used internally by core module */
 };
