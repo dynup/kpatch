@@ -3,12 +3,16 @@ include ../Makefile.inc
 CFLAGS  += -I../kmod/patch -Wall -g
 LDFLAGS = -lelf
 
-TARGETS = create-diff-object
+TARGETS = create-diff-object add-patches-section link-vmlinux-syms
+
 
 all: $(TARGETS)
 
-create-diff-object: create-diff-object.c list.h lookup.c lookup.h
-	$(CC) $(CFLAGS) create-diff-object.c lookup.c -o $@ $(LDFLAGS)
+%: %.c
+	$(CC) $(CFLAGS) $^ -o $@ $(LDFLAGS)
+
+create-diff-object: create-diff-object.c list.h
+	$(CC) $(CFLAGS) create-diff-object.c -o $@ $(LDFLAGS)
 
 install: all
 	$(INSTALL) -d $(LIBEXECDIR)
