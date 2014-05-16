@@ -88,6 +88,7 @@ usage() {
 	echo "		-r, --sourcerpm	Specify kernel source RPM" >&2
 	echo "		-s, --sourcedir	Specify kernel source directory" >&2
 	echo "		-c, --config	Specify kernel config file" >&2
+	echo "		-v, --vmlinux	Specify original vmlinux" >&2
 	echo "		-d, --debug	Keep scratch files in /tmp" >&2
 }
 
@@ -118,6 +119,11 @@ while [[ $# -gt 0 ]]; do
 		CONFIGFILE=$(readlink -f "$2")
 		shift
 		[[ ! -f "$CONFIGFILE" ]] && die "config file $CONFIGFILE not found"
+		;;
+	-v|--vmlinux)
+		VMLINUX=$(readlink -f "$2")
+		shift
+		[[ ! -f "$VMLINUX" ]] && die "vmlinux file $VMLINUX not found"
 		;;
 	-d|--debug)
 		echo "DEBUG mode enabled"
@@ -157,6 +163,9 @@ trap cleanup EXIT INT TERM
 find_dirs || die "can't find supporting tools"
 
 [[ -e "$SYMVERSFILE" ]] || die "can't find core module Module.symvers"
+
+[[ -z $VMLINUX ]] && VMLINUX=/usr/lib/debug/lib/modules/${ARCHVERSION}/vmlinux
+[[ -e "$VMLINUX" ]] || die "kernel-debuginfo not installed"
 
 if [[ -n "$USERSRCDIR" ]]; then
 	SRCDIR="$CACHEDIR/src"
@@ -209,6 +218,7 @@ else
 	elif [[ $ID = ubuntu ]]; then
 
 		echo "Debian/Ubuntu distribution detected"
+
 		cd $TEMPDIR
 		echo "Downloading and unpacking kernel source for $ARCHVERSION"
 		apt-get source linux || die "'apt-get source linux' failed. you may need to run 'apt-get install dpkg-dev'"
@@ -234,7 +244,6 @@ echo "Building original kernel"
 make mrproper >> "$LOGFILE" 2>&1 || die
 make "-j$CPUS" vmlinux "O=$OBJDIR" >> "$LOGFILE" 2>&1 || die
 cp -LR "$DATADIR/patch" "$TEMPDIR" || die
-cp "$OBJDIR/vmlinux" "$TEMPDIR" || die
 
 echo "Building patched kernel"
 patch -N -p1 < "$APPLIEDPATCHFILE" >> "$LOGFILE" 2>&1 || die
@@ -286,10 +295,10 @@ make prepare >> "$LOGFILE" 2>&1 || die
 cd "$TEMPDIR/output"
 ld -r -o ../patch/output.o $FILES >> "$LOGFILE" 2>&1 || die
 cd "$TEMPDIR/patch"
-"$TOOLSDIR"/add-patches-section output.o ../vmlinux >> "$LOGFILE" 2>&1 || die
+"$TOOLSDIR"/add-patches-section output.o "$VMLINUX" >> "$LOGFILE" 2>&1 || die
 KPATCH_BUILD="$SRCDIR" KPATCH_NAME="$PATCHNAME" KBUILD_EXTRA_SYMBOLS="$SYMVERSFILE" make "O=$OBJDIR" >> "$LOGFILE" 2>&1 || die
 $STRIPCMD "kpatch-$PATCHNAME.ko" >> "$LOGFILE" 2>&1 || die
-"$TOOLSDIR"/link-vmlinux-syms "kpatch-$PATCHNAME.ko" ../vmlinux >> "$LOGFILE" 2>&1 || die
+"$TOOLSDIR"/link-vmlinux-syms "kpatch-$PATCHNAME.ko" "$VMLINUX" >> "$LOGFILE" 2>&1 || die
 
 cp -f "$TEMPDIR/patch/kpatch-$PATCHNAME.ko" "$BASE" || die
 
