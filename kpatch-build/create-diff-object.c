@@ -44,6 +44,7 @@
 #include <gelf.h>
 #include <argp.h>
 #include <libgen.h>
+#include <unistd.h>
 
 #include "list.h"
 #include "lookup.h"
@@ -136,7 +137,7 @@ struct kpatch_elf {
 	Elf *elf;
 	struct list_head sections;
 	struct list_head symbols;
-	int sections_nr;
+	int fd, sections_nr;
 };
 
 /*******************
@@ -426,6 +427,7 @@ struct kpatch_elf *kpatch_elf_open(const char *name)
 
 	/* read and store section, symbol entries from file */
 	kelf->elf = elf;
+	kelf->fd = fd;
 	kpatch_create_section_list(kelf);
 	kpatch_create_symbol_list(kelf);
 
@@ -1732,6 +1734,48 @@ static error_t parse_opt (int key, char *arg, struct argp_state *state)
 
 static struct argp argp = { options, parse_opt, args_doc, 0 };
 
+/*
+ * While this is a one-shot program without a lot of proper cleanup in case
+ * of an error, this function serves a debugging purpose: to break down and
+ * zero data structures we shouldn't be accessing anymore.  This should
+ * help cause an immediate and obvious issue when a logic error leads to
+ * accessing data that is not intended to be accessed past a particular point.
+ */
+void kpatch_elf_teardown(struct kpatch_elf *kelf)
+{
+	struct section *sec, *safesec;
+	struct symbol *sym, *safesym;
+	struct rela *rela, *saferela;
+
+	list_for_each_entry_safe(sec, safesec, &kelf->sections, list) {
+		if (is_rela_section(sec)) {
+			list_for_each_entry_safe(rela, saferela, &sec->relas, list) {
+				memset(rela, 0, sizeof(*rela));
+				free(rela);
+			}
+			memset(sec, 0, sizeof(*sec));
+			free(sec);
+		}
+	}
+
+	list_for_each_entry_safe(sym, safesym, &kelf->symbols, list) {
+		memset(sym, 0, sizeof(*sym));
+		free(sym);
+	}
+
+	INIT_LIST_HEAD(&kelf->sections);
+	INIT_LIST_HEAD(&kelf->symbols);
+	kelf->sections_nr = 0;
+}
+
+void kpatch_elf_free(struct kpatch_elf *kelf)
+{
+	elf_end(kelf->elf);
+	close(kelf->fd);
+	memset(kelf, 0, sizeof(*kelf));
+	free(kelf);
+}
+
 int main(int argc, char *argv[])
 {
 	struct kpatch_elf *kelf_base, *kelf_patched, *kelf_out;
@@ -1769,6 +1813,8 @@ int main(int argc, char *argv[])
 	 * section, symbol, and rela lists of kelf_patched.
 	 */
 	kpatch_compare_correlated_elements(kelf_patched);
+	kpatch_elf_teardown(kelf_base);
+	kpatch_elf_free(kelf_base);
 
 	/*
 	 * Mangle the relas a little.  The compiler will sometimes
@@ -1799,6 +1845,15 @@ int main(int argc, char *argv[])
 
 	/* this is destructive to kelf_patched */
 	kpatch_generate_output(kelf_patched, &kelf_out);
+
+	/*
+	 * Teardown kelf_patched since we shouldn't access sections or symbols
+	 * through it anymore.  Don't free however, since our section and symbol
+	 * name fields still point to strings in the Elf object owned by
+	 * kpatch_patched.
+	 */
+	kpatch_elf_teardown(kelf_patched);
+
 	kpatch_update_rela_section_headers(kelf_out);
 
 	list_for_each_entry(sym, &kelf_out->symbols, list) {
@@ -1825,6 +1880,10 @@ int main(int argc, char *argv[])
 			kpatch_rebuild_rela_section_data(sec);
 
 	kpatch_write_output_elf(kelf_out, kelf_patched->elf, outfile);
+
+	kpatch_elf_free(kelf_patched);
+	kpatch_elf_teardown(kelf_out);
+	kpatch_elf_free(kelf_out);
 
 	return 0;
 }
