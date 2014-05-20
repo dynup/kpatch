@@ -834,8 +834,14 @@ int kpatch_migrate_included_symbols(int startndx, struct kpatch_elf *src,
 		 *  By this point, the included sections have already been
 		 *  reindexed.  Update the symbol section header index.
 		 */
-		if (sym->sec)
-			sym->sym.st_shndx = sym->sec->index;
+		if (sym->sec) {
+			if (sym->sec->include)
+				sym->sym.st_shndx = sym->sec->index;
+			else {
+				sym->sec = NULL;
+				sym->sym.st_shndx = SHN_UNDEF;
+			}
+		}
 	}
 
 	return index;
