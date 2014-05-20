@@ -1150,56 +1150,20 @@ void kpatch_regenerate_parainstructions_sections(struct kpatch_elf *kelf)
 	sec->base->data->d_size = offset;
 }
 
-void kpatch_create_rela_section(struct section *sec, int link)
-{
-	struct rela *rela;
-	int symndx, type, offset = 0;
-	char *buf;
-	size_t size;
-
-	/* create new rela data buffer */
-	size = sec->data->d_size;
-	buf = malloc(size);
-	if (!buf)
-		ERROR("malloc");
-	memset(buf, 0, size);
-
-	/* reindex and copy into buffer */
-	list_for_each_entry(rela, &sec->relas, list) {
-		if (!rela->sym)
-			ERROR("expected rela symbol in rela section %s",
-			      sec->name);
-
-		symndx = rela->sym->index;
-		type = GELF_R_TYPE(rela->rela.r_info);
-		rela->rela.r_info = GELF_R_INFO(symndx, type);
-
-		memcpy(buf + offset, &rela->rela, sec->sh.sh_entsize);
-		offset += sec->sh.sh_entsize;
-	}
-
-	sec->data->d_buf = buf;
-	/* size should be unchanged */
-	if (offset != sec->data->d_size)
-		ERROR("new rela buffer size mismatch (%d != %zu",
-		      offset, sec->data->d_size);
-
-	sec->sh.sh_link = link;
-	/* info is section index of text section that matches this rela */
-	sec->sh.sh_info = sec->base->index;
-}
-
-void kpatch_create_rela_sections(struct kpatch_elf *kelf)
+void kpatch_update_rela_section_headers(struct kpatch_elf *kelf)
 {
 	struct section *sec;
 	int link;
 
 	link = find_section_by_name(&kelf->sections, ".symtab")->index;
 
-	/* reindex rela entries */
-	list_for_each_entry(sec, &kelf->sections, list)
-		if (is_rela_section(sec))
-			kpatch_create_rela_section(sec, link);
+	/* update rela section header link and info fields after reindexing */
+	list_for_each_entry(sec, &kelf->sections, list) {
+		if (is_rela_section(sec)) {
+			sec->sh.sh_link = link;
+			sec->sh.sh_info = sec->base->index;
+		}
+	}
 }
 
 void print_strtab(char *buf, size_t size)
@@ -1580,7 +1544,6 @@ void kpatch_create_dynamic_rela_sections(struct kpatch_elf *kelf,
 		}
 	}
 
-
 	/* sanity check, index should equal nr */
 	if (index != nr)
 		ERROR("size mismatch in dynrelas sections");
@@ -1836,7 +1799,7 @@ int main(int argc, char *argv[])
 
 	/* this is destructive to kelf_patched */
 	kpatch_generate_output(kelf_patched, &kelf_out);
-	kpatch_create_rela_sections(kelf_out);
+	kpatch_update_rela_section_headers(kelf_out);
 
 	list_for_each_entry(sym, &kelf_out->symbols, list) {
 		if (sym->type == STT_FILE) {
