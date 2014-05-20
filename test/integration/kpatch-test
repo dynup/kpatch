@@ -203,6 +203,11 @@ done
 
 unload_all
 
-log "$ERROR errors encountered"
+if [[ $ERROR -gt 0 ]]; then
+	log "$ERROR errors encountered"
+	echo "see test.log for more information"
+else
+	log "SUCCESS"
+fi
 
 exit $ERROR
