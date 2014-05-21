@@ -23,9 +23,7 @@
 # This is the kpatch user script that manages installing, loading, and
 # displaying information about kernel patch modules installed on the system.
 
-KERNELRELEASE="$(uname -r)"
-SYSDIR="/usr/lib/kpatch/$KERNELRELEASE"
-USERDIR="/var/lib/kpatch/$KERNELRELEASE"
+INSTALLDIR=/var/lib/kpatch
 SCRIPTDIR="$(readlink -f $(dirname $(type -p $0)))"
 
 usage_cmd() {
@@ -38,8 +36,8 @@ usage () {
 	echo "usage: kpatch <command> [<args>]" >&2
 	echo >&2
 	echo "Valid commands:" >&2
-	usage_cmd "install <module>" "install patch module to the initrd to be loaded at boot"
-	usage_cmd "uninstall <module>" "uninstall patch module from the initrd"
+	usage_cmd "install [-k|--kernel-version=<kernel version>] <module>" "install patch module to the initrd to be loaded at boot"
+	usage_cmd "uninstall [-k|--kernel-version=<kernel version>] <module>" "uninstall patch module from the initrd"
 	echo >&2
 	usage_cmd "load --all" "load all installed patch modules into the running kernel"
 	usage_cmd "load <module>" "load patch module into the running kernel"
@@ -65,10 +63,7 @@ __find_module () {
 	MODULE="$1"
 	[[ -f "$MODULE" ]] && return
 
-	MODULE="$USERDIR/$1"
-	[[ -f "$MODULE" ]] && return
-
-	MODULE="$SYSDIR/$1"
+	MODULE=$INSTALLDIR/$(uname -r)/"$1"
 	[[ -f "$MODULE" ]] && return
 
 	return 1
@@ -136,23 +131,19 @@ unload_disabled_modules() {
 	done
 }
 
-echo_patch_name() {
-	NAME="$(basename $1)"
-	echo $NAME
+get_module_version() {
+	MODVER=$(modinfo -F vermagic "$1") || return 1
+	MODVER=${MODVER/ */}
 }
 
 unset MODULE
-[[ "$#" -gt 2 ]] || [[ "$#" -lt 1 ]] && usage
+[[ "$#" -lt 1 ]] && usage
 case "$1" in
 "load")
 	[[ "$#" -ne 2 ]] && usage
 	case "$2" in
 	"--all")
-		for i in "$SYSDIR"/*.ko; do
-			[[ -e "$i" ]] || continue
-			load_module "$i" || die "failed to load module $i"
-		done
-		for i in "$USERDIR"/*.ko; do
+		for i in "$INSTALLDIR"/$(uname -r)/*.ko; do
 			[[ -e "$i" ]] || continue
 			load_module "$i" || die "failed to load module $i"
 		done
@@ -179,29 +170,70 @@ case "$1" in
 	;;
 
 "install")
-	[[ "$#" -ne 2 ]] && usage
-	PATCH="$2"
-	[[ -e "$PATCH" ]] || die "$PATCH doesn't exist"
+	KVER=$(uname -r)
+	shift
+	options=$(getopt -o k: -l "kernel-version:" -- "$@") || die "getopt failed"
+	eval set -- "$options"
+	while [[ $# -gt 0 ]]; do
+		case "$1" in
+		-k|--kernel-version)
+			KVER=$2
+			shift
+			;;
+		--)
+			[[ -z "$2" ]] && die "no patch file specified"
+			PATCH="$2"
+			;;
+		esac
+		shift
+	done
+
+	[[ ! -e "$PATCH" ]] && die "$PATCH doesn't exist"
 	[[ ${PATCH: -3} == ".ko" ]] || die "$PATCH isn't a .ko file"
 
-	echo "installing $PATCH to $USERDIR"
-	mkdir -p "$USERDIR" || die "failed to create install directory"
-	cp -f "$PATCH" "$USERDIR" || die "failed to install patch $PATCH"
+	get_module_version "$PATCH" || die "modinfo failed"
+	[[ $KVER != $MODVER ]] && die "invalid module version $MODVER for kernel $KVER"
 
-	echo "installing $PATCH to initramfs"
-	dracut -f || die "dracut failed"
+	[[ -e $INSTALLDIR/$KVER/$(basename "$PATCH") ]] && die "$PATCH is already installed"
+
+	echo "installing $PATCH ($KVER)"
+	mkdir -p $INSTALLDIR/$KVER || die "failed to create install directory"
+	cp -f "$PATCH" $INSTALLDIR/$KVER || die "failed to install patch $PATCH"
+
+	if lsinitrd -k $KVER &> /dev/null; then
+		echo "rebuilding $KVER initramfs"
+		dracut -f --kver $KVER || die "dracut failed"
+	fi
 	;;
 
 "uninstall")
-	[[ "$#" -ne 2 ]] && usage
-	PATCH="$2"
-	find_module "$PATCH" || die "$PATCH is not installed"
+	KVER=$(uname -r)
+	shift
+	options=$(getopt -o k: -l "kernel-version:" -- "$@") || die "getopt failed"
+	eval set -- "$options"
+	while [[ $# -gt 0 ]]; do
+		case "$1" in
+		-k|--kernel-version)
+			KVER=$2
+			shift
+			;;
+		--)
+			[[ -z "$2" ]] && die "no patch file specified"
+			PATCH="$2"
+			[[ "$PATCH" != $(basename "$PATCH") ]] && die "please supply patch module name without path"
+			;;
+		esac
+		shift
+	done
 
-	echo "uninstalling $PATCH from $USERDIR"
-	rm -f "$USERDIR/$(basename $MODULE)" || die "failed to uninstall patch $PATCH"
+	[[ ! -e $INSTALLDIR/$KVER/"$PATCH" ]] && die "$PATCH is not installed for kernel $KVER"
 
-	echo "uninstalling $PATCH from initramfs"
-	dracut -f || die "dracut failed"
+	echo "uninstalling $PATCH ($KVER)"
+	rm -f $INSTALLDIR/$KVER/"$PATCH" || die "failed to uninstall patch $PATCH"
+	if lsinitrd -k $KVER &> /dev/null; then
+		echo "rebuilding $KVER initramfs"
+		dracut -f --kver $KVER || die "dracut failed"
+	fi
 	;;
 
 "list")
@@ -209,20 +241,17 @@ case "$1" in
 	echo "Loaded patch modules:"
 	for module in /sys/kernel/kpatch/patches/*; do
 		if [[ -e $module ]] && [[ $(cat $module/enabled) -eq 1 ]]; then
-			echo_patch_name $module
+			echo $(basename "$module")
 		fi
 	done
 	echo ""
-	echo "System installed patch modules:"
-	for i in "$SYSDIR"/*.ko; do
-		[[ -e "$i" ]] || continue
-		echo_patch_name $i
-	done
-	echo ""
-	echo "User installed patch modules:"
-	for i in "$USERDIR"/*.ko; do
-		[[ -e "$i" ]] || continue
-		echo_patch_name $i
+	echo "Installed patch modules:"
+	for kdir in $INSTALLDIR/*; do
+		[[ -e "$kdir" ]] || continue
+		for module in $kdir/*; do
+			[[ -e "$module" ]] || continue
+			echo "$(basename $module) ($(basename $kdir))"
+		done
 	done
 	;;
 

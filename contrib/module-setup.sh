@@ -7,7 +7,7 @@
 
 # called by dracut
 check() {
-    if [[ -e /var/lib/kpatch/$kernel ]] || [[ -e /usr/lib/kpatch/$kernel ]]; then
+    if [[ -e /var/lib/kpatch/$kernel ]]; then
         return 0
     else
         return 1
@@ -32,13 +32,6 @@ install() {
     if [[ -e /var/lib/kpatch/$kernel ]]; then
         inst_dir /var/lib/kpatch/$kernel
         for i in /var/lib/kpatch/$kernel/*; do
-            [[ -e $i ]] || continue
-            inst "$i"
-        done
-    fi
-    if [[ -e /usr/lib/kpatch/$kernel ]]; then
-        inst_dir /usr/lib/kpatch/$kernel
-        for i in /usr/lib/kpatch/$kernel/*; do
             [[ -e $i ]] || continue
             inst "$i"
         done
