@@ -184,6 +184,8 @@ case "$1" in
 	[[ -e "$PATCH" ]] || die "$PATCH doesn't exist"
 	[[ ${PATCH: -3} == ".ko" ]] || die "$PATCH isn't a .ko file"
 
+	find_module $(basename "$PATCH") && die "$PATCH is already installed"
+
 	echo "installing $PATCH to $USERDIR"
 	mkdir -p "$USERDIR" || die "failed to create install directory"
 	cp -f "$PATCH" "$USERDIR" || die "failed to install patch $PATCH"
