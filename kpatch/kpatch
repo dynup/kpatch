@@ -36,8 +36,8 @@ usage () {
 	echo "usage: kpatch <command> [<args>]" >&2
 	echo >&2
 	echo "Valid commands:" >&2
-	usage_cmd "install [-k|--kver=<kernel version>] <module>" "install patch module to the initrd to be loaded at boot"
-	usage_cmd "uninstall [-k|--kver=<kernel version>] <module>" "uninstall patch module from the initrd"
+	usage_cmd "install [-k|--kernel-version=<kernel version>] <module>" "install patch module to the initrd to be loaded at boot"
+	usage_cmd "uninstall [-k|--kernel-version=<kernel version>] <module>" "uninstall patch module from the initrd"
 	echo >&2
 	usage_cmd "load --all" "load all installed patch modules into the running kernel"
 	usage_cmd "load <module>" "load patch module into the running kernel"
@@ -172,11 +172,11 @@ case "$1" in
 "install")
 	KVER=$(uname -r)
 	shift
-	options=$(getopt -o k: -l "kver:" -- "$@") || die "getopt failed"
+	options=$(getopt -o k: -l "kernel-version:" -- "$@") || die "getopt failed"
 	eval set -- "$options"
 	while [[ $# -gt 0 ]]; do
 		case "$1" in
-		-k|--kver)
+		-k|--kernel-version)
 			KVER=$2
 			shift
 			;;
@@ -209,11 +209,11 @@ case "$1" in
 "uninstall")
 	KVER=$(uname -r)
 	shift
-	options=$(getopt -o k: -l "kver:" -- "$@") || die "getopt failed"
+	options=$(getopt -o k: -l "kernel-version:" -- "$@") || die "getopt failed"
 	eval set -- "$options"
 	while [[ $# -gt 0 ]]; do
 		case "$1" in
-		-k|--kver)
+		-k|--kernel-version)
 			KVER=$2
 			shift
 			;;
