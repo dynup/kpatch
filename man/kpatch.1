@@ -11,10 +11,10 @@ displaying information about kernel patch modules installed on
 the system. 
 .SH COMMANDS
 
-install <module>
+install [-k|--kver=<kernel version>] <module>
        install patch module to the initrd to be loaded at boot
 
-uninstall <module>
+uninstall [-k|--kver=<kernel version>] <module>
        uninstall patch module from the initrd
 
 load --all
