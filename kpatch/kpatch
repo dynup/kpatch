@@ -197,7 +197,7 @@ case "$1" in
 "uninstall")
 	[[ "$#" -ne 2 ]] && usage
 	PATCH="$2"
-	find_module "$PATCH" || die "$PATCH is not installed"
+	[[ ! -e $USERDIR/$PATCH ]] && die "$PATCH is not installed"
 
 	echo "uninstalling $PATCH from $USERDIR"
 	rm -f "$USERDIR/$(basename $MODULE)" || die "failed to uninstall patch $PATCH"
