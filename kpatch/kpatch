@@ -27,6 +27,7 @@ KERNELRELEASE="$(uname -r)"
 SYSDIR="/usr/lib/kpatch/$KERNELRELEASE"
 USERDIR="/var/lib/kpatch/$KERNELRELEASE"
 SCRIPTDIR="$(readlink -f $(dirname $(type -p $0)))"
+PATCH_PATH=""
 
 usage_cmd() {
 	printf '   %-20s\n      %s\n' "$1" "$2" >&2
@@ -66,10 +67,10 @@ __find_module () {
 	[[ -f "$MODULE" ]] && return
 
 	MODULE="$USERDIR/$1"
-	[[ -f "$MODULE" ]] && return
+	[[ -f "$MODULE" ]] && PATCH_PATH=$MODULE && return
 
 	MODULE="$SYSDIR/$1"
-	[[ -f "$MODULE" ]] && return
+	[[ -f "$MODULE" ]] && PATCH_PATH=$MODULE && return
 
 	return 1
 }
@@ -197,8 +198,8 @@ case "$1" in
 	PATCH="$2"
 	find_module "$PATCH" || die "$PATCH is not installed"
 
-	echo "uninstalling $PATCH from $USERDIR"
-	rm -f "$USERDIR/$(basename $MODULE)" || die "failed to uninstall patch $PATCH"
+	echo "uninstalling $PATCH from $PATCH_PATH"
+	rm -f "$PATCH_PATH" || die "failed to uninstall patch $PATCH"
 
 	echo "uninstalling $PATCH from initramfs"
 	dracut -f || die "dracut failed"
