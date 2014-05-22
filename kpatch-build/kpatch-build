@@ -143,9 +143,9 @@ while [[ $# -gt 0 ]]; do
 	shift
 done
 
-SRCDIR="$CACHEDIR/$ARCHVERSION/src"
-OBJDIR="$CACHEDIR/$ARCHVERSION/obj"
-OBJDIR2="$CACHEDIR/$ARCHVERSION/obj2"
+SRCDIR="$CACHEDIR/src"
+OBJDIR="$CACHEDIR/obj"
+OBJDIR2="$CACHEDIR/obj2"
 
 PATCHNAME="$(basename $PATCHFILE)"
 if [[ "$PATCHNAME" =~ \.patch ]] || [[ "$PATCHNAME" =~ \.diff ]]; then
@@ -185,7 +185,7 @@ if [[ -n "$USERSRCDIR" ]]; then
 	echo "Copying source to $SRCDIR"
 	cp -a "$USERSRCDIR" "$SRCDIR" || die "copy failed"
 
-elif [[ -d "$SRCDIR" ]]; then
+elif [[ -e "$SRCDIR" ]] && [[ -e "$CACHEDIR"/version ]] && [[ $(cat "$CACHEDIR"/version) = $ARCHVERSION ]]; then
 	echo "Using cache at $SRCDIR"
 
 else
@@ -215,6 +215,8 @@ else
 		cp "$SRCDIR/.config" "$OBJDIR" || die
 		echo "-${ARCHVERSION##*-}" > "$SRCDIR/localversion" || die
 
+		echo $ARCHVERSION > "$CACHEDIR"/version || die
+
 	elif [[ $ID = ubuntu ]]; then
 
 		echo "Debian/Ubuntu distribution detected"
@@ -222,6 +224,7 @@ else
 		cd $TEMPDIR
 		echo "Downloading and unpacking kernel source for $ARCHVERSION"
 		apt-get source linux || die "'apt-get source linux' failed. you may need to run 'apt-get install dpkg-dev'"
+		rm -rf "$CACHEDIR"
 		mkdir -p "$OBJDIR"
 		mv linux-${ARCHVERSION%%-*} "$SRCDIR" || die
 		cp "/boot/config-${ARCHVERSION}" "$OBJDIR/.config" || die
@@ -229,6 +232,7 @@ else
 		# for some reason the Ubuntu kernel versions don't follow the
 		# upstream SUBLEVEL; they are always at SUBLEVEL 0
 		sed -i "s/^SUBLEVEL.*/SUBLEVEL = 0/" "$SRCDIR/Makefile" || die
+		echo $ARCHVERSION > "$CACHEDIR"/version || die
 
 	else
 		die "Unsupported distribution"
