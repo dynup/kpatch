@@ -836,7 +836,7 @@ void kpatch_migrate_symbols(struct list_head *src,
 
 int is_null_sym(struct symbol *sym)
 {
-	return sym->bind == STB_LOCAL && sym->sym.st_shndx == SHN_UNDEF;
+	return !strlen(sym->name);
 }
 
 int is_file_sym(struct symbol *sym)
