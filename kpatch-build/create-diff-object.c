@@ -1268,7 +1268,7 @@ void kpatch_create_symtab(struct kpatch_elf *kelf)
 	struct symbol *sym;
 	char *buf;
 	size_t size;
-	int nr = 0, offset = 0;
+	int nr = 0, offset = 0, nr_local = 0;
 
 	symtab = find_section_by_name(&kelf->sections, ".symtab");
 	if (!symtab)
@@ -1289,10 +1289,17 @@ void kpatch_create_symtab(struct kpatch_elf *kelf)
 	list_for_each_entry(sym, &kelf->symbols, list) {
 		memcpy(buf + offset, &sym->sym, symtab->sh.sh_entsize);
 		offset += symtab->sh.sh_entsize;
+
+		if (is_local_sym(sym))
+			nr_local++;
 	}
 
 	symtab->data->d_buf = buf;
 	symtab->data->d_size = size;
+
+	/* update symtab section header */
+	symtab->sh.sh_link = find_section_by_name(&kelf->sections, ".strtab")->index;
+	symtab->sh.sh_info = nr_local;
 }
 
 void kpatch_create_patches_sections(struct kpatch_elf *kelf,
@@ -1825,15 +1832,11 @@ int main(int argc, char *argv[])
 	kpatch_strip_unneeded_syms(kelf_out, vmlinux);
 	kpatch_reindex_elements(kelf_out);
 
-	/* update symtab section header */
-	symtab = find_section_by_name(&kelf_out->sections, ".symtab");
-	symtab->sh.sh_link = find_section_by_name(&kelf_out->sections, ".strtab")->index;
-	symtab->sh.sh_info = find_section_by_name(&kelf_out->sections, ".shstrtab")->index;
-
 	/*
 	 * Update rela section headers and rebuild the rela section data
 	 * buffers from the relas lists.
 	 */
+	symtab = find_section_by_name(&kelf_out->sections, ".symtab");
 	list_for_each_entry(sec, &kelf_out->sections, list) {
 		if (!is_rela_section(sec))
 			continue;
