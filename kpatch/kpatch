@@ -98,11 +98,11 @@ load_module () {
 		else
 			find_core_module || die "can't find core module"
 			echo "loading core module: $COREMOD"
-			/usr/sbin/insmod "$COREMOD" || die "failed to load core module"
+			insmod "$COREMOD" || die "failed to load core module"
 		fi
 	fi
 	echo "loading patch module: $1"
-	/usr/sbin/insmod "$1" "$2"
+	insmod "$1" "$2"
 }
 
 unload_module () {
@@ -120,7 +120,7 @@ unload_module () {
 	fi
 
 	echo "unloading patch module: $PATCH"
-	/usr/sbin/rmmod "$(basename $1)"
+	rmmod "$(basename $1)"
 }
 
 unload_disabled_modules() {
