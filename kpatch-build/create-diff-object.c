@@ -963,6 +963,45 @@ struct special_section {
 int bug_table_group_size(struct section *sec, struct rela *rela) { return 2; }
 int smp_locks_group_size(struct section *sec, struct rela *rela) { return 1; }
 int parainstructions_group_size(struct section *sec, struct rela *rela) { return 1; }
+int ex_table_group_size(struct section *sec, struct rela *rela) { return 2; }
+
+int altinstructions_group_size(struct section *sec, struct rela *rela)
+{
+	/*
+	 * The first rela (.text instruction destination) is mandatory, and the
+	 * second rela (.altinstr_replacement instruction source) is optional.
+	 * So just check whether the second rela references
+	 * .altinstr_replacement.
+	 */
+
+	rela = list_next_entry(rela, list);
+	if (!strcmp(rela->sym->name, ".altinstr_replacement"))
+		return 2;
+	return 1;
+}
+
+int fixup_group_size(struct section *sec, struct rela *rela)
+{
+	int count;
+	unsigned char *instr;
+
+	/*
+	 * Each fixup group is a collection of instructions.  The last
+	 * instruction is always 'jmpq'.
+	 */
+
+	sec = sec->base;
+	count = 1;
+	while (1) {
+		instr = sec->data->d_buf;
+		instr += rela->offset - 1;
+		if (*instr == 0xe9)
+			return count;
+
+		count++;
+		rela = list_next_entry(rela, list);
+	}
+}
 
 struct special_section special_sections[] = {
 	{
@@ -976,6 +1015,18 @@ struct special_section special_sections[] = {
 	{
 		.name		= ".parainstructions",
 		.group_size	= parainstructions_group_size,
+	},
+	{
+		.name		= "__ex_table",
+		.group_size	= ex_table_group_size,
+	},
+	{
+		.name		= ".altinstructions",
+		.group_size	= altinstructions_group_size,
+	},
+	{
+		.name		= ".fixup",
+		.group_size	= fixup_group_size,
 	},
 	{},
 };
