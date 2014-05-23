@@ -995,6 +995,28 @@ void kpatch_reindex_elements(struct kpatch_elf *kelf)
 int bug_table_group_size(struct section *sec, int offset) { return 12; }
 int smp_locks_group_size(struct section *sec, int offset) { return 4; }
 int parainstructions_group_size(struct section *sec, int offset) { return 16; }
+int ex_table_group_size(struct section *sec, int offset) { return 8; }
+int altinstructions_group_size(struct section *sec, int offset) { return 12; }
+
+int fixup_group_size(struct section *sec, int offset)
+{
+	unsigned char *insn, *start, *end;
+
+	/*
+	 * Each fixup group is a collection of instructions.  The last
+	 * instruction is always 'jmpq'.
+	 */
+	start = sec->data->d_buf + offset;
+	end = start + sec->sh.sh_size;
+	for (insn = start; insn < end; insn++) {
+		/* looking for the pattern "e9 00 00 00 00" */
+		if (*insn == 0xe9 && *(uint32_t *)(insn + 1) == 0)
+			return insn + 5 - start;
+	}
+
+	ERROR("can't find jump instruction in .fixup section");
+	return 0;
+}
 
 struct special_section special_sections[] = {
 	{
@@ -1008,6 +1030,18 @@ struct special_section special_sections[] = {
 	{
 		.name		= ".parainstructions",
 		.group_size	= parainstructions_group_size,
+	},
+	{
+		.name		= "__ex_table",
+		.group_size	= ex_table_group_size,
+	},
+	{
+		.name		= ".altinstructions",
+		.group_size	= altinstructions_group_size,
+	},
+	{
+		.name		= ".fixup",
+		.group_size	= fixup_group_size,
 	},
 	{},
 };
@@ -1117,6 +1151,8 @@ void kpatch_process_special_sections(struct kpatch_elf *kelf)
 {
 	struct special_section *special;
 	struct section *sec;
+	struct symbol *sym;
+	struct rela *rela;
 
 	for (special = special_sections; special->name; special++) {
 		sec = find_section_by_name(&kelf->sections, special->name);
@@ -1128,6 +1164,31 @@ void kpatch_process_special_sections(struct kpatch_elf *kelf)
 			continue;
 
 		kpatch_regenerate_special_section(special, sec);
+	}
+
+	/*
+	 * The following special section doesn't have relas which reference
+	 * non-included symbols, so its entire rela section can be included.
+	 */
+	list_for_each_entry(sec, &kelf->sections, list) {
+		if (strcmp(sec->name, ".altinstr_replacement"))
+			continue;
+
+		/* include base section */
+		sec->include = 1;
+
+		/* include all symbols in the section */
+		list_for_each_entry(sym, &kelf->symbols, list)
+			if (sym->sec == sec)
+				sym->include = 1;
+
+		/* include rela section */
+		if (sec->rela) {
+			sec->rela->include = 1;
+			/* include all symbols referenced by relas */
+			list_for_each_entry(rela, &sec->rela->relas, list)
+				rela->sym->include = 1;
+		}
 	}
 }
 
