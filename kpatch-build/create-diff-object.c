@@ -997,6 +997,7 @@ int smp_locks_group_size(struct section *sec, int offset) { return 4; }
 int parainstructions_group_size(struct section *sec, int offset) { return 16; }
 int ex_table_group_size(struct section *sec, int offset) { return 8; }
 int altinstructions_group_size(struct section *sec, int offset) { return 12; }
+int jump_table_group_size(struct section *sec, int offset) { return 24; }
 
 int fixup_group_size(struct section *sec, int offset)
 {
@@ -1034,6 +1035,10 @@ struct special_section special_sections[] = {
 	{
 		.name		= "__ex_table",
 		.group_size	= ex_table_group_size,
+	},
+	{
+		.name		= "__jump_table",
+		.group_size	= jump_table_group_size,
 	},
 	{
 		.name		= ".altinstructions",
@@ -1167,11 +1172,14 @@ void kpatch_process_special_sections(struct kpatch_elf *kelf)
 	}
 
 	/*
-	 * The following special section doesn't have relas which reference
-	 * non-included symbols, so its entire rela section can be included.
+	 * The following special sections don't have relas which reference
+	 * non-included symbols, so their entire rela section can be included.
 	 */
 	list_for_each_entry(sec, &kelf->sections, list) {
-		if (strcmp(sec->name, ".altinstr_replacement"))
+		if (strcmp(sec->name, ".altinstr_replacement") &&
+		    strcmp(sec->name, "__tracepoints") &&
+		    strcmp(sec->name, "__tracepoints_ptrs") &&
+		    strcmp(sec->name, "__tracepoints_strings"))
 			continue;
 
 		/* include base section */

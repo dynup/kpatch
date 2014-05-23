@@ -1,0 +1,13 @@
+Index: src/kernel/timer.c
+===================================================================
+--- src.orig/kernel/timer.c
++++ src/kernel/timer.c
+@@ -1370,6 +1370,8 @@ static void run_timer_softirq(struct sof
+ {
+ 	struct tvec_base *base = __this_cpu_read(tvec_bases);
+ 
++	printk("kpatch-test: testing __tracepoints section changes\n");
++
+ 	hrtimer_run_pending();
+ 
+ 	if (time_after_eq(jiffies, base->timer_jiffies))
