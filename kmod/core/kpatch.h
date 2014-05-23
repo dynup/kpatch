@@ -28,12 +28,15 @@ struct kpatch_patch {
 	unsigned long new_size;
 	unsigned long old_addr;
 	unsigned long old_size;
+	char *name;
 };
 
 struct kpatch_dynrela {
 	unsigned long dest;
 	unsigned long src;
 	unsigned long type;
+	char *name;
+	int addend;
 };
 
 #ifdef __KERNEL__

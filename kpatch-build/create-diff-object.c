@@ -133,10 +133,16 @@ struct rela {
 	char *string;
 };
 
+struct string {
+	struct list_head list;
+	char *name;
+};
+
 struct kpatch_elf {
 	Elf *elf;
 	struct list_head sections;
 	struct list_head symbols;
+	struct list_head strings;
 	int fd;
 };
 
@@ -217,6 +223,25 @@ struct symbol *find_symbol_by_name(struct list_head *list, const char *name)
 	memset((_new), 0, sizeof(*(_new))); \
 	INIT_LIST_HEAD(&(_new)->list); \
 	list_add_tail(&(_new)->list, (_list)); \
+}
+
+/* returns the offset of the string in the string table */
+int offset_of_string(struct list_head *list, char *name)
+{
+	struct string *string;
+	int index = 0;
+
+	/* try to find string in the string list */
+	list_for_each_entry(string, list, list) {
+		if (!strcmp(string->name, name))
+			return index;
+		index += strlen(string->name) + 1;
+	}
+
+	/* allocation a new string */
+	ALLOC_LINK(string, list);
+	string->name = name;
+	return index;
 }
 
 /*************
@@ -423,6 +448,7 @@ struct kpatch_elf *kpatch_elf_open(const char *name)
 	memset(kelf, 0, sizeof(*kelf));
 	INIT_LIST_HEAD(&kelf->sections);
 	INIT_LIST_HEAD(&kelf->symbols);
+	INIT_LIST_HEAD(&kelf->strings);
 
 	/* read and store section, symbol entries from file */
 	kelf->elf = elf;
@@ -867,6 +893,7 @@ void kpatch_migrate_included_elements(struct kpatch_elf *kelf, struct kpatch_elf
 	memset(out, 0, sizeof(*out));
 	INIT_LIST_HEAD(&out->sections);
 	INIT_LIST_HEAD(&out->symbols);
+	INIT_LIST_HEAD(&out->strings);
 
 	/* migrate included sections from kelf to out */
 	list_for_each_entry_safe(sec, safesec, &kelf->sections, list) {
@@ -1304,7 +1331,7 @@ void kpatch_create_patches_sections(struct kpatch_elf *kelf,
 {
 	int nr, size, index;
 	struct section *sec, *relasec;
-	struct symbol *sym;
+	struct symbol *sym, *strsym;
 	struct rela *rela;
 	struct lookup_result result;
 	struct kpatch_patch *patches;
@@ -1358,6 +1385,11 @@ void kpatch_create_patches_sections(struct kpatch_elf *kelf,
 	relasec->sh.sh_entsize = sizeof(GElf_Rela);
 	relasec->sh.sh_addralign = 8;
 
+	/* lookup strings symbol */
+	strsym = find_symbol_by_name(&kelf->symbols, "__kpatch_strings");
+	if (!strsym)
+		ERROR("can't find strsym");
+
 	/* populate sections */
 	index = 0;
 	list_for_each_entry(sym, &kelf->symbols, list) {
@@ -1392,6 +1424,16 @@ void kpatch_create_patches_sections(struct kpatch_elf *kelf,
 			rela->addend = 0;
 			rela->offset = index * sizeof(*patches);
 
+			/*
+			 * Add a relocation that will populate
+			 * the patches[index].name field.
+			 */
+			ALLOC_LINK(rela, &relasec->relas);
+			rela->sym = strsym;
+			rela->type = R_X86_64_64;
+			rela->addend = offset_of_string(&kelf->strings, sym->name);
+			rela->offset = index * sizeof(*patches) +
+			               offsetof(struct kpatch_patch, name);
 			index++;
 		}
 	}
@@ -1408,6 +1450,7 @@ void kpatch_create_dynamic_rela_sections(struct kpatch_elf *kelf,
 	int nr, size, index;
 	struct section *sec, *relasec;
 	struct rela *rela, *dynrela, *safe;
+	struct symbol *strsym;
 	struct lookup_result result;
 	struct kpatch_dynrela *dynrelas;
 
@@ -1469,6 +1512,11 @@ void kpatch_create_dynamic_rela_sections(struct kpatch_elf *kelf,
 	relasec->sh.sh_entsize = sizeof(GElf_Rela);
 	relasec->sh.sh_addralign = 8;
 
+	/* lookup strings symbol */
+	strsym = find_symbol_by_name(&kelf->symbols, "__kpatch_strings");
+	if (!strsym)
+		ERROR("can't find strsym");
+
 	/* populate sections (reuse sec for iterator here) */
 	index = 0;
 	list_for_each_entry(sec, &kelf->sections, list) {
@@ -1496,9 +1544,11 @@ void kpatch_create_dynamic_rela_sections(struct kpatch_elf *kelf,
 				          rela->sym->name, result.value, result.size);
 
 				/* dest filed in by rela entry below */
-				dynrelas[index].src = result.value + rela->addend;
+				dynrelas[index].src = result.value;
+				dynrelas[index].addend = rela->addend;
 				dynrelas[index].type = rela->type;
 
+				/* add rela to fill in dest field */
 				ALLOC_LINK(dynrela, &relasec->relas);
 				if (!sec->base->sym)
 					ERROR("expected bundled symbol");
@@ -1506,6 +1556,13 @@ void kpatch_create_dynamic_rela_sections(struct kpatch_elf *kelf,
 				dynrela->type = R_X86_64_64;
 				dynrela->addend = rela->offset;
 				dynrela->offset = index * sizeof(*dynrelas);
+
+				/* add rela to fill in name field */
+				ALLOC_LINK(dynrela, &relasec->relas);
+				dynrela->sym = strsym;
+				dynrela->type = R_X86_64_64;
+				dynrela->addend = offset_of_string(&kelf->strings, rela->sym->name);
+				dynrela->offset = index * sizeof(*dynrelas) + offsetof(struct kpatch_dynrela, name);
 
 				list_del(&rela->list);
 				free(rela);
@@ -1542,6 +1599,78 @@ void kpatch_strip_unneeded_syms(struct kpatch_elf *kelf,
 
 		list_del(&sym->list);
 		free(sym);
+	}
+}
+
+void kpatch_create_strings_elements(struct kpatch_elf *kelf)
+{
+	struct section *sec;
+	struct symbol *sym;
+
+	/* create .kpatch.strings */
+
+	/* allocate section resources */
+	ALLOC_LINK(sec, &kelf->sections);
+	sec->name = ".kpatch.strings";
+
+	/* set data */
+	sec->data = malloc(sizeof(*sec->data));
+	if (!sec->data)
+		ERROR("malloc");
+	sec->data->d_type = ELF_T_BYTE;
+
+	/* set section header */
+	sec->sh.sh_type = SHT_PROGBITS;
+	sec->sh.sh_entsize = 1;
+	sec->sh.sh_addralign = 1;
+	sec->sh.sh_flags = SHF_ALLOC;
+
+	/* create __kpatch_strings symbol */
+
+	ALLOC_LINK(sym, &kelf->symbols);
+	sym->sec = sec;
+	sym->sym.st_info = GELF_ST_INFO(STB_LOCAL, STT_NOTYPE);
+	sym->type = STT_NOTYPE;
+	sym->bind = STB_LOCAL;
+	sym->name = "__kpatch_strings";
+
+	/* create .kpatch.strings section symbol (reuse sym variable) */
+
+	ALLOC_LINK(sym, &kelf->symbols);
+	sym->sec = sec;
+	sym->sym.st_info = GELF_ST_INFO(STB_LOCAL, STT_SECTION);
+	sym->type = STT_SECTION;
+	sym->bind = STB_LOCAL;
+	sym->name = ".kpatch.strings";
+}
+
+void kpatch_build_strings_section_data(struct kpatch_elf *kelf)
+{
+	struct string *string;
+	struct section *sec;
+	int size;
+	char *strtab;
+
+	sec = find_section_by_name(&kelf->sections, ".kpatch.strings");
+	if (!sec)
+		ERROR("can't find .kpatch.strings");
+
+	/* determine size */
+	size = 0;
+	list_for_each_entry(string, &kelf->strings, list)
+		size += strlen(string->name) + 1;
+
+	/* allocate section resources */
+	strtab = malloc(size);
+	if (!strtab)
+		ERROR("malloc");
+	sec->data->d_buf = strtab;
+	sec->data->d_size = size;
+
+	/* populate strings section data */
+	list_for_each_entry(string, &kelf->strings, list) {
+		strcpy(strtab, string->name);
+		strtab += strlen(string->name) + 1;
 	}
 }
 
@@ -1815,8 +1944,10 @@ int main(int argc, char *argv[])
 			break;
 		}
 	}
+	kpatch_create_strings_elements(kelf_out);
 	kpatch_create_patches_sections(kelf_out, vmlinux, hint);
 	kpatch_create_dynamic_rela_sections(kelf_out, vmlinux, hint);
+	kpatch_build_strings_section_data(kelf_out);
 
 	/*
 	 *  At this point, the set of output sections and symbols is
