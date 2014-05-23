@@ -819,16 +819,13 @@ int kpatch_include_changed_functions(struct kpatch_elf *kelf)
 	return changed_nr;
 }
 
-void kpatch_migrate_included_symbols(struct list_head *src,
+void kpatch_migrate_symbols(struct list_head *src,
                                     struct list_head *dst,
                                     int (*select)(struct symbol *))
 {
 	struct symbol *sym, *safe;
 
 	list_for_each_entry_safe(sym, safe, src, list) {
-		if (!sym->include)
-			continue;
-
 		if (select && !select(sym))
 			continue;
 
@@ -901,15 +898,15 @@ void kpatch_reorder_symbols(struct kpatch_elf *kelf)
 	LIST_HEAD(symbols);
 
 	/* migrate NULL sym */
-	kpatch_migrate_included_symbols(&kelf->symbols, &symbols, is_null_sym);
+	kpatch_migrate_symbols(&kelf->symbols, &symbols, is_null_sym);
 	/* migrate LOCAL FILE sym */
-	kpatch_migrate_included_symbols(&kelf->symbols, &symbols, is_file_sym);
+	kpatch_migrate_symbols(&kelf->symbols, &symbols, is_file_sym);
 	/* migrate LOCAL FUNC syms */
-	kpatch_migrate_included_symbols(&kelf->symbols, &symbols, is_local_func_sym);
+	kpatch_migrate_symbols(&kelf->symbols, &symbols, is_local_func_sym);
 	/* migrate all other LOCAL syms */
-	kpatch_migrate_included_symbols(&kelf->symbols, &symbols, is_local_sym);
+	kpatch_migrate_symbols(&kelf->symbols, &symbols, is_local_sym);
 	/* migrate all other (GLOBAL) syms */
-	kpatch_migrate_included_symbols(&kelf->symbols, &symbols, NULL);
+	kpatch_migrate_symbols(&kelf->symbols, &symbols, NULL);
 
 	list_replace(&symbols, &kelf->symbols);
 }
