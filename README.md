@@ -52,8 +52,25 @@ Install the dependencies for the "kpatch-build" command:
     # optional, but highly recommended
     apt-get install ccache
 
-NOTE: While kpatch-build will build a module on Ubuntu, currently
-the hot patch can't be loaded due to issue #156.
+Install kernel debug symbols
+
+```bash
+# Add ddebs repository
+codename=$(lsb_release -sc)
+sudo tee /etc/apt/sources.list.d/ddebs.list << EOF
+deb http://ddebs.ubuntu.com/ ${codename} main restricted universe multiverse
+deb http://ddebs.ubuntu.com/ ${codename}-security main restricted universe multiverse
+deb http://ddebs.ubuntu.com/ ${codename}-updates main restricted universe multiverse
+deb http://ddebs.ubuntu.com/ ${codename}-proposed main restricted universe multiverse
+EOF
+
+# add APT key
+wget -Nq http://ddebs.ubuntu.com/dbgsym-release-key.asc -O- | sudo apt-key add -
+apt-get update && apt-get install linux-image-$(uname -r)-dbgsym
+```
+
+> NOTE: If **NOT** installed, you'll get `ERROR: linux-image-$(uname -r)-dbgsym not installed` when running `kpatch-build` to build a patch module.
+
 
 ###Build
 
@@ -75,8 +92,7 @@ Quick start
 -----------
 
 *NOTE: While kpatch is designed to work with any recent Linux
-kernel on any distribution, the "kpatch-build" command currently
-only works on Fedora.*
+kernel on any distribution, the "kpatch-build" command currently only works on Fedora and Ubuntu.*
 
 First, make a source code patch against the kernel tree using diff, git, or
 quilt.
