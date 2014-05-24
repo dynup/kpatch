@@ -41,6 +41,7 @@
 #include <linux/hashtable.h>
 #include <linux/hardirq.h>
 #include <linux/uaccess.h>
+#include <linux/kallsyms.h>
 #include <asm/stacktrace.h>
 #include <asm/cacheflush.h>
 #include "kpatch.h"
@@ -420,6 +421,49 @@ static void kpatch_remove_funcs_from_filter(struct kpatch_func *funcs,
 	}
 }
 
+int kpatch_verify_symbol_match(char *name, unsigned long addr)
+{
+	int ret;
+	unsigned long offset;
+	char buf[KSYM_SYMBOL_LEN], *symname, *offsetstr, *pos;
+
+	sprint_symbol(buf, addr);
+
+	/*
+	 * sprint_symbol() doesn't return an error if it can't find the symbol.
+	 * It returns the addr we passed in as a hex string in 'name'.
+	 * Check for this and, if so, error.
+	 */
+	if (!strncmp(buf, "0x", 2)) {
+		pr_err("failed to find named symbol\n");
+		return -EINVAL;
+	}
+
+	/* hack out the symbol name and offset */
+	/* example format for buf 'printk+0x0/0x8e' */
+	symname = buf;
+	pos = strchr(buf, '+');
+	*pos = '\0';
+	pos += 3; /* skip the "+0x" */
+	offsetstr = pos;
+	pos = strchr(offsetstr, '/');
+	*pos = '\0';
+
+	ret = kstrtoul(offsetstr, 16, &offset);
+	if (ret) {
+		pr_err("failed to parse symbol offset\n");
+		return ret;
+	}
+
+	if (strcmp(symname, name) || offset != 0) {
+		pr_err("base kernel mismatch for symbol '%s'\n", name);
+		pr_err("expected address was 0x%016lx\n", addr);
+		return -EINVAL;
+	}
+
+	return 0;
+}
+
 int kpatch_register(struct kpatch_module *kpmod, bool replace)
 {
 	int ret, i;
@@ -455,15 +499,19 @@ int kpatch_register(struct kpatch_module *kpmod, bool replace)
 
 	for (i = 0; i < kpmod->dynrelas_nr; i++) {
 		dynrela = &kpmod->dynrelas[i];
+		ret = kpatch_verify_symbol_match(dynrela->name, dynrela->src);
+		if (ret)
+			goto err_put;
 		switch (dynrela->type) {
 			case R_X86_64_PC32:
 				loc = (void *)dynrela->dest;
-				val = (u32)(dynrela->src - dynrela->dest);
+				val = (u32)(dynrela->src + dynrela->addend -
+				            dynrela->dest);
 				size = 4;
 				break;
 			case R_X86_64_32S:
 				loc = (void *)dynrela->dest;
-				val = (s32)dynrela->src;
+				val = (s32)dynrela->src + dynrela->addend;
 				size = 4;
 				break;
 			default:
@@ -487,6 +535,11 @@ int kpatch_register(struct kpatch_module *kpmod, bool replace)
 		func->op = KPATCH_OP_PATCH;
 		func->kpmod = kpmod;
 		func->patch = &kpmod->patches[i];
+
+		ret = kpatch_verify_symbol_match(func->patch->name,
+		                               func->patch->old_addr);
+		if (ret)
+			goto err_rollback;
 
 		/*
 		 * If any other modules have also patched this function, it
