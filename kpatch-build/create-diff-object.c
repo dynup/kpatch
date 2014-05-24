@@ -238,7 +238,7 @@ int offset_of_string(struct list_head *list, char *name)
 		index += strlen(string->name) + 1;
 	}
 
-	/* allocation a new string */
+	/* allocate a new string */
 	ALLOC_LINK(string, list);
 	string->name = name;
 	return index;
@@ -1386,9 +1386,9 @@ void kpatch_create_patches_sections(struct kpatch_elf *kelf,
 	relasec->sh.sh_addralign = 8;
 
 	/* lookup strings symbol */
-	strsym = find_symbol_by_name(&kelf->symbols, "__kpatch_strings");
+	strsym = find_symbol_by_name(&kelf->symbols, ".kpatch.strings");
 	if (!strsym)
-		ERROR("can't find strsym");
+		ERROR("can't find .kpatch.strings symbol");
 
 	/* populate sections */
 	index = 0;
@@ -1513,9 +1513,9 @@ void kpatch_create_dynamic_rela_sections(struct kpatch_elf *kelf,
 	relasec->sh.sh_addralign = 8;
 
 	/* lookup strings symbol */
-	strsym = find_symbol_by_name(&kelf->symbols, "__kpatch_strings");
+	strsym = find_symbol_by_name(&kelf->symbols, ".kpatch.strings");
 	if (!strsym)
-		ERROR("can't find strsym");
+		ERROR("can't find .kpatch.strings symbol");
 
 	/* populate sections (reuse sec for iterator here) */
 	index = 0;
@@ -1624,15 +1624,6 @@ void kpatch_create_strings_elements(struct kpatch_elf *kelf)
 	sec->sh.sh_entsize = 1;
 	sec->sh.sh_addralign = 1;
 	sec->sh.sh_flags = SHF_ALLOC;
-
-	/* create __kpatch_strings symbol */
-
-	ALLOC_LINK(sym, &kelf->symbols);
-	sym->sec = sec;
-	sym->sym.st_info = GELF_ST_INFO(STB_LOCAL, STT_NOTYPE);
-	sym->type = STT_NOTYPE;
-	sym->bind = STB_LOCAL;
-	sym->name = "__kpatch_strings";
 
 	/* create .kpatch.strings section symbol (reuse sym variable) */
 

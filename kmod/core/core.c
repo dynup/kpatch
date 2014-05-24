@@ -539,7 +539,7 @@ int kpatch_register(struct kpatch_module *kpmod, bool replace)
 		ret = kpatch_verify_symbol_match(func->patch->name,
 		                               func->patch->old_addr);
 		if (ret)
-			goto err_put;
+			goto err_rollback;
 
 		/*
 		 * If any other modules have also patched this function, it
