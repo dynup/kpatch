@@ -1,10 +1,10 @@
 Name: kpatch
 Summary: Dynamic kernel patching
-Version: 0.0.1
+Version: 0.1.2
 License: GPLv2 
 Group: System Environment/Kernel
 URL: http://github.com/dynup/kpatch
-Release: 3%{?dist}
+Release: 1%{?dist}
 Source0: %{name}-%{version}.tar.gz
 
 Requires: kmod bash
@@ -85,7 +85,7 @@ rm -rf %{buildroot}
 
 %files %{KVER}
 %defattr(-,root,root,-)
-%{_usr}/lib/modules/%{KVER}/%{name}/*
+%{_usr}/lib/modules/%{KVER}/extra/%{name}/*
 
 %files build
 %defattr(-,root,root,-)
@@ -95,6 +95,9 @@ rm -rf %{buildroot}
 %{_mandir}/man1/kpatch-build.1*
 
 %changelog
+* Sat May 24 2014 Udo Seidel <udoseidel@gmx.de> - 0.1.1-1
+- rebased to current version
+
 * Tue Apr 10 2014 Udo Seidel <udoseidel@gmx.de> - 0.0.1-3
 - added dracut module
 
