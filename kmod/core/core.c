@@ -69,6 +69,11 @@ struct kpatch_backtrace_args {
 	int ret;
 };
 
+struct kpatch_kallsyms_args {
+	char *name;
+	unsigned long addr;
+};
+
 /*
  * The kpatch core module has a state machine which allows for proper
  * synchronization with kpatch_ftrace_handler() when it runs in NMI context.
@@ -421,41 +426,29 @@ static void kpatch_remove_funcs_from_filter(struct kpatch_func *funcs,
 	}
 }
 
-int kpatch_verify_symbol_match(char *name, unsigned long addr)
+static int kpatch_kallsyms_callback(void *data, const char *name,
+					 struct module *mod,
+					 unsigned long addr)
+{
+	struct kpatch_kallsyms_args *args = data;
+
+	if (args->addr == addr && !strcmp(args->name, name))
+		return 1;
+
+	return 0;
+}
+
+static int kpatch_verify_symbol_match(char *name, unsigned long addr)
 {
 	int ret;
-	unsigned long offset;
-	char buf[KSYM_SYMBOL_LEN], *symname, *offsetstr, *pos;
 
-	sprint_symbol(buf, addr);
+	struct kpatch_kallsyms_args args = {
+		.name = name,
+		.addr = addr,
+	};
 
-	/*
-	 * sprint_symbol() doesn't return an error if it can't find the symbol.
-	 * It returns the addr we passed in as a hex string in 'name'.
-	 * Check for this and, if so, error.
-	 */
-	if (!strncmp(buf, "0x", 2)) {
-		pr_err("failed to find named symbol\n");
-		return -EINVAL;
-	}
-
-	/* hack out the symbol name and offset */
-	/* example format for buf 'printk+0x0/0x8e' */
-	symname = buf;
-	pos = strchr(buf, '+');
-	*pos = '\0';
-	pos += 3; /* skip the "+0x" */
-	offsetstr = pos;
-	pos = strchr(offsetstr, '/');
-	*pos = '\0';
-
-	ret = kstrtoul(offsetstr, 16, &offset);
-	if (ret) {
-		pr_err("failed to parse symbol offset\n");
-		return ret;
-	}
-
-	if (strcmp(symname, name) || offset != 0) {
+	ret = kallsyms_on_each_symbol(kpatch_kallsyms_callback, &args);
+	if (!ret) {
 		pr_err("base kernel mismatch for symbol '%s'\n", name);
 		pr_err("expected address was 0x%016lx\n", addr);
 		return -EINVAL;

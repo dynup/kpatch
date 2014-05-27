@@ -146,6 +146,11 @@ struct kpatch_elf {
 	int fd;
 };
 
+struct special_section {
+	char *name;
+	int (*group_size)(struct section *sec, int offset);
+};
+
 /*******************
  * Helper functions
  ******************/
@@ -689,20 +694,49 @@ void kpatch_replace_sections_syms(struct kpatch_elf *kelf)
 {
 	struct section *sec;
 	struct rela *rela;
+	struct symbol *sym;
 
 	list_for_each_entry(sec, &kelf->sections, list) {
 		if (!is_rela_section(sec))
 			continue;
 
 		list_for_each_entry(rela, &sec->relas, list) {
-			if (rela->sym->type != STT_SECTION ||
-			    !rela->sym->sec || !rela->sym->sec->sym)
+
+			/*
+			 * Replace references to bundled sections with their
+			 * symbols.
+			 */
+			if (rela->sym->type == STT_SECTION &&
+			    rela->sym->sec && rela->sym->sec->sym) {
+
+				log_debug("replacing %s with %s\n",
+					  rela->sym->name,
+					  rela->sym->sec->sym->name);
+
+				rela->sym = rela->sym->sec->sym;
 				continue;
+			}
 
-			log_debug("replacing %s with %s\n",
-			       rela->sym->name, rela->sym->sec->sym->name);
+			/*
+			 * .data..percpu is a special data section whose data
+			 * symbols aren't bundled with sections when using
+			 * -fdata-sections.  We need to replace the section
+			 * references with their corresponding objects.
+			 */
+			if (strcmp(rela->sym->name, ".data..percpu"))
+				continue;
+			list_for_each_entry(sym, &kelf->symbols, list) {
 
-			rela->sym = rela->sym->sec->sym;
+				if (sym->sec != rela->sym->sec ||
+				    sym->sym.st_value != rela->addend)
+					continue;
+
+				log_debug("replacing %s with %s\n",
+					  rela->sym->name, sym->name);
+
+				rela->sym = sym;
+				break;
+			}
 		}
 	}
 }
@@ -835,8 +869,7 @@ int kpatch_include_changed_functions(struct kpatch_elf *kelf)
 		    sym->type == STT_FUNC) {
 			changed_nr++;
 			log_normal("changed function: %s\n", sym->name);
-			if (!sym->include)
-				kpatch_include_symbol(sym, 0);
+			kpatch_include_symbol(sym, 0);
 		}
 
 		if (sym->type == STT_FILE)
@@ -954,202 +987,218 @@ void kpatch_reindex_elements(struct kpatch_elf *kelf)
 		sym->index = index++;
 		if (sym->sec)
 			sym->sym.st_shndx = sym->sec->index;
+		else if (sym->sym.st_shndx != SHN_ABS)
+			sym->sym.st_shndx = SHN_UNDEF;
 	}
 }
 
-/*
- * The format of section __bug_table is a table of struct bug_entry.  Each
- * bug_entry has three fields:
- * - relocated address of instruction pointer at BUG
- * - relocated address of string with filename
- * - line number of the BUG
- *
- * Therefore, .rela__bug_table has two relocations per entry. The first
- * relocation is that of the instruction pointer at the BUG. The second is the
- * pointer to the filename string in .rodata.str1.1. These two related
- * relocations we will call a "pair".
- *
- * This function goes through .rela__bug_table and finds pairs the refer to
- * functions that have been marked as changed.  If one is found, that pair is
- * copied into the new version of the .rela__bug_table section.  If no pairs
- * are found, the bug table (both the __bug_table and .rela__bug_table
- * sections) are considered unchanged and not copied into the final output.
- *
- * The __bug_table section is not modified and therefore will contains "blank"
- * bug_entry slots i.e. ones that do not get relocated and therefore the IP
- * fields are zero.  While this wastes space, it doesn't hurt anything and
- * keeps the code cleaner by not having to regenerate the __bug_table section
- * as well.
- */
 
-void kpatch_regenerate_bug_table_rela_section(struct kpatch_elf *kelf)
+int bug_table_group_size(struct section *sec, int offset) { return 12; }
+int smp_locks_group_size(struct section *sec, int offset) { return 4; }
+int parainstructions_group_size(struct section *sec, int offset) { return 16; }
+int ex_table_group_size(struct section *sec, int offset) { return 8; }
+int altinstructions_group_size(struct section *sec, int offset) { return 12; }
+int jump_table_group_size(struct section *sec, int offset) { return 24; }
+
+int fixup_group_size(struct section *sec, int offset)
 {
-	struct section *sec;
-	struct rela *rela, *safe;
-	int nr = 0, copynext = 0, i = 0;
-	LIST_HEAD(newrelas);
-
-	sec = find_section_by_name(&kelf->sections, ".rela__bug_table");
-	if (!sec)
-		return;
-
-	list_for_each_entry_safe(rela, safe, &sec->relas, list) {
-		if (i % 2) { /* filename reloc */
-			if (!copynext)
-				continue;
-			rela->sym->include = 1;
-			rela->sym->sec->include = 1;
-			list_del(&rela->list);
-			list_add_tail(&rela->list, &newrelas);
-			nr++;
-			copynext = 0;
-		}
-		else if (rela->sym->sec->status != SAME) { /* IP reloc */
-			log_debug("new/changed symbol %s found in bug table\n",
-			          rela->sym->name);
-			/* copy BOTH relocs for this bug_entry */
-			list_del(&rela->list);
-			list_add_tail(&rela->list, &newrelas);
-			nr++;
-			/* tell the next loop to copy the filename reloc */
-			copynext = 1;
-		}
-		i++;
-	}
-
-	if (!nr) {
-		/* no changed functions referenced */
-		sec->status = SAME;
-		sec->base->status = SAME;
-		return;
-	}
-
-	/* overwrite with new relas list */
-	list_replace(&newrelas, &sec->relas);
-
-	/* include both rela and text sections */
-	sec->include = 1;
-	sec->base->include = 1;
+	unsigned char *insn, *start, *end;
 
 	/*
-	 * Adjust d_size but not d_buf. d_buf is overwritten in
-	 * kpatch_create_rela_section() from the relas list. No
-	 * point in regen'ing the buffer here just to be discarded
-	 * later.
+	 * Each fixup group is a collection of instructions.  The last
+	 * instruction is always 'jmpq'.
 	 */
-	sec->data->d_size = sec->sh.sh_entsize * nr;
+	start = sec->data->d_buf + offset;
+	end = start + sec->sh.sh_size;
+	for (insn = start; insn < end; insn++) {
+		/* looking for the pattern "e9 00 00 00 00" */
+		if (*insn == 0xe9 && *(uint32_t *)(insn + 1) == 0)
+			return insn + 5 - start;
+	}
+
+	ERROR("can't find jump instruction in .fixup section");
+	return 0;
 }
 
-void kpatch_regenerate_smp_locks_sections(struct kpatch_elf *kelf)
+struct special_section special_sections[] = {
+	{
+		.name		= "__bug_table",
+		.group_size	= bug_table_group_size,
+	},
+	{
+		.name		= ".smp_locks",
+		.group_size	= smp_locks_group_size,
+	},
+	{
+		.name		= ".parainstructions",
+		.group_size	= parainstructions_group_size,
+	},
+	{
+		.name		= "__ex_table",
+		.group_size	= ex_table_group_size,
+	},
+	{
+		.name		= "__jump_table",
+		.group_size	= jump_table_group_size,
+	},
+	{
+		.name		= ".altinstructions",
+		.group_size	= altinstructions_group_size,
+	},
+	{
+		.name		= ".fixup",
+		.group_size	= fixup_group_size,
+	},
+	{},
+};
+
+int should_keep_rela_group(struct section *sec, int start, int size)
 {
-	struct section *sec;
-	struct rela *rela, *safe;
-	int nr = 0, offset = 0;
-	LIST_HEAD(newrelas);
+	struct rela *rela;
+	int found = 0;
 
-	sec = find_section_by_name(&kelf->sections, ".rela.smp_locks");
-	if (!sec)
-		return;
-
-	list_for_each_entry_safe(rela, safe, &sec->relas, list) {
-		if (rela->sym->sec->status != SAME) {
-			log_debug("new/changed symbol %s found in smp locks table\n",
-			          rela->sym->name);
-			list_del(&rela->list);
-			list_add_tail(&rela->list, &newrelas);
-			rela->offset = offset;
-			rela->rela.r_offset = offset;
-			offset += 4;
-			nr++;
+	/* check if any relas in the group reference any changed functions */
+	list_for_each_entry(rela, &sec->relas, list) {
+		if (rela->offset >= start &&
+		    rela->offset < start + size &&
+		    rela->sym->type == STT_FUNC &&
+		    rela->sym->sec->status != SAME) {
+			found = 1;
+			log_debug("new/changed symbol %s found in special section %s\n",
+				  rela->sym->name, sec->name);
 		}
 	}
 
-	if (!nr) {
-		/* no changed functions referenced */
-		sec->status = SAME;
-		sec->base->status = SAME;
-		return;
-	}
-
-	/* overwrite with new relas list */
-	list_replace(&newrelas, &sec->relas);
-
-	/* include both rela and text sections */
-	sec->include = 1;
-	sec->base->include = 1;
-
-	/*
-	 * Adjust d_size but not d_buf. d_buf is overwritten in
-	 * kpatch_create_rela_section() from the relas list. No
-	 * point in regen'ing the buffer here just to be discarded
-	 * later.
-	 */
-	sec->data->d_size = sec->sh.sh_entsize * nr;
-
-	/* truncate smp_locks section */
-	sec->base->data->d_size = offset;
+	return found;
 }
 
-void kpatch_regenerate_parainstructions_sections(struct kpatch_elf *kelf)
+void kpatch_regenerate_special_section(struct special_section *special,
+				       struct section *sec)
 {
-	struct section *sec;
 	struct rela *rela, *safe;
-	int nr = 0, offset = 0;
-	char *old, *new;
+	char *src, *dest;
+	int group_size, src_offset, dest_offset, include, align, aligned_size;
+
 	LIST_HEAD(newrelas);
 
-	sec = find_section_by_name(&kelf->sections, ".rela.parainstructions");
-	if (!sec)
-		return;
-
-	old = sec->base->data->d_buf;
-	/* alloc buffer for new text section */
-	new = malloc(sec->base->sh.sh_size);
-	if (!new)
+	src = sec->base->data->d_buf;
+	/* alloc buffer for new base section */
+	dest = malloc(sec->base->sh.sh_size);
+	if (!dest)
 		ERROR("malloc");
 
-	list_for_each_entry_safe(rela, safe, &sec->relas, list) {
-		if (rela->sym->sec->status != SAME) {
-			log_debug("new/changed symbol %s found in parainstructions table\n",
-			          rela->sym->name);
-			/* copy rela entry into new list*/
-			list_del(&rela->list);
-			list_add_tail(&rela->list, &newrelas);
+	group_size = 0;
+	src_offset = 0;
+	dest_offset = 0;
+	for ( ; src_offset < sec->base->sh.sh_size; src_offset += group_size) {
 
-			/* adjust offset in both table entry and rela section */
-			rela->offset = offset;
-			rela->rela.r_offset = offset;
+		group_size = special->group_size(sec->base, src_offset);
+		include = should_keep_rela_group(sec, src_offset, group_size);
 
-			/* copy the entry to the new text section */
-			memcpy(new + offset, old, 16);
+		if (!include)
+			continue;
 
-			offset += 16;
-			nr++;
+		/*
+		 * Copy all relas in the group.  It's possible that the relas
+		 * aren't sorted (e.g. .rela.fixup), so go through the entire
+		 * rela list each time.
+		 */
+		list_for_each_entry_safe(rela, safe, &sec->relas, list) {
+			if (rela->offset >= src_offset &&
+			    rela->offset < src_offset + group_size) {
+				/* copy rela entry */
+				list_del(&rela->list);
+				list_add_tail(&rela->list, &newrelas);
+
+				rela->offset -= src_offset - dest_offset;
+				rela->rela.r_offset = rela->offset;
+
+				rela->sym->include = 1;
+			}
 		}
-		old += 16;
+
+		/* copy base section group */
+		memcpy(dest + dest_offset, src + src_offset, group_size);
+		dest_offset += group_size;
 	}
 
-	if (!nr) {
-		/* no changed functions referenced */
+	/* verify that group_size is a divisor of aligned section size */
+	align = sec->base->sh.sh_addralign;
+	aligned_size = ((sec->base->sh.sh_size + align - 1) / align) * align;
+	if (src_offset != aligned_size)
+		ERROR("group size mismatch for section %s\n", sec->base->name);
+
+	if (!dest_offset) {
+		/* no changed or global functions referenced */
 		sec->status = SAME;
 		sec->base->status = SAME;
 		return;
 	}
 
-	/* overwrite with new relas table */
+	/* overwrite with new relas list */
 	list_replace(&newrelas, &sec->relas);
 
-	/* mark sections for inclusion */
+	/* include both rela and base sections */
 	sec->include = 1;
 	sec->base->include = 1;
-	sec->base->secsym->include = 1;
 
-	/* update rela section data size */
-	sec->data->d_size = sec->sh.sh_entsize * nr;
+	/*
+	 * Update text section data buf and size.
+	 *
+	 * The rela section's data buf and size will be regenerated in
+	 * kpatch_rebuild_rela_section_data().
+	 */
+	sec->base->data->d_buf = dest;
+	sec->base->data->d_size = dest_offset;
+}
 
-	/* update text section data buf and size */
-	sec->base->data->d_buf = new;
-	sec->base->data->d_size = offset;
+
+void kpatch_process_special_sections(struct kpatch_elf *kelf)
+{
+	struct special_section *special;
+	struct section *sec;
+	struct symbol *sym;
+	struct rela *rela;
+
+	for (special = special_sections; special->name; special++) {
+		sec = find_section_by_name(&kelf->sections, special->name);
+		if (!sec)
+			continue;
+
+		sec = sec->rela;
+		if (!sec)
+			continue;
+
+		kpatch_regenerate_special_section(special, sec);
+	}
+
+	/*
+	 * The following special sections don't have relas which reference
+	 * non-included symbols, so their entire rela section can be included.
+	 */
+	list_for_each_entry(sec, &kelf->sections, list) {
+		if (strcmp(sec->name, ".altinstr_replacement") &&
+		    strcmp(sec->name, "__tracepoints") &&
+		    strcmp(sec->name, "__tracepoints_ptrs") &&
+		    strcmp(sec->name, "__tracepoints_strings"))
+			continue;
+
+		/* include base section */
+		sec->include = 1;
+
+		/* include all symbols in the section */
+		list_for_each_entry(sym, &kelf->symbols, list)
+			if (sym->sec == sec)
+				sym->include = 1;
+
+		/* include rela section */
+		if (sec->rela) {
+			sec->rela->include = 1;
+			/* include all symbols referenced by relas */
+			list_for_each_entry(rela, &sec->rela->relas, list)
+				rela->sym->include = 1;
+		}
+	}
 }
 
 void print_strtab(char *buf, size_t size)
@@ -1529,7 +1578,8 @@ void kpatch_create_dynamic_rela_sections(struct kpatch_elf *kelf,
 				/* add rela to fill in dest field */
 				ALLOC_LINK(dynrela, &relasec->relas);
 				if (!sec->base->sym)
-					ERROR("expected bundled symbol");
+					ERROR("expected bundled symbol for section %s for dynrela src %s",
+					      sec->base->name, rela->sym->name);
 				dynrela->sym = sec->base->sym;
 				dynrela->type = R_X86_64_64;
 				dynrela->addend = rela->offset;
@@ -1876,9 +1926,8 @@ int main(int argc, char *argv[])
 	 * in vmlinux can be linked to.
 	 */
 	kpatch_replace_sections_syms(kelf_patched);
-	kpatch_regenerate_bug_table_rela_section(kelf_patched);
-	kpatch_regenerate_smp_locks_sections(kelf_patched);
-	kpatch_regenerate_parainstructions_sections(kelf_patched);
+
+	kpatch_process_special_sections(kelf_patched);
 
 	kpatch_include_standard_elements(kelf_patched);
 	num_changed = kpatch_include_changed_functions(kelf_patched);
