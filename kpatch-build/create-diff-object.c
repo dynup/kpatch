@@ -956,29 +956,6 @@ void kpatch_reindex_elements(struct kpatch_elf *kelf)
 	}
 }
 
-void kpatch_write_inventory_file(struct kpatch_elf *kelf, char *outfile)
-{
-	FILE *out;
-	char outbuf[255];
-	struct section *sec;
-	struct symbol *sym;
-
-	if (snprintf(outbuf, 254, "%s.inventory", outfile) < 0)
-		ERROR("snprintf");
-
-	out = fopen(outbuf, "w");
-	if (!out)
-		ERROR("fopen");
-
-	list_for_each_entry(sec, &kelf->sections, list)
-		fprintf(out, "section %s\n", sec->name);
-
-	list_for_each_entry(sym, &kelf->symbols, list)
-		fprintf(out, "symbol %s %d %d\n", sym->name, sym->type, sym->bind);
-
-	fclose(out);
-}
-
 /*
  * The format of section __bug_table is a table of struct bug_entry.  Each
  * bug_entry has three fields:
@@ -1770,14 +1747,12 @@ void kpatch_write_output_elf(struct kpatch_elf *kelf, Elf *elf, char *outfile)
 struct arguments {
 	char *args[4];
 	int debug;
-	int inventory;
 };
 
 static char args_doc[] = "original.o patched.o vmlinux output.o";
 
 static struct argp_option options[] = {
 	{"debug", 'd', 0, 0, "Show debug output" },
-	{"inventory", 'i', 0, 0, "Create inventory file with list of sections and symbols" },
 	{ 0 }
 };
 
@@ -1791,9 +1766,6 @@ static error_t parse_opt (int key, char *arg, struct argp_state *state)
 	{
 		case 'd':
 			arguments->debug = 1;
-			break;
-		case 'i':
-			arguments->inventory = 1;
 			break;
 		case ARGP_KEY_ARG:
 			if (state->arg_num >= 4)
@@ -1867,7 +1839,6 @@ int main(int argc, char *argv[])
 	char *hint;
 
 	arguments.debug = 0;
-	arguments.inventory = 0;
 	argp_parse (&argp, argc, argv, 0, 0, &arguments);
 	if (arguments.debug)
 		loglevel = DEBUG;
@@ -1969,9 +1940,6 @@ int main(int argc, char *argv[])
 	kpatch_create_symtab(kelf_out);
 	kpatch_dump_kelf(kelf_out);
 	kpatch_write_output_elf(kelf_out, kelf_patched->elf, outfile);
-
-	if (arguments.inventory)
-		kpatch_write_inventory_file(kelf_out, outfile);
 
 	kpatch_elf_free(kelf_patched);
 	kpatch_elf_teardown(kelf_out);
