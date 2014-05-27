@@ -51,10 +51,11 @@ rm -f $LOG
 usage() {
 	echo "usage: $0 [options]" >&2
 	echo "		-h, --help	Show this help message" >&2
-	echo "		-s, --skipbuild Don't rebuild patch modules" >&2
+	echo "		-c, --cached	Don't rebuild patch modules" >&2
+	echo "		-q, --quick	Just combine all patches into one module for testing" >&2
 }
 
-options=$(getopt -o hs -l "help,skipbuild" -- "$@") || exit 1
+options=$(getopt -o hcq -l "help,cached,quick" -- "$@") || exit 1
 
 eval set -- "$options"
 
@@ -64,8 +65,11 @@ while [[ $# -gt 0 ]]; do
 		usage
 		exit 0
 		;;
-	-s|--skipbuild)
+	-c|--cached)
 		SKIPBUILD=1
+		;;
+	-q|--quick)
+		QUICK=1
 		;;
 	esac
 	shift
@@ -97,6 +101,8 @@ build_module() {
 	prefix=${file%%.patch}
 	module=kpatch-$prefix.ko
 
+	[[ $prefix = COMBINED ]] && return
+
 	if [[ $prefix = *-FAIL ]]; then
 		shouldfail=1
 	else
@@ -125,6 +131,7 @@ run_load_test() {
 	module=kpatch-$prefix.ko
 	testprog=$prefix-LOADED.test
 
+	[[ $prefix = COMBINED ]] && return
 	[[ $prefix = *-FAIL ]] && return
 
 	if [[ ! -e $module ]]; then
@@ -183,23 +190,94 @@ run_custom_test() {
 	fi
 }
 
+build_combined_module() {
+
+	if [[ $SKIPBUILD -eq 1 ]] && [[ -e kpatch-COMBINED.ko ]]; then
+		log "skipping build: combined"
+		return
+	fi
+
+	if ! which combinediff > /dev/null; then
+		log "patchutils not installed, skipping combined module build"
+		error "PLEASE INSTALL PATCHUTILS"
+		return
+	fi
+
+	rm -f COMBINED.patch
+	first=1
+	for file in *.patch; do
+		prefix=${file%%.patch}
+
+		[[ $prefix = *-FAIL ]] && continue
+		[[ $prefix = meminfo-cmdline ]] && continue # HACK
+
+		log "combine: $prefix"
+
+		if [[ $first -eq 1 ]]; then
+			cp -f $file COMBINED.patch
+			first=0
+			continue
+		fi
+
+		combinediff COMBINED.patch $file > TMP.patch
+		mv -f TMP.patch COMBINED.patch
+	done
+
+	log "build: combined module"
+
+	if ! $KPATCHBUILD COMBINED.patch >> $LOG 2>&1; then
+		error "combined build failed"
+	fi
+}
+
+run_combined_test() {
+	if [[ ! -e kpatch-COMBINED.ko ]]; then
+		log "can't find kpatch-COMBINED.ko, skipping"
+		return
+	fi
+
+	log "load test: combined module"
+
+	if ! $KPATCH replace kpatch-COMBINED.ko >> $LOG 2>&1; then
+		error "combined: kpatch replace failed"
+		return
+	fi
+
+	for testprog in *.test; do
+		[[ $testprog != *-LOADED.test ]] && continue
+		if ! ./$testprog >> $LOG 2>&1; then
+			error "combined: $testprog failed"
+		fi
+	done
+}
+
 cd "$SCRIPTDIR"
 
-for file in *.patch; do
-	build_module $file
-done
+if [[ $QUICK != 1 ]]; then
+	for file in *.patch; do
+		build_module $file
+	done
+fi
+
+build_combined_module
 
 unload_all
 
-for file in *.patch; do
-	run_load_test $file
-	lastmod=$file
-done
+if [[ $QUICK != 1 ]]; then
+	for file in *.patch; do
+		run_load_test $file
+	done
+fi
 
-for file in *.test; do
-	unload_all
-	run_custom_test $file
-done
+run_combined_test
+
+if [[ $QUICK != 1 ]]; then
+	for file in *.test; do
+		unload_all
+		run_custom_test $file
+	done
+fi
+
 
 unload_all
 
