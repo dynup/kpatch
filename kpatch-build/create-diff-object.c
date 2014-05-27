@@ -688,20 +688,49 @@ void kpatch_replace_sections_syms(struct kpatch_elf *kelf)
 {
 	struct section *sec;
 	struct rela *rela;
+	struct symbol *sym;
 
 	list_for_each_entry(sec, &kelf->sections, list) {
 		if (!is_rela_section(sec))
 			continue;
 
 		list_for_each_entry(rela, &sec->relas, list) {
-			if (rela->sym->type != STT_SECTION ||
-			    !rela->sym->sec || !rela->sym->sec->sym)
+
+			/*
+			 * Replace references to bundled sections with their
+			 * symbols.
+			 */
+			if (rela->sym->type == STT_SECTION &&
+			    rela->sym->sec && rela->sym->sec->sym) {
+
+				log_debug("replacing %s with %s\n",
+					  rela->sym->name,
+					  rela->sym->sec->sym->name);
+
+				rela->sym = rela->sym->sec->sym;
 				continue;
+			}
 
-			log_debug("replacing %s with %s\n",
-			       rela->sym->name, rela->sym->sec->sym->name);
+			/*
+			 * .data..percpu is a special data section whose data
+			 * symbols aren't bundled with sections when using
+			 * -fdata-sections.  We need to replace the section
+			 * references with their corresponding objects.
+			 */
+			if (strcmp(rela->sym->name, ".data..percpu"))
+				continue;
+			list_for_each_entry(sym, &kelf->symbols, list) {
 
-			rela->sym = rela->sym->sec->sym;
+				if (sym->sec != rela->sym->sec ||
+				    sym->sym.st_value != rela->addend)
+					continue;
+
+				log_debug("replacing %s with %s\n",
+					  rela->sym->name, sym->name);
+
+				rela->sym = sym;
+				break;
+			}
 		}
 	}
 }
