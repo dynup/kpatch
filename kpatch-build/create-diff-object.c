@@ -626,7 +626,8 @@ void kpatch_correlate_symbols(struct list_head *symlist1, struct list_head *syml
 
 	list_for_each_entry(sym1, symlist1, list) {
 		list_for_each_entry(sym2, symlist2, list) {
-			if (!strcmp(sym1->name, sym2->name)) {
+			if (!strcmp(sym1->name, sym2->name) &&
+			    sym1->type == sym2->type) {
 				sym1->twin = sym2;
 				sym2->twin = sym1;
 				/* set initial status, might change */
