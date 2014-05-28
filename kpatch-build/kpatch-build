@@ -257,6 +257,7 @@ make "-j$CPUS" vmlinux "O=$OBJDIR" 2>&1 | tee -a "$TEMPDIR/patched_build.log" >>
 echo "Detecting changed objects"
 grep CC "$TEMPDIR/patched_build.log" | grep -v -e init/version.o -e scripts/mod/devicetable-offsets.s -e scripts/mod/file2alias.o | awk '{print $2}' > "$TEMPDIR/changed_objs"
 [[ ! -s "$TEMPDIR/changed_objs" ]] && die "no changed objects were detected"
+grep -q asm-offsets.s $TEMPDIR/changed_objs && die "a struct definition change was detected"
 
 echo "Rebuilding changed objects"
 rm -rf "$OBJDIR2"
