@@ -212,6 +212,7 @@ else
 		mkdir -p "$OBJDIR"
 		mv "$HOME"/rpmbuild/BUILD/kernel-*/linux-"$ARCHVERSION" "$SRCDIR" >> "$LOGFILE" 2>&1 || die
 
+		sed -i -e's/CONFIG_DEBUG_INFO=y/CONFIG_DEBUG_INFO=n/' "$SRCDIR/.config" || die
 		cp "$SRCDIR/.config" "$OBJDIR" || die
 		echo "-${ARCHVERSION##*-}" > "$SRCDIR/localversion" || die
 
