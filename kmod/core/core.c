@@ -457,15 +457,55 @@ static int kpatch_verify_symbol_match(char *name, unsigned long addr)
 	return 0;
 }
 
+static int kpatch_write_relocations(struct kpatch_module *kpmod)
+{
+	int ret, i, size;
+	struct kpatch_dynrela *dynrela;
+	void *loc;
+	u64 val;
+
+	for (i = 0; i < kpmod->dynrelas_nr; i++) {
+		dynrela = &kpmod->dynrelas[i];
+
+		ret = kpatch_verify_symbol_match(dynrela->name, dynrela->src);
+		if (ret)
+			return ret;
+
+		switch (dynrela->type) {
+			case R_X86_64_PC32:
+				loc = (void *)dynrela->dest;
+				val = (u32)(dynrela->src + dynrela->addend -
+				            dynrela->dest);
+				size = 4;
+				break;
+			case R_X86_64_32S:
+				loc = (void *)dynrela->dest;
+				val = (s32)dynrela->src + dynrela->addend;
+				size = 4;
+				break;
+			default:
+				printk("unsupported rela type %ld for "
+				       "0x%lx <- 0x%lx at index %d\n",
+				       dynrela->type, dynrela->dest,
+				       dynrela->src, i);
+				return -EINVAL;
+		}
+
+		set_memory_rw((unsigned long)loc & PAGE_MASK, 1);
+		ret = probe_kernel_write(loc, &val, size);
+		set_memory_ro((unsigned long)loc & PAGE_MASK, 1);
+		if (ret)
+			return ret;
+	}
+
+	return 0;
+}
+
 int kpatch_register(struct kpatch_module *kpmod, bool replace)
 {
 	int ret, i;
 	struct kpatch_func *funcs, *func;
 	int num_funcs = kpmod->patches_nr;
-	struct kpatch_dynrela *dynrela;
-	void *loc;
-	u64 val;
-	int size;
 
 	if (!kpmod->mod || !kpmod->patches || !num_funcs)
 		return -EINVAL;
@@ -490,37 +530,9 @@ int kpatch_register(struct kpatch_module *kpmod, bool replace)
 		goto err_up;
 	}
 
-	for (i = 0; i < kpmod->dynrelas_nr; i++) {
-		dynrela = &kpmod->dynrelas[i];
-		ret = kpatch_verify_symbol_match(dynrela->name, dynrela->src);
-		if (ret)
-			goto err_put;
-		switch (dynrela->type) {
-			case R_X86_64_PC32:
-				loc = (void *)dynrela->dest;
-				val = (u32)(dynrela->src + dynrela->addend -
-				            dynrela->dest);
-				size = 4;
-				break;
-			case R_X86_64_32S:
-				loc = (void *)dynrela->dest;
-				val = (s32)dynrela->src + dynrela->addend;
-				size = 4;
-				break;
-			default:
-				printk("unsupported rela type %ld for "
-				       "0x%lx <- 0x%lx at index %d\n",
-				       dynrela->type, dynrela->dest,
-				       dynrela->src, i);
-				ret = -EINVAL;
-				goto err_put;
-		}
-		set_memory_rw((unsigned long)loc & PAGE_MASK, 1);
-		ret = probe_kernel_write(loc, &val, size);
-		set_memory_ro((unsigned long)loc & PAGE_MASK, 1);
-		if (ret)
-			goto err_put;
-	}
+	ret = kpatch_write_relocations(kpmod);
+	if (ret)
+		goto err_put;
 
 	for (i = 0; i < num_funcs; i++) {
 		func = &funcs[i];
