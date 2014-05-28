@@ -459,9 +459,11 @@ static int kpatch_verify_symbol_match(char *name, unsigned long addr)
 
 static int kpatch_write_relocations(struct kpatch_module *kpmod)
 {
-	int ret, i, size;
+	int ret, i, size, readonly = 0;
 	struct kpatch_dynrela *dynrela;
 	u64 loc, val;
+	pte_t *pte;
+	unsigned int level;
 
 	for (i = 0; i < kpmod->dynrelas_nr; i++) {
 		dynrela = &kpmod->dynrelas[i];
@@ -490,9 +492,17 @@ static int kpatch_write_relocations(struct kpatch_module *kpmod)
 				return -EINVAL;
 		}
 
-		set_memory_rw(loc & PAGE_MASK, 1);
+		pte = lookup_address(loc, &level);
+		if (!pte_write(*pte)) {
+			readonly = 1;
+			set_memory_rw(loc & PAGE_MASK, 1);
+		}
+
 		ret = probe_kernel_write((void *)loc, &val, size);
-		set_memory_ro(loc & PAGE_MASK, 1);
+
+		if (readonly)
+			set_memory_ro(loc & PAGE_MASK, 1);
+
 		if (ret)
 			return ret;
 	}
