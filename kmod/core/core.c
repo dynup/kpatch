@@ -461,8 +461,7 @@ static int kpatch_write_relocations(struct kpatch_module *kpmod)
 {
 	int ret, i, size;
 	struct kpatch_dynrela *dynrela;
-	void *loc;
-	u64 val;
+	u64 loc, val;
 
 	for (i = 0; i < kpmod->dynrelas_nr; i++) {
 		dynrela = &kpmod->dynrelas[i];
@@ -473,13 +472,13 @@ static int kpatch_write_relocations(struct kpatch_module *kpmod)
 
 		switch (dynrela->type) {
 			case R_X86_64_PC32:
-				loc = (void *)dynrela->dest;
+				loc = dynrela->dest;
 				val = (u32)(dynrela->src + dynrela->addend -
 				            dynrela->dest);
 				size = 4;
 				break;
 			case R_X86_64_32S:
-				loc = (void *)dynrela->dest;
+				loc = dynrela->dest;
 				val = (s32)dynrela->src + dynrela->addend;
 				size = 4;
 				break;
@@ -491,9 +490,9 @@ static int kpatch_write_relocations(struct kpatch_module *kpmod)
 				return -EINVAL;
 		}
 
-		set_memory_rw((unsigned long)loc & PAGE_MASK, 1);
-		ret = probe_kernel_write(loc, &val, size);
-		set_memory_ro((unsigned long)loc & PAGE_MASK, 1);
+		set_memory_rw(loc & PAGE_MASK, 1);
+		ret = probe_kernel_write((void *)loc, &val, size);
+		set_memory_ro(loc & PAGE_MASK, 1);
 		if (ret)
 			return ret;
 	}
