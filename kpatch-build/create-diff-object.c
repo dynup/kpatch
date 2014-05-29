@@ -718,12 +718,13 @@ void kpatch_replace_sections_syms(struct kpatch_elf *kelf)
 			}
 
 			/*
-			 * .data..percpu is a special data section whose data
+			 * The following are special data sections whose data
 			 * symbols aren't bundled with sections when using
 			 * -fdata-sections.  We need to replace the section
-			 * references with their corresponding objects.
+			 *  references with their corresponding objects.
 			 */
-			if (strcmp(rela->sym->name, ".data..percpu"))
+			if (strcmp(rela->sym->name, ".data..percpu") &&
+			    strcmp(rela->sym->name, ".data..read_mostly"))
 				continue;
 			list_for_each_entry(sym, &kelf->symbols, list) {
 
