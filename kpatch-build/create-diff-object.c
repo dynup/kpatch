@@ -790,12 +790,23 @@ void kpatch_verify_patchability(struct kpatch_elf *kelf)
 	struct section *sec;
 	int errs = 0;
 
-	list_for_each_entry(sec, &kelf->sections, list)
+	list_for_each_entry(sec, &kelf->sections, list) {
 		if (sec->status == CHANGED && !sec->include) {
 			log_normal("%s: changed section %s not selected for inclusion\n",
 				   objname, sec->name);
 			errs++;
 		}
+
+		/* ensure we aren't including .data.* or .bss.* */
+		if (sec->include &&
+		    (!strncmp(sec->name, ".data", 5) ||
+		     !strncmp(sec->name, ".bss", 4))) {
+			log_normal("%s: data section %s selected for inclusion\n",
+				   objname, sec->name);
+			errs++;
+		}
+	}
+
 	if (errs)
 		DIFF_FATAL("%d unsupported section change(s)", errs);
 }
