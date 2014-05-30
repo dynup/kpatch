@@ -48,6 +48,7 @@
 
 #include "list.h"
 #include "lookup.h"
+#include "asm/insn.h"
 #include "kpatch.h"
 
 #define ERROR(format, ...) \
@@ -690,11 +691,31 @@ void kpatch_compare_correlated_elements(struct kpatch_elf *kelf)
 	kpatch_compare_symbols(&kelf->symbols);
 }
 
+void rela_insn(struct section *sec, struct rela *rela, struct insn *insn)
+{
+	unsigned long insn_addr, start, end, rela_addr;
+
+	start = (unsigned long)sec->base->data->d_buf;
+	end = start + sec->base->sh.sh_size;
+	rela_addr = start + rela->offset;
+	for (insn_addr = start; insn_addr < end; insn_addr += insn->length) {
+		insn_init(insn, (void *)insn_addr, 1);
+		insn_get_length(insn);
+		if (!insn->length)
+			ERROR("can't decode instruction in section %s at offset 0x%lx",
+			      sec->base->name, insn_addr);
+		if (rela_addr >= insn_addr &&
+		    rela_addr < insn_addr + insn->length)
+			return;
+	}
+}
+
 void kpatch_replace_sections_syms(struct kpatch_elf *kelf)
 {
 	struct section *sec;
 	struct rela *rela;
 	struct symbol *sym;
+	int add_off;
 
 	list_for_each_entry(sec, &kelf->sections, list) {
 		if (!is_rela_section(sec))
@@ -718,23 +739,41 @@ void kpatch_replace_sections_syms(struct kpatch_elf *kelf)
 			}
 
 			/*
-			 * .data..percpu is a special data section whose data
-			 * symbols aren't bundled with sections when using
+			 * These are special data sections whose data symbols
+			 * aren't bundled with sections when using
 			 * -fdata-sections.  We need to replace the section
 			 * references with their corresponding objects.
 			 */
-			if (strcmp(rela->sym->name, ".data..percpu"))
+			if (strcmp(rela->sym->name, ".data..percpu") &&
+			    strcmp(rela->sym->name, ".data..read_mostly") &&
+			    strcmp(rela->sym->name, ".data.unlikely"))
 				continue;
 			list_for_each_entry(sym, &kelf->symbols, list) {
 
-				if (sym->sec != rela->sym->sec ||
-				    sym->sym.st_value != rela->addend)
+				if (sym->sec != rela->sym->sec)
 					continue;
 
-				log_debug("replacing %s with %s\n",
-					  rela->sym->name, sym->name);
+				if (rela->type == R_X86_64_PC32) {
+					struct insn insn;
+					rela_insn(sec, rela, &insn);
+					add_off = (long)insn.next_byte -
+						  (long)sec->base->data->d_buf -
+						  rela->offset;
+				} else if (rela->type == R_X86_64_64 ||
+					   rela->type == R_X86_64_32S)
+					add_off = 0;
+				else
+					continue;
+
+				if (sym->sym.st_value != rela->addend + add_off)
+					continue;
+
+				log_debug("replacing %s+%d with %s+%d\n",
+					  rela->sym->name, rela->addend,
+					  sym->name, -add_off);
 
 				rela->sym = sym;
+				rela->addend = -add_off;
 				break;
 			}
 		}
@@ -790,12 +829,23 @@ void kpatch_verify_patchability(struct kpatch_elf *kelf)
 	struct section *sec;
 	int errs = 0;
 
-	list_for_each_entry(sec, &kelf->sections, list)
+	list_for_each_entry(sec, &kelf->sections, list) {
 		if (sec->status == CHANGED && !sec->include) {
 			log_normal("%s: changed section %s not selected for inclusion\n",
 				   objname, sec->name);
 			errs++;
 		}
+
+		/* ensure we aren't including .data.* or .bss.* */
+		if (sec->include &&
+		    (!strncmp(sec->name, ".data", 5) ||
+		     !strncmp(sec->name, ".bss", 4))) {
+			log_normal("%s: data section %s selected for inclusion\n",
+				   objname, sec->name);
+			errs++;
+		}
+	}
+
 	if (errs)
 		DIFF_FATAL("%d unsupported section change(s)", errs);
 }
@@ -998,7 +1048,6 @@ int smp_locks_group_size(struct section *sec, int offset) { return 4; }
 int parainstructions_group_size(struct section *sec, int offset) { return 16; }
 int ex_table_group_size(struct section *sec, int offset) { return 8; }
 int altinstructions_group_size(struct section *sec, int offset) { return 12; }
-int jump_table_group_size(struct section *sec, int offset) { return 24; }
 
 int fixup_group_size(struct section *sec, int offset)
 {
@@ -1036,10 +1085,6 @@ struct special_section special_sections[] = {
 	{
 		.name		= "__ex_table",
 		.group_size	= ex_table_group_size,
-	},
-	{
-		.name		= "__jump_table",
-		.group_size	= jump_table_group_size,
 	},
 	{
 		.name		= ".altinstructions",
@@ -1177,10 +1222,7 @@ void kpatch_process_special_sections(struct kpatch_elf *kelf)
 	 * non-included symbols, so their entire rela section can be included.
 	 */
 	list_for_each_entry(sec, &kelf->sections, list) {
-		if (strcmp(sec->name, ".altinstr_replacement") &&
-		    strcmp(sec->name, "__tracepoints") &&
-		    strcmp(sec->name, "__tracepoints_ptrs") &&
-		    strcmp(sec->name, "__tracepoints_strings"))
+		if (strcmp(sec->name, ".altinstr_replacement"))
 			continue;
 
 		/* include base section */
@@ -1198,6 +1240,25 @@ void kpatch_process_special_sections(struct kpatch_elf *kelf)
 			list_for_each_entry(rela, &sec->rela->relas, list)
 				rela->sym->include = 1;
 		}
+	}
+
+	/*
+	 * The following special sections aren't supported, so make sure we
+	 * don't ever try to include them.  Otherwise the kernel will see the
+	 * jump table during module loading and get confused.  Generally it
+	 * should be safe to exclude them, it just means that you can't modify
+	 * jump labels and enable tracepoints in a patched function.
+	 */
+	list_for_each_entry(sec, &kelf->sections, list) {
+		if (strcmp(sec->name, "__jump_table") &&
+		    strcmp(sec->name, "__tracepoints") &&
+		    strcmp(sec->name, "__tracepoints_ptrs") &&
+		    strcmp(sec->name, "__tracepoints_strings"))
+			continue;
+
+		sec->status = SAME;
+		if (sec->rela)
+			sec->rela->status = SAME;
 	}
 }
 
@@ -1559,8 +1620,9 @@ void kpatch_create_dynamic_rela_sections(struct kpatch_elf *kelf,
 				if (rela->sym->bind == STB_LOCAL) {
 					if (lookup_local_symbol(table, rela->sym->name,
 								hint, &result))
-						ERROR("lookup_local_symbol %s (%s)",
-								rela->sym->name, hint);
+						ERROR("lookup_local_symbol %s (%s) needed for %s",
+						      rela->sym->name, hint,
+						      sec->base->name);
 				} else {
 					if(lookup_global_symbol(table, rela->sym->name,
 								&result))
