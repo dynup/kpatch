@@ -26,6 +26,8 @@
 #include <asm/inat.h>
 #include <asm/insn.h>
 
+#define unlikely(a) a
+
 /* Verify next sizeof(t) bytes can be on the same instruction */
 #define validate_next(t, insn, n)	\
 	((insn)->next_byte + sizeof(t) + n - (insn)->kaddr <= MAX_INSN_SIZE)
