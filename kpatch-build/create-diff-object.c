@@ -1609,8 +1609,9 @@ void kpatch_create_dynamic_rela_sections(struct kpatch_elf *kelf,
 				if (rela->sym->bind == STB_LOCAL) {
 					if (lookup_local_symbol(table, rela->sym->name,
 								hint, &result))
-						ERROR("lookup_local_symbol %s (%s)",
-								rela->sym->name, hint);
+						ERROR("lookup_local_symbol %s (%s) needed for %s",
+						      rela->sym->name, hint,
+						      sec->base->name);
 				} else {
 					if(lookup_global_symbol(table, rela->sym->name,
 								&result))
