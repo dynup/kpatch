@@ -48,6 +48,7 @@
 
 #include "list.h"
 #include "lookup.h"
+#include "asm/insn.h"
 #include "kpatch.h"
 
 #define ERROR(format, ...) \
@@ -690,11 +691,31 @@ void kpatch_compare_correlated_elements(struct kpatch_elf *kelf)
 	kpatch_compare_symbols(&kelf->symbols);
 }
 
+void rela_insn(struct section *sec, struct rela *rela, struct insn *insn)
+{
+	unsigned long insn_addr, start, end, rela_addr;
+
+	start = (unsigned long)sec->base->data->d_buf;
+	end = start + sec->base->sh.sh_size;
+	rela_addr = start + rela->offset;
+	for (insn_addr = start; insn_addr < end; insn_addr += insn->length) {
+		insn_init(insn, (void *)insn_addr, 1);
+		insn_get_length(insn);
+		if (!insn->length)
+			ERROR("can't decode instruction in section %s at offset 0x%lx",
+			      sec->base->name, insn_addr);
+		if (rela_addr >= insn_addr &&
+		    rela_addr < insn_addr + insn->length)
+			return;
+	}
+}
+
 void kpatch_replace_sections_syms(struct kpatch_elf *kelf)
 {
 	struct section *sec;
 	struct rela *rela;
 	struct symbol *sym;
+	int add_off;
 
 	list_for_each_entry(sec, &kelf->sections, list) {
 		if (!is_rela_section(sec))
@@ -727,14 +748,30 @@ void kpatch_replace_sections_syms(struct kpatch_elf *kelf)
 				continue;
 			list_for_each_entry(sym, &kelf->symbols, list) {
 
-				if (sym->sec != rela->sym->sec ||
-				    sym->sym.st_value != rela->addend)
+				if (sym->sec != rela->sym->sec)
 					continue;
 
-				log_debug("replacing %s with %s\n",
-					  rela->sym->name, sym->name);
+				if (rela->type == R_X86_64_PC32) {
+					struct insn insn;
+					rela_insn(sec, rela, &insn);
+					add_off = (long)insn.next_byte -
+						  (long)sec->base->data->d_buf -
+						  rela->offset;
+				} else if (rela->type == R_X86_64_64 ||
+					   rela->type == R_X86_64_32S)
+					add_off = 0;
+				else
+					continue;
+
+				if (sym->sym.st_value != rela->addend + add_off)
+					continue;
+
+				log_debug("replacing %s+%d with %s+%d\n",
+					  rela->sym->name, rela->addend,
+					  sym->name, -add_off);
 
 				rela->sym = sym;
+				rela->addend = -add_off;
 				break;
 			}
 		}
