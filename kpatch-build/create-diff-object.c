@@ -1048,7 +1048,6 @@ int smp_locks_group_size(struct section *sec, int offset) { return 4; }
 int parainstructions_group_size(struct section *sec, int offset) { return 16; }
 int ex_table_group_size(struct section *sec, int offset) { return 8; }
 int altinstructions_group_size(struct section *sec, int offset) { return 12; }
-int jump_table_group_size(struct section *sec, int offset) { return 24; }
 
 int fixup_group_size(struct section *sec, int offset)
 {
@@ -1086,10 +1085,6 @@ struct special_section special_sections[] = {
 	{
 		.name		= "__ex_table",
 		.group_size	= ex_table_group_size,
-	},
-	{
-		.name		= "__jump_table",
-		.group_size	= jump_table_group_size,
 	},
 	{
 		.name		= ".altinstructions",
@@ -1227,10 +1222,7 @@ void kpatch_process_special_sections(struct kpatch_elf *kelf)
 	 * non-included symbols, so their entire rela section can be included.
 	 */
 	list_for_each_entry(sec, &kelf->sections, list) {
-		if (strcmp(sec->name, ".altinstr_replacement") &&
-		    strcmp(sec->name, "__tracepoints") &&
-		    strcmp(sec->name, "__tracepoints_ptrs") &&
-		    strcmp(sec->name, "__tracepoints_strings"))
+		if (strcmp(sec->name, ".altinstr_replacement"))
 			continue;
 
 		/* include base section */
@@ -1248,6 +1240,25 @@ void kpatch_process_special_sections(struct kpatch_elf *kelf)
 			list_for_each_entry(rela, &sec->rela->relas, list)
 				rela->sym->include = 1;
 		}
+	}
+
+	/*
+	 * The following special sections aren't supported, so make sure we
+	 * don't ever try to include them.  Otherwise the kernel will see the
+	 * jump table during module loading and get confused.  Generally it
+	 * should be safe to exclude them, it just means that you can't modify
+	 * jump labels and enable tracepoints in a patched function.
+	 */
+	list_for_each_entry(sec, &kelf->sections, list) {
+		if (strcmp(sec->name, "__jump_table") &&
+		    strcmp(sec->name, "__tracepoints") &&
+		    strcmp(sec->name, "__tracepoints_ptrs") &&
+		    strcmp(sec->name, "__tracepoints_strings"))
+			continue;
+
+		sec->status = SAME;
+		if (sec->rela)
+			sec->rela->status = SAME;
 	}
 }
 

@@ -1,0 +1,12 @@
+Index: src/net/core/dev.c
+===================================================================
+--- src.orig/net/core/dev.c
++++ src/net/core/dev.c
+@@ -3609,6 +3609,7 @@ ncls:
+ 		case RX_HANDLER_PASS:
+ 			break;
+ 		default:
++			printk("BUG!\n");
+ 			BUG();
+ 		}
+ 	}
