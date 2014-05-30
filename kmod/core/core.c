@@ -462,8 +462,9 @@ static int kpatch_write_relocations(struct kpatch_module *kpmod)
 	int ret, i, size, readonly = 0;
 	struct kpatch_dynrela *dynrela;
 	u64 loc, val;
-	pte_t *pte;
-	unsigned int level;
+	unsigned long core = (unsigned long)kpmod->mod->module_core;
+	unsigned long core_ro_size = kpmod->mod->core_ro_size;
+	unsigned long core_size = kpmod->mod->core_size;
 
 	for (i = 0; i < kpmod->dynrelas_nr; i++) {
 		dynrela = &kpmod->dynrelas[i];
@@ -492,19 +493,29 @@ static int kpatch_write_relocations(struct kpatch_module *kpmod)
 				return -EINVAL;
 		}
 
-		pte = lookup_address(loc, &level);
-		if (!pte_write(*pte)) {
+		if (loc >= core && loc < core + core_ro_size)
 			readonly = 1;
-			set_memory_rw(loc & PAGE_MASK, 1);
+		else if (loc >= core + core_ro_size && loc < core + core_size)
+			readonly = 0;
+		else {
+			pr_err("bad dynrela location 0x%llx for symbol %s\n",
+			       loc, dynrela->name);
+			return -EINVAL;
 		}
+
+		if (readonly)
+			set_memory_rw(loc & PAGE_MASK, 1);
 
 		ret = probe_kernel_write((void *)loc, &val, size);
 
 		if (readonly)
 			set_memory_ro(loc & PAGE_MASK, 1);
 
-		if (ret)
+		if (ret) {
+			pr_err("write to 0x%llx failed for symbol %s\n",
+			       loc, dynrela->name);
 			return ret;
+		}
 	}
 
 	return 0;
