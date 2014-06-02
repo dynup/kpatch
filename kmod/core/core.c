@@ -120,6 +120,7 @@ enum kpatch_op {
 
 struct kpatch_func {
 	struct kpatch_patch *patch;
+	unsigned long old_addr;
 	struct hlist_node node;
 	struct kpatch_module *kpmod;
 	enum kpatch_op op;
@@ -163,7 +164,7 @@ static struct kpatch_func *kpatch_get_func(unsigned long ip)
 
 	/* Here, we have to use rcu safe hlist because of NMI concurrency */
 	hash_for_each_possible_rcu(kpatch_func_hash, f, node, ip)
-		if (f->patch->old_addr == ip)
+		if (f->old_addr == ip)
 			return f;
 	return NULL;
 }
@@ -172,7 +173,7 @@ static struct kpatch_func *kpatch_get_prev_func(struct kpatch_func *f,
 						unsigned long ip)
 {
 	hlist_for_each_entry_continue_rcu(f, node)
-		if (f->patch->old_addr == ip)
+		if (f->old_addr == ip)
 			return f;
 	return NULL;
 }
@@ -207,10 +208,10 @@ static void kpatch_backtrace_address_verify(void *data, unsigned long address,
 		struct kpatch_func *active_func;
 
 		func = &kpmod->internal->funcs[i];
-		active_func = kpatch_get_func(func->patch->old_addr);
+		active_func = kpatch_get_func(func->old_addr);
 		if (!active_func) {
 			/* patching an unpatched func */
-			func_addr = func->patch->old_addr;
+			func_addr = func->old_addr;
 			func_size = func->patch->old_size;
 		} else {
 			/* repatching or unpatching */
@@ -293,7 +294,7 @@ static int kpatch_apply_patch(void *data)
 	/* tentatively add the new funcs to the global func hash */
 	for (i = 0; i < num_funcs; i++)
 		hash_add_rcu(kpatch_func_hash, &funcs[i].node,
-			     funcs[i].patch->old_addr);
+			     funcs[i].old_addr);
 
 	/* memory barrier between func hash add and state change */
 	smp_wmb();
@@ -414,15 +415,15 @@ static void kpatch_remove_funcs_from_filter(struct kpatch_func *funcs,
 		 * If any other modules have also patched this function, don't
 		 * remove its ftrace handler.
 		 */
-		if (kpatch_get_func(func->patch->old_addr))
+		if (kpatch_get_func(func->old_addr))
 			continue;
 
 		/* Remove the ftrace handler for this function. */
 		ret = ftrace_set_filter_ip(&kpatch_ftrace_ops,
-		                  func->patch->old_addr, 1, 0);
+		                  func->old_addr, 1, 0);
 
 		WARN(ret, "can't remove ftrace filter at address 0x%lx (rc=%d)",
-		     func->patch->old_addr, ret);
+		     func->old_addr, ret);
 	}
 }
 
@@ -560,9 +561,10 @@ int kpatch_register(struct kpatch_module *kpmod, bool replace)
 		func->op = KPATCH_OP_PATCH;
 		func->kpmod = kpmod;
 		func->patch = &kpmod->patches[i];
+		func->old_addr = func->patch->old_offset;
 
 		ret = kpatch_verify_symbol_match(func->patch->name,
-		                               func->patch->old_addr);
+		                               func->old_addr);
 		if (ret)
 			goto err_rollback;
 
@@ -570,15 +572,15 @@ int kpatch_register(struct kpatch_module *kpmod, bool replace)
 		 * If any other modules have also patched this function, it
 		 * already has an ftrace handler.
 		 */
-		if (kpatch_get_func(func->patch->old_addr))
+		if (kpatch_get_func(func->old_addr))
 			continue;
 
 		/* Add an ftrace handler for this function. */
 		ret = ftrace_set_filter_ip(&kpatch_ftrace_ops,
-		                  func->patch->old_addr, 0, 0);
+		                  func->old_addr, 0, 0);
 		if (ret) {
 			pr_err("can't set ftrace filter at address 0x%lx\n",
-			       func->patch->old_addr);
+			       func->old_addr);
 			num_funcs = i;
 			goto err_rollback;
 		}

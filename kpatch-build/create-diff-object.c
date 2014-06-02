@@ -1498,7 +1498,7 @@ void kpatch_create_patches_sections(struct kpatch_elf *kelf,
 			          sym->name, result.value, result.size);
 
 			/* add entry in text section */
-			patches[index].old_addr = result.value;
+			patches[index].old_offset = result.value;
 			patches[index].old_size = result.size;
 			patches[index].new_size = sym->sym.st_size;
 
