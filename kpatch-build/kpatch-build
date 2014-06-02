@@ -164,8 +164,15 @@ find_dirs || die "can't find supporting tools"
 
 [[ -e "$SYMVERSFILE" ]] || die "can't find core module Module.symvers"
 
-[[ -z $VMLINUX ]] && VMLINUX=/usr/lib/debug/lib/modules/${ARCHVERSION}/vmlinux
-[[ -e "$VMLINUX" ]] || die "kernel-debuginfo not installed"
+source /etc/os-release
+DISTRO=$ID
+if [[ $DISTRO = fedora ]] || [[ $DISTRO = rhel ]]; then
+	[[ -z $VMLINUX ]] && VMLINUX=/usr/lib/debug/lib/modules/$ARCHVERSION/vmlinux
+	[[ -e "$VMLINUX" ]] || die "kernel-debuginfo-$ARCHVERSION not installed"
+elif [[ $DISTRO = ubuntu ]]; then
+	[[ -z $VMLINUX ]] && VMLINUX=/usr/lib/debug/boot/vmlinux-$ARCHVERSION
+	[[ -e "$VMLINUX" ]] || die "linux-image-$ARCHVERSION-dbgsym not installed"
+fi
 
 if [[ -n "$USERSRCDIR" ]]; then
 	SRCDIR="$CACHEDIR/src"
@@ -189,8 +196,7 @@ elif [[ -e "$SRCDIR" ]] && [[ -e "$CACHEDIR"/version ]] && [[ $(cat "$CACHEDIR"/
 	echo "Using cache at $SRCDIR"
 
 else
-	source /etc/os-release
-	if [[ $ID = fedora ]] || [[ $ID = rhel ]]; then
+	if [[ $DISTRO = fedora ]] || [[ $DISTRO = rhel ]]; then
 
 		echo "Fedora/Red Hat distribution detected"
 		rpm -q --quiet rpmdevtools || die "rpmdevtools not installed"
@@ -217,7 +223,7 @@ else
 
 		echo $ARCHVERSION > "$CACHEDIR"/version || die
 
-	elif [[ $ID = ubuntu ]]; then
+	elif [[ $DISTRO = ubuntu ]]; then
 
 		echo "Debian/Ubuntu distribution detected"
 
