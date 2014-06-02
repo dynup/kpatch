@@ -750,7 +750,8 @@ void kpatch_replace_sections_syms(struct kpatch_elf *kelf)
 				continue;
 			list_for_each_entry(sym, &kelf->symbols, list) {
 
-				if (sym->sec != rela->sym->sec)
+				if (sym->type == STT_SECTION ||
+				    sym->sec != rela->sym->sec)
 					continue;
 
 				if (rela->type == R_X86_64_PC32) {
