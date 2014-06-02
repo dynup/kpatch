@@ -1541,7 +1541,7 @@ void kpatch_create_dynamic_rela_sections(struct kpatch_elf *kelf,
                                          struct lookup_table *table, char *hint)
 {
 	int nr, size, index;
-	struct section *sec, *relasec;
+	struct section *sec, *sec2, *relasec;
 	struct rela *rela, *dynrela, *safe;
 	struct symbol *strsym;
 	struct lookup_result result;
@@ -1554,12 +1554,8 @@ void kpatch_create_dynamic_rela_sections(struct kpatch_elf *kelf,
 			continue;
 		if (!strcmp(sec->name, ".rela.kpatch.patches"))
 			continue;
-		list_for_each_entry(rela, &sec->relas, list) {
-			if (lookup_is_exported_symbol(table, rela->sym->name))
-				continue;
-			if (!rela->sym->sec)
-				nr++;
-		}
+		list_for_each_entry(rela, &sec->relas, list)
+			nr++; /* upper bound on number of dynrelas */
 	}
 
 	/* create .kpatch.dynrelas*/
@@ -1610,13 +1606,13 @@ void kpatch_create_dynamic_rela_sections(struct kpatch_elf *kelf,
 
 	/* populate sections */
 	index = 0;
-	list_for_each_entry(sec, &kelf->sections, list) {
-		if (!is_rela_section(sec))
+	list_for_each_entry(sec2, &kelf->sections, list) {
+		if (!is_rela_section(sec2))
 			continue;
-		if (!strcmp(sec->name, ".rela.kpatch.patches") ||
-		    !strcmp(sec->name, ".rela.kpatch.dynrelas"))
+		if (!strcmp(sec2->name, ".rela.kpatch.patches") ||
+		    !strcmp(sec2->name, ".rela.kpatch.dynrelas"))
 			continue;
-		list_for_each_entry_safe(rela, safe, &sec->relas, list) {
+		list_for_each_entry_safe(rela, safe, &sec2->relas, list) {
 			if (lookup_is_exported_symbol(table, rela->sym->name))
 				continue;
 			if (!rela->sym->sec) {
@@ -1625,7 +1621,7 @@ void kpatch_create_dynamic_rela_sections(struct kpatch_elf *kelf,
 								hint, &result))
 						ERROR("lookup_local_symbol %s (%s) needed for %s",
 						      rela->sym->name, hint,
-						      sec->base->name);
+						      sec2->base->name);
 				} else {
 					if(lookup_global_symbol(table, rela->sym->name,
 								&result))
@@ -1642,10 +1638,10 @@ void kpatch_create_dynamic_rela_sections(struct kpatch_elf *kelf,
 
 				/* add rela to fill in dest field */
 				ALLOC_LINK(dynrela, &relasec->relas);
-				if (!sec->base->sym)
+				if (!sec2->base->sym)
 					ERROR("expected bundled symbol for section %s for dynrela src %s",
-					      sec->base->name, rela->sym->name);
-				dynrela->sym = sec->base->sym;
+					      sec2->base->name, rela->sym->name);
+				dynrela->sym = sec2->base->sym;
 				dynrela->type = R_X86_64_64;
 				dynrela->addend = rela->offset;
 				dynrela->offset = index * sizeof(*dynrelas);
@@ -1666,9 +1662,9 @@ void kpatch_create_dynamic_rela_sections(struct kpatch_elf *kelf,
 		}
 	}
 
-	/* sanity check, index should equal nr */
-	if (index != nr)
-		ERROR("size mismatch in dynrelas sections");
+	/* set size to actual number of dynrelas */
+	sec->data->d_size = index * sizeof(struct kpatch_dynrela);
+	sec->sh.sh_size = sec->data->d_size;
 }
 
 /*
