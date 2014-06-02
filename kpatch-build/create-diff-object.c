@@ -121,7 +121,10 @@ struct symbol {
 	int index;
 	unsigned char bind, type;
 	enum status status;
-	int include;
+	union {
+		int include; /* used in the patched elf */
+		int strip; /* used in the output elf */
+	};
 };
 
 struct rela {
@@ -996,6 +999,7 @@ void kpatch_migrate_included_elements(struct kpatch_elf *kelf, struct kpatch_elf
 		list_del(&sym->list);
 		list_add_tail(&sym->list, &out->symbols);
 		sym->index = 0;
+		sym->strip = 0;
 		if (sym->sec && !sym->sec->include)
 			/* break link to non-included section */
 			sym->sec = NULL;
@@ -1573,7 +1577,6 @@ void kpatch_create_dynamic_rela_sections(struct kpatch_elf *kelf,
 	if (!sec->data)
 		ERROR("malloc");
 	sec->data->d_buf = dynrelas;
-	sec->data->d_size = size;
 	sec->data->d_type = ELF_T_BYTE;
 
 	/* set section header */
@@ -1581,7 +1584,6 @@ void kpatch_create_dynamic_rela_sections(struct kpatch_elf *kelf,
 	sec->sh.sh_entsize = sizeof(*dynrelas);
 	sec->sh.sh_addralign = 8;
 	sec->sh.sh_flags = SHF_ALLOC;
-	sec->sh.sh_size = size;
 
 	/* create .rela.kpatch.dynrelas*/
 
@@ -1606,7 +1608,7 @@ void kpatch_create_dynamic_rela_sections(struct kpatch_elf *kelf,
 	if (!strsym)
 		ERROR("can't find .kpatch.strings symbol");
 
-	/* populate sections (reuse sec for iterator here) */
+	/* populate sections */
 	index = 0;
 	list_for_each_entry(sec, &kelf->sections, list) {
 		if (!is_rela_section(sec))
@@ -1658,6 +1660,7 @@ void kpatch_create_dynamic_rela_sections(struct kpatch_elf *kelf,
 				list_del(&rela->list);
 				free(rela);
 
+				rela->sym->strip = 1;
 				index++;
 			}
 		}
@@ -1679,17 +1682,10 @@ void kpatch_strip_unneeded_syms(struct kpatch_elf *kelf,
 	struct symbol *sym, *safe;
 
 	list_for_each_entry_safe(sym, safe, &kelf->symbols, list) {
-		if (sym->bind == STB_LOCAL && sym->sym.st_shndx == SHN_UNDEF)
-			continue; /* skip NULL symbol */
-		if (sym->type == STT_FILE)
-			continue;
-		if (lookup_is_exported_symbol(table, sym->name))
-			continue;
-		if (sym->sec)
-			continue;
-
-		list_del(&sym->list);
-		free(sym);
+		if (sym->strip) {
+			list_del(&sym->list);
+			free(sym);
+		}
 	}
 }
 
