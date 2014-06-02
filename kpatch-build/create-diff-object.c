@@ -1615,50 +1615,50 @@ void kpatch_create_dynamic_rela_sections(struct kpatch_elf *kelf,
 		list_for_each_entry_safe(rela, safe, &sec2->relas, list) {
 			if (lookup_is_exported_symbol(table, rela->sym->name))
 				continue;
-			if (!rela->sym->sec) {
-				if (rela->sym->bind == STB_LOCAL) {
-					if (lookup_local_symbol(table, rela->sym->name,
-								hint, &result))
-						ERROR("lookup_local_symbol %s (%s) needed for %s",
-						      rela->sym->name, hint,
-						      sec2->base->name);
-				} else {
-					if(lookup_global_symbol(table, rela->sym->name,
-								&result))
-						ERROR("lookup_global_symbol %s",
-								rela->sym->name);
-				}
-				log_debug("lookup for %s @ 0x%016lx len %lu\n",
-				          rela->sym->name, result.value, result.size);
-
-				/* dest filed in by rela entry below */
-				dynrelas[index].src = result.value;
-				dynrelas[index].addend = rela->addend;
-				dynrelas[index].type = rela->type;
-
-				/* add rela to fill in dest field */
-				ALLOC_LINK(dynrela, &relasec->relas);
-				if (!sec2->base->sym)
-					ERROR("expected bundled symbol for section %s for dynrela src %s",
-					      sec2->base->name, rela->sym->name);
-				dynrela->sym = sec2->base->sym;
-				dynrela->type = R_X86_64_64;
-				dynrela->addend = rela->offset;
-				dynrela->offset = index * sizeof(*dynrelas);
-
-				/* add rela to fill in name field */
-				ALLOC_LINK(dynrela, &relasec->relas);
-				dynrela->sym = strsym;
-				dynrela->type = R_X86_64_64;
-				dynrela->addend = offset_of_string(&kelf->strings, rela->sym->name);
-				dynrela->offset = index * sizeof(*dynrelas) + offsetof(struct kpatch_dynrela, name);
-
-				list_del(&rela->list);
-				free(rela);
-
-				rela->sym->strip = 1;
-				index++;
+			if (rela->sym->sec)
+				continue;
+			if (rela->sym->bind == STB_LOCAL) {
+				if (lookup_local_symbol(table, rela->sym->name,
+							hint, &result))
+					ERROR("lookup_local_symbol %s (%s) needed for %s",
+					      rela->sym->name, hint,
+					      sec2->base->name);
+			} else {
+				if(lookup_global_symbol(table, rela->sym->name,
+							&result))
+					ERROR("lookup_global_symbol %s",
+							rela->sym->name);
 			}
+			log_debug("lookup for %s @ 0x%016lx len %lu\n",
+			          rela->sym->name, result.value, result.size);
+
+			/* dest filed in by rela entry below */
+			dynrelas[index].src = result.value;
+			dynrelas[index].addend = rela->addend;
+			dynrelas[index].type = rela->type;
+
+			/* add rela to fill in dest field */
+			ALLOC_LINK(dynrela, &relasec->relas);
+			if (!sec2->base->sym)
+				ERROR("expected bundled symbol for section %s for dynrela src %s",
+				      sec2->base->name, rela->sym->name);
+			dynrela->sym = sec2->base->sym;
+			dynrela->type = R_X86_64_64;
+			dynrela->addend = rela->offset;
+			dynrela->offset = index * sizeof(*dynrelas);
+
+			/* add rela to fill in name field */
+			ALLOC_LINK(dynrela, &relasec->relas);
+			dynrela->sym = strsym;
+			dynrela->type = R_X86_64_64;
+			dynrela->addend = offset_of_string(&kelf->strings, rela->sym->name);
+			dynrela->offset = index * sizeof(*dynrelas) + offsetof(struct kpatch_dynrela, name);
+
+			list_del(&rela->list);
+			free(rela);
+
+			rela->sym->strip = 1;
+			index++;
 		}
 	}
 
