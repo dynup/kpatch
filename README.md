@@ -225,6 +225,8 @@ Limitations
   old functions did, and whether it would be safe to atomically apply
   such a patch to a running kernel.
 
+- Patches which modify functions in vdso are not supported at
+  the moment. These run in user-space and ftrace can't hook them.
 
 Frequently Asked Questions
 --------------------------
