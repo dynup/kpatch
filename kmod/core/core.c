@@ -120,9 +120,11 @@ enum kpatch_op {
 
 struct kpatch_func {
 	struct kpatch_patch *patch;
+	unsigned long old_addr;
 	struct hlist_node node;
 	struct kpatch_module *kpmod;
 	enum kpatch_op op;
+	struct module *mod;
 };
 
 /*
@@ -163,7 +165,7 @@ static struct kpatch_func *kpatch_get_func(unsigned long ip)
 
 	/* Here, we have to use rcu safe hlist because of NMI concurrency */
 	hash_for_each_possible_rcu(kpatch_func_hash, f, node, ip)
-		if (f->patch->old_addr == ip)
+		if (f->old_addr == ip)
 			return f;
 	return NULL;
 }
@@ -172,7 +174,7 @@ static struct kpatch_func *kpatch_get_prev_func(struct kpatch_func *f,
 						unsigned long ip)
 {
 	hlist_for_each_entry_continue_rcu(f, node)
-		if (f->patch->old_addr == ip)
+		if (f->old_addr == ip)
 			return f;
 	return NULL;
 }
@@ -207,10 +209,10 @@ static void kpatch_backtrace_address_verify(void *data, unsigned long address,
 		struct kpatch_func *active_func;
 
 		func = &kpmod->internal->funcs[i];
-		active_func = kpatch_get_func(func->patch->old_addr);
+		active_func = kpatch_get_func(func->old_addr);
 		if (!active_func) {
 			/* patching an unpatched func */
-			func_addr = func->patch->old_addr;
+			func_addr = func->old_addr;
 			func_size = func->patch->old_size;
 		} else {
 			/* repatching or unpatching */
@@ -293,7 +295,7 @@ static int kpatch_apply_patch(void *data)
 	/* tentatively add the new funcs to the global func hash */
 	for (i = 0; i < num_funcs; i++)
 		hash_add_rcu(kpatch_func_hash, &funcs[i].node,
-			     funcs[i].patch->old_addr);
+			     funcs[i].old_addr);
 
 	/* memory barrier between func hash add and state change */
 	smp_wmb();
@@ -401,6 +403,18 @@ static struct ftrace_ops kpatch_ftrace_ops __read_mostly = {
 	.flags = FTRACE_OPS_FL_SAVE_REGS,
 };
 
+static void kpatch_put_modules(struct kpatch_func *funcs, int num_funcs)
+{
+	int i;
+
+	for (i = 0; i < num_funcs; i++) {
+		struct kpatch_func *func = &funcs[i];
+
+		if (func->mod)
+			module_put(func->mod);
+	}
+}
+
 /* Remove kpatch_funcs from ftrace filter */
 static void kpatch_remove_funcs_from_filter(struct kpatch_func *funcs,
 					    int num_funcs)
@@ -414,15 +428,15 @@ static void kpatch_remove_funcs_from_filter(struct kpatch_func *funcs,
 		 * If any other modules have also patched this function, don't
 		 * remove its ftrace handler.
 		 */
-		if (kpatch_get_func(func->patch->old_addr))
+		if (kpatch_get_func(func->old_addr))
 			continue;
 
 		/* Remove the ftrace handler for this function. */
 		ret = ftrace_set_filter_ip(&kpatch_ftrace_ops,
-		                  func->patch->old_addr, 1, 0);
+		                  func->old_addr, 1, 0);
 
 		WARN(ret, "can't remove ftrace filter at address 0x%lx (rc=%d)",
-		     func->patch->old_addr, ret);
+		     func->old_addr, ret);
 	}
 }
 
@@ -457,6 +471,25 @@ static int kpatch_verify_symbol_match(char *name, unsigned long addr)
 	return 0;
 }
 
+static unsigned long kpatch_find_module_symbol(struct module *mod, char *name)
+{
+	char buf[KSYM_SYMBOL_LEN];
+
+	/* check total string length for overrun */
+	if (strlen(mod->name) + strlen(name) + 1 >= KSYM_SYMBOL_LEN) {
+		pr_err("buffer overrun finding symbol '%s' in module '%s'\n",
+		       name, mod->name);
+		return 0;
+	}
+
+	/* encode symbol name as "mod->name:name" */
+	strcpy(buf, mod->name);
+	strcat(buf, ":");
+	strcat(buf, name);
+
+	return kallsyms_lookup_name(buf);
+}
+
 static int kpatch_write_relocations(struct kpatch_module *kpmod)
 {
 	int ret, i, size, readonly = 0;
@@ -465,31 +498,51 @@ static int kpatch_write_relocations(struct kpatch_module *kpmod)
 	unsigned long core = (unsigned long)kpmod->mod->module_core;
 	unsigned long core_ro_size = kpmod->mod->core_ro_size;
 	unsigned long core_size = kpmod->mod->core_size;
+	unsigned long src_addr;
+	struct module *mod;
 
 	for (i = 0; i < kpmod->dynrelas_nr; i++) {
 		dynrela = &kpmod->dynrelas[i];
 
-		ret = kpatch_verify_symbol_match(dynrela->name, dynrela->src);
-		if (ret)
-			return ret;
+		if (!strcmp(dynrela->objname, "vmlinux")) {
+			/* vmlinux */
+			ret = kpatch_verify_symbol_match(dynrela->name, dynrela->src);
+			if (ret)
+				return ret;
+			src_addr = dynrela->src;
+		} else {
+			/* module, dynrela->src is not right */
+			mod = find_module(dynrela->objname);
+			if (!mod) {
+				pr_err("unable to find module '%s'\n",
+				       dynrela->objname);
+				return -EINVAL;
+			}
+			src_addr = kpatch_find_module_symbol(mod, dynrela->name);
+			if (!src_addr) {
+				pr_err("unable to find symbol '%s' in module '%s'\n",
+				       dynrela->name, mod->name);
+				return -EINVAL;
+			}
+		}
 
 		switch (dynrela->type) {
 			case R_X86_64_PC32:
 				loc = dynrela->dest;
-				val = (u32)(dynrela->src + dynrela->addend -
+				val = (u32)(src_addr + dynrela->addend -
 				            dynrela->dest);
 				size = 4;
 				break;
 			case R_X86_64_32S:
 				loc = dynrela->dest;
-				val = (s32)dynrela->src + dynrela->addend;
+				val = (s32)src_addr + dynrela->addend;
 				size = 4;
 				break;
 			default:
 				printk("unsupported rela type %ld for "
 				       "0x%lx <- 0x%lx at index %d\n",
 				       dynrela->type, dynrela->dest,
-				       dynrela->src, i);
+				       src_addr, i);
 				return -EINVAL;
 		}
 
@@ -521,6 +574,32 @@ static int kpatch_write_relocations(struct kpatch_module *kpmod)
 	return 0;
 }
 
+static int kpatch_calculate_old_addr(struct kpatch_func *func)
+{
+	struct module *module;
+
+	if (!strcmp(func->patch->objname, "vmlinux")) {
+		func->old_addr = func->patch->old_offset;
+		return 0;
+	}
+
+	module = find_module(func->patch->objname);
+	if (!module) {
+		pr_err("patch contains code for a module that is not loaded\n");
+		return -EINVAL;
+	}
+
+	if (!try_module_get(module)) {
+		pr_err("failed to reference module\n");
+		return -EINVAL;
+	}
+
+	func->mod = module;
+	func->old_addr = (unsigned long)module->module_core +
+	                 func->patch->old_offset;
+	return 0;
+}
+
 int kpatch_register(struct kpatch_module *kpmod, bool replace)
 {
 	int ret, i;
@@ -536,7 +615,7 @@ int kpatch_register(struct kpatch_module *kpmod, bool replace)
 	if (!kpmod->internal)
 		return -ENOMEM;
 
-	funcs = kmalloc(sizeof(*funcs) * num_funcs, GFP_KERNEL);
+	funcs = kzalloc(sizeof(*funcs) * num_funcs, GFP_KERNEL);
 	if (!funcs) {
 		kfree(kpmod->internal);
 		return -ENOMEM;
@@ -561,8 +640,13 @@ int kpatch_register(struct kpatch_module *kpmod, bool replace)
 		func->kpmod = kpmod;
 		func->patch = &kpmod->patches[i];
 
+		/* calculate actual old location (refs if module) */
+		ret = kpatch_calculate_old_addr(func);
+		if (ret)
+			goto err_rollback;
+
 		ret = kpatch_verify_symbol_match(func->patch->name,
-		                               func->patch->old_addr);
+		                               func->old_addr);
 		if (ret)
 			goto err_rollback;
 
@@ -570,15 +654,15 @@ int kpatch_register(struct kpatch_module *kpmod, bool replace)
 		 * If any other modules have also patched this function, it
 		 * already has an ftrace handler.
 		 */
-		if (kpatch_get_func(func->patch->old_addr))
+		if (kpatch_get_func(func->old_addr))
 			continue;
 
 		/* Add an ftrace handler for this function. */
 		ret = ftrace_set_filter_ip(&kpatch_ftrace_ops,
-		                  func->patch->old_addr, 0, 0);
+		                  func->old_addr, 0, 0);
 		if (ret) {
 			pr_err("can't set ftrace filter at address 0x%lx\n",
-			       func->patch->old_addr);
+			       func->old_addr);
 			num_funcs = i;
 			goto err_rollback;
 		}
@@ -674,6 +758,7 @@ err_unregister:
 	}
 	kpatch_num_registered--;
 err_rollback:
+	kpatch_put_modules(funcs, num_funcs);
 	kpatch_remove_funcs_from_filter(funcs, num_funcs);
 err_put:
 	module_put(kpmod->mod);
@@ -733,6 +818,7 @@ int kpatch_unregister(struct kpatch_module *kpmod)
 		}
 	}
 
+	kpatch_put_modules(funcs, num_funcs);
 	kpatch_remove_funcs_from_filter(funcs, num_funcs);
 
 	kfree(kpmod->internal->funcs);

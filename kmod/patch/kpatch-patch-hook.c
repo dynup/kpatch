@@ -87,7 +87,7 @@ static ssize_t func_old_addr_show(struct kobject *kobj,
 	struct kpatch_func_obj *func =
 		container_of(kobj, struct kpatch_func_obj, kobj);
 
-	return sprintf(buf, "0x%lx\n", func->patch->old_addr);
+	return sprintf(buf, "0x%lx\n", func->patch->old_offset);
 }
 
 static ssize_t func_new_addr_show(struct kobject *kobj,
@@ -195,7 +195,7 @@ static int __init patch_init(void)
 		}
 		funcs[i] = func;
 
-		sprint_symbol_no_offset(func->name, kpmod.patches[i].old_addr);
+		sprint_symbol_no_offset(func->name, kpmod.patches[i].old_offset);
 
 		ret = kobject_add(&func->kobj, functions_kobj,
 				  "%s", func->name);

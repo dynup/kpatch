@@ -26,9 +26,10 @@
 struct kpatch_patch {
 	unsigned long new_addr;
 	unsigned long new_size;
-	unsigned long old_addr;
+	unsigned long old_offset;
 	unsigned long old_size;
 	char *name;
+	char *objname;
 };
 
 struct kpatch_dynrela {
@@ -36,6 +37,7 @@ struct kpatch_dynrela {
 	unsigned long src;
 	unsigned long type;
 	char *name;
+	char *objname;
 	int addend;
 };
 

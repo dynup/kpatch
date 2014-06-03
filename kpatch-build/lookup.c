@@ -41,7 +41,7 @@ struct symbol {
 	unsigned long value;
 	unsigned long size;
 	char *name;
-	int type, bind;
+	int type, bind, skip;
 };
 
 struct lookup_table {
@@ -108,6 +108,7 @@ struct lookup_table *lookup_open(char *path)
 	table->syms = malloc(len * sizeof(struct symbol));
 	if (!table->syms)
 		ERROR("malloc table.syms");
+	memset(table->syms, 0, len * sizeof(struct symbol));
 	table->nr = len;
 	table->fd = fd;
 	table->elf = elf;
@@ -115,6 +116,11 @@ struct lookup_table *lookup_open(char *path)
 	for_each_symbol(i, mysym, table) {
 		if (!gelf_getsym(data, i, &sym))
 			ERROR("gelf_getsym");
+
+		if (sym.st_shndx == SHN_UNDEF) {
+			mysym->skip = 1;
+			continue;
+		}
 
 		name = elf_strptr(elf, sh.sh_link, sym.st_name);
 		if(!name)
@@ -179,7 +185,7 @@ int lookup_global_symbol(struct lookup_table *table, char *name,
 
 	memset(result, 0, sizeof(*result));
 	for_each_symbol(i, sym, table)
-		if (sym->bind == STB_GLOBAL &&
+		if (!sym->skip && sym->bind == STB_GLOBAL &&
 		    !strcmp(sym->name, name)) {
 			result->value = sym->value;
 			result->size = sym->size;
@@ -198,7 +204,7 @@ int lookup_is_exported_symbol(struct lookup_table *table, char *name)
 	strncat(export, name, 254);
 
 	for_each_symbol(i, sym, table)
-		if (!strcmp(sym->name, export))
+		if (!sym->skip && !strcmp(sym->name, export))
 			return 1;
 
 	return 0;

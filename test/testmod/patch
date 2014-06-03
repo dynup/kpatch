@@ -1,0 +1,11 @@
+--- testmod_drv.c.orig	2014-06-02 16:49:49.428509600 -0500
++++ testmod_drv.c	2014-06-02 16:49:56.973656791 -0500
+@@ -11,7 +11,7 @@
+ static ssize_t value_show(struct kobject *kobj,
+                           struct kobj_attribute *attr, char *buf)
+ {
+-	return sprintf(buf, "%d\n", value);
++	return sprintf(buf, "%d\n", value+1);
+ }
+ 
+ static struct kobj_attribute testmod_value_attr = __ATTR_RO(value);
