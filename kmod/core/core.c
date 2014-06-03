@@ -473,15 +473,20 @@ static int kpatch_verify_symbol_match(char *name, unsigned long addr)
 
 static unsigned long kpatch_find_module_symbol(struct module *mod, char *name)
 {
-	char buf[255], *pos;
+	char buf[KSYM_SYMBOL_LEN];
+
+	/* check total string length for overrun */
+	if (strlen(mod->name) + strlen(name) + 1 >= KSYM_SYMBOL_LEN) {
+		pr_err("buffer overrun finding symbol '%s' in module '%s'\n",
+		       name, mod->name);
+		return 0;
+	}
 
 	/* encode symbol name as "mod->name:name" */
 	strcpy(buf, mod->name);
-	pos = buf + strlen(mod->name);
-	*pos++ = ':';
-	strcpy(pos, name);
+	strcat(buf, ":");
+	strcat(buf, name);
 
-	pr_notice("looking up '%s'\n", buf);
 	return kallsyms_lookup_name(buf);
 }
 
@@ -493,7 +498,7 @@ static int kpatch_write_relocations(struct kpatch_module *kpmod)
 	unsigned long core = (unsigned long)kpmod->mod->module_core;
 	unsigned long core_ro_size = kpmod->mod->core_ro_size;
 	unsigned long core_size = kpmod->mod->core_size;
-	unsigned long old_addr;
+	unsigned long src_addr;
 	struct module *mod;
 
 	for (i = 0; i < kpmod->dynrelas_nr; i++) {
@@ -504,17 +509,19 @@ static int kpatch_write_relocations(struct kpatch_module *kpmod)
 			ret = kpatch_verify_symbol_match(dynrela->name, dynrela->src);
 			if (ret)
 				return ret;
-			old_addr = dynrela->src;
+			src_addr = dynrela->src;
 		} else {
 			/* module, dynrela->src is not right */
 			mod = find_module(dynrela->objname);
 			if (!mod) {
-				pr_err("unable to find module\n");
+				pr_err("unable to find module '%s'\n",
+				       dynrela->objname);
 				return -EINVAL;
 			}
-			old_addr = kpatch_find_module_symbol(mod, dynrela->name);
-			if (!old_addr) {
-				pr_err("unable to find symbol\n");
+			src_addr = kpatch_find_module_symbol(mod, dynrela->name);
+			if (!src_addr) {
+				pr_err("unable to find symbol '%s' in module '%s'\n",
+				       dynrela->name, mod->name);
 				return -EINVAL;
 			}
 		}
@@ -522,20 +529,20 @@ static int kpatch_write_relocations(struct kpatch_module *kpmod)
 		switch (dynrela->type) {
 			case R_X86_64_PC32:
 				loc = dynrela->dest;
-				val = (u32)(old_addr + dynrela->addend -
+				val = (u32)(src_addr + dynrela->addend -
 				            dynrela->dest);
 				size = 4;
 				break;
 			case R_X86_64_32S:
 				loc = dynrela->dest;
-				val = (s32)old_addr + dynrela->addend;
+				val = (s32)src_addr + dynrela->addend;
 				size = 4;
 				break;
 			default:
 				printk("unsupported rela type %ld for "
 				       "0x%lx <- 0x%lx at index %d\n",
 				       dynrela->type, dynrela->dest,
-				       old_addr, i);
+				       src_addr, i);
 				return -EINVAL;
 		}
 
@@ -567,19 +574,18 @@ static int kpatch_write_relocations(struct kpatch_module *kpmod)
 	return 0;
 }
 
-int kpatch_calculate_old_addr(struct kpatch_func *func)
+static int kpatch_calculate_old_addr(struct kpatch_func *func)
 {
 	struct module *module;
 
 	if (!strcmp(func->patch->objname, "vmlinux")) {
 		func->old_addr = func->patch->old_offset;
-		func->mod = NULL;
 		return 0;
 	}
 
 	module = find_module(func->patch->objname);
 	if (!module) {
-		pr_err("patch contains code for an module that is not loaded\n");
+		pr_err("patch contains code for a module that is not loaded\n");
 		return -EINVAL;
 	}
 
@@ -609,7 +615,7 @@ int kpatch_register(struct kpatch_module *kpmod, bool replace)
 	if (!kpmod->internal)
 		return -ENOMEM;
 
-	funcs = kmalloc(sizeof(*funcs) * num_funcs, GFP_KERNEL);
+	funcs = kzalloc(sizeof(*funcs) * num_funcs, GFP_KERNEL);
 	if (!funcs) {
 		kfree(kpmod->internal);
 		return -ENOMEM;
