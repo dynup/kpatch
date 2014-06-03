@@ -1,0 +1,12 @@
+Index: src/fs/proc/proc_sysctl.c
+===================================================================
+--- src.orig/fs/proc/proc_sysctl.c
++++ src/fs/proc/proc_sysctl.c
+@@ -24,6 +24,7 @@ void proc_sys_poll_notify(struct ctl_tab
+ 	if (!poll)
+ 		return;
+ 
++	printk("kpatch-test: testing gcc .isra function name mangling\n");
+ 	atomic_inc(&poll->event);
+ 	wake_up_interruptible(&poll->wait);
+ }

@@ -224,6 +224,19 @@ struct symbol *find_symbol_by_name(struct list_head *list, const char *name)
 	return NULL;
 }
 
+struct symbol *find_symbol_by_name_prefix(struct list_head *list,
+					  const char *name)
+{
+	struct symbol *sym;
+	int namelen = strlen(name);
+
+	list_for_each_entry(sym, list, list)
+		if (!strncmp(sym->name, name, namelen))
+			return sym;
+
+	return NULL;
+}
+
 #define ALLOC_LINK(_new, _list) \
 { \
 	(_new) = malloc(sizeof(*(_new))); \
@@ -679,6 +692,51 @@ void kpatch_check_program_headers(Elf *elf)
 
 	if (ph_nr != 0)
 		DIFF_FATAL("ELF contains program header");
+}
+
+/*
+ * When gcc makes compiler optimizations which affect a function's calling
+ * interface, it mangles the function's name.  For example, sysctl_print_dir is
+ * renamed to sysctl_print_dir.isra.2.  The problem is that the trailing number
+ * is chosen arbitrarily, and the patched version of the function may end up
+ * with a different trailing number.  Rename any mangled patched functions to
+ * match their base counterparts.
+ */
+void kpatch_rename_mangled_functions(struct kpatch_elf *base,
+				     struct kpatch_elf *patched)
+{
+	struct symbol *sym, *basesym;
+	char *prefix, *dot;
+
+	list_for_each_entry(sym, &patched->symbols, list) {
+		if (sym->type != STT_FUNC)
+			continue;
+
+		if (!strstr(sym->name, ".isra.") &&
+		    !strstr(sym->name, ".constprop."))
+			continue;
+
+		if (sym != sym->sec->sym)
+			ERROR("expected bundled section for %s\n", sym->name);
+
+		prefix = strdup(sym->name);
+		dot = strchr(prefix, '.');
+		*dot = '\0';
+
+		basesym = find_symbol_by_name_prefix(&base->symbols, prefix);
+		free(prefix);
+		if (!basesym)
+			continue;
+
+		if (!strcmp(sym->name, basesym->name))
+			continue;
+
+		log_debug("renaming %s to %s\n", sym->name, basesym->name);
+		sym->name = strdup(basesym->name);
+		sym->sec->name = strdup(basesym->sec->name);
+		if (sym->sec->rela)
+			sym->sec->rela->name = strdup(basesym->sec->rela->name);
+	}
 }
 
 void kpatch_correlate_elfs(struct kpatch_elf *kelf1, struct kpatch_elf *kelf2)
@@ -2003,6 +2061,8 @@ int main(int argc, char *argv[])
 	kpatch_compare_elf_headers(kelf_base->elf, kelf_patched->elf);
 	kpatch_check_program_headers(kelf_base->elf);
 	kpatch_check_program_headers(kelf_patched->elf);
+
+	kpatch_rename_mangled_functions(kelf_base, kelf_patched);
 
 	kpatch_correlate_elfs(kelf_base, kelf_patched);
 	/*
