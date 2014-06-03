@@ -106,27 +106,22 @@ load_module () {
 }
 
 unload_module () {
-	# strip leading path, .ko suffix and convert '-' to '_' so we can find
-	# the module name in sysfs
-	PATCH="$(basename $1)"
+	PATCH="${1//-/_}"
 	PATCH="${PATCH%.ko}"
-	PATCH="${PATCH//-/_}"
-
 	ENABLED=/sys/kernel/kpatch/patches/"$PATCH"/enabled
-
-	if [[ -e "$ENABLED" ]] && [[ $(cat "$ENABLED") -eq 1 ]]; then
+	[[ -e "$ENABLED" ]] || die "patch module $1 is not loaded"
+	if [[ $(cat "$ENABLED") -eq 1 ]]; then
 		echo "disabling patch module: $PATCH"
 		echo 0 > $ENABLED || die "can't disable $PATCH"
 	fi
-
 	echo "unloading patch module: $PATCH"
-	rmmod "$(basename $1)"
+	rmmod $PATCH
 }
 
 unload_disabled_modules() {
 	for module in /sys/kernel/kpatch/patches/*; do
 		if [[ $(cat $module/enabled) -eq 0 ]]; then
-			unload_module $module || die "failed to unload $module"
+			unload_module $(basename $module) || die "failed to unload $module"
 		fi
 	done
 }
