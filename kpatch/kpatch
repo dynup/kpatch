@@ -151,7 +151,7 @@ case "$1" in
 	*)
 		PATCH="$2"
 		find_module "$PATCH" || die "can't find $PATCH"
-		load_module "$MODULE" || die "failed to load patch $PATCH"
+		load_module "$MODULE" || die "failed to load module $PATCH"
 		;;
 	esac
 	;;
@@ -160,13 +160,14 @@ case "$1" in
 	[[ "$#" -ne 2 ]] && usage
 	PATCH="$2"
 	find_module "$PATCH" || die "can't find $PATCH"
-	load_module "$MODULE" replace=1 || die "failed to load patch $PATCH"
+	load_module "$MODULE" replace=1 || die "failed to load module $PATCH"
 	unload_disabled_modules || die "failed to unload old modules"
 	;;
 
 "unload")
 	[[ "$#" -ne 2 ]] && usage
-	unload_module "$2" || die "failed to unload patch $2"
+	[[ $2 =~ ^- ]] && usage
+	unload_module "$2" || die "failed to unload module $2"
 	;;
 
 "install")
@@ -181,7 +182,7 @@ case "$1" in
 			shift
 			;;
 		--)
-			[[ -z "$2" ]] && die "no patch file specified"
+			[[ -z "$2" ]] && die "no module file specified"
 			PATCH="$2"
 			;;
 		esac
@@ -198,7 +199,7 @@ case "$1" in
 
 	echo "installing $PATCH ($KVER)"
 	mkdir -p $INSTALLDIR/$KVER || die "failed to create install directory"
-	cp -f "$PATCH" $INSTALLDIR/$KVER || die "failed to install patch $PATCH"
+	cp -f "$PATCH" $INSTALLDIR/$KVER || die "failed to install module $PATCH"
 
 	if lsinitrd -k $KVER &> /dev/null; then
 		echo "rebuilding $KVER initramfs"
@@ -218,7 +219,7 @@ case "$1" in
 			shift
 			;;
 		--)
-			[[ -z "$2" ]] && die "no patch file specified"
+			[[ -z "$2" ]] && die "no module file specified"
 			PATCH="$2"
 			[[ "$PATCH" != $(basename "$PATCH") ]] && die "please supply patch module name without path"
 			;;
@@ -229,7 +230,7 @@ case "$1" in
 	[[ ! -e $INSTALLDIR/$KVER/"$PATCH" ]] && die "$PATCH is not installed for kernel $KVER"
 
 	echo "uninstalling $PATCH ($KVER)"
-	rm -f $INSTALLDIR/$KVER/"$PATCH" || die "failed to uninstall patch $PATCH"
+	rm -f $INSTALLDIR/$KVER/"$PATCH" || die "failed to uninstall module $PATCH"
 	if lsinitrd -k $KVER &> /dev/null; then
 		echo "rebuilding $KVER initramfs"
 		dracut -f --kver $KVER || die "dracut failed"
@@ -260,7 +261,7 @@ case "$1" in
 	PATCH="$2"
 	find_module "$PATCH" || die "can't find $PATCH"
 	echo "Patch information for $PATCH:"
-	/usr/sbin/modinfo "$MODULE" || die "failed to get info for patch $PATCH"
+	/usr/sbin/modinfo "$MODULE" || die "failed to get info for module $PATCH"
 	;;
 
 "help"|"-h"|"--help")
