@@ -697,14 +697,13 @@ void kpatch_check_program_headers(Elf *elf)
  * renamed to sysctl_print_dir.isra.2.  The problem is that the trailing number
  * is chosen arbitrarily, and the patched version of the function may end up
  * with a different trailing number.  Rename any mangled patched functions to
- * match their original counterparts.
+ * match their base counterparts.
  */
-void kpatch_rename_mangled_functions(struct kpatch_elf *orig,
+void kpatch_rename_mangled_functions(struct kpatch_elf *base,
 				     struct kpatch_elf *patched)
 {
-	struct symbol *sym, *origsym;
-	char *prefix;
-	int i;
+	struct symbol *sym, *basesym;
+	char *prefix, *dot;
 
 	list_for_each_entry(sym, &patched->symbols, list) {
 		if (sym->type != STT_FUNC)
@@ -717,24 +716,23 @@ void kpatch_rename_mangled_functions(struct kpatch_elf *orig,
 		if (sym != sym->sec->sym)
 			ERROR("expected bundled section for %s\n", sym->name);
 
-		prefix = malloc(strlen(sym->name) + 1);
-		for (i = 0; sym->name[i] != '.'; i++)
-			prefix[i] = sym->name[i];
-		prefix[i] = 0;
+		prefix = strdup(sym->name);
+		dot = strchr(prefix, '.');
+		*dot = '\0';
 
-		origsym = find_symbol_by_name_prefix(&orig->symbols, prefix);
+		basesym = find_symbol_by_name_prefix(&base->symbols, prefix);
 		free(prefix);
-		if (!origsym)
+		if (!basesym)
 			continue;
 
-		if (!strcmp(sym->name, origsym->name))
+		if (!strcmp(sym->name, basesym->name))
 			continue;
 
-		log_debug("renaming %s to %s\n", sym->name, origsym->name);
-		sym->name = strdup(origsym->name);
-		sym->sec->name = strdup(origsym->sec->name);
+		log_debug("renaming %s to %s\n", sym->name, basesym->name);
+		sym->name = strdup(basesym->name);
+		sym->sec->name = strdup(basesym->sec->name);
 		if (sym->sec->rela)
-			sym->sec->rela->name = strdup(origsym->sec->rela->name);
+			sym->sec->rela->name = strdup(basesym->sec->rela->name);
 	}
 }
 
