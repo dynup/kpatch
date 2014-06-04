@@ -540,7 +540,7 @@ static int kpatch_write_relocations(struct kpatch_module *kpmod)
 				break;
 			case R_X86_64_64:
 				loc = dynrela->dest;
-				val = dynrela->src;
+				val = src_addr;
 				size = 8;
 				break;
 			default:
