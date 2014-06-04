@@ -375,6 +375,11 @@ int is_bundleable(struct symbol *sym)
 	    !strcmp(sym->sec->name + 6, sym->name))
 		return 1;
 
+	if (sym->type == STT_FUNC &&
+	    !strncmp(sym->sec->name, ".text.unlikely.",15) &&
+	    !strcmp(sym->sec->name + 15, sym->name))
+		return 1;
+
 	if (sym->type == STT_OBJECT &&
 	   !strncmp(sym->sec->name, ".data.",6) &&
 	   !strcmp(sym->sec->name + 6, sym->name))
@@ -713,14 +718,17 @@ void kpatch_rename_mangled_functions(struct kpatch_elf *base,
 			continue;
 
 		if (!strstr(sym->name, ".isra.") &&
-		    !strstr(sym->name, ".constprop."))
+		    !strstr(sym->name, ".constprop.") &&
+		    !strstr(sym->name, ".part."))
 			continue;
 
 		if (sym != sym->sec->sym)
 			ERROR("expected bundled section for %s\n", sym->name);
 
+		/* prefix of foo.isra.1.constprop.2 is foo.isra */
 		prefix = strdup(sym->name);
 		dot = strchr(prefix, '.');
+		dot = strchr(dot+1, '.');
 		*dot = '\0';
 
 		basesym = find_symbol_by_name_prefix(&base->symbols, prefix);
