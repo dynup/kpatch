@@ -1499,7 +1499,7 @@ void kpatch_create_patches_sections(struct kpatch_elf *kelf,
 	/* count patched functions */
 	nr = 0;
 	list_for_each_entry(sym, &kelf->symbols, list)
-		if (sym->type == STT_FUNC && sym->sec)
+		if (sym->type == STT_FUNC && sym->status == CHANGED)
 			nr++;
 
 	/* create .kpatch.patches */
@@ -1556,7 +1556,7 @@ void kpatch_create_patches_sections(struct kpatch_elf *kelf,
 	/* populate sections */
 	index = 0;
 	list_for_each_entry(sym, &kelf->symbols, list) {
-		if (sym->type == STT_FUNC && sym->sec) {
+		if (sym->type == STT_FUNC && sym->status == CHANGED) {
 			if (sym->bind == STB_LOCAL) {
 				if (lookup_local_symbol(table, sym->name,
 				                        hint, &result))
