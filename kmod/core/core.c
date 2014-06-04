@@ -538,11 +538,15 @@ static int kpatch_write_relocations(struct kpatch_module *kpmod)
 				val = (s32)src_addr + dynrela->addend;
 				size = 4;
 				break;
+			case R_X86_64_64:
+				loc = dynrela->dest;
+				val = dynrela->src;
+				size = 8;
+				break;
 			default:
-				printk("unsupported rela type %ld for "
-				       "0x%lx <- 0x%lx at index %d\n",
-				       dynrela->type, dynrela->dest,
-				       src_addr, i);
+				printk("unsupported rela type %ld for source %s (0x%lx <- 0x%lx) at index %d\n",
+				       dynrela->type, dynrela->name,
+				       dynrela->dest, src_addr, i);
 				return -EINVAL;
 		}
 
