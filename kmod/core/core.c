@@ -181,12 +181,11 @@ static struct kpatch_func *kpatch_get_prev_func(struct kpatch_func *f,
 
 static inline int kpatch_compare_addresses(unsigned long stack_addr,
 					   unsigned long func_addr,
-					   unsigned long func_size)
+					   unsigned long func_size,
+					   char *func_name)
 {
 	if (stack_addr >= func_addr && stack_addr < func_addr + func_size) {
-		/* TODO: use kallsyms to print symbol name */
-		pr_err("activeness safety check failed for function at address 0x%lx\n",
-		       stack_addr);
+		pr_err("activeness safety check failed for %s\n", func_name);
 		return -EBUSY;
 	}
 	return 0;
@@ -206,6 +205,7 @@ static void kpatch_backtrace_address_verify(void *data, unsigned long address,
 	/* check kpmod funcs */
 	for (i = 0; i < kpmod->patches_nr; i++) {
 		unsigned long func_addr, func_size;
+		char *func_name;
 		struct kpatch_func *active_func;
 
 		func = &kpmod->internal->funcs[i];
@@ -214,14 +214,16 @@ static void kpatch_backtrace_address_verify(void *data, unsigned long address,
 			/* patching an unpatched func */
 			func_addr = func->old_addr;
 			func_size = func->patch->old_size;
+			func_name = func->patch->name;
 		} else {
 			/* repatching or unpatching */
 			func_addr = active_func->patch->new_addr;
 			func_size = active_func->patch->new_size;
+			func_name = active_func->patch->name;
 		}
 
 		args->ret = kpatch_compare_addresses(address, func_addr,
-						     func_size);
+						     func_size, func_name);
 		if (args->ret)
 			return;
 	}
@@ -231,7 +233,8 @@ static void kpatch_backtrace_address_verify(void *data, unsigned long address,
 		if (func->op == KPATCH_OP_UNPATCH) {
 			args->ret = kpatch_compare_addresses(address,
 			                        func->patch->new_addr,
-			                        func->patch->new_size);
+			                        func->patch->new_size,
+						func->patch->name);
 			if (args->ret)
 				return;
 		}
