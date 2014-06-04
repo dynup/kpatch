@@ -713,7 +713,8 @@ void kpatch_rename_mangled_functions(struct kpatch_elf *base,
 			continue;
 
 		if (!strstr(sym->name, ".isra.") &&
-		    !strstr(sym->name, ".constprop."))
+		    !strstr(sym->name, ".constprop.") &&
+		    !strstr(sym->name, ".part."))
 			continue;
 
 		if (sym != sym->sec->sym)
