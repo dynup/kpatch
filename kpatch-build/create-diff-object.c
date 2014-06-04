@@ -941,9 +941,7 @@ void kpatch_include_symbol(struct symbol *sym, int recurselevel)
 	sec = sym->sec;
 	sec->include = 1;
 	inc_printf("section %s is included\n", sec->name);
-	if (sec->secsym == sym)
-		goto out;
-	if (sec->secsym) {
+	if (sec->secsym && sec->secsym != sym) {
 		sec->secsym->include = 1;
 		inc_printf("section symbol %s is included\n", sec->secsym->name);
 	}
@@ -1742,10 +1740,10 @@ void kpatch_create_dynamic_rela_sections(struct kpatch_elf *kelf,
 
 			/* add rela to fill in dest field */
 			ALLOC_LINK(dynrela, &relasec->relas);
-			if (!sec2->base->sym)
-				ERROR("expected bundled symbol for section %s for dynrela src %s",
-				      sec2->base->name, rela->sym->name);
-			dynrela->sym = sec2->base->sym;
+			if (sec2->base->sym)
+				dynrela->sym = sec2->base->sym;
+			else
+				dynrela->sym = sec2->base->secsym;
 			dynrela->type = R_X86_64_64;
 			dynrela->addend = rela->offset;
 			dynrela->offset = index * sizeof(*dynrelas);
