@@ -128,6 +128,7 @@ while [[ $# -gt 0 ]]; do
 	-d|--debug)
 		echo "DEBUG mode enabled"
 		DEBUG=1
+		set -o xtrace
 		;;
 	--)
 		if [[ -z "$2" ]]; then
