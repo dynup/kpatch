@@ -375,6 +375,11 @@ int is_bundleable(struct symbol *sym)
 	    !strcmp(sym->sec->name + 6, sym->name))
 		return 1;
 
+	if (sym->type == STT_FUNC &&
+	    !strncmp(sym->sec->name, ".text.unlikely.",15) &&
+	    !strcmp(sym->sec->name + 15, sym->name))
+		return 1;
+
 	if (sym->type == STT_OBJECT &&
 	   !strncmp(sym->sec->name, ".data.",6) &&
 	   !strcmp(sym->sec->name + 6, sym->name))
