@@ -719,8 +719,10 @@ void kpatch_rename_mangled_functions(struct kpatch_elf *base,
 		if (sym != sym->sec->sym)
 			ERROR("expected bundled section for %s\n", sym->name);
 
+		/* prefix of foo.isra.1.constprop.2 is foo.isra */
 		prefix = strdup(sym->name);
 		dot = strchr(prefix, '.');
+		dot = strchr(dot+1, '.');
 		*dot = '\0';
 
 		basesym = find_symbol_by_name_prefix(&base->symbols, prefix);
