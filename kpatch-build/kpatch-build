@@ -90,9 +90,10 @@ usage() {
 	echo "		-c, --config	Specify kernel config file" >&2
 	echo "		-v, --vmlinux	Specify original vmlinux" >&2
 	echo "		-d, --debug	Keep scratch files in /tmp" >&2
+	echo "		-t, --targets   File containing the list of kernel make targets to examine" >&2
 }
 
-options=$(getopt -o hr:s:c:v:d -l "help,sourcerpm:,sourcedir:,config:,vmlinux:,debug" -- "$@") || die "getopt failed"
+options=$(getopt -o hr:s:c:v:t:d -l "help,sourcerpm:,sourcedir:,config:,vmlinux:,targets:,debug" -- "$@") || die "getopt failed"
 
 eval set -- "$options"
 
@@ -130,6 +131,11 @@ while [[ $# -gt 0 ]]; do
 		DEBUG=1
 		set -o xtrace
 		;;
+	-t|--targets)
+		TARGETSFILE=$(readlink -f "$2")
+		shift
+		[[ ! -f "$TARGETSFILE" ]] && die "targets file $TARGETSFILE not found"
+		;;
 	--)
 		if [[ -z "$2" ]]; then
 			echo "ERROR: no patch file specified" >&2
@@ -143,6 +149,12 @@ while [[ $# -gt 0 ]]; do
 	esac
 	shift
 done
+
+if [[ -z $TARGETSFILE ]]; then
+	TARGETS="vmlinux"
+else
+	TARGETS="$(cat $TARGETSFILE)"
+fi
 
 SRCDIR="$CACHEDIR/src"
 OBJDIR="$CACHEDIR/obj"
@@ -249,63 +261,87 @@ fi
 echo "Testing patch file"
 cd "$SRCDIR" || die
 patch -N -p1 --dry-run < "$PATCHFILE" || die "source patch file failed to apply"
-cp "$PATCHFILE" "$APPLIEDPATCHFILE" || die
 
-echo "Building original kernel"
-make mrproper >> "$LOGFILE" 2>&1 || die
-make "-j$CPUS" vmlinux "O=$OBJDIR" >> "$LOGFILE" 2>&1 || die
 cp -LR "$DATADIR/patch" "$TEMPDIR" || die
+for TARGET in $TARGETS; do # START target loop
+	TARGETNAME=$(basename $TARGET)
+	TEMPDIR="$TEMPDIR/$TARGETNAME"
+	mkdir -p "$TEMPDIR"
+	make "O=$OBJDIR" clean >> "$LOGFILE" 2>&1 || die
 
-echo "Building patched kernel"
-patch -N -p1 < "$APPLIEDPATCHFILE" >> "$LOGFILE" 2>&1 || die
-make "-j$CPUS" vmlinux "O=$OBJDIR" 2>&1 | tee -a "$TEMPDIR/patched_build.log" >> "$LOGFILE"
-[[ "${PIPESTATUS[0]}" -eq 0 ]] || die
+	echo "Building original $TARGETNAME"
+	make mrproper >> "$LOGFILE" 2>&1 || die
+	make "-j$CPUS" $TARGET "O=$OBJDIR" >> "$LOGFILE" 2>&1 || die
 
-echo "Detecting changed objects"
-grep CC "$TEMPDIR/patched_build.log" | grep -v -e init/version.o -e scripts/mod/devicetable-offsets.s -e scripts/mod/file2alias.o | awk '{print $2}' > "$TEMPDIR/changed_objs"
-[[ ! -s "$TEMPDIR/changed_objs" ]] && die "no changed objects were detected"
-grep -q asm-offsets.s $TEMPDIR/changed_objs && die "a struct definition change was detected"
-
-echo "Rebuilding changed objects"
-rm -rf "$OBJDIR2"
-mkdir -p "$OBJDIR2"
-cp "$OBJDIR/.config" "$OBJDIR2" || die
-mkdir "$TEMPDIR/patched"
-for i in $(cat $TEMPDIR/changed_objs); do
-	KCFLAGS="-ffunction-sections -fdata-sections" make "$i" "O=$OBJDIR2" >> "$LOGFILE" 2>&1 || die
-	$STRIPCMD "$OBJDIR2/$i" >> "$LOGFILE" 2>&1 || die
-	mkdir -p "$TEMPDIR/patched/$(dirname $i)"
-	cp -f "$OBJDIR2/$i" "$TEMPDIR/patched/$i" || die
-	
-done
-patch -R -p1 < "$APPLIEDPATCHFILE" >> "$LOGFILE" 2>&1
-rm -f "$APPLIEDPATCHFILE"
-mkdir "$TEMPDIR/orig"
-for i in $(cat $TEMPDIR/changed_objs); do
-	rm -f "$i"
-	KCFLAGS="-ffunction-sections -fdata-sections" make "$i" "O=$OBJDIR2" >> "$LOGFILE" 2>&1 || die
-	$STRIPCMD -d "$OBJDIR2/$i" >> "$LOGFILE" 2>&1 || die
-	mkdir -p "$TEMPDIR/orig/$(dirname $i)"
-	cp -f "$OBJDIR2/$i" "$TEMPDIR/orig/$i" || die
-done
-
-echo "Extracting new and modified ELF sections"
-cd "$TEMPDIR/orig"
-FILES="$(find * -type f)"
-cd "$TEMPDIR"
-mkdir output
-for i in $FILES; do
-	mkdir -p "output/$(dirname $i)"
-	"$TOOLSDIR"/create-diff-object "orig/$i" "patched/$i" "$VMLINUX" "output/$i" 2>&1 |tee -a "$LOGFILE"
+	echo "Building patched $TARGETNAME"
+	cp "$PATCHFILE" "$APPLIEDPATCHFILE" || die
+	patch -N -p1 < "$APPLIEDPATCHFILE" >> "$LOGFILE" 2>&1 || die
+	make "-j$CPUS" $TARGET "O=$OBJDIR" 2>&1 | tee -a "$TEMPDIR/patched_build.log" >> "$LOGFILE"
 	[[ "${PIPESTATUS[0]}" -eq 0 ]] || die
-done
+
+	echo "Detecting changed objects"
+	grep CC "$TEMPDIR/patched_build.log" | grep -v -e init/version.o -e scripts/mod/devicetable-offsets.s -e scripts/mod/file2alias.o > "$TEMPDIR/tmp"
+	while read FILE; do
+		if [[ $TARGET = "vmlinux" ]]; then
+			echo $FILE | awk '{print $2}' >> "$TEMPDIR/changed_objs"
+		else
+			echo $FILE | awk '{print $3}' >> "$TEMPDIR/changed_objs"
+		fi
+	done < "$TEMPDIR/tmp"
+	[[ ! -s "$TEMPDIR/changed_objs" ]] && die "no changed objects were detected"
+	grep -q asm-offsets.s $TEMPDIR/changed_objs && die "a struct definition change was detected"
+
+	echo "Rebuilding changed objects"
+	rm -rf "$OBJDIR2"
+	mkdir -p "$OBJDIR2"
+	cp "$OBJDIR/.config" "$OBJDIR2" || die
+	mkdir "$TEMPDIR/patched"
+	for i in $(cat $TEMPDIR/changed_objs); do
+		KCFLAGS="-ffunction-sections -fdata-sections" make "$i" "O=$OBJDIR2" >> "$LOGFILE" 2>&1 || die
+		$STRIPCMD "$OBJDIR2/$i" >> "$LOGFILE" 2>&1 || die
+		mkdir -p "$TEMPDIR/patched/$(dirname $i)"
+		cp -f "$OBJDIR2/$i" "$TEMPDIR/patched/$i" || die
+	done
+	patch -R -p1 < "$APPLIEDPATCHFILE" >> "$LOGFILE" 2>&1
+	rm -f "$APPLIEDPATCHFILE"
+	mkdir "$TEMPDIR/orig"
+	for i in $(cat $TEMPDIR/changed_objs); do
+		rm -f "$i"
+		KCFLAGS="-ffunction-sections -fdata-sections" make "$i" "O=$OBJDIR2" >> "$LOGFILE" 2>&1 || die
+		$STRIPCMD -d "$OBJDIR2/$i" >> "$LOGFILE" 2>&1 || die
+		mkdir -p "$TEMPDIR/orig/$(dirname $i)"
+		cp -f "$OBJDIR2/$i" "$TEMPDIR/orig/$i" || die
+	done
+
+	echo "Extracting new and modified ELF sections"
+	cd "$TEMPDIR/orig"
+	FILES="$(find * -type f)"
+	cd "$TEMPDIR"
+	mkdir output
+	if [[ $TARGET = "vmlinux" ]]; then
+		KOBJFILE=$VMLINUX
+	else
+		KOBJFILE="/lib/modules/$ARCHVERSION/kernel/$TARGET"
+		[[ -e "$KOBJFILE" ]] || die "module not found at $KOBJFILE. Ensure kernel package is installed."
+	fi
+	for i in $FILES; do
+		mkdir -p "output/$(dirname $i)"
+		"$TOOLSDIR"/create-diff-object "orig/$i" "patched/$i" "$KOBJFILE" "output/$i" 2>&1 |tee -a "$LOGFILE"
+		[[ "${PIPESTATUS[0]}" -eq 0 ]] || die
+	done
+	cd output
+	ld -r -o $TEMPDIR/output.o $FILES >> "$LOGFILE" 2>&1 || die
+	TEMPDIR=$(dirname $TEMPDIR)
+	cd "$SRCDIR"
+done # END target loop
 
 echo "Building patch module: kpatch-$PATCHNAME.ko"
 cp "$OBJDIR/.config" "$SRCDIR"
 cd "$SRCDIR"
 make prepare >> "$LOGFILE" 2>&1 || die
-cd "$TEMPDIR/output"
-ld -r -o ../patch/output.o $FILES >> "$LOGFILE" 2>&1 || die
+cd "$TEMPDIR"
+
+ld -r -o patch/output.o $(ls */output.o) >> "$LOGFILE" 2>&1 || die
 cd "$TEMPDIR/patch"
 KPATCH_BUILD="$SRCDIR" KPATCH_NAME="$PATCHNAME" KBUILD_EXTRA_SYMBOLS="$SYMVERSFILE" make "O=$OBJDIR" >> "$LOGFILE" 2>&1 || die
 $STRIPCMD "kpatch-$PATCHNAME.ko" >> "$LOGFILE" 2>&1 || die
