@@ -56,6 +56,7 @@ struct kpatch_module {
 	bool enabled;
 
 	/* private */
+	struct list_head list;
 	struct kpatch_func *funcs;
 };
 

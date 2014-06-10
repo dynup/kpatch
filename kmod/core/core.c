@@ -58,6 +58,8 @@ static DEFINE_HASHTABLE(kpatch_func_hash, KPATCH_HASH_BITS);
 
 static DEFINE_SEMAPHORE(kpatch_mutex);
 
+LIST_HEAD(kpmod_list);
+
 static int kpatch_num_patched;
 
 static struct kobject *kpatch_root_kobj;
@@ -648,6 +650,8 @@ int kpatch_register(struct kpatch_module *kpmod, bool replace)
 
 	down(&kpatch_mutex);
 
+	list_add_tail(&kpmod->list, &kpmod_list);
+
 	if (!try_module_get(kpmod->mod)) {
 		ret = -ENODEV;
 		goto err_up;
@@ -759,6 +763,7 @@ err_rollback:
 	kpatch_put_modules(funcs, kpmod->patches_nr);
 	module_put(kpmod->mod);
 err_up:
+	list_del(&kpmod->list);
 	up(&kpatch_mutex);
 	kfree(kpmod->funcs);
 	return ret;
@@ -821,6 +826,7 @@ int kpatch_unregister(struct kpatch_module *kpmod)
 
 	kpmod->enabled = false;
 	module_put(kpmod->mod);
+	list_del(&kpmod->list);
 
 out:
 	up(&kpatch_mutex);
