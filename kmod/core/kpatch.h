@@ -46,16 +46,17 @@ struct kpatch_dynrela {
 #include <linux/types.h>
 #include <linux/module.h>
 
-struct kpatch_internal;
-
 struct kpatch_module {
+	/* public */
 	struct module *mod;
 	struct kpatch_patch *patches;
 	struct kpatch_dynrela *dynrelas;
 	int patches_nr;
 	int dynrelas_nr;
 	bool enabled;
-	struct kpatch_internal *internal; /* used internally by core module */
+
+	/* private */
+	struct kpatch_func *funcs;
 };
 
 extern struct kobject *kpatch_patches_kobj;

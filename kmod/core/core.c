@@ -127,16 +127,6 @@ struct kpatch_func {
 	struct module *mod;
 };
 
-/*
- * This structure is allocated on a per registered module basis
- * and is stored in the struct kpatch_module "internal" field.
- * Any data associated with each registered module used internally
- * by this core module can be added here.
- */
-struct kpatch_internal {
-	struct kpatch_func *funcs;
-};
-
 static inline void kpatch_state_idle(void)
 {
 	int state = atomic_read(&kpatch_state);
@@ -208,7 +198,7 @@ static void kpatch_backtrace_address_verify(void *data, unsigned long address,
 		char *func_name;
 		struct kpatch_func *active_func;
 
-		func = &kpmod->internal->funcs[i];
+		func = &kpmod->funcs[i];
 		active_func = kpatch_get_func(func->old_addr);
 		if (!active_func) {
 			/* patching an unpatched func */
@@ -285,7 +275,7 @@ out:
 static int kpatch_apply_patch(void *data)
 {
 	struct kpatch_module *kpmod = data;
-	struct kpatch_func *funcs = kpmod->internal->funcs;
+	struct kpatch_func *funcs = kpmod->funcs;
 	int num_funcs = kpmod->patches_nr;
 	int i, ret;
 
@@ -325,7 +315,7 @@ static int kpatch_apply_patch(void *data)
 static int kpatch_remove_patch(void *data)
 {
 	struct kpatch_module *kpmod = data;
-	struct kpatch_func *funcs = kpmod->internal->funcs;
+	struct kpatch_func *funcs = kpmod->funcs;
 	int num_funcs = kpmod->patches_nr;
 	int ret, i;
 
@@ -650,16 +640,11 @@ int kpatch_register(struct kpatch_module *kpmod, bool replace)
 
 	kpmod->enabled = false;
 
-	kpmod->internal = kmalloc(sizeof(*kpmod->internal), GFP_KERNEL);
-	if (!kpmod->internal)
+	funcs = kzalloc(sizeof(*funcs) * num_funcs, GFP_KERNEL);
+	if (!funcs)
 		return -ENOMEM;
 
-	funcs = kzalloc(sizeof(*funcs) * num_funcs, GFP_KERNEL);
-	if (!funcs) {
-		kfree(kpmod->internal);
-		return -ENOMEM;
-	}
-	kpmod->internal->funcs = funcs;
+	kpmod->funcs = funcs;
 
 	down(&kpatch_mutex);
 
@@ -775,15 +760,14 @@ err_rollback:
 	module_put(kpmod->mod);
 err_up:
 	up(&kpatch_mutex);
-	kfree(kpmod->internal->funcs);
-	kfree(kpmod->internal);
+	kfree(kpmod->funcs);
 	return ret;
 }
 EXPORT_SYMBOL(kpatch_register);
 
 int kpatch_unregister(struct kpatch_module *kpmod)
 {
-	struct kpatch_func *funcs = kpmod->internal->funcs;
+	struct kpatch_func *funcs = kpmod->funcs;
 	int num_funcs = kpmod->patches_nr;
 	int i, ret;
 
@@ -831,8 +815,7 @@ int kpatch_unregister(struct kpatch_module *kpmod)
 
 	kpatch_put_modules(funcs, num_funcs);
 
-	kfree(kpmod->internal->funcs);
-	kfree(kpmod->internal);
+	kfree(kpmod->funcs);
 
 	pr_notice("unloaded patch module '%s'\n", kpmod->mod->name);
 
