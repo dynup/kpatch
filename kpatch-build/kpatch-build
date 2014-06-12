@@ -247,13 +247,14 @@ else
 		pkgname="linux-source-${pkgver}_all"
 
 		cd $TEMPDIR
-		echo "Downloading and unpacking kernel source for $ARCHVERSION"
+		echo "Downloading the kernel source for $ARCHVERSION"
 		# Download source deb pkg
-		wget "$url/${pkgname}.deb" || die "wget: Could not fetch $url/${pkgname}.deb"
+		(wget "$url/${pkgname}.deb" 2>&1) >> "$LOGFILE" || die "wget: Could not fetch $url/${pkgname}.deb"
 		# Unpack
-		dpkg -x ${pkgname}.deb $TEMPDIR || die "dpkg: Could not extract ${pkgname}.deb"
+		echo "Unpacking kernel source"
+		dpkg -x ${pkgname}.deb $TEMPDIR >> "$LOGFILE" || die "dpkg: Could not extract ${pkgname}.deb"
 		# extract and move to SRCDIR
-		tar xvjf usr/src/linux-source-${ARCHVERSION%%-*}.tar.bz2
+		tar xvjf usr/src/linux-source-${ARCHVERSION%%-*}.tar.bz2 >> "$LOGFILE" || die "tar: Failed to extract kernel source package"
 		rm -rf "$CACHEDIR"
 		mkdir -p "$OBJDIR"
 		mv linux-source-${ARCHVERSION%%-*} "$SRCDIR" || die
