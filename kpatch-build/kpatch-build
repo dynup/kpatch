@@ -251,7 +251,7 @@ else
 		# Download source deb pkg
 		wget "$url/${pkgname}.deb" || die "wget: Could not fetch $url/${pkgname}.deb"
 		# Unpack
-		dpkg -x ${pkgname}.deb $TEMPDIR
+		dpkg -x ${pkgname}.deb $TEMPDIR || die "dpkg: Could not extract ${pkgname}.deb"
 		# extract and move to SRCDIR
 		tar xvjf usr/src/linux-source-${ARCHVERSION%%-*}.tar.bz2
 		rm -rf "$CACHEDIR"
