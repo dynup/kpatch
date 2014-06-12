@@ -240,12 +240,24 @@ else
 
 		echo "Debian/Ubuntu distribution detected"
 
+		# url may be changed for a different mirror
+		url="http://us.archive.ubuntu.com/ubuntu/pool/main/l/linux"
+		# The linux-source packages are formatted like the following: linux-source-3.13.0_3.13.0-24.46_all.deb
+		pkgver="${ARCHVERSION%%-*}_$(dpkg-query -W -f='${Version}' linux-image-$(uname -r))"
+		pkgname="linux-source-${pkgver}_all"
+
 		cd $TEMPDIR
-		echo "Downloading and unpacking kernel source for $ARCHVERSION"
-		apt-get source linux || die "'apt-get source linux' failed. you may need to run 'apt-get install dpkg-dev'"
+		echo "Downloading the kernel source for $ARCHVERSION"
+		# Download source deb pkg
+		(wget "$url/${pkgname}.deb" 2>&1) >> "$LOGFILE" || die "wget: Could not fetch $url/${pkgname}.deb"
+		# Unpack
+		echo "Unpacking kernel source"
+		dpkg -x ${pkgname}.deb $TEMPDIR >> "$LOGFILE" || die "dpkg: Could not extract ${pkgname}.deb"
+		# extract and move to SRCDIR
+		tar xvjf usr/src/linux-source-${ARCHVERSION%%-*}.tar.bz2 >> "$LOGFILE" || die "tar: Failed to extract kernel source package"
 		rm -rf "$CACHEDIR"
 		mkdir -p "$OBJDIR"
-		mv linux-${ARCHVERSION%%-*} "$SRCDIR" || die
+		mv linux-source-${ARCHVERSION%%-*} "$SRCDIR" || die
 		cp "/boot/config-${ARCHVERSION}" "$OBJDIR/.config" || die
 		echo "-${ARCHVERSION#*-}" > "$SRCDIR/localversion" || die
 		# for some reason the Ubuntu kernel versions don't follow the
