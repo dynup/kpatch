@@ -182,9 +182,14 @@ DISTRO=$ID
 if [[ $DISTRO = fedora ]] || [[ $DISTRO = rhel ]]; then
 	[[ -z $VMLINUX ]] && VMLINUX=/usr/lib/debug/lib/modules/$ARCHVERSION/vmlinux
 	[[ -e "$VMLINUX" ]] || die "kernel-debuginfo-$ARCHVERSION not installed"
+
+	export PATH=/usr/lib64/ccache:$PATH
+
 elif [[ $DISTRO = ubuntu ]]; then
 	[[ -z $VMLINUX ]] && VMLINUX=/usr/lib/debug/boot/vmlinux-$ARCHVERSION
 	[[ -e "$VMLINUX" ]] || die "linux-image-$ARCHVERSION-dbgsym not installed"
+
+	export PATH=/usr/lib/ccache:$PATH
 fi
 
 if [[ -n "$USERSRCDIR" ]]; then
