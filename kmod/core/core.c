@@ -58,7 +58,7 @@ static DEFINE_HASHTABLE(kpatch_func_hash, KPATCH_HASH_BITS);
 
 static DEFINE_SEMAPHORE(kpatch_mutex);
 
-static int kpatch_num_registered;
+static int kpatch_num_patched;
 
 static struct kobject *kpatch_root_kobj;
 struct kobject *kpatch_patches_kobj;
@@ -406,6 +406,60 @@ static struct ftrace_ops kpatch_ftrace_ops __read_mostly = {
 	.flags = FTRACE_OPS_FL_SAVE_REGS,
 };
 
+static int kpatch_ftrace_add_func(unsigned long ip)
+{
+	int ret;
+
+	/* check if any other patch modules have also patched this func */
+	if (kpatch_get_func(ip))
+		return 0;
+
+	ret = ftrace_set_filter_ip(&kpatch_ftrace_ops, ip, 0, 0);
+	if (ret) {
+		pr_err("can't set ftrace filter at address 0x%lx\n", ip);
+		return ret;
+	}
+
+	if (!kpatch_num_patched) {
+		ret = register_ftrace_function(&kpatch_ftrace_ops);
+		if (ret) {
+			pr_err("can't register ftrace handler\n");
+			ftrace_set_filter_ip(&kpatch_ftrace_ops, ip, 1, 0);
+			return ret;
+		}
+	}
+	kpatch_num_patched++;
+
+	return 0;
+}
+
+static int kpatch_ftrace_remove_func(unsigned long ip)
+{
+	int ret;
+
+	/* check if any other patch modules have also patched this func */
+	if (kpatch_get_func(ip))
+		return 0;
+
+	ret = ftrace_set_filter_ip(&kpatch_ftrace_ops, ip, 1, 0);
+	if (ret) {
+		pr_err("can't remove ftrace filter at address 0x%lx\n", ip);
+		return ret;
+	}
+
+	if (kpatch_num_patched == 1) {
+		ret = unregister_ftrace_function(&kpatch_ftrace_ops);
+		if (ret) {
+			pr_err("can't unregister ftrace handler\n");
+			ftrace_set_filter_ip(&kpatch_ftrace_ops, ip, 0, 0);
+			return ret;
+		}
+	}
+	kpatch_num_patched--;
+
+	return 0;
+}
+
 static void kpatch_put_modules(struct kpatch_func *funcs, int num_funcs)
 {
 	int i;
@@ -415,31 +469,6 @@ static void kpatch_put_modules(struct kpatch_func *funcs, int num_funcs)
 
 		if (func->mod)
 			module_put(func->mod);
-	}
-}
-
-/* Remove kpatch_funcs from ftrace filter */
-static void kpatch_remove_funcs_from_filter(struct kpatch_func *funcs,
-					    int num_funcs)
-{
-	int i, ret = 0;
-
-	for (i = 0; i < num_funcs; i++) {
-		struct kpatch_func *func = &funcs[i];
-
-		/*
-		 * If any other modules have also patched this function, don't
-		 * remove its ftrace handler.
-		 */
-		if (kpatch_get_func(func->old_addr))
-			continue;
-
-		/* Remove the ftrace handler for this function. */
-		ret = ftrace_set_filter_ip(&kpatch_ftrace_ops,
-		                  func->old_addr, 1, 0);
-
-		WARN(ret, "can't remove ftrace filter at address 0x%lx (rc=%d)",
-		     func->old_addr, ret);
 	}
 }
 
@@ -662,33 +691,12 @@ int kpatch_register(struct kpatch_module *kpmod, bool replace)
 			goto err_rollback;
 		}
 
-		/*
-		 * If any other modules have also patched this function, it
-		 * already has an ftrace handler.
-		 */
-		if (kpatch_get_func(func->old_addr))
-			continue;
-
-		/* Add an ftrace handler for this function. */
-		ret = ftrace_set_filter_ip(&kpatch_ftrace_ops,
-		                  func->old_addr, 0, 0);
+		ret = kpatch_ftrace_add_func(func->old_addr);
 		if (ret) {
-			pr_err("can't set ftrace filter at address 0x%lx\n",
-			       func->old_addr);
 			num_funcs = i;
 			goto err_rollback;
 		}
 	}
-
-	/* Register the ftrace handler if it hasn't been done already. */
-	if (!kpatch_num_registered) {
-		ret = register_ftrace_function(&kpatch_ftrace_ops);
-		if (ret) {
-			pr_err("can't register ftrace handler\n");
-			goto err_rollback;
-		}
-	}
-	kpatch_num_registered++;
 
 	if (replace)
 		hash_for_each_rcu(kpatch_func_hash, i, func, node)
@@ -715,9 +723,8 @@ int kpatch_register(struct kpatch_module *kpmod, bool replace)
 			if (func->op != KPATCH_OP_UNPATCH)
 				continue;
 			hash_del_rcu(&func->node);
-			kpatch_remove_funcs_from_filter(func, 1);
+			WARN_ON(kpatch_ftrace_remove_func(func->old_addr));
 			if (func->kpmod->enabled) {
-				kpatch_num_registered--;
 				func->kpmod->enabled = false;
 				pr_notice("unloaded patch module '%s'\n",
 					  func->kpmod->mod->name);
@@ -741,7 +748,7 @@ int kpatch_register(struct kpatch_module *kpmod, bool replace)
 	synchronize_rcu();
 
 	if (ret)
-		goto err_unregister;
+		goto err_ops;
 
 	for (i = 0; i < num_funcs; i++)
 		funcs[i].op = KPATCH_OP_NONE;
@@ -757,20 +764,13 @@ int kpatch_register(struct kpatch_module *kpmod, bool replace)
 	up(&kpatch_mutex);
 	return 0;
 
-err_unregister:
+err_ops:
 	if (replace)
 		hash_for_each_rcu(kpatch_func_hash, i, func, node)
 			func->op = KPATCH_OP_NONE;
-	if (kpatch_num_registered == 1) {
-		int ret2 = unregister_ftrace_function(&kpatch_ftrace_ops);
-		if (ret2) {
-			pr_err("ftrace unregister failed (%d)\n", ret2);
-			goto err_rollback;
-		}
-	}
-	kpatch_num_registered--;
 err_rollback:
-	kpatch_remove_funcs_from_filter(funcs, num_funcs);
+	for (i = 0; i < num_funcs; i++)
+		kpatch_ftrace_remove_func(funcs[i].old_addr);
 	kpatch_put_modules(funcs, kpmod->patches_nr);
 err_put:
 	module_put(kpmod->mod);
@@ -821,16 +821,15 @@ int kpatch_unregister(struct kpatch_module *kpmod)
 		goto out;
 	}
 
-	kpatch_num_registered--;
-	if (!kpatch_num_registered) {
-		ret = unregister_ftrace_function(&kpatch_ftrace_ops);
+	for (i = 0; i < num_funcs; i++) {
+		ret = kpatch_ftrace_remove_func(funcs[i].old_addr);
 		if (ret) {
-			WARN(1, "can't unregister ftrace handler");
-			kpatch_num_registered++;
+			WARN(1, "can't unregister ftrace for address 0x%lx\n",
+			     funcs[i].old_addr);
+			goto out;
 		}
 	}
 
-	kpatch_remove_funcs_from_filter(funcs, num_funcs);
 	kpatch_put_modules(funcs, num_funcs);
 
 	kfree(kpmod->internal->funcs);
@@ -863,7 +862,7 @@ static int kpatch_init(void)
 
 static void kpatch_exit(void)
 {
-	WARN_ON(kpatch_num_registered != 0);
+	WARN_ON(kpatch_num_patched != 0);
 	kobject_put(kpatch_patches_kobj);
 	kobject_put(kpatch_root_kobj);
 }
