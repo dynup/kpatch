@@ -2125,13 +2125,17 @@ int main(int argc, char *argv[])
 
 	/* extract module name (destructive to arguments.modulefile) */
 	name = basename(arguments.args[2]);
-	pos = strchr(name,'.');
-	if (pos) {
-		/* kernel module */
-		*pos = '\0';
-		pos = name;
-		while ((pos = strchr(pos, '-')))
-			*pos++ = '_';
+	if (!strncmp(name, "vmlinux-", 8))
+		name = "vmlinux";
+	else {
+		pos = strchr(name,'.');
+		if (pos) {
+			/* kernel module */
+			*pos = '\0';
+			pos = name;
+			while ((pos = strchr(pos, '-')))
+				*pos++ = '_';
+		}
 	}
 
 	/* create strings, patches, and dynrelas sections */
