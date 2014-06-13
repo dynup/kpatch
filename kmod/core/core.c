@@ -707,19 +707,28 @@ int kpatch_register(struct kpatch_module *kpmod, bool replace)
 	 * the ftrace filter, and disable the owning patch module so that it
 	 * can be removed.
 	 */
-	if (!ret && replace)
+	if (!ret && replace) {
+		struct kpatch_module *kpmod2, *safe;
+
 		hash_for_each_rcu(kpatch_func_hash, i, func, node) {
 			if (func->op != KPATCH_OP_UNPATCH)
 				continue;
 			hash_del_rcu(&func->node);
 			WARN_ON(kpatch_ftrace_remove_func(func->old_addr));
-			if (func->kpmod->enabled) {
-				func->kpmod->enabled = false;
-				pr_notice("unloaded patch module '%s'\n",
-					  func->kpmod->mod->name);
-				module_put(func->kpmod->mod);
-			}
 		}
+
+		list_for_each_entry_safe(kpmod2, safe, &kpmod_list, list) {
+			if (kpmod == kpmod2)
+				continue;
+
+			kpmod2->enabled = false;
+			pr_notice("unloaded patch module '%s'\n",
+				  kpmod2->mod->name);
+			module_put(kpmod2->mod);
+			list_del(&kpmod2->list);
+		}
+	}
+
 
 	/* memory barrier between func hash and state write */
 	smp_wmb();
