@@ -766,7 +766,7 @@ err_unregister:
 	kpatch_num_registered--;
 err_rollback:
 	kpatch_remove_funcs_from_filter(funcs, num_funcs);
-	kpatch_put_modules(funcs, num_funcs);
+	kpatch_put_modules(funcs, kpmod->patches_nr);
 err_put:
 	module_put(kpmod->mod);
 err_up:
