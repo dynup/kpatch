@@ -668,10 +668,6 @@ int kpatch_register(struct kpatch_module *kpmod, bool replace)
 		goto err_up;
 	}
 
-	ret = kpatch_write_relocations(kpmod);
-	if (ret)
-		goto err_put;
-
 	for (i = 0; i < num_funcs; i++) {
 		func = &funcs[i];
 
@@ -697,6 +693,10 @@ int kpatch_register(struct kpatch_module *kpmod, bool replace)
 			goto err_rollback;
 		}
 	}
+
+	ret = kpatch_write_relocations(kpmod);
+	if (ret)
+		goto err_rollback;
 
 	if (replace)
 		hash_for_each_rcu(kpatch_func_hash, i, func, node)
@@ -772,7 +772,6 @@ err_rollback:
 	for (i = 0; i < num_funcs; i++)
 		kpatch_ftrace_remove_func(funcs[i].old_addr);
 	kpatch_put_modules(funcs, kpmod->patches_nr);
-err_put:
 	module_put(kpmod->mod);
 err_up:
 	up(&kpatch_mutex);
