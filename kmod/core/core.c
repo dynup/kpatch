@@ -765,8 +765,8 @@ err_unregister:
 	}
 	kpatch_num_registered--;
 err_rollback:
-	kpatch_put_modules(funcs, num_funcs);
 	kpatch_remove_funcs_from_filter(funcs, num_funcs);
+	kpatch_put_modules(funcs, num_funcs);
 err_put:
 	module_put(kpmod->mod);
 err_up:
@@ -825,8 +825,8 @@ int kpatch_unregister(struct kpatch_module *kpmod)
 		}
 	}
 
-	kpatch_put_modules(funcs, num_funcs);
 	kpatch_remove_funcs_from_filter(funcs, num_funcs);
+	kpatch_put_modules(funcs, num_funcs);
 
 	kfree(kpmod->internal->funcs);
 	kfree(kpmod->internal);
