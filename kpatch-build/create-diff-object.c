@@ -1734,7 +1734,11 @@ void kpatch_create_dynamic_rela_sections(struct kpatch_elf *kelf,
 			          rela->sym->name, result.value, result.size);
 
 			/* dest filed in by rela entry below */
-			dynrelas[index].src = result.value;
+			if (!strcmp(objname, "vmlinux"))
+				dynrelas[index].src = result.value;
+			else
+				/* for modules, src is discovered at runtime */
+				dynrelas[index].src = 0;
 			dynrelas[index].addend = rela->addend;
 			dynrelas[index].type = rela->type;
 

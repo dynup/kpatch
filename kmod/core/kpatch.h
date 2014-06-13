@@ -58,6 +58,7 @@ struct kpatch_module {
 	/* private */
 	struct list_head list;
 	struct kpatch_func *funcs;
+	bool pending;
 };
 
 extern struct kobject *kpatch_patches_kobj;
