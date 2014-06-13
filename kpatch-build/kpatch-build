@@ -82,6 +82,51 @@ find_dirs() {
 	return 1
 }
 
+find_parent_obj() {
+	dir=$(dirname $1)
+	file=$(basename $1)
+	grepname=${1%.o}
+	grepname=$grepname\\\.o
+	if [[ $DEEP_FIND -eq 1 ]]; then
+		parent=$(find . -name ".*.cmd" | xargs grep -l $grepname | grep -v $dir/.${file}.cmd)
+		num=$(find . -name ".*.cmd" | xargs grep -l $grepname | grep -v $dir/.${file}.cmd | wc -l)
+	else
+		parent=$(grep -l $grepname $dir/.*.cmd | grep -v $dir/.${file}.cmd)
+		num=$(grep -l $grepname $dir/.*.cmd | grep -v $dir/.${file}.cmd | wc -l)
+	fi
+
+	[[ $num -eq 0 ]] && PARENT="" && return
+	[[ $num -gt 1 ]] && die "two parent matches for $1"
+
+	dir=$(dirname $parent)
+	PARENT=$(basename $parent)
+	PARENT=${PARENT#.}
+	PARENT=${PARENT%.cmd}
+	PARENT=$dir/$PARENT
+	[[ ! -e $PARENT ]] && die "ERROR: can't find parent $PARENT for $1"
+}
+
+find_kobj() {
+	arg=$1
+	KOBJFILE=$arg
+	dir=$(dirname $KOBJFILE)
+	file=$(basename $KOBJFILE)
+	DEEP_FIND=0
+	while true; do
+		find_parent_obj $KOBJFILE
+		if [[ -z $PARENT ]]; then
+			[[ $KOBJFILE = *built-in.o ]] && KOBJFILE=vmlinux && return
+			[[ $KOBJFILE = *.ko ]] && return
+			if [[ $DEEP_FIND -eq 0 ]]; then
+				DEEP_FIND=1
+				continue;
+			fi
+			die "invalid ancestor $KOBJFILE for $arg"
+		fi
+		KOBJFILE=$PARENT
+	done
+}
+
 usage() {
 	echo "usage: $0 [options] <patch file>" >&2
 	echo "		-h, --help	Show this help message" >&2
@@ -268,20 +313,35 @@ cd "$SRCDIR" || die
 patch -N -p1 --dry-run < "$PATCHFILE" || die "source patch file failed to apply"
 cp "$PATCHFILE" "$APPLIEDPATCHFILE" || die
 
+TARGETS="vmlinux modules"
+
 echo "Building original kernel"
 make mrproper >> "$LOGFILE" 2>&1 || die
-make "-j$CPUS" vmlinux "O=$OBJDIR" >> "$LOGFILE" 2>&1 || die
+make "-j$CPUS" $TARGETS "O=$OBJDIR" >> "$LOGFILE" 2>&1 || die
 cp -LR "$DATADIR/patch" "$TEMPDIR" || die
 
 echo "Building patched kernel"
 patch -N -p1 < "$APPLIEDPATCHFILE" >> "$LOGFILE" 2>&1 || die
-make "-j$CPUS" vmlinux "O=$OBJDIR" 2>&1 | tee -a "$TEMPDIR/patched_build.log" >> "$LOGFILE"
+make "-j$CPUS" $TARGETS "O=$OBJDIR" 2>&1 | tee -a "$TEMPDIR/patched_build.log" >> "$LOGFILE"
 [[ "${PIPESTATUS[0]}" -eq 0 ]] || die
 
 echo "Detecting changed objects"
-grep CC "$TEMPDIR/patched_build.log" | grep -v -e init/version.o -e scripts/mod/devicetable-offsets.s -e scripts/mod/file2alias.o | awk '{print $2}' > "$TEMPDIR/changed_objs"
+while read line; do
+	[[ "$line" =~ CC ]] || continue
+	eval set -- "$line"
+	case $2 in
+		init/version.o) continue ;;
+		scripts/mod/devicetable-offsets.s) continue ;;
+		scripts/mod/file2alias.o) continue ;;
+		arch/x86/kernel/asm-offsets.s) die "a struct definition change was detected" ;;
+		\[M\]) obj=$3 ;;
+		*) obj=$2 ;;
+	esac
+
+	echo $obj >> $TEMPDIR/changed_objs
+done < "$TEMPDIR/patched_build.log"
+
 [[ ! -s "$TEMPDIR/changed_objs" ]] && die "no changed objects were detected"
-grep -q asm-offsets.s $TEMPDIR/changed_objs && die "a struct definition change was detected"
 
 echo "Rebuilding changed objects"
 rm -rf "$OBJDIR2"
@@ -293,7 +353,6 @@ for i in $(cat $TEMPDIR/changed_objs); do
 	$STRIPCMD "$OBJDIR2/$i" >> "$LOGFILE" 2>&1 || die
 	mkdir -p "$TEMPDIR/patched/$(dirname $i)"
 	cp -f "$OBJDIR2/$i" "$TEMPDIR/patched/$i" || die
-	
 done
 patch -R -p1 < "$APPLIEDPATCHFILE" >> "$LOGFILE" 2>&1
 rm -f "$APPLIEDPATCHFILE"
@@ -311,11 +370,25 @@ cd "$TEMPDIR/orig"
 FILES="$(find * -type f)"
 cd "$TEMPDIR"
 mkdir output
+declare -A objnames
 for i in $FILES; do
 	mkdir -p "output/$(dirname $i)"
-	"$TOOLSDIR"/create-diff-object "orig/$i" "patched/$i" "$VMLINUX" "output/$i" 2>&1 |tee -a "$LOGFILE"
+	cd "$OBJDIR"
+	find_kobj $i
+	objnames[$KOBJFILE]=1
+	if [[ $KOBJFILE = vmlinux ]]; then
+		KOBJFILE=$VMLINUX
+	else
+		KOBJFILE="$(readlink -f $KOBJFILE)"
+	fi
+	cd $TEMPDIR
+	"$TOOLSDIR"/create-diff-object "orig/$i" "patched/$i" "$KOBJFILE" "output/$i" 2>&1 |tee -a "$LOGFILE"
 	[[ "${PIPESTATUS[0]}" -eq 0 ]] || die
 done
+
+echo -n "Patched objects:"
+for i in "${!objnames[@]}"; do echo -n " $(basename $i)"; done
+echo
 
 echo "Building patch module: kpatch-$PATCHNAME.ko"
 cp "$OBJDIR/.config" "$SRCDIR"

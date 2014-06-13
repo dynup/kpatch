@@ -21,6 +21,9 @@ Installation
 
 ####Fedora 20
 
+*NOTE: You'll need about 10GB of free disk space for the kpatch-build cache in
+`~/.kpatch`.*
+
 Install the dependencies for compiling kpatch:
 
     sudo yum install gcc kernel-devel elfutils elfutils-devel
@@ -37,6 +40,9 @@ Install the dependencies for the "kpatch-build" command:
     sudo yum install ccache
 
 ####Ubuntu 14.04
+
+*NOTE: You'll need about 10GB of free disk space for the kpatch-build cache in
+`~/.kpatch`.*
 
 Install the dependencies for compiling kpatch:
 
