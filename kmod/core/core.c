@@ -653,9 +653,11 @@ int kpatch_register(struct kpatch_module *kpmod, bool replace)
 			goto err_rollback;
 
 		ret = kpatch_verify_symbol_match(func->patch->name,
-		                               func->old_addr);
-		if (ret)
+						 func->old_addr);
+		if (ret) {
+			num_funcs = i;
 			goto err_rollback;
+		}
 
 		/*
 		 * If any other modules have also patched this function, it
