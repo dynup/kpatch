@@ -719,7 +719,7 @@ int kpatch_register(struct kpatch_module *kpmod, bool replace)
 			if (func->kpmod->enabled) {
 				kpatch_num_registered--;
 				func->kpmod->enabled = false;
-				pr_notice("unloaded patch module \"%s\"\n",
+				pr_notice("unloaded patch module '%s'\n",
 					  func->kpmod->mod->name);
 				module_put(func->kpmod->mod);
 			}
@@ -750,7 +750,7 @@ int kpatch_register(struct kpatch_module *kpmod, bool replace)
 	pr_notice_once("tainting kernel with TAINT_USER\n");
 	add_taint(TAINT_USER, LOCKDEP_STILL_OK);
 
-	pr_notice("loaded patch module \"%s\"\n", kpmod->mod->name);
+	pr_notice("loaded patch module '%s'\n", kpmod->mod->name);
 
 	kpmod->enabled = true;
 
@@ -836,7 +836,7 @@ int kpatch_unregister(struct kpatch_module *kpmod)
 	kfree(kpmod->internal->funcs);
 	kfree(kpmod->internal);
 
-	pr_notice("unloaded patch module \"%s\"\n", kpmod->mod->name);
+	pr_notice("unloaded patch module '%s'\n", kpmod->mod->name);
 
 	kpmod->enabled = false;
 	module_put(kpmod->mod);
