@@ -134,10 +134,11 @@ usage() {
 	echo "		-s, --sourcedir	Specify kernel source directory" >&2
 	echo "		-c, --config	Specify kernel config file" >&2
 	echo "		-v, --vmlinux	Specify original vmlinux" >&2
+	echo "		-t, --target	Specify custom kernel build targets" >&2
 	echo "		-d, --debug	Keep scratch files in /tmp" >&2
 }
 
-options=$(getopt -o hr:s:c:v:d -l "help,sourcerpm:,sourcedir:,config:,vmlinux:,debug" -- "$@") || die "getopt failed"
+options=$(getopt -o hr:s:c:v:t:d -l "help,sourcerpm:,sourcedir:,config:,vmlinux:,target:debug" -- "$@") || die "getopt failed"
 
 eval set -- "$options"
 
@@ -170,6 +171,10 @@ while [[ $# -gt 0 ]]; do
 		shift
 		[[ ! -f "$VMLINUX" ]] && die "vmlinux file $VMLINUX not found"
 		;;
+	-t|--target)
+		TARGETS="$TARGETS $2"
+		shift
+		;;
 	-d|--debug)
 		echo "DEBUG mode enabled"
 		DEBUG=1
@@ -192,6 +197,8 @@ done
 SRCDIR="$CACHEDIR/src"
 OBJDIR="$CACHEDIR/obj"
 OBJDIR2="$CACHEDIR/obj2"
+
+[[ -z $TARGETS ]] && TARGETS="vmlinux modules"
 
 PATCHNAME="$(basename $PATCHFILE)"
 if [[ "$PATCHNAME" =~ \.patch ]] || [[ "$PATCHNAME" =~ \.diff ]]; then
@@ -312,8 +319,6 @@ echo "Testing patch file"
 cd "$SRCDIR" || die
 patch -N -p1 --dry-run < "$PATCHFILE" || die "source patch file failed to apply"
 cp "$PATCHFILE" "$APPLIEDPATCHFILE" || die
-
-TARGETS="vmlinux modules"
 
 echo "Building original kernel"
 make mrproper >> "$LOGFILE" 2>&1 || die
