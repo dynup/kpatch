@@ -515,7 +515,9 @@ static int kpatch_write_relocations(struct kpatch_module *kpmod)
 			src_addr = dynrela->src;
 		} else {
 			/* module, dynrela->src is not right */
+			mutex_lock(&module_mutex);
 			mod = find_module(dynrela->objname);
+			mutex_unlock(&module_mutex);
 			if (!mod) {
 				pr_err("unable to find module '%s'\n",
 				       dynrela->objname);
@@ -590,16 +592,17 @@ static int kpatch_calculate_old_addr(struct kpatch_func *func)
 		return 0;
 	}
 
+	mutex_lock(&module_mutex);
 	module = find_module(func->patch->objname);
 	if (!module) {
+		mutex_unlock(&module_mutex);
 		pr_err("patch contains code for a module that is not loaded\n");
 		return -EINVAL;
 	}
 
-	if (!try_module_get(module)) {
-		pr_err("failed to reference module\n");
-		return -EINVAL;
-	}
+	/* should never fail because we have the mutex */
+	WARN_ON(!try_module_get(module));
+	mutex_unlock(&module_mutex);
 
 	func->mod = module;
 	func->old_addr = (unsigned long)module->module_core +
