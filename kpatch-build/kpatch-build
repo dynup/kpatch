@@ -338,6 +338,7 @@ while read line; do
 		init/version.o) continue ;;
 		scripts/mod/devicetable-offsets.s) continue ;;
 		scripts/mod/file2alias.o) continue ;;
+		*.mod.o) continue ;;
 		arch/x86/kernel/asm-offsets.s) die "a struct definition change was detected" ;;
 		\[M\]) obj=$3 ;;
 		*) obj=$2 ;;
