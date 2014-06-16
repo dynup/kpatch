@@ -186,10 +186,10 @@ The primary steps in kpatch-build are:
   resulting in the changed original objects
 - For every changed object, use `create-diff-object` to do the following:
 	* Analyze each original/patched object pair for patchability
-	* Add .kpatches.patches and .rela.kpatch.patches sections to the output object.
+	* Add `.kpatch.patches` and `.rela.kpatch.patches` sections to the output object.
 	The kpatch core module uses this to determine the list of functions
 	that need to be redirected using ftrace.
-	* Add .kpatches.dynrelas and .rela.kpatch.dynrelas sections to the output object.
+	* Add `.kpatch.dynrelas` and `.rela.kpatch.dynrelas` sections to the output object.
 	This will be used to resolve references to non-included local
 	and non-exported global symbols. These relocations will be resolved by the kpatch core module.
 	* Generate the resulting output object containing the new and modified sections
