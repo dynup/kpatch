@@ -178,8 +178,7 @@ ones.  It has four main components:
 
 The "kpatch-build" command converts a source-level diff patch file to a kernel
 patch module.  Most of its work is performed by the kpatch-build script
-which uses a collection of utilities: `create-diff-object`,
-`add-patch-section`, and `link-vmlinux-syms`.
+which uses a utility named `create-diff-object` to compare changed objects.
 
 The primary steps in kpatch-build are:
 - Build the unstripped vmlinux for the kernel
@@ -191,16 +190,17 @@ The primary steps in kpatch-build are:
 - Unpatch the source tree
 - Recompile each changed object with `-ffunction-sections -fdata-sections`,
   resulting in the changed original objects
-- Use `create-diff-object` to analyze each original/patched object pair
-  for patchability and generate an output object containing modified
-  sections
+- For every changed object, use `create-diff-object` to do the following:
+	* Analyze each original/patched object pair for patchability
+	* Add `.kpatch.patches` and `.rela.kpatch.patches` sections to the output object.
+	The kpatch core module uses this to determine the list of functions
+	that need to be redirected using ftrace.
+	* Add `.kpatch.dynrelas` and `.rela.kpatch.dynrelas` sections to the output object.
+	This will be used to resolve references to non-included local
+	and non-exported global symbols. These relocations will be resolved by the kpatch core module.
+	* Generate the resulting output object containing the new and modified sections
 - Link all the output objects into a cumulative object
-- Use `add-patches-section` to add the .patches section that the
-  kpatch core module uses to determine the list of functions that need
-  to be redirected using ftrace
 - Generate the patch module
-- Use `link-vmlinux-syms` to hardcode non-exported kernel symbols
-  into the symbol table of the patch module
 
 ### Patching
 
