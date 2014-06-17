@@ -24,13 +24,14 @@
 #include <linux/slab.h>
 #include <linux/kallsyms.h>
 #include "kpatch.h"
+#include "kpatch-patch.h"
 
 static bool replace;
 module_param(replace, bool, S_IRUGO);
 MODULE_PARM_DESC(replace, "replace all previously loaded patch modules");
 
-extern char __kpatch_patches, __kpatch_patches_end;
-extern char __kpatch_dynrelas, __kpatch_dynrelas_end;
+extern struct kpatch_patch_func __kpatch_funcs[], __kpatch_funcs_end[];
+extern struct kpatch_patch_dynrela __kpatch_dynrelas[], __kpatch_dynrelas_end[];
 
 static struct kpatch_module kpmod;
 static struct kobject *patch_kobj;
@@ -38,11 +39,11 @@ static struct kobject *functions_kobj;
 
 struct kpatch_func_obj {
 	struct kobject kobj;
-	struct kpatch_patch *patch;
+	struct kpatch_patch_func *func;
 	char name[KSYM_NAME_LEN];
 };
 
-static struct kpatch_func_obj **funcs = NULL;
+static struct kpatch_func_obj **func_objs = NULL;
 
 static ssize_t patch_enabled_show(struct kobject *kobj,
 				  struct kobj_attribute *attr, char *buf)
@@ -87,7 +88,7 @@ static ssize_t func_old_addr_show(struct kobject *kobj,
 	struct kpatch_func_obj *func =
 		container_of(kobj, struct kpatch_func_obj, kobj);
 
-	return sprintf(buf, "0x%lx\n", func->patch->old_offset);
+	return sprintf(buf, "0x%lx\n", func->func->old_offset);
 }
 
 static ssize_t func_new_addr_show(struct kobject *kobj,
@@ -96,7 +97,7 @@ static ssize_t func_new_addr_show(struct kobject *kobj,
 	struct kpatch_func_obj *func =
 		container_of(kobj, struct kpatch_func_obj, kobj);
 
-	return sprintf(buf, "0x%lx\n", func->patch->new_addr);
+	return sprintf(buf, "0x%lx\n", func->func->new_addr);
 }
 
 static struct kobj_attribute old_addr_attr =
@@ -149,37 +150,166 @@ static struct kpatch_func_obj *func_kobj_alloc(void)
 	return func;
 }
 
+static struct kpatch_object *patch_find_or_add_object(struct list_head *head,
+						      const char *name)
+{
+	struct kpatch_object *object;
+
+	list_for_each_entry(object, head, list) {
+		if (!strcmp(object->name, name))
+			return object;
+	}
+
+	object = kzalloc(sizeof(*object), GFP_KERNEL);
+	if (!object)
+		return NULL;
+
+	object->name = name;
+	INIT_LIST_HEAD(&object->funcs);
+	INIT_LIST_HEAD(&object->dynrelas);
+
+	list_add_tail(&object->list, head);
+
+	return object;
+}
+
+static void patch_free_objects(void)
+{
+	struct kpatch_object *object, *object_safe;
+	struct kpatch_func *func, *func_safe;
+	struct kpatch_dynrela *dynrela, *dynrela_safe;
+	int i;
+
+	for (i = 0; i < __kpatch_funcs_end - __kpatch_funcs; i++)
+		if (func_objs[i])
+			kobject_put(&func_objs[i]->kobj);
+	kfree(func_objs);
+
+	list_for_each_entry_safe(object, object_safe, &kpmod.objects, list) {
+		list_for_each_entry_safe(func, func_safe, &object->funcs,
+					 list) {
+			list_del(&func->list);
+			kfree(func);
+		}
+		list_for_each_entry_safe(dynrela, dynrela_safe,
+					 &object->dynrelas, list) {
+			list_del(&dynrela->list);
+			kfree(dynrela);
+		}
+		list_del(&object->list);
+		kfree(object);
+	}
+
+}
+
+static int patch_make_funcs_list(struct list_head *objects)
+{
+	struct kpatch_object *object;
+	struct kpatch_patch_func *p_func;
+	struct kpatch_func *func;
+	struct kpatch_func_obj *func_obj;
+	int i = 0, funcs_nr, ret;
+
+	funcs_nr = __kpatch_funcs_end - __kpatch_funcs;
+	func_objs = kzalloc(funcs_nr * sizeof(struct kpatch_func_obj*),
+			    GFP_KERNEL);
+	if (!func_objs)
+		return -ENOMEM;
+
+	for (p_func = __kpatch_funcs; p_func < __kpatch_funcs_end; p_func++) {
+		object = patch_find_or_add_object(&kpmod.objects,
+						  p_func->objname);
+		if (!object) {
+			ret = -ENOMEM;
+			goto err;
+		}
+
+		func = kzalloc(sizeof(*func), GFP_KERNEL);
+		if (!func) {
+			ret = -ENOMEM;
+			goto err;
+		}
+
+		func->new_addr = p_func->new_addr;
+		func->new_size = p_func->new_size;
+		func->old_offset = p_func->old_offset;
+		func->old_size = p_func->old_size;
+		func->name = p_func->name;
+		list_add_tail(&func->list, &object->funcs);
+
+		func_obj = func_kobj_alloc();
+		if (!func_obj) {
+			ret = -ENOMEM;
+			goto err;
+		}
+
+		func_obj->func = p_func;
+		func_objs[i++] = func_obj;
+		sprint_symbol_no_offset(func_obj->name,
+					p_func->old_offset);
+
+		ret = kobject_add(&func_obj->kobj, functions_kobj,
+				  "%s", func_obj->name);
+		if (ret)
+			goto err;
+	}
+
+	return 0;
+
+err:
+	patch_free_objects();
+	return ret;
+}
+
+static int patch_make_dynrelas_list(struct list_head *objects)
+{
+	struct kpatch_object *object;
+	struct kpatch_patch_dynrela *p_dynrela;
+	struct kpatch_dynrela *dynrela;
+	int ret;
+
+	for (p_dynrela = __kpatch_dynrelas; p_dynrela < __kpatch_dynrelas_end;
+	     p_dynrela++) {
+		object = patch_find_or_add_object(objects, p_dynrela->objname);
+		if (!object) {
+			ret = -ENOMEM;
+			goto err;
+		}
+
+		dynrela = kzalloc(sizeof(*dynrela), GFP_KERNEL);
+		if (!dynrela) {
+			ret = -ENOMEM;
+			goto err;
+		}
+
+		dynrela->dest = p_dynrela->dest;
+		dynrela->src = p_dynrela->src;
+		dynrela->type = p_dynrela->type;
+		dynrela->name = p_dynrela->name;
+		dynrela->objname = p_dynrela->objname;
+		dynrela->addend = p_dynrela->addend;
+		list_add_tail(&dynrela->list, &object->dynrelas);
+	}
+
+	return 0;
+
+err:
+	patch_free_objects();
+	return ret;
+}
+
 static int __init patch_init(void)
 {
 	int ret;
-	int i = 0;
-	struct kpatch_func_obj *func = NULL;
-
-	kpmod.mod = THIS_MODULE;
-	kpmod.patches = (struct kpatch_patch *)&__kpatch_patches;
-	kpmod.patches_nr = (&__kpatch_patches_end - &__kpatch_patches) /
-			  sizeof(*kpmod.patches);
-	kpmod.dynrelas = (struct kpatch_dynrela *)&__kpatch_dynrelas;
-	kpmod.dynrelas_nr = (&__kpatch_dynrelas_end - &__kpatch_dynrelas) /
-			  sizeof(*kpmod.dynrelas);
-
-	funcs = kzalloc(kpmod.patches_nr * sizeof(struct kpatch_func_obj*),
-			GFP_KERNEL);
-	if (!funcs) {
-		ret = -ENOMEM;
-		goto err_ret;
-	}
 
 	patch_kobj = kobject_create_and_add(THIS_MODULE->name,
 					    kpatch_patches_kobj);
-	if (!patch_kobj) {
-		ret = -ENOMEM;
-		goto err_free;
-	}
+	if (!patch_kobj)
+		return -ENOMEM;
 
 	ret = sysfs_create_file(patch_kobj, &patch_enabled_attr.attr);
 	if (ret)
-		goto err_put;
+		goto err_patch;
 
 	functions_kobj = kobject_create_and_add("functions", patch_kobj);
 	if (!functions_kobj) {
@@ -187,55 +317,39 @@ static int __init patch_init(void)
 		goto err_sysfs;
 	}
 
-	for (i = 0; i < kpmod.patches_nr; i++) {
-		func = func_kobj_alloc();
-		if (!func) {
-			ret = -ENOMEM;
-			goto err_sysfs2;
-		}
-		funcs[i] = func;
+	kpmod.mod = THIS_MODULE;
+	INIT_LIST_HEAD(&kpmod.objects);
 
-		sprint_symbol_no_offset(func->name, kpmod.patches[i].old_offset);
+	ret = patch_make_funcs_list(&kpmod.objects);
+	if (ret)
+		goto err_functions;
 
-		ret = kobject_add(&func->kobj, functions_kobj,
-				  "%s", func->name);
-		if (ret)
-			goto err_sysfs2;
-
-		func->patch = &kpmod.patches[i];
-	}
+	ret = patch_make_dynrelas_list(&kpmod.objects);
+	if (ret)
+		goto err_objects;
 
 	ret = kpatch_register(&kpmod, replace);
 	if (ret)
-		goto err_sysfs2;
+		goto err_objects;
 
 	return 0;
 
-err_sysfs2:
-	for (i = 0; i < kpmod.patches_nr; i++) {
-		if (funcs[i] != NULL)
-			kobject_put(&funcs[i]->kobj);
-	}
+err_objects:
+	patch_free_objects();
+err_functions:
 	kobject_put(functions_kobj);
 err_sysfs:
 	sysfs_remove_file(patch_kobj, &patch_enabled_attr.attr);
-err_put:
+err_patch:
 	kobject_put(patch_kobj);
-err_free:
-	kfree(funcs);
-err_ret:
 	return ret;
 }
 
 static void __exit patch_exit(void)
 {
-	int i;
 	WARN_ON(kpmod.enabled);
 
-	for (i = 0; i < kpmod.patches_nr; i++) {
-		kobject_put(&funcs[i]->kobj);
-	}
-	kfree(funcs);
+	patch_free_objects();
 	kobject_put(functions_kobj);
 	sysfs_remove_file(patch_kobj, &patch_enabled_attr.attr);
 	kobject_put(patch_kobj);
