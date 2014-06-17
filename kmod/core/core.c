@@ -72,9 +72,23 @@ struct kpatch_backtrace_args {
 };
 
 struct kpatch_kallsyms_args {
-	char *name;
+	const char *name;
 	unsigned long addr;
 };
+
+/* this is a double loop, use goto instead of break */
+#define do_for_each_linked_func(kpmod, func) {				\
+	struct kpatch_object *_object;					\
+	list_for_each_entry(_object, &kpmod->objects, list) {		\
+		if (!kpatch_object_linked(_object))			\
+			continue;					\
+		list_for_each_entry(func, &_object->funcs, list) {
+
+#define while_for_each_linked_func()					\
+		}							\
+	}								\
+}
+
 
 /*
  * The kpatch core module has a state machine which allows for proper
@@ -113,21 +127,6 @@ enum {
 	KPATCH_STATE_FAILURE,
 };
 static atomic_t kpatch_state;
-
-enum kpatch_op {
-	KPATCH_OP_NONE,
-	KPATCH_OP_PATCH,
-	KPATCH_OP_UNPATCH,
-};
-
-struct kpatch_func {
-	struct kpatch_patch *patch;
-	unsigned long old_addr;
-	struct hlist_node node;
-	struct kpatch_module *kpmod;
-	enum kpatch_op op;
-	struct module *mod;
-};
 
 static inline void kpatch_state_idle(void)
 {
@@ -171,10 +170,15 @@ static struct kpatch_func *kpatch_get_prev_func(struct kpatch_func *f,
 	return NULL;
 }
 
+static inline bool kpatch_object_linked(struct kpatch_object *object)
+{
+	return object->mod || !strcmp(object->name, "vmlinux");
+}
+
 static inline int kpatch_compare_addresses(unsigned long stack_addr,
 					   unsigned long func_addr,
 					   unsigned long func_size,
-					   char *func_name)
+					   const char *func_name)
 {
 	if (stack_addr >= func_addr && stack_addr < func_addr + func_size) {
 		pr_err("activeness safety check failed for %s\n", func_name);
@@ -195,43 +199,37 @@ static void kpatch_backtrace_address_verify(void *data, unsigned long address,
 		return;
 
 	/* check kpmod funcs */
-	for (i = 0; i < kpmod->patches_nr; i++) {
+	do_for_each_linked_func(kpmod, func) {
 		unsigned long func_addr, func_size;
-		char *func_name;
+		const char *func_name;
 		struct kpatch_func *active_func;
-
-		func = &kpmod->funcs[i];
-
-		/* check if patch depends on a future module load */
-		if (!func->old_addr)
-			continue;
 
 		active_func = kpatch_get_func(func->old_addr);
 		if (!active_func) {
 			/* patching an unpatched func */
 			func_addr = func->old_addr;
-			func_size = func->patch->old_size;
-			func_name = func->patch->name;
+			func_size = func->old_size;
+			func_name = func->name;
 		} else {
 			/* repatching or unpatching */
-			func_addr = active_func->patch->new_addr;
-			func_size = active_func->patch->new_size;
-			func_name = active_func->patch->name;
+			func_addr = active_func->new_addr;
+			func_size = active_func->new_size;
+			func_name = active_func->name;
 		}
 
 		args->ret = kpatch_compare_addresses(address, func_addr,
 						     func_size, func_name);
 		if (args->ret)
 			return;
-	}
+	} while_for_each_linked_func();
 
 	/* in the replace case, need to check the func hash as well */
 	hash_for_each_rcu(kpatch_func_hash, i, func, node) {
 		if (func->op == KPATCH_OP_UNPATCH) {
 			args->ret = kpatch_compare_addresses(address,
-			                        func->patch->new_addr,
-			                        func->patch->new_size,
-						func->patch->name);
+			                        func->new_addr,
+			                        func->new_size,
+						func->name);
 			if (args->ret)
 				return;
 		}
@@ -282,9 +280,8 @@ out:
 static int kpatch_apply_patch(void *data)
 {
 	struct kpatch_module *kpmod = data;
-	struct kpatch_func *funcs = kpmod->funcs;
-	int num_funcs = kpmod->patches_nr;
-	int i, ret;
+	struct kpatch_func *func;
+	int ret;
 
 	ret = kpatch_verify_activeness_safety(kpmod);
 	if (ret) {
@@ -293,10 +290,9 @@ static int kpatch_apply_patch(void *data)
 	}
 
 	/* tentatively add the new funcs to the global func hash */
-	for (i = 0; i < num_funcs; i++)
-		if (funcs[i].old_addr)
-			hash_add_rcu(kpatch_func_hash, &funcs[i].node,
-				     funcs[i].old_addr);
+	do_for_each_linked_func(kpmod, func) {
+		hash_add_rcu(kpatch_func_hash, &func->node, func->old_addr);
+	} while_for_each_linked_func();
 
 	/* memory barrier between func hash add and state change */
 	smp_wmb();
@@ -310,9 +306,9 @@ static int kpatch_apply_patch(void *data)
 		pr_err("NMI activeness safety check failed\n");
 
 		/* Failed, we have to rollback patching process */
-		for (i = 0; i < num_funcs; i++)
-			if (funcs[i].old_addr)
-				hash_del_rcu(&funcs[i].node);
+		do_for_each_linked_func(kpmod, func) {
+			hash_del_rcu(&func->node);
+		} while_for_each_linked_func();
 
 		return -EBUSY;
 	}
@@ -324,9 +320,8 @@ static int kpatch_apply_patch(void *data)
 static int kpatch_remove_patch(void *data)
 {
 	struct kpatch_module *kpmod = data;
-	struct kpatch_func *funcs = kpmod->funcs;
-	int num_funcs = kpmod->patches_nr;
-	int ret, i;
+	struct kpatch_func *func;
+	int ret;
 
 	ret = kpatch_verify_activeness_safety(kpmod);
 	if (ret) {
@@ -340,9 +335,9 @@ static int kpatch_remove_patch(void *data)
 		return -EBUSY;
 
 	/* Succeeded, remove all updating funcs from hash table */
-	for (i = 0; i < num_funcs; i++)
-		if (funcs[i].old_addr)
-			hash_del_rcu(&funcs[i].node);
+	do_for_each_linked_func(kpmod, func) {
+		hash_del_rcu(&func->node);
+	} while_for_each_linked_func();
 
 	return 0;
 }
@@ -396,7 +391,7 @@ kpatch_ftrace_handler(unsigned long ip, unsigned long parent_ip,
 	}
 done:
 	if (func)
-		regs->ip = func->patch->new_addr;
+		regs->ip = func->new_addr;
 
 	preempt_enable_notrace();
 }
@@ -460,18 +455,6 @@ static int kpatch_ftrace_remove_func(unsigned long ip)
 	return 0;
 }
 
-static void kpatch_put_modules(struct kpatch_func *funcs, int num_funcs)
-{
-	int i;
-
-	for (i = 0; i < num_funcs; i++) {
-		struct kpatch_func *func = &funcs[i];
-
-		if (func->mod)
-			module_put(func->mod);
-	}
-}
-
 static int kpatch_kallsyms_callback(void *data, const char *name,
 					 struct module *mod,
 					 unsigned long addr)
@@ -484,7 +467,7 @@ static int kpatch_kallsyms_callback(void *data, const char *name,
 	return 0;
 }
 
-static int kpatch_verify_symbol_match(char *name, unsigned long addr)
+static int kpatch_verify_symbol_match(const char *name, unsigned long addr)
 {
 	int ret;
 
@@ -503,7 +486,8 @@ static int kpatch_verify_symbol_match(char *name, unsigned long addr)
 	return 0;
 }
 
-static unsigned long kpatch_find_module_symbol(struct module *mod, char *name)
+static unsigned long kpatch_find_module_symbol(struct module *mod,
+					       const char *name)
 {
 	char buf[KSYM_SYMBOL_LEN];
 
@@ -522,27 +506,20 @@ static unsigned long kpatch_find_module_symbol(struct module *mod, char *name)
 	return kallsyms_lookup_name(buf);
 }
 
-static int kpatch_write_relocations(struct kpatch_module *kpmod)
+static int kpatch_write_relocations(struct kpatch_module *kpmod,
+				    struct kpatch_object *object)
 {
-	int ret, i, size, readonly = 0;
+	int ret, size, readonly = 0;
 	struct kpatch_dynrela *dynrela;
 	u64 loc, val;
 	unsigned long core = (unsigned long)kpmod->mod->module_core;
 	unsigned long core_ro_size = kpmod->mod->core_ro_size;
 	unsigned long core_size = kpmod->mod->core_size;
 	unsigned long src;
-	struct module *mod;
+	bool vmlinux = !strcmp(object->name, "vmlinux");
 
-	for (i = 0; i < kpmod->dynrelas_nr; i++) {
-		dynrela = &kpmod->dynrelas[i];
-
-		if (!strcmp(dynrela->objname, "vmlinux")) {
-			/* vmlinux */
-
-			/* check if reloc has already been written */
-			if (kpmod->enabled)
-				continue;
-
+	list_for_each_entry(dynrela, &object->dynrelas, list) {
+		if (vmlinux) {
 			ret = kpatch_verify_symbol_match(dynrela->name,
 							 dynrela->src);
 			if (ret)
@@ -550,21 +527,11 @@ static int kpatch_write_relocations(struct kpatch_module *kpmod)
 		} else {
 			/* module, dynrela->src needs to be discovered */
 
-			/* check if reloc has already been written */
-			if (dynrela->src)
-				continue;
-
-			/* check if dynrela depends on a future loaded module */
-			mutex_lock(&module_mutex);
-			mod = find_module(dynrela->objname);
-			mutex_unlock(&module_mutex);
-			if (!mod)
-				continue;
-
-			src = kpatch_find_module_symbol(mod, dynrela->name);
+			src = kpatch_find_module_symbol(object->mod,
+							dynrela->name);
 			if (!src) {
 				pr_err("unable to find symbol '%s' in module '%s'\n",
-				       dynrela->name, mod->name);
+				       dynrela->name, object->name);
 				return -EINVAL;
 			}
 
@@ -589,9 +556,9 @@ static int kpatch_write_relocations(struct kpatch_module *kpmod)
 				size = 8;
 				break;
 			default:
-				printk("unsupported rela type %ld for source %s (0x%lx <- 0x%lx) at index %d\n",
+				printk("unsupported rela type %ld for source %s (0x%lx <- 0x%lx)\n",
 				       dynrela->type, dynrela->name,
-				       dynrela->dest, dynrela->src, i);
+				       dynrela->dest, dynrela->src);
 				return -EINVAL;
 		}
 
@@ -623,33 +590,93 @@ static int kpatch_write_relocations(struct kpatch_module *kpmod)
 	return 0;
 }
 
-static void kpatch_calculate_old_addr(struct kpatch_func *func)
+static int kpatch_unlink_object(struct kpatch_object *object)
 {
-	struct module *module;
+	struct kpatch_func *func;
+	int ret;
 
-	if (!strcmp(func->patch->objname, "vmlinux")) {
-		func->old_addr = func->patch->old_offset;
-		return;
+	list_for_each_entry(func, &object->funcs, list) {
+		if (!func->old_addr)
+			continue;
+		ret = kpatch_ftrace_remove_func(func->old_addr);
+		if (ret) {
+			WARN(1, "can't unregister ftrace for address 0x%lx\n",
+			     func->old_addr);
+			return ret;
+		}
 	}
 
-	/*
-	 * If the module hasn't been loaded yet, we'll patch it later in
-	 * kpatch_module_notify().
-	 */
-	mutex_lock(&module_mutex);
-	module = find_module(func->patch->objname);
-	if (!module) {
+	if (object->mod)
+		module_put(object->mod);
+
+	return 0;
+}
+
+/*
+ * Link to a to-be-patched object in preparation for patching it.
+ *
+ * - Find the object module
+ * - Write patch module relocations which reference the object
+ * - Calculate the patched functions' addresses
+ * - Register them with ftrace
+ */
+static int kpatch_link_object(struct kpatch_module *kpmod,
+			      struct kpatch_object *object)
+{
+	struct module *mod = NULL;
+	struct kpatch_func *func;
+	int ret;
+	bool vmlinux = !strcmp(object->name, "vmlinux");
+
+	if (!vmlinux) {
+		mutex_lock(&module_mutex);
+		mod = find_module(object->name);
+		if (!mod) {
+			/*
+			 * The module hasn't been loaded yet.  We can patch it
+			 * later in kpatch_module_notify().
+			 */
+			mutex_unlock(&module_mutex);
+			return 0;
+		}
+
+		/* should never fail because we have the mutex */
+		WARN_ON(!try_module_get(mod));
 		mutex_unlock(&module_mutex);
-		return;
+		object->mod = mod;
 	}
 
-	/* should never fail because we have the mutex */
-	WARN_ON(!try_module_get(module));
-	mutex_unlock(&module_mutex);
+	ret = kpatch_write_relocations(kpmod, object);
+	if (ret)
+		goto err_unlink;
 
-	func->mod = module;
-	func->old_addr = (unsigned long)module->module_core +
-	                 func->patch->old_offset;
+	list_for_each_entry(func, &object->funcs, list) {
+		unsigned long old_addr;
+
+		/* calculate actual old location */
+		if (vmlinux) {
+			old_addr = func->old_offset;
+			ret = kpatch_verify_symbol_match(func->name,
+							 old_addr);
+			if (ret)
+				goto err_unlink;
+		} else
+			old_addr = (unsigned long)mod->module_core +
+				   func->old_offset;
+
+		/* add to ftrace filter and register handler if needed */
+		ret = kpatch_ftrace_add_func(old_addr);
+		if (ret)
+			goto err_unlink;
+
+		func->old_addr = old_addr;
+	}
+
+	return 0;
+
+err_unlink:
+	kpatch_unlink_object(object);
+	return ret;
 }
 
 static int kpatch_module_notify(struct notifier_block *nb, unsigned long action,
@@ -657,83 +684,63 @@ static int kpatch_module_notify(struct notifier_block *nb, unsigned long action,
 {
 	struct module *mod = data;
 	struct kpatch_module *kpmod;
-	int printed = 0, ret = 0, i;
+	struct kpatch_object *object;
+	struct kpatch_func *func;
+	int ret = 0;
+	bool found = false;
 
 	if (action != MODULE_STATE_COMING)
-		return ret;
+		return 0;
 
 	down(&kpatch_mutex);
 
 	list_for_each_entry(kpmod, &kpmod_list, list) {
-		if (!kpmod->pending)
-			continue;
-
-		/* temporarily clear pending, can be set again below */
-		kpmod->pending = 0;
-
-		for (i = 0; i < kpmod->patches_nr; i++) {
-			struct kpatch_func *func = &kpmod->funcs[i];
-
-			/* check if it has already been patched */
-			if (func->old_addr)
+		list_for_each_entry(object, &kpmod->objects, list) {
+			if (kpatch_object_linked(object))
 				continue;
-
-			/* calculate actual old location (refs if module) */
-			kpatch_calculate_old_addr(func);
-
-			if (!func->old_addr) {
-				kpmod->pending = 1;
-				continue;
+			if (!strcmp(object->name, mod->name)) {
+				found = true;
+				goto done;
 			}
-
-			if (!printed) {
-				pr_notice("patching newly loaded module '%s'\n",
-					  mod->name);
-				printed = 1;
-			}
-
-			ret = kpatch_ftrace_add_func(func->old_addr);
-			if (ret)
-				goto out;
-
-			/* add to the global func hash */
-			hash_add_rcu(kpatch_func_hash, &func->node,
-				     func->old_addr);
 		}
-
-		/* write any newly valid relocations */
-		ret = kpatch_write_relocations(kpmod);
-		if (ret)
-			goto out;
 	}
+done:
+	if (!found)
+		goto out;
+
+	ret = kpatch_link_object(kpmod, object);
+	if (ret)
+		goto out;
+
+	BUG_ON(!object->mod);
+
+	pr_notice("patching newly loaded module '%s'\n", object->name);
+
+	/* add to the global func hash */
+	list_for_each_entry(func, &object->funcs, list)
+		hash_add_rcu(kpatch_func_hash, &func->node, func->old_addr);
 
 out:
 	up(&kpatch_mutex);
 
 	/* no way to stop the module load on error */
 	WARN(ret, "error (%d) patching newly loaded module '%s'\n", ret,
-	     mod->name);
+	     object->name);
 	return 0;
 }
 
 int kpatch_register(struct kpatch_module *kpmod, bool replace)
 {
 	int ret, i;
-	struct kpatch_func *funcs, *func;
-	int num_funcs = kpmod->patches_nr;
+	struct kpatch_object *object;
+	struct kpatch_func *func;
 
-	if (!kpmod->mod || !kpmod->patches || !num_funcs)
+	if (!kpmod->mod || list_empty(&kpmod->objects))
 		return -EINVAL;
-
-	funcs = kzalloc(sizeof(*funcs) * num_funcs, GFP_KERNEL);
-	if (!funcs)
-		return -ENOMEM;
 
 	down(&kpatch_mutex);
 
 	kpmod->enabled = false;
-	kpmod->pending = 0;
-	kpmod->funcs = funcs;
 	list_add_tail(&kpmod->list, &kpmod_list);
 
 	if (!try_module_get(kpmod->mod)) {
@@ -741,39 +748,23 @@ int kpatch_register(struct kpatch_module *kpmod, bool replace)
 		goto err_up;
 	}
 
-	for (i = 0; i < num_funcs; i++) {
-		func = &funcs[i];
+	list_for_each_entry(object, &kpmod->objects, list) {
 
-		func->op = KPATCH_OP_PATCH;
-		func->kpmod = kpmod;
-		func->patch = &kpmod->patches[i];
+		ret = kpatch_link_object(kpmod, object);
+		if (ret)
+			goto err_unlink;
 
-		/* calculate actual old location (refs if module) */
-		kpatch_calculate_old_addr(func);
-
-		/* check if patch depends on a future loaded module */
-		if (!func->old_addr) {
-			kpmod->pending = 1;
+		if (!object->mod) {
+			pr_notice("delaying patch of unloaded module '%s'\n",
+				  object->name);
 			continue;
 		}
 
-		ret = kpatch_verify_symbol_match(func->patch->name,
-						 func->old_addr);
-		if (ret) {
-			num_funcs = i;
-			goto err_rollback;
-		}
+		pr_notice("patching module '%s\n", object->name);
 
-		ret = kpatch_ftrace_add_func(func->old_addr);
-		if (ret) {
-			num_funcs = i;
-			goto err_rollback;
-		}
+		list_for_each_entry(func, &object->funcs, list)
+			func->op = KPATCH_OP_PATCH;
 	}
-
-	ret = kpatch_write_relocations(kpmod);
-	if (ret)
-		goto err_rollback;
 
 	if (replace)
 		hash_for_each_rcu(kpatch_func_hash, i, func, node)
@@ -836,8 +827,9 @@ int kpatch_register(struct kpatch_module *kpmod, bool replace)
 	if (ret)
 		goto err_ops;
 
-	for (i = 0; i < num_funcs; i++)
-		funcs[i].op = KPATCH_OP_NONE;
+	do_for_each_linked_func(kpmod, func) {
+		func->op = KPATCH_OP_NONE;
+	} while_for_each_linked_func();
 
 	/* TODO: need TAINT_KPATCH */
 	pr_notice_once("tainting kernel with TAINT_USER\n");
@@ -854,32 +846,32 @@ err_ops:
 	if (replace)
 		hash_for_each_rcu(kpatch_func_hash, i, func, node)
 			func->op = KPATCH_OP_NONE;
-err_rollback:
-	for (i = 0; i < num_funcs; i++)
-		kpatch_ftrace_remove_func(funcs[i].old_addr);
-	kpatch_put_modules(funcs, kpmod->patches_nr);
+err_unlink:
+	list_for_each_entry(object, &kpmod->objects, list)
+		if (kpatch_object_linked(object))
+			kpatch_unlink_object(object);
 	module_put(kpmod->mod);
 err_up:
 	list_del(&kpmod->list);
 	up(&kpatch_mutex);
-	kfree(kpmod->funcs);
 	return ret;
 }
 EXPORT_SYMBOL(kpatch_register);
 
 int kpatch_unregister(struct kpatch_module *kpmod)
 {
-	struct kpatch_func *funcs = kpmod->funcs;
-	int num_funcs = kpmod->patches_nr;
-	int i, ret;
+	struct kpatch_object *object;
+	struct kpatch_func *func;
+	int ret;
 
 	if (!kpmod->enabled)
 		return -EINVAL;
 
 	down(&kpatch_mutex);
 
-	for (i = 0; i < num_funcs; i++)
-		funcs[i].op = KPATCH_OP_UNPATCH;
+	do_for_each_linked_func(kpmod, func) {
+		func->op = KPATCH_OP_UNPATCH;
+	} while_for_each_linked_func();
 
 	/* memory barrier between func hash and state write */
 	smp_wmb();
@@ -901,25 +893,19 @@ int kpatch_unregister(struct kpatch_module *kpmod)
 	synchronize_rcu();
 
 	if (ret) {
-		for (i = 0; i < num_funcs; i++)
-			funcs[i].op = KPATCH_OP_NONE;
+		do_for_each_linked_func(kpmod, func) {
+			func->op = KPATCH_OP_NONE;
+		} while_for_each_linked_func();
 		goto out;
 	}
 
-	for (i = 0; i < num_funcs; i++) {
-		if (!funcs[i].old_addr)
+	list_for_each_entry(object, &kpmod->objects, list) {
+		if (!kpatch_object_linked(object))
 			continue;
-		ret = kpatch_ftrace_remove_func(funcs[i].old_addr);
-		if (ret) {
-			WARN(1, "can't unregister ftrace for address 0x%lx\n",
-			     funcs[i].old_addr);
+		ret = kpatch_unlink_object(object);
+		if (ret)
 			goto out;
-		}
 	}
-
-	kpatch_put_modules(funcs, num_funcs);
-
-	kfree(kpmod->funcs);
 
 	pr_notice("unloaded patch module '%s'\n", kpmod->mod->name);
 

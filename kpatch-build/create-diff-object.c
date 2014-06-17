@@ -49,7 +49,7 @@
 #include "list.h"
 #include "lookup.h"
 #include "asm/insn.h"
-#include "kpatch.h"
+#include "kpatch-patch.h"
 
 #define ERROR(format, ...) \
 	error(1, 0, "%s: %d: " format, __FUNCTION__, __LINE__, ##__VA_ARGS__)
@@ -1492,7 +1492,7 @@ void kpatch_create_patches_sections(struct kpatch_elf *kelf,
 	struct symbol *sym, *strsym;
 	struct rela *rela;
 	struct lookup_result result;
-	struct kpatch_patch *patches;
+	struct kpatch_patch_func *funcs;
 
 	/* count patched functions */
 	nr = 0;
@@ -1500,36 +1500,36 @@ void kpatch_create_patches_sections(struct kpatch_elf *kelf,
 		if (sym->type == STT_FUNC && sym->status == CHANGED)
 			nr++;
 
-	/* create .kpatch.patches */
+	/* create .kpatch.funcs */
 
 	/* allocate section resources */
 	ALLOC_LINK(sec, &kelf->sections);
-	size = nr * sizeof(*patches);
-	patches = malloc(size);
-	if (!patches)
+	size = nr * sizeof(*funcs);
+	funcs = malloc(size);
+	if (!funcs)
 		ERROR("malloc");
-	sec->name = ".kpatch.patches";
+	sec->name = ".kpatch.funcs";
 
 	/* set data */
 	sec->data = malloc(sizeof(*sec->data));
 	if (!sec->data)
 		ERROR("malloc");
-	sec->data->d_buf = patches;
+	sec->data->d_buf = funcs;
 	sec->data->d_size = size;
 	sec->data->d_type = ELF_T_BYTE;
 
 	/* set section header */
 	sec->sh.sh_type = SHT_PROGBITS;
-	sec->sh.sh_entsize = sizeof(*patches);
+	sec->sh.sh_entsize = sizeof(*funcs);
 	sec->sh.sh_addralign = 8;
 	sec->sh.sh_flags = SHF_ALLOC;
 	sec->sh.sh_size = size;
 
-	/* create .rela.patches */
+	/* create .rela.funcs */
 
 	/* allocate section resources */
 	ALLOC_LINK(relasec, &kelf->sections);
-	relasec->name = ".rela.kpatch.patches";
+	relasec->name = ".rela.kpatch.funcs";
 	relasec->base = sec;
 	INIT_LIST_HEAD(&relasec->relas);
 
@@ -1570,42 +1570,42 @@ void kpatch_create_patches_sections(struct kpatch_elf *kelf,
 			          sym->name, result.value, result.size);
 
 			/* add entry in text section */
-			patches[index].old_offset = result.value;
-			patches[index].old_size = result.size;
-			patches[index].new_size = sym->sym.st_size;
+			funcs[index].old_offset = result.value;
+			funcs[index].old_size = result.size;
+			funcs[index].new_size = sym->sym.st_size;
 
 			/*
 			 * Add a relocation that will populate
-			 * the patches[index].new_addr field at
+			 * the funcs[index].new_addr field at
 			 * module load time.
 			 */
 			ALLOC_LINK(rela, &relasec->relas);
 			rela->sym = sym;
 			rela->type = R_X86_64_64;
 			rela->addend = 0;
-			rela->offset = index * sizeof(*patches);
+			rela->offset = index * sizeof(*funcs);
 
 			/*
 			 * Add a relocation that will populate
-			 * the patches[index].name field.
+			 * the funcs[index].name field.
 			 */
 			ALLOC_LINK(rela, &relasec->relas);
 			rela->sym = strsym;
 			rela->type = R_X86_64_64;
 			rela->addend = offset_of_string(&kelf->strings, sym->name);
-			rela->offset = index * sizeof(*patches) +
-			               offsetof(struct kpatch_patch, name);
+			rela->offset = index * sizeof(*funcs) +
+			               offsetof(struct kpatch_patch_func, name);
 
 			/*
 			 * Add a relocation that will populate
-			 * the patches[index].objname field.
+			 * the funcs[index].objname field.
 			 */
 			ALLOC_LINK(rela, &relasec->relas);
 			rela->sym = strsym;
 			rela->type = R_X86_64_64;
 			rela->addend = objname_offset;
-			rela->offset = index * sizeof(*patches) +
-			               offsetof(struct kpatch_patch, objname);
+			rela->offset = index * sizeof(*funcs) +
+			               offsetof(struct kpatch_patch_func,objname);
 
 			index++;
 		}
@@ -1613,7 +1613,7 @@ void kpatch_create_patches_sections(struct kpatch_elf *kelf,
 
 	/* sanity check, index should equal nr */
 	if (index != nr)
-		ERROR("size mismatch in patches sections");
+		ERROR("size mismatch in funcs sections");
 
 }
 
@@ -1626,14 +1626,14 @@ void kpatch_create_dynamic_rela_sections(struct kpatch_elf *kelf,
 	struct rela *rela, *dynrela, *safe;
 	struct symbol *strsym;
 	struct lookup_result result;
-	struct kpatch_dynrela *dynrelas;
+	struct kpatch_patch_dynrela *dynrelas;
 
 	/* count rela entries that need to be dynamic */
 	nr = 0;
 	list_for_each_entry(sec, &kelf->sections, list) {
 		if (!is_rela_section(sec))
 			continue;
-		if (!strcmp(sec->name, ".rela.kpatch.patches"))
+		if (!strcmp(sec->name, ".rela.kpatch.funcs"))
 			continue;
 		list_for_each_entry(rela, &sec->relas, list)
 			nr++; /* upper bound on number of dynrelas */
@@ -1757,7 +1757,7 @@ void kpatch_create_dynamic_rela_sections(struct kpatch_elf *kelf,
 			dynrela->sym = strsym;
 			dynrela->type = R_X86_64_64;
 			dynrela->addend = offset_of_string(&kelf->strings, rela->sym->name);
-			dynrela->offset = index * sizeof(*dynrelas) + offsetof(struct kpatch_dynrela, name);
+			dynrela->offset = index * sizeof(*dynrelas) + offsetof(struct kpatch_patch_dynrela, name);
 
 			/* add rela to fill in objname field */
 			ALLOC_LINK(dynrela, &relasec->relas);
@@ -1765,7 +1765,7 @@ void kpatch_create_dynamic_rela_sections(struct kpatch_elf *kelf,
 			dynrela->type = R_X86_64_64;
 			dynrela->addend = objname_offset;
 			dynrela->offset = index * sizeof(*dynrelas) +
-				offsetof(struct kpatch_dynrela, objname);
+				offsetof(struct kpatch_patch_dynrela, objname);
 
 			list_del(&rela->list);
 			free(rela);
@@ -1776,7 +1776,7 @@ void kpatch_create_dynamic_rela_sections(struct kpatch_elf *kelf,
 	}
 
 	/* set size to actual number of dynrelas */
-	sec->data->d_size = index * sizeof(struct kpatch_dynrela);
+	sec->data->d_size = index * sizeof(struct kpatch_patch_dynrela);
 	sec->sh.sh_size = sec->data->d_size;
 }
 
