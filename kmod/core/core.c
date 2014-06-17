@@ -516,10 +516,9 @@ static int kpatch_write_relocations(struct kpatch_module *kpmod,
 	unsigned long core_ro_size = kpmod->mod->core_ro_size;
 	unsigned long core_size = kpmod->mod->core_size;
 	unsigned long src;
-	bool vmlinux = !strcmp(object->name, "vmlinux");
 
 	list_for_each_entry(dynrela, &object->dynrelas, list) {
-		if (vmlinux) {
+		if (!strcmp(object->name, "vmlinux")) {
 			ret = kpatch_verify_symbol_match(dynrela->name,
 							 dynrela->src);
 			if (ret)

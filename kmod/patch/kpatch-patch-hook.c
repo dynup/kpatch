@@ -178,6 +178,12 @@ static void patch_free_objects(void)
 	struct kpatch_object *object, *object_safe;
 	struct kpatch_func *func, *func_safe;
 	struct kpatch_dynrela *dynrela, *dynrela_safe;
+	int i;
+
+	for (i = 0; i < __kpatch_funcs_end - __kpatch_funcs; i++)
+		if (func_objs[i])
+			kobject_put(&func_objs[i]->kobj);
+	kfree(func_objs);
 
 	list_for_each_entry_safe(object, object_safe, &kpmod.objects, list) {
 		list_for_each_entry_safe(func, func_safe, &object->funcs,
@@ -193,17 +199,16 @@ static void patch_free_objects(void)
 		list_del(&object->list);
 		kfree(object);
 	}
+
 }
 
-static int __init patch_init(void)
+static int patch_make_funcs_list(struct list_head *objects)
 {
-	int ret, funcs_nr, i;
-	struct kpatch_func_obj *func_obj = NULL;
 	struct kpatch_object *object;
 	struct kpatch_patch_func *p_func;
 	struct kpatch_func *func;
-	struct kpatch_patch_dynrela *p_dynrela;
-	struct kpatch_dynrela *dynrela;
+	struct kpatch_func_obj *func_obj;
+	int i = 0, funcs_nr, ret;
 
 	funcs_nr = __kpatch_funcs_end - __kpatch_funcs;
 	func_objs = kzalloc(funcs_nr * sizeof(struct kpatch_func_obj*),
@@ -211,39 +216,18 @@ static int __init patch_init(void)
 	if (!func_objs)
 		return -ENOMEM;
 
-	patch_kobj = kobject_create_and_add(THIS_MODULE->name,
-					    kpatch_patches_kobj);
-	if (!patch_kobj) {
-		ret = -ENOMEM;
-		goto err_free;
-	}
-
-	ret = sysfs_create_file(patch_kobj, &patch_enabled_attr.attr);
-	if (ret)
-		goto err_put;
-
-	functions_kobj = kobject_create_and_add("functions", patch_kobj);
-	if (!functions_kobj) {
-		ret = -ENOMEM;
-		goto err_sysfs;
-	}
-
-	kpmod.mod = THIS_MODULE;
-	INIT_LIST_HEAD(&kpmod.objects);
-
-	i = 0;
 	for (p_func = __kpatch_funcs; p_func < __kpatch_funcs_end; p_func++) {
 		object = patch_find_or_add_object(&kpmod.objects,
 						  p_func->objname);
 		if (!object) {
 			ret = -ENOMEM;
-			goto err_objects;
+			goto err;
 		}
 
 		func = kzalloc(sizeof(*func), GFP_KERNEL);
 		if (!func) {
 			ret = -ENOMEM;
-			goto err_objects;
+			goto err;
 		}
 
 		func->new_addr = p_func->new_addr;
@@ -256,7 +240,7 @@ static int __init patch_init(void)
 		func_obj = func_kobj_alloc();
 		if (!func_obj) {
 			ret = -ENOMEM;
-			goto err_objects;
+			goto err;
 		}
 
 		func_obj->func = p_func;
@@ -267,22 +251,35 @@ static int __init patch_init(void)
 		ret = kobject_add(&func_obj->kobj, functions_kobj,
 				  "%s", func_obj->name);
 		if (ret)
-			goto err_objects;
+			goto err;
 	}
+
+	return 0;
+
+err:
+	patch_free_objects();
+	return ret;
+}
+
+static int patch_make_dynrelas_list(struct list_head *objects)
+{
+	struct kpatch_object *object;
+	struct kpatch_patch_dynrela *p_dynrela;
+	struct kpatch_dynrela *dynrela;
+	int ret;
 
 	for (p_dynrela = __kpatch_dynrelas; p_dynrela < __kpatch_dynrelas_end;
 	     p_dynrela++) {
-		object = patch_find_or_add_object(&kpmod.objects,
-						  p_dynrela->objname);
+		object = patch_find_or_add_object(objects, p_dynrela->objname);
 		if (!object) {
 			ret = -ENOMEM;
-			goto err_objects;
+			goto err;
 		}
 
 		dynrela = kzalloc(sizeof(*dynrela), GFP_KERNEL);
 		if (!dynrela) {
 			ret = -ENOMEM;
-			goto err_objects;
+			goto err;
 		}
 
 		dynrela->dest = p_dynrela->dest;
@@ -294,6 +291,43 @@ static int __init patch_init(void)
 		list_add_tail(&dynrela->list, &object->dynrelas);
 	}
 
+	return 0;
+
+err:
+	patch_free_objects();
+	return ret;
+}
+
+static int __init patch_init(void)
+{
+	int ret;
+
+	patch_kobj = kobject_create_and_add(THIS_MODULE->name,
+					    kpatch_patches_kobj);
+	if (!patch_kobj)
+		return -ENOMEM;
+
+	ret = sysfs_create_file(patch_kobj, &patch_enabled_attr.attr);
+	if (ret)
+		goto err_patch;
+
+	functions_kobj = kobject_create_and_add("functions", patch_kobj);
+	if (!functions_kobj) {
+		ret = -ENOMEM;
+		goto err_sysfs;
+	}
+
+	kpmod.mod = THIS_MODULE;
+	INIT_LIST_HEAD(&kpmod.objects);
+
+	ret = patch_make_funcs_list(&kpmod.objects);
+	if (ret)
+		goto err_functions;
+
+	ret = patch_make_dynrelas_list(&kpmod.objects);
+	if (ret)
+		goto err_objects;
+
 	ret = kpatch_register(&kpmod, replace);
 	if (ret)
 		goto err_objects;
@@ -301,33 +335,24 @@ static int __init patch_init(void)
 	return 0;
 
 err_objects:
-	for (i = 0; i < funcs_nr; i++)
-		if (func_objs[i] != NULL)
-			kobject_put(&func_objs[i]->kobj);
 	patch_free_objects();
+err_functions:
 	kobject_put(functions_kobj);
 err_sysfs:
 	sysfs_remove_file(patch_kobj, &patch_enabled_attr.attr);
-err_put:
+err_patch:
 	kobject_put(patch_kobj);
-err_free:
-	kfree(func_objs);
 	return ret;
 }
 
 static void __exit patch_exit(void)
 {
-	int i;
-
 	WARN_ON(kpmod.enabled);
 
-	for (i = 0; i < __kpatch_funcs_end - __kpatch_funcs; i++)
-		kobject_put(&func_objs[i]->kobj);
 	patch_free_objects();
 	kobject_put(functions_kobj);
 	sysfs_remove_file(patch_kobj, &patch_enabled_attr.attr);
 	kobject_put(patch_kobj);
-	kfree(func_objs);
 }
 
 module_init(patch_init);
