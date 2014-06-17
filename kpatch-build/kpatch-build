@@ -43,7 +43,6 @@ ARCHVERSION="$(uname -r)"
 CPUS="$(grep -c ^processor /proc/cpuinfo)"
 CACHEDIR="$HOME/.kpatch"
 TEMPDIR=
-STRIPCMD="strip -d --keep-file-symbols"
 APPLIEDPATCHFILE="applied-patch"
 DEBUG=0
 
@@ -356,7 +355,6 @@ cp "$OBJDIR/.config" "$OBJDIR2" || die
 mkdir "$TEMPDIR/patched"
 for i in $(cat $TEMPDIR/changed_objs); do
 	KCFLAGS="-ffunction-sections -fdata-sections" make "$i" "O=$OBJDIR2" >> "$LOGFILE" 2>&1 || die
-	$STRIPCMD "$OBJDIR2/$i" >> "$LOGFILE" 2>&1 || die
 	mkdir -p "$TEMPDIR/patched/$(dirname $i)"
 	cp -f "$OBJDIR2/$i" "$TEMPDIR/patched/$i" || die
 done
@@ -366,7 +364,6 @@ mkdir "$TEMPDIR/orig"
 for i in $(cat $TEMPDIR/changed_objs); do
 	rm -f "$i"
 	KCFLAGS="-ffunction-sections -fdata-sections" make "$i" "O=$OBJDIR2" >> "$LOGFILE" 2>&1 || die
-	$STRIPCMD -d "$OBJDIR2/$i" >> "$LOGFILE" 2>&1 || die
 	mkdir -p "$TEMPDIR/orig/$(dirname $i)"
 	cp -f "$OBJDIR2/$i" "$TEMPDIR/orig/$i" || die
 done
@@ -404,7 +401,6 @@ cd "$TEMPDIR/output"
 ld -r -o ../patch/output.o $FILES >> "$LOGFILE" 2>&1 || die
 cd "$TEMPDIR/patch"
 KPATCH_BUILD="$SRCDIR" KPATCH_NAME="$PATCHNAME" KBUILD_EXTRA_SYMBOLS="$SYMVERSFILE" make "O=$OBJDIR" >> "$LOGFILE" 2>&1 || die
-$STRIPCMD "kpatch-$PATCHNAME.ko" >> "$LOGFILE" 2>&1 || die
 
 cp -f "$TEMPDIR/patch/kpatch-$PATCHNAME.ko" "$BASE" || die
 

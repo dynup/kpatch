@@ -1266,6 +1266,33 @@ void kpatch_regenerate_special_section(struct special_section *special,
 	sec->base->data->d_size = dest_offset;
 }
 
+void kpatch_include_debug_sections(struct kpatch_elf *kelf)
+{
+	struct section *sec;
+	struct rela *rela, *saferela;
+
+	/* include all .debug_* sections */
+	list_for_each_entry(sec, &kelf->sections, list) {
+		if (!strncmp(sec->name, ".debug_", 7)) {
+			sec->include = 1;
+			if (sec->rela)
+				sec->rela->include = 1;
+			sec->secsym->include = 1;
+		}
+	}
+
+	/*
+	 * Go through the .rela.debug_ sections and strip entries
+	 * referencing unchanged symbols
+	 */
+	list_for_each_entry(sec, &kelf->sections, list) {
+		if (strncmp(sec->name, ".rela.debug_", 12))
+			continue;
+		list_for_each_entry_safe(rela, saferela, &sec->relas, list)
+			if (!rela->sym->sec->include)
+				list_del(&rela->list);
+	}
+}
 
 void kpatch_process_special_sections(struct kpatch_elf *kelf)
 {
@@ -2098,6 +2125,7 @@ int main(int argc, char *argv[])
 
 	kpatch_include_standard_elements(kelf_patched);
 	num_changed = kpatch_include_changed_functions(kelf_patched);
+	kpatch_include_debug_sections(kelf_patched);
 	kpatch_dump_kelf(kelf_patched);
 	kpatch_verify_patchability(kelf_patched);
 
