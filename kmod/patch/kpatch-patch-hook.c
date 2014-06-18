@@ -287,6 +287,7 @@ static int patch_make_dynrelas_list(struct list_head *objects)
 		dynrela->type = p_dynrela->type;
 		dynrela->name = p_dynrela->name;
 		dynrela->objname = p_dynrela->objname;
+		dynrela->exported = p_dynrela->exported;
 		dynrela->addend = p_dynrela->addend;
 		list_add_tail(&dynrela->list, &object->dynrelas);
 	}

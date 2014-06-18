@@ -54,6 +54,7 @@ struct kpatch_dynrela {
 	const char *name;
 	const char *objname;
 	int addend;
+	bool exported;
 	struct list_head list;
 };
 

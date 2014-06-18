@@ -526,11 +526,15 @@ static int kpatch_write_relocations(struct kpatch_module *kpmod,
 		} else {
 			/* module, dynrela->src needs to be discovered */
 
-			src = kpatch_find_module_symbol(object->mod,
-							dynrela->name);
+			if (dynrela->exported)
+				src = (unsigned long)__symbol_get(dynrela->name);
+			else
+				src = kpatch_find_module_symbol(object->mod,
+								dynrela->name);
+
 			if (!src) {
-				pr_err("unable to find symbol '%s' in module '%s'\n",
-				       dynrela->name, object->name);
+				pr_err("unable to find symbol '%s'\n",
+				       dynrela->name);
 				return -EINVAL;
 			}
 
@@ -538,6 +542,8 @@ static int kpatch_write_relocations(struct kpatch_module *kpmod,
 		}
 
 		switch (dynrela->type) {
+			case R_X86_64_NONE:
+				continue;
 			case R_X86_64_PC32:
 				loc = dynrela->dest;
 				val = (u32)(dynrela->src + dynrela->addend -
@@ -592,6 +598,7 @@ static int kpatch_write_relocations(struct kpatch_module *kpmod,
 static int kpatch_unlink_object(struct kpatch_object *object)
 {
 	struct kpatch_func *func;
+	struct kpatch_dynrela *dynrela;
 	int ret;
 
 	list_for_each_entry(func, &object->funcs, list) {
@@ -604,6 +611,10 @@ static int kpatch_unlink_object(struct kpatch_object *object)
 			return ret;
 		}
 	}
+
+	list_for_each_entry(dynrela, &object->dynrelas, list)
+		if (dynrela->src && dynrela->exported)
+			__symbol_put(dynrela->name);
 
 	if (object->mod)
 		module_put(object->mod);

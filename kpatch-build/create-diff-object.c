@@ -1654,6 +1654,9 @@ void kpatch_create_dynamic_rela_sections(struct kpatch_elf *kelf,
 	struct symbol *strsym;
 	struct lookup_result result;
 	struct kpatch_patch_dynrela *dynrelas;
+	bool vmlinux, exported;
+
+	vmlinux = !strcmp(objname, "vmlinux");
 
 	/* count rela entries that need to be dynamic */
 	nr = 0;
@@ -1726,48 +1729,55 @@ void kpatch_create_dynamic_rela_sections(struct kpatch_elf *kelf,
 		list_for_each_entry_safe(rela, safe, &sec2->relas, list) {
 			if (rela->sym->sec)
 				continue;
+
+			exported = false;
+
 			if (rela->sym->bind == STB_LOCAL) {
 				/* An unchanged local symbol */
 				if (lookup_local_symbol(table, rela->sym->name,
 				                        hint, &result))
 					ERROR("lookup_local_symbol %s (%s) needed for %s",
 			               rela->sym->name, hint, sec2->base->name);
+			}
+			else if (vmlinux) {
+				/*
+				 * We have a patch to vmlinux which references
+				 * a global symbol.  Use a normal rela for
+				 * exported symbols and a dynrela otherwise.
+				 */
+				if (lookup_is_exported_symbol(table, rela->sym->name))
+					continue;
+				if (lookup_global_symbol(table, rela->sym->name,
+							 &result))
+					ERROR("lookup_global_symbol failed for %s, needed for %s\n",
+					      rela->sym->name,
+					      sec2->base->name);
 			} else {
 				/*
-				 *  Symbol is global, could be an object-level
-				 *  global not defined in this file or exported
-				 *  by another object.
-				 */
-				if (!strcmp(objname, "vmlinux") &&
-				    lookup_is_exported_symbol(table, rela->sym->name))
-					continue;
-
-				 /*
-				 * Try to find global symbol.  If none is
-				 * found, assume it is exported and no dynrela
-				 * is needed.  If the symbol is not exported,
-				 * the final patch module will fail to load.
+				 * We have a patch to a module which references
+				 * a global symbol.  First try to find it in
+				 * the module being patched.
 				 */
 				if (lookup_global_symbol(table, rela->sym->name,
-			                             &result))
+							 &result))
 					/*
-					 * Symbol is not a kernel object
-					 * global. Assume symbol is exported by
-					 * vmlinux or another kernel module.
+					 * Not there, assume it's exported by
+					 * another object.
 					 */
-					continue;
+					exported = true;
 			}
 			log_debug("lookup for %s @ 0x%016lx len %lu\n",
 			          rela->sym->name, result.value, result.size);
 
 			/* dest filed in by rela entry below */
-			if (!strcmp(objname, "vmlinux"))
+			if (vmlinux)
 				dynrelas[index].src = result.value;
 			else
 				/* for modules, src is discovered at runtime */
 				dynrelas[index].src = 0;
 			dynrelas[index].addend = rela->addend;
 			dynrelas[index].type = rela->type;
+			dynrelas[index].exported = exported;
 
 			/* add rela to fill in dest field */
 			ALLOC_LINK(dynrela, &relasec->relas);

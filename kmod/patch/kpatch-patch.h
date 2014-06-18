@@ -19,6 +19,10 @@
  * Contains the structs used for the patch module special sections
  */
 
+#ifndef __KERNEL__
+#include <stdbool.h>
+#endif
+
 struct kpatch_patch_func {
 	unsigned long new_addr;
 	unsigned long new_size;
@@ -34,5 +38,6 @@ struct kpatch_patch_dynrela {
 	unsigned long type;
 	char *name;
 	char *objname;
+	bool exported;
 	int addend;
 };
