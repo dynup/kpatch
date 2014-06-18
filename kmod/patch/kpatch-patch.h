@@ -19,6 +19,9 @@
  * Contains the structs used for the patch module special sections
  */
 
+#ifndef _KPATCH_PATCH_H_
+#define _KPATCH_PATCH_H_
+
 struct kpatch_patch_func {
 	unsigned long new_addr;
 	unsigned long new_size;
@@ -34,5 +37,8 @@ struct kpatch_patch_dynrela {
 	unsigned long type;
 	char *name;
 	char *objname;
+	int exported;
 	int addend;
 };
+
+#endif /* _KPATCH_PATCH_H_ */
