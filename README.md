@@ -14,6 +14,10 @@ in production environments.
 **WARNING: Use with caution!  Kernel crashes, spontaneous reboots, and data loss
 may occur!**
 
+Here's a video of kpatch in action:
+
+[![kpatch video](http://img.youtube.com/vi/juyQ5TsJRTA/0.jpg)](http://www.youtube.com/watch?v=juyQ5TsJRTA)
+
 Installation
 ------------
 
@@ -21,14 +25,12 @@ Installation
 
 ####Fedora 20
 
-*NOTE: You'll need about 10GB of free disk space for the kpatch-build cache in
-`~/.kpatch`.*
+*NOTE: You'll need about 15GB of free disk space for the kpatch-build cache in
+`~/.kpatch` and for ccache.*
 
 Install the dependencies for compiling kpatch:
 
     sudo yum install gcc kernel-devel elfutils elfutils-devel
-
-*NOTE: Ensure you have elfutils-0.158 or newer.*
 
 Install the dependencies for the "kpatch-build" command:
 
@@ -38,17 +40,16 @@ Install the dependencies for the "kpatch-build" command:
 
     # optional, but highly recommended
     sudo yum install ccache
+    ccache --max-size=5G
 
 ####Ubuntu 14.04
 
-*NOTE: You'll need about 10GB of free disk space for the kpatch-build cache in
-`~/.kpatch`.*
+*NOTE: You'll need about 15GB of free disk space for the kpatch-build cache in
+`~/.kpatch` and for ccache.*
 
 Install the dependencies for compiling kpatch:
 
     apt-get install make gcc libelf-dev
-
-*NOTE: Ensure you have libelf-dev version 0.158 or newer*
 
 Install the dependencies for the "kpatch-build" command:
 
@@ -57,8 +58,9 @@ Install the dependencies for the "kpatch-build" command:
 
     # optional, but highly recommended
     apt-get install ccache
+    ccache --max-size=5G
 
-Install kernel debug symbols
+Install kernel debug symbols:
 
 ```bash
 # Add ddebs repository
@@ -74,9 +76,6 @@ EOF
 wget -Nq http://ddebs.ubuntu.com/dbgsym-release-key.asc -O- | sudo apt-key add -
 apt-get update && apt-get install linux-image-$(uname -r)-dbgsym
 ```
-
-> NOTE: If **NOT** installed, you'll get `ERROR: linux-image-$(uname -r)-dbgsym not installed` when running `kpatch-build` to build a patch module.
-
 
 ###Build
 
@@ -98,7 +97,8 @@ Quick start
 -----------
 
 *NOTE: While kpatch is designed to work with any recent Linux
-kernel on any distribution, the "kpatch-build" command currently only works on Fedora and Ubuntu.*
+kernel on any distribution, the "kpatch-build" command currently only works on
+Fedora 20 and Ubuntu 14.04.*
 
 First, make a source code patch against the kernel tree using diff, git, or
 quilt.
@@ -123,7 +123,7 @@ CAPS so we can see it better:
 
 Build the patch module:
 
-    $ kpatch-build meminfo-string.patch
+    $ kpatch-build -t vmlinux meminfo-string.patch
     Using cache at /home/jpoimboe/.kpatch/3.13.10-200.fc20.x86_64/src
     Testing patch file
     checking file fs/proc/meminfo.c
@@ -135,6 +135,13 @@ Build the patch module:
     meminfo.o: changed function: meminfo_proc_show
     Building patch module: kpatch-meminfo-string.ko
     SUCCESS
+
+> NOTE: The `-t vmlinux` option is used to tell `kpatch-build` to only look for
+> changes in the `vmlinux` base kernel image, which is much faster than also
+> compiling all the kernel modules.  If your patch affects a kernel module, you
+> can either omit this option to build everything, and have `kpatch-build`
+> detect which modules changed, or you can specify the affected kernel build
+> targets with multiple `-t` options.
 
 That outputs a patch module named `kpatch-meminfo-string.ko` in the current
 directory.  Now apply it to the running kernel:
@@ -192,7 +199,7 @@ The primary steps in kpatch-build are:
   resulting in the changed original objects
 - For every changed object, use `create-diff-object` to do the following:
 	* Analyze each original/patched object pair for patchability
-	* Add `.kpatch.patches` and `.rela.kpatch.patches` sections to the output object.
+	* Add `.kpatch.funcs` and `.rela.kpatch.funcs` sections to the output object.
 	The kpatch core module uses this to determine the list of functions
 	that need to be redirected using ftrace.
 	* Add `.kpatch.dynrelas` and `.rela.kpatch.dynrelas` sections to the output object.
@@ -208,20 +215,17 @@ The patch modules register with the core module (`kpatch.ko`).
 They provide information about original functions that need to be replaced, and
 corresponding function pointers to the replacement functions.
 
-The core module registers a trampoline function with ftrace.  The
-trampoline function is called by ftrace immediately before the original
+The core module registers a handler function with ftrace.  The
+handler function is called by ftrace immediately before the original
 function begins executing.  This occurs with the help of the reserved mcount
 call at the beginning of every function, created by the gcc `-mfentry` flag.
-The trampoline function then modifies the return instruction pointer (IP)
+The ftrace handler then modifies the return instruction pointer (IP)
 address on the stack and returns to ftrace, which then restores the original
 function's arguments and stack, and "returns" to the new function.
 
 
 Limitations
 -----------
-
-- Patches which modify kernel modules are not supported (yet).  Only
-  functions in the vmlinux file (listed in System.map) can be patched.
 
 - Patches to functions which are always on the stack of at least one
   process in the system are not supported.  Examples: schedule(),
@@ -247,8 +251,12 @@ Limitations
   old functions did, and whether it would be safe to atomically apply
   such a patch to a running kernel.
 
-- Patches which modify functions in vdso are not supported at
-  the moment. These run in user-space and ftrace can't hook them.
+- Patches which modify functions in vdso are not supported.  These run in
+  user-space and ftrace can't hook them.
+
+- Some incompatibilities currently exist between kpatch and usage of ftrace and
+  kprobes.  See the Frequently Asked Questions section for more details.
+
 
 Frequently Asked Questions
 --------------------------
@@ -284,11 +292,13 @@ adding the jump directly?**
 
 ftrace owns the first "call mcount" instruction of every kernel function.  In
 order to keep compatibility with ftrace, we go through ftrace rather than
-updating the instruction directly.
+updating the instruction directly.  This approach also ensures that the code
+modification path is reliable, since ftrace has been doing it successfully for
+years.
 
 **Q Is kpatch compatible with \<insert kernel debugging subsystem here\>?**
 
-We aim to be good kernel citizens and maintain compatibility.  A hot patch
+We aim to be good kernel citizens and maintain compatibility.  A kpatch
 replacement function is no different than a function loaded by any other kernel
 module.  Each replacement function has its own symbol name and kallsyms entry,
 so it looks like a normal function to the kernel.
@@ -298,9 +308,12 @@ so it looks like a normal function to the kernel.
   replacement function, just like any other kernel module function.  The oops
   message will also show the taint flag (currently `TAINT_USER`).
 - **kdump/crash**: Yes.  Replacement functions are normal functions, so crash
-  will have no issues. [TODO: create patch module debuginfo symbols and crash
-  warning message]
-- **ftrace**: Yes, see previous question.
+  will have no issues.
+- **ftrace**: Yes, but certain uses of ftrace which involve opening the
+  `/sys/kernel/debug/tracing/trace` file or using `trace-cmd record` can result
+  in a tiny window of time where a patch gets temporarily disabled.  Therefore
+  it's a good idea to avoid using ftrace on a patched system until this issue
+  is resolved.
 - **systemtap/kprobes**: Some incompatibilities exist.
   - If you setup a kprobe module at the beginning of a function before loading
     a kpatch module, and they both affect the same function, kprobes "wins"
@@ -308,7 +321,9 @@ so it looks like a normal function to the kernel.
     [#47](https://github.com/dynup/kpatch/issues/47).
   - Setting a kretprobe before loading a kpatch module could be unsafe.  See
     issue [#67](https://github.com/dynup/kpatch/issues/67).
-- **perf**: TODO: try it out
+- **perf**: Yes.
+- **tracepoints**: Patches to a function which uses tracepoints will result in
+  the tracepoints being effectively disabled as long as the patch is applied.
 
 **Q. Why not use something like kexec instead?**
 
@@ -330,7 +345,6 @@ We hope to make the following changes to other projects:
 	- possibly the kpatch core module itself
 
 - crash:
-	- make it glaringly obvious that you're debugging a patched kernel
 	- point it to where the patch modules and corresponding debug symbols
 	  live on the file system
 
@@ -350,7 +364,11 @@ and restore the function to its original state.
 
 **Q. Can you apply multiple patches?**
 
-Yes.  Also, a single function can even be patched multiple times if needed.
+Yes, but to prevent any unexpected interactions between multiple patch modules,
+it's recommended that you only have a single patch loaded at any given time.
+This can be achieved by combining the new patch with the previous patch using
+`combinediff` before running `kpatch-build`.  You can then the `kpatch replace`
+command to atomically replace the old patch module with the new cumulative one.
 
 **Q. Why did kpatch-build detect a changed function that wasn't touched by the
 source patch?**
@@ -370,17 +388,6 @@ There could be a variety of reasons for this, such as:
   reason, you can change the source patch to redefine the WARN macro for the
   affected files, such that it hard codes the old line number instead of using
   `__LINE__`, for example.
-
-Demonstration
--------------
-
-A low-level demonstration of kpatch is available on Youtube:
-
-http://www.youtube.com/watch?v=WeSmG-XirC4
-
-This demonstration completes each step in the previous section in a manual
-fashion.  However, from a end-user perspective, most of these steps are hidden
-by the "kpatch-build" command.
 
 
 Get involved
