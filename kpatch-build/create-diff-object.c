@@ -1654,7 +1654,7 @@ void kpatch_create_dynamic_rela_sections(struct kpatch_elf *kelf,
 	struct symbol *strsym;
 	struct lookup_result result;
 	struct kpatch_patch_dynrela *dynrelas;
-	bool vmlinux, exported;
+	int vmlinux, exported;
 
 	vmlinux = !strcmp(objname, "vmlinux");
 
@@ -1730,7 +1730,7 @@ void kpatch_create_dynamic_rela_sections(struct kpatch_elf *kelf,
 			if (rela->sym->sec)
 				continue;
 
-			exported = false;
+			exported = 0;
 
 			if (rela->sym->bind == STB_LOCAL) {
 				/* An unchanged local symbol */
@@ -1764,7 +1764,7 @@ void kpatch_create_dynamic_rela_sections(struct kpatch_elf *kelf,
 					 * Not there, assume it's exported by
 					 * another object.
 					 */
-					exported = true;
+					exported = 1;
 			}
 			log_debug("lookup for %s @ 0x%016lx len %lu\n",
 			          rela->sym->name, result.value, result.size);
