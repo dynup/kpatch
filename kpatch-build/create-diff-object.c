@@ -1687,7 +1687,7 @@ void kpatch_create_dynamic_rela_sections(struct kpatch_elf *kelf,
 	sec->sh.sh_type = SHT_PROGBITS;
 	sec->sh.sh_entsize = sizeof(*dynrelas);
 	sec->sh.sh_addralign = 8;
-	sec->sh.sh_flags = SHF_ALLOC | SHF_WRITE;
+	sec->sh.sh_flags = SHF_ALLOC;
 
 	/* create .rela.kpatch.dynrelas*/
 
