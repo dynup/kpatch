@@ -137,7 +137,7 @@ usage() {
 	echo "		-d, --debug	Keep scratch files in /tmp" >&2
 }
 
-options=$(getopt -o hr:s:c:v:t:d -l "help,sourcerpm:,sourcedir:,config:,vmlinux:,target:debug" -- "$@") || die "getopt failed"
+options=$(getopt -o hr:s:c:v:t:d -l "help,sourcerpm:,sourcedir:,config:,vmlinux:,target:,debug" -- "$@") || die "getopt failed"
 
 eval set -- "$options"
 
