@@ -385,7 +385,9 @@ for i in $FILES; do
 		KOBJFILE="$(readlink -f $KOBJFILE)"
 	fi
 	cd $TEMPDIR
-	"$TOOLSDIR"/create-diff-object "orig/$i" "patched/$i" "$KOBJFILE" "output/$i" 2>&1 |tee -a "$LOGFILE"
+	debugopt=
+	[[ $DEBUG -eq 1 ]] && debugopt=-d
+	"$TOOLSDIR"/create-diff-object $debugopt "orig/$i" "patched/$i" "$KOBJFILE" "output/$i" 2>&1 |tee -a "$LOGFILE"
 	[[ "${PIPESTATUS[0]}" -eq 0 ]] || die
 done
 
