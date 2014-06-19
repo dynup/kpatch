@@ -764,7 +764,7 @@ int kpatch_register(struct kpatch_module *kpmod, bool replace)
 		if (ret)
 			goto err_unlink;
 
-		if (!object->mod) {
+		if (!kpatch_object_linked(object)) {
 			pr_notice("delaying patch of unloaded module '%s'\n",
 				  object->name);
 			continue;
