@@ -256,7 +256,7 @@ case "$1" in
 	PATCH="$2"
 	find_module "$PATCH" || die "can't find $PATCH"
 	echo "Patch information for $PATCH:"
-	/usr/sbin/modinfo "$MODULE" || die "failed to get info for module $PATCH"
+	modinfo "$MODULE" || die "failed to get info for module $PATCH"
 	;;
 
 "help"|"-h"|"--help")
