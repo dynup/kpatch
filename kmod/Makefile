@@ -11,7 +11,7 @@ install:
 	$(INSTALL) -m 644 patch/* $(DATADIR)/patch
 
 uninstall:
-	$(RM) -R $(MODULESDIR)/*/kpatch
+	$(RM) -R $(MODULESDIR)/*/extra/kpatch
 	$(RM) -R $(DATADIR)
 
 clean:
