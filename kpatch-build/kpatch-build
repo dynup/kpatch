@@ -43,7 +43,7 @@ ARCHVERSION="$(uname -r)"
 CPUS="$(grep -c ^processor /proc/cpuinfo)"
 CACHEDIR="$HOME/.kpatch"
 TEMPDIR=
-APPLIEDPATCHFILE="applied-patch"
+APPLIEDPATCHFILE="kpatch.patch"
 DEBUG=0
 
 die() {
@@ -56,11 +56,17 @@ die() {
 }
 
 cleanup() {
-	[[ "$DEBUG" -eq 0 ]] && rm -rf "$TEMPDIR"
 	if [[ -e "$SRCDIR/$APPLIEDPATCHFILE" ]]; then
 		patch -p1 -R -d "$SRCDIR" < "$SRCDIR/$APPLIEDPATCHFILE" &> /dev/null
 		rm -f "$SRCDIR/$APPLIEDPATCHFILE"
 	fi
+	if [[ -n $USERSRCDIR ]]; then
+		# restore original .config and vmlinux since they were removed
+		# with mrproper
+		[[ -e $TEMPDIR/vmlinux ]] && cp -f $TEMPDIR/vmlinux $USERSRCDIR
+		[[ -e $TEMPDIR/.config ]] && cp -f $TEMPDIR/.config $USERSRCDIR
+	fi
+	[[ "$DEBUG" -eq 0 ]] && rm -rf "$TEMPDIR"
 }
 
 find_dirs() {
@@ -193,6 +199,22 @@ while [[ $# -gt 0 ]]; do
 	shift
 done
 
+TEMPDIR="$(mktemp -d /tmp/kpatch-build-XXXXXX)" || die "mktemp failed"
+trap cleanup EXIT INT TERM
+
+if [[ -n $USERSRCDIR ]]; then
+	# save .config and vmlinux since they'll get removed with mrproper so
+	# we can restore them later and be able to run kpatch-build multiple
+	# times on the same sourcedir
+	[[ -z $CONFIGFILE ]] && CONFIGFILE="$USERSRCDIR"/.config
+	[[ ! -e "$CONFIGFILE" ]] && die "can't find config file"
+	[[ "$CONFIGFILE" = "$USERSRCDIR"/.config ]] && cp -f "$CONFIGFILE" $TEMPDIR
+
+	[[ -z $VMLINUX ]] && VMLINUX="$USERSRCDIR"/vmlinux
+	[[ ! -e "$VMLINUX" ]] && die "can't find vmlinux"
+	[[ "$VMLINUX" = "$USERSRCDIR"/vmlinux ]] && cp -f "$VMLINUX" $TEMPDIR/vmlinux && VMLINUX=$TEMPDIR/vmlinux
+fi
+
 SRCDIR="$CACHEDIR/src"
 OBJDIR="$CACHEDIR/obj"
 OBJDIR2="$CACHEDIR/obj2"
@@ -207,10 +229,6 @@ fi
 # Only allow alphanumerics and '_' and '-' in the module name.
 # Everything else is replaced with '-'.
 PATCHNAME=${PATCHNAME//[^a-zA-Z0-9_-]/-}
-
-TEMPDIR="$(mktemp -d /tmp/kpatch-build-XXXXXX)" || die "mktemp failed"
-
-trap cleanup EXIT INT TERM
 
 find_dirs || die "can't find supporting tools"
 
@@ -232,7 +250,8 @@ elif [[ $DISTRO = ubuntu ]]; then
 fi
 
 if [[ -n "$USERSRCDIR" ]]; then
-	SRCDIR="$CACHEDIR/src"
+	echo "Using source directory at $USERSRCDIR"
+	SRCDIR="$USERSRCDIR"
 	OBJDIR="$CACHEDIR/obj"
 	OBJDIR2="$CACHEDIR/obj2"
 
@@ -240,14 +259,13 @@ if [[ -n "$USERSRCDIR" ]]; then
 	mkdir -p "$CACHEDIR"
 	mkdir -p "$OBJDIR" "$OBJDIR2"
 
-	if [[ -n "$CONFIGFILE" ]]; then
-		cp "$CONFIGFILE" "$OBJDIR/.config" || die "config file is missing"
-	else
-		cp "$USERSRCDIR/.config" "$OBJDIR" || die "source dir is missing a .config file"
-	fi
+	cp -f "$CONFIGFILE" "$OBJDIR/.config"
 
-	echo "Copying source to $SRCDIR"
-	cp -a "$USERSRCDIR" "$SRCDIR" || die "copy failed"
+	echo "Detecting kernel version"
+	cd "$SRCDIR"
+	make mrproper >> "$LOGFILE" 2>&1 || die "make mrproper failed"
+	make O="$OBJDIR" prepare >> "$LOGFILE" 2>&1 || die "make prepare failed"
+	ARCHVERSION=$(make O="$OBJDIR" kernelrelease) || die "make kernelrelease failed"
 
 elif [[ -e "$SRCDIR" ]] && [[ -e "$CACHEDIR"/version ]] && [[ $(cat "$CACHEDIR"/version) = $ARCHVERSION ]]; then
 	echo "Using cache at $SRCDIR"
