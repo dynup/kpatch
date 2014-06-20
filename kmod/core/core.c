@@ -770,7 +770,8 @@ int kpatch_register(struct kpatch_module *kpmod, bool replace)
 			continue;
 		}
 
-		pr_notice("patching module '%s\n", object->name);
+		if (strcmp(object->name, "vmlinux"))
+			pr_notice("patching module '%s'\n", object->name);
 
 		list_for_each_entry(func, &object->funcs, list)
 			func->op = KPATCH_OP_PATCH;
