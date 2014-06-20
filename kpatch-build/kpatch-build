@@ -263,10 +263,9 @@ if [[ -n "$USERSRCDIR" ]]; then
 
 	echo "Detecting kernel version"
 	cd "$SRCDIR"
-	make mrproper >> "$LOGFILE" 2>&1 || die
-	make "O=$OBJDIR" include/generated/utsrelease.h >> "$LOGFILE" 2>&1 || die
-	ARCHVERSION=$(awk '{print $3}' "$OBJDIR"/include/generated/utsrelease.h) || die "can't find version in utsrelease.h"
-	ARCHVERSION=${ARCHVERSION//\"/}
+	make mrproper >> "$LOGFILE" 2>&1 || die "make mrproper failed"
+	make O="$OBJDIR" prepare >> "$LOGFILE" 2>&1 || die "make prepare failed"
+	ARCHVERSION=$(make O="$OBJDIR" kernelrelease) || die "make kernelrelease failed"
 
 elif [[ -e "$SRCDIR" ]] && [[ -e "$CACHEDIR"/version ]] && [[ $(cat "$CACHEDIR"/version) = $ARCHVERSION ]]; then
 	echo "Using cache at $SRCDIR"
