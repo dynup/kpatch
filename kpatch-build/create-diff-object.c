@@ -861,6 +861,9 @@ void kpatch_dump_kelf(struct kpatch_elf *kelf)
 
 	printf("\n=== Sections ===\n");
 	list_for_each_entry(sec, &kelf->sections, list) {
+		/* skip debug sections */
+		if (!strncmp(sec->name, ".debug_", 7) || !strncmp(sec->name, ".rela.debug_", 12))
+			continue;
 		printf("%02d %s (%s)", sec->index, sec->name, status_str(sec->status));
 		if (is_rela_section(sec)) {
 			printf(", base-> %s\n", sec->base->name);
