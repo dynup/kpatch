@@ -180,6 +180,9 @@ static void patch_free_objects(void)
 	struct kpatch_dynrela *dynrela, *dynrela_safe;
 	int i;
 
+	if (!func_objs)
+		return;
+
 	for (i = 0; i < __kpatch_funcs_end - __kpatch_funcs; i++)
 		if (func_objs[i])
 			kobject_put(&func_objs[i]->kobj);
@@ -219,16 +222,12 @@ static int patch_make_funcs_list(struct list_head *objects)
 	for (p_func = __kpatch_funcs; p_func < __kpatch_funcs_end; p_func++) {
 		object = patch_find_or_add_object(&kpmod.objects,
 						  p_func->objname);
-		if (!object) {
-			ret = -ENOMEM;
-			goto err;
-		}
+		if (!object)
+			return -ENOMEM;
 
 		func = kzalloc(sizeof(*func), GFP_KERNEL);
-		if (!func) {
-			ret = -ENOMEM;
-			goto err;
-		}
+		if (!func)
+			return -ENOMEM;
 
 		func->new_addr = p_func->new_addr;
 		func->new_size = p_func->new_size;
@@ -238,10 +237,8 @@ static int patch_make_funcs_list(struct list_head *objects)
 		list_add_tail(&func->list, &object->funcs);
 
 		func_obj = func_kobj_alloc();
-		if (!func_obj) {
-			ret = -ENOMEM;
-			goto err;
-		}
+		if (!func_obj)
+			return -ENOMEM;
 
 		func_obj->func = p_func;
 		func_objs[i++] = func_obj;
@@ -251,14 +248,10 @@ static int patch_make_funcs_list(struct list_head *objects)
 		ret = kobject_add(&func_obj->kobj, functions_kobj,
 				  "%s", func_obj->name);
 		if (ret)
-			goto err;
+			return ret;
 	}
 
 	return 0;
-
-err:
-	patch_free_objects();
-	return ret;
 }
 
 static int patch_make_dynrelas_list(struct list_head *objects)
@@ -266,21 +259,16 @@ static int patch_make_dynrelas_list(struct list_head *objects)
 	struct kpatch_object *object;
 	struct kpatch_patch_dynrela *p_dynrela;
 	struct kpatch_dynrela *dynrela;
-	int ret;
 
 	for (p_dynrela = __kpatch_dynrelas; p_dynrela < __kpatch_dynrelas_end;
 	     p_dynrela++) {
 		object = patch_find_or_add_object(objects, p_dynrela->objname);
-		if (!object) {
-			ret = -ENOMEM;
-			goto err;
-		}
+		if (!object)
+			return -ENOMEM;
 
 		dynrela = kzalloc(sizeof(*dynrela), GFP_KERNEL);
-		if (!dynrela) {
-			ret = -ENOMEM;
-			goto err;
-		}
+		if (!dynrela)
+			return -ENOMEM;
 
 		dynrela->dest = p_dynrela->dest;
 		dynrela->src = p_dynrela->src;
@@ -292,10 +280,6 @@ static int patch_make_dynrelas_list(struct list_head *objects)
 	}
 
 	return 0;
-
-err:
-	patch_free_objects();
-	return ret;
 }
 
 static int __init patch_init(void)
@@ -322,7 +306,7 @@ static int __init patch_init(void)
 
 	ret = patch_make_funcs_list(&kpmod.objects);
 	if (ret)
-		goto err_functions;
+		goto err_objects;
 
 	ret = patch_make_dynrelas_list(&kpmod.objects);
 	if (ret)
@@ -336,7 +320,6 @@ static int __init patch_init(void)
 
 err_objects:
 	patch_free_objects();
-err_functions:
 	kobject_put(functions_kobj);
 err_sysfs:
 	sysfs_remove_file(patch_kobj, &patch_enabled_attr.attr);
