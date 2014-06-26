@@ -42,6 +42,10 @@ SCRIPTDIR="$(readlink -f $(dirname $(type -p $0)))"
 ARCHVERSION="$(uname -r)"
 CPUS="$(grep -c ^processor /proc/cpuinfo)"
 CACHEDIR="$HOME/.kpatch"
+SRCDIR="$CACHEDIR/src"
+OBJDIR="$CACHEDIR/obj"
+OBJDIR2="$CACHEDIR/obj2"
+VERSIONFILE="$CACHEDIR/version"
 TEMPDIR=
 APPLIEDPATCHFILE="kpatch.patch"
 DEBUG=0
@@ -67,6 +71,11 @@ cleanup() {
 		[[ -e $TEMPDIR/.config ]] && cp -f $TEMPDIR/.config $USERSRCDIR
 	fi
 	[[ "$DEBUG" -eq 0 ]] && rm -rf "$TEMPDIR"
+}
+
+clean_cache() {
+	rm -rf "$SRCDIR" "$OBJDIR" "$OBJDIR2" "$VERSIONFILE"
+	mkdir -p "$OBJDIR"
 }
 
 find_dirs() {
@@ -215,10 +224,6 @@ if [[ -n $USERSRCDIR ]]; then
 	[[ "$VMLINUX" = "$USERSRCDIR"/vmlinux ]] && cp -f "$VMLINUX" $TEMPDIR/vmlinux && VMLINUX=$TEMPDIR/vmlinux
 fi
 
-SRCDIR="$CACHEDIR/src"
-OBJDIR="$CACHEDIR/obj"
-OBJDIR2="$CACHEDIR/obj2"
-
 [[ -z $TARGETS ]] && TARGETS="vmlinux modules"
 
 PATCHNAME="$(basename $PATCHFILE)"
@@ -252,12 +257,8 @@ fi
 if [[ -n "$USERSRCDIR" ]]; then
 	echo "Using source directory at $USERSRCDIR"
 	SRCDIR="$USERSRCDIR"
-	OBJDIR="$CACHEDIR/obj"
-	OBJDIR2="$CACHEDIR/obj2"
 
-	rm -rf "$CACHEDIR"
-	mkdir -p "$CACHEDIR"
-	mkdir -p "$OBJDIR" "$OBJDIR2"
+	clean_cache
 
 	cp -f "$CONFIGFILE" "$OBJDIR/.config"
 
@@ -267,7 +268,7 @@ if [[ -n "$USERSRCDIR" ]]; then
 	make O="$OBJDIR" prepare >> "$LOGFILE" 2>&1 || die "make prepare failed"
 	ARCHVERSION=$(make O="$OBJDIR" kernelrelease) || die "make kernelrelease failed"
 
-elif [[ -e "$SRCDIR" ]] && [[ -e "$CACHEDIR"/version ]] && [[ $(cat "$CACHEDIR"/version) = $ARCHVERSION ]]; then
+elif [[ -e "$SRCDIR" ]] && [[ -e "$VERSIONFILE" ]] && [[ $(cat "$VERSIONFILE") = $ARCHVERSION ]]; then
 	echo "Using cache at $SRCDIR"
 
 else
@@ -289,14 +290,15 @@ else
 		rpm -ivh "$SRCRPM" >> "$LOGFILE" 2>&1 || die
 		rpmbuild -bp "--target=$(uname -m)" "$HOME/rpmbuild/SPECS/kernel.spec" >> "$LOGFILE" 2>&1 ||
 			die "rpmbuild -bp failed.  you may need to run 'yum-builddep kernel' first."
-		rm -rf "$CACHEDIR"
-		mkdir -p "$OBJDIR"
+
+		clean_cache
+
 		mv "$HOME"/rpmbuild/BUILD/kernel-*/linux-"$ARCHVERSION" "$SRCDIR" >> "$LOGFILE" 2>&1 || die
 
 		cp "$SRCDIR/.config" "$OBJDIR" || die
 		echo "-${ARCHVERSION##*-}" > "$SRCDIR/localversion" || die
 
-		echo $ARCHVERSION > "$CACHEDIR"/version || die
+		echo $ARCHVERSION > "$VERSIONFILE" || die
 
 	elif [[ $DISTRO = ubuntu ]]; then
 
@@ -317,15 +319,14 @@ else
 		dpkg -x ${pkgname}.deb $TEMPDIR >> "$LOGFILE" || die "dpkg: Could not extract ${pkgname}.deb"
 		# extract and move to SRCDIR
 		tar xvjf usr/src/linux-source-${ARCHVERSION%%-*}.tar.bz2 >> "$LOGFILE" || die "tar: Failed to extract kernel source package"
-		rm -rf "$CACHEDIR"
-		mkdir -p "$OBJDIR"
+		clean_cache
 		mv linux-source-${ARCHVERSION%%-*} "$SRCDIR" || die
 		cp "/boot/config-${ARCHVERSION}" "$OBJDIR/.config" || die
 		echo "-${ARCHVERSION#*-}" > "$SRCDIR/localversion" || die
 		# for some reason the Ubuntu kernel versions don't follow the
 		# upstream SUBLEVEL; they are always at SUBLEVEL 0
 		sed -i "s/^SUBLEVEL.*/SUBLEVEL = 0/" "$SRCDIR/Makefile" || die
-		echo $ARCHVERSION > "$CACHEDIR"/version || die
+		echo $ARCHVERSION > "$VERSIONFILE" || die
 
 	else
 		die "Unsupported distribution"
