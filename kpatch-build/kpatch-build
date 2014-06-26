@@ -141,9 +141,10 @@ usage() {
 	echo "		-v, --vmlinux	Specify original vmlinux" >&2
 	echo "		-t, --target	Specify custom kernel build targets" >&2
 	echo "		-d, --debug	Keep scratch files in /tmp" >&2
+	echo "		-k, --kpatchdir	Specify directory for kpatch cache" >&2
 }
 
-options=$(getopt -o hr:s:c:v:t:d -l "help,sourcerpm:,sourcedir:,config:,vmlinux:,target:,debug" -- "$@") || die "getopt failed"
+options=$(getopt -o hr:s:c:v:t:dk -l "help,sourcerpm:,sourcedir:,config:,vmlinux:,target:,debug,kpatchdir:" -- "$@") || die "getopt failed"
 
 eval set -- "$options"
 
@@ -184,6 +185,10 @@ while [[ $# -gt 0 ]]; do
 		echo "DEBUG mode enabled"
 		DEBUG=1
 		set -o xtrace
+		;;
+	-k|--kpatchdir)
+                CACHEDIR="$2/.kpatch"
+		shift
 		;;
 	--)
 		if [[ -z "$2" ]]; then
