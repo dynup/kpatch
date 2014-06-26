@@ -990,6 +990,12 @@ int kpatch_include_changed_functions(struct kpatch_elf *kelf)
 			kpatch_include_symbol(sym, 0);
 		}
 
+		if (sym->status == NEW &&
+		    sym->type == STT_FUNC) {
+			log_normal("new function: %s\n", sym->name);
+			kpatch_include_symbol(sym, 0);
+		}
+
 		if (sym->type == STT_FILE)
 			sym->include = 1;
 	}
