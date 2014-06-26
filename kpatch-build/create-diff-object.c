@@ -961,11 +961,8 @@ void kpatch_include_symbol(struct symbol *sym, int recurselevel)
 		goto out;
 	sec->rela->include = 1;
 	inc_printf("section %s is included\n", sec->rela->name);
-	list_for_each_entry(rela, &sec->rela->relas, list) {
-		if (rela->sym->include)
-			continue;
+	list_for_each_entry(rela, &sec->rela->relas, list)
 		kpatch_include_symbol(rela->sym, recurselevel+1);
-	}
 out:
 	inc_printf("end include_symbol(%s)\n", sym->name);
 	return;
@@ -999,12 +996,6 @@ int kpatch_include_changed_functions(struct kpatch_elf *kelf)
 		    sym->type == STT_FUNC) {
 			changed_nr++;
 			log_normal("changed function: %s\n", sym->name);
-			kpatch_include_symbol(sym, 0);
-		}
-
-		if (sym->status == NEW &&
-		    sym->type == STT_FUNC) {
-			log_normal("new function: %s\n", sym->name);
 			kpatch_include_symbol(sym, 0);
 		}
 
