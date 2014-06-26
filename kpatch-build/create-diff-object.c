@@ -180,6 +180,16 @@ int is_rela_section(struct section *sec)
 	return (sec->sh.sh_type == SHT_RELA);
 }
 
+int is_debug_section(struct section *sec)
+{
+	char *name;
+	if (is_rela_section(sec))
+		name = sec->base->name;
+	else
+		name = sec->name;
+	return !strncmp(name, ".debug_", 7);
+}
+
 struct section *find_section_by_index(struct list_head *list, unsigned int index)
 {
 	struct section *sec;
@@ -271,7 +281,7 @@ int offset_of_string(struct list_head *list, char *name)
  * **********/
 void kpatch_create_rela_list(struct kpatch_elf *kelf, struct section *sec)
 {
-	int rela_nr, index = 0;
+	int rela_nr, index = 0, skip = 0;
 	struct rela *rela;
 	unsigned int symndx;
 
@@ -287,6 +297,11 @@ void kpatch_create_rela_list(struct kpatch_elf *kelf, struct section *sec)
 
 	log_debug("\n=== rela list for %s (%d entries) ===\n",
 		sec->base->name, rela_nr);
+
+	if (is_debug_section(sec)) {
+		log_debug("skipping rela listing for .debug_* section\n");
+		skip = 1;
+	}
 
 	/* read and store the rela entries */
 	while (rela_nr--) {
@@ -309,6 +324,8 @@ void kpatch_create_rela_list(struct kpatch_elf *kelf, struct section *sec)
 				ERROR("could not lookup rela string\n");
 		}
 
+		if (skip)
+			continue;
 		log_debug("offset %d, type %d, %s %s %d", rela->offset,
 			rela->type, rela->sym->name,
 			(rela->addend < 0)?"-":"+", abs(rela->addend));
@@ -798,11 +815,6 @@ void kpatch_replace_sections_syms(struct kpatch_elf *kelf)
 			 */
 			if (rela->sym->type == STT_SECTION &&
 			    rela->sym->sec && rela->sym->sec->sym) {
-
-				log_debug("replacing %s with %s\n",
-					  rela->sym->name,
-					  rela->sym->sec->sym->name);
-
 				rela->sym = rela->sym->sec->sym;
 				continue;
 			}
@@ -838,10 +850,6 @@ void kpatch_replace_sections_syms(struct kpatch_elf *kelf)
 				if (sym->sym.st_value != rela->addend + add_off)
 					continue;
 
-				log_debug("replacing %s+%d with %s+%d\n",
-					  rela->sym->name, rela->addend,
-					  sym->name, -add_off);
-
 				rela->sym = sym;
 				rela->addend = -add_off;
 				break;
@@ -864,6 +872,9 @@ void kpatch_dump_kelf(struct kpatch_elf *kelf)
 		printf("%02d %s (%s)", sec->index, sec->name, status_str(sec->status));
 		if (is_rela_section(sec)) {
 			printf(", base-> %s\n", sec->base->name);
+			/* skip .debug_* sections */
+			if (is_debug_section(sec))
+				goto next;
 			printf("rela section expansion\n");
 			list_for_each_entry(rela, &sec->relas, list) {
 				printf("sym %d, offset %d, type %d, %s %s %d\n",
@@ -880,6 +891,7 @@ void kpatch_dump_kelf(struct kpatch_elf *kelf)
 			if (sec->rela)
 				printf(", rela-> %s", sec->rela->name);
 		}
+next:
 		printf("\n");
 	}
 
@@ -1279,11 +1291,10 @@ void kpatch_include_debug_sections(struct kpatch_elf *kelf)
 
 	/* include all .debug_* sections */
 	list_for_each_entry(sec, &kelf->sections, list) {
-		if (!strncmp(sec->name, ".debug_", 7)) {
+		if (is_debug_section(sec)) {
 			sec->include = 1;
-			if (sec->rela)
-				sec->rela->include = 1;
-			sec->secsym->include = 1;
+			if (!is_rela_section(sec))
+				sec->secsym->include = 1;
 		}
 	}
 
@@ -1292,7 +1303,7 @@ void kpatch_include_debug_sections(struct kpatch_elf *kelf)
 	 * referencing unchanged symbols
 	 */
 	list_for_each_entry(sec, &kelf->sections, list) {
-		if (strncmp(sec->name, ".rela.debug_", 12))
+		if (!is_rela_section(sec) || !is_debug_section(sec))
 			continue;
 		list_for_each_entry_safe(rela, saferela, &sec->relas, list)
 			if (!rela->sym->sec->include)
