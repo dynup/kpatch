@@ -509,7 +509,7 @@ static unsigned long kpatch_find_module_symbol(struct module *mod,
 static int kpatch_write_relocations(struct kpatch_module *kpmod,
 				    struct kpatch_object *object)
 {
-	int ret, size, readonly = 0;
+	int ret, size, readonly = 0, numpages;
 	struct kpatch_dynrela *dynrela;
 	u64 loc, val;
 	unsigned long core = (unsigned long)kpmod->mod->module_core;
@@ -577,13 +577,15 @@ static int kpatch_write_relocations(struct kpatch_module *kpmod,
 			return -EINVAL;
 		}
 
+		numpages = (PAGE_SIZE - (loc & ~PAGE_MASK) >= size) ? 1 : 2;
+
 		if (readonly)
-			set_memory_rw(loc & PAGE_MASK, 1);
+			set_memory_rw(loc & PAGE_MASK, numpages);
 
 		ret = probe_kernel_write((void *)loc, &val, size);
 
 		if (readonly)
-			set_memory_ro(loc & PAGE_MASK, 1);
+			set_memory_ro(loc & PAGE_MASK, numpages);
 
 		if (ret) {
 			pr_err("write to 0x%llx failed for symbol %s\n",
