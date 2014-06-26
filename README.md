@@ -355,7 +355,7 @@ We do have plans to implement something like that.
 
 **Q. What kernels are supported?**
 
-kpatch needs gcc >= 4.6 and Linux >= 3.7 for use of the -mfentry flag.
+kpatch needs gcc >= 4.8 and Linux >= 3.7 for use of the -mfentry flag.
 
 **Q. Is it possible to remove a patch?**
 
