@@ -247,6 +247,25 @@ static const struct stacktrace_ops kpatch_backtrace_ops = {
 	.walk_stack	= print_context_stack_bp,
 };
 
+static int kpatch_print_trace_stack(void *data, char *name)
+{
+	pr_cont(" <%s> ", name);
+	return 0;
+}
+
+static void kpatch_print_trace_address(void *data, unsigned long addr,
+				       int reliable)
+{
+	if (reliable)
+		pr_info("[<%p>] %pB\n", (void *)addr, (void *)addr);
+}
+
+static const struct stacktrace_ops kpatch_print_trace_ops = {
+	.stack		= kpatch_print_trace_stack,
+	.address	= kpatch_print_trace_address,
+	.walk_stack	= print_context_stack,
+};
+
 /*
  * Verify activeness safety, i.e. that none of the to-be-patched functions are
  * on the stack of any task.
@@ -268,6 +287,9 @@ static int kpatch_verify_activeness_safety(struct kpatch_module *kpmod)
 		dump_trace(t, NULL, NULL, 0, &kpatch_backtrace_ops, &args);
 		if (args.ret) {
 			ret = args.ret;
+			pr_info("PID: %d Comm: %.20s\n", t->pid, t->comm);
+			dump_trace(t, NULL, (unsigned long *)t->thread.sp,
+				   0, &kpatch_print_trace_ops, NULL);
 			goto out;
 		}
 	} while_each_thread(g, t);
