@@ -2,11 +2,12 @@ Index: src/drivers/tty/tty_buffer.c
 ===================================================================
 --- src.orig/drivers/tty/tty_buffer.c
 +++ src/drivers/tty/tty_buffer.c
-@@ -245,6 +245,7 @@ static int __tty_buffer_request_room(str
+@@ -247,6 +247,8 @@ static int __tty_buffer_request_room(str
  	struct tty_buffer *b, *n;
  	int left, change;
  
-+	printk("kpatch-test: testing .smp_locks section changes\n");
++	if (!size)
++		printk("kpatch-test: testing .smp_locks section changes\n");
  	b = buf->tail;
  	if (b->flags & TTYB_NORMAL)
  		left = 2 * b->size - b->used;
