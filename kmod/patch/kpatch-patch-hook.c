@@ -32,6 +32,8 @@ MODULE_PARM_DESC(replace, "replace all previously loaded patch modules");
 
 extern struct kpatch_patch_func __kpatch_funcs[], __kpatch_funcs_end[];
 extern struct kpatch_patch_dynrela __kpatch_dynrelas[], __kpatch_dynrelas_end[];
+extern struct kpatch_patch_hook __kpatch_hooks_load[], __kpatch_hooks_load_end[];
+extern struct kpatch_patch_hook __kpatch_hooks_unload[], __kpatch_hooks_unload_end[];
 
 static struct kpatch_module kpmod;
 static struct kobject *patch_kobj;
@@ -167,6 +169,8 @@ static struct kpatch_object *patch_find_or_add_object(struct list_head *head,
 	object->name = name;
 	INIT_LIST_HEAD(&object->funcs);
 	INIT_LIST_HEAD(&object->dynrelas);
+	INIT_LIST_HEAD(&object->hooks_load);
+	INIT_LIST_HEAD(&object->hooks_unload);
 
 	list_add_tail(&object->list, head);
 
@@ -178,6 +182,8 @@ static void patch_free_objects(void)
 	struct kpatch_object *object, *object_safe;
 	struct kpatch_func *func, *func_safe;
 	struct kpatch_dynrela *dynrela, *dynrela_safe;
+	struct kpatch_hook *hook, *hook_safe;
+
 	int i;
 
 	if (!func_objs)
@@ -198,6 +204,16 @@ static void patch_free_objects(void)
 					 &object->dynrelas, list) {
 			list_del(&dynrela->list);
 			kfree(dynrela);
+		}
+		list_for_each_entry_safe(hook, hook_safe,
+					 &object->hooks_load, list) {
+			list_del(&hook->list);
+			kfree(hook);
+		}
+		list_for_each_entry_safe(hook, hook_safe,
+					 &object->hooks_unload, list) {
+			list_del(&hook->list);
+			kfree(hook);
 		}
 		list_del(&object->list);
 		kfree(object);
@@ -282,6 +298,42 @@ static int patch_make_dynrelas_list(struct list_head *objects)
 	return 0;
 }
 
+static int patch_make_hook_lists(struct list_head *objects)
+{
+	struct kpatch_object *object;
+	struct kpatch_patch_hook *p_hook;
+	struct kpatch_hook *hook;
+
+	for (p_hook = __kpatch_hooks_load; p_hook < __kpatch_hooks_load_end;
+	     p_hook++) {
+		object = patch_find_or_add_object(objects, p_hook->objname);
+		if (!object)
+			return -ENOMEM;
+
+		hook = kzalloc(sizeof(*hook), GFP_KERNEL);
+		if (!hook)
+			return -ENOMEM;
+
+		hook->hook = p_hook->hook;
+		list_add_tail(&hook->list, &object->hooks_load);
+	}
+
+	for (p_hook = __kpatch_hooks_unload; p_hook < __kpatch_hooks_unload_end;
+	     p_hook++) {
+		object = patch_find_or_add_object(objects, p_hook->objname);
+		if (!object)
+			return -ENOMEM;
+
+		hook = kzalloc(sizeof(*hook), GFP_KERNEL);
+		if (!hook)
+			return -ENOMEM;
+
+		hook->hook = p_hook->hook;
+		list_add_tail(&hook->list, &object->hooks_unload);
+	}
+	return 0;
+}
+
 static int __init patch_init(void)
 {
 	int ret;
@@ -309,6 +361,10 @@ static int __init patch_init(void)
 		goto err_objects;
 
 	ret = patch_make_dynrelas_list(&kpmod.objects);
+	if (ret)
+		goto err_objects;
+
+	ret = patch_make_hook_lists(&kpmod.objects);
 	if (ret)
 		goto err_objects;
 

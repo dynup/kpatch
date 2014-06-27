@@ -985,6 +985,46 @@ void kpatch_include_standard_elements(struct kpatch_elf *kelf)
 	list_entry(kelf->symbols.next, struct symbol, list)->include = 1;
 }
 
+void kpatch_include_hook_elements(struct kpatch_elf *kelf)
+{
+	struct section *sec;
+	struct symbol *sym;
+	struct rela *rela;
+
+	/* include load/unload sections */
+	list_for_each_entry(sec, &kelf->sections, list) {
+		if (!strcmp(sec->name, ".kpatch.hooks.load") ||
+		    !strcmp(sec->name, ".kpatch.hooks.unload") ||
+		    !strcmp(sec->name, ".rela.kpatch.hooks.load") ||
+		    !strcmp(sec->name, ".rela.kpatch.hooks.unload")) {
+			sec->include = 1;
+			if (is_rela_section(sec)) {
+				/* include hook dependencies */
+				rela = list_entry(sec->relas.next,
+			                         struct rela, list);
+				sym = rela->sym;
+				log_normal("found hook: %s\n",sym->name);
+				kpatch_include_symbol(sym, 0);
+				/* strip the hook symbol */
+				sym->include = 0;
+				/* use section symbol instead */
+				rela->sym = sym->sec->secsym;
+			} else {
+				sec->secsym->include = 1;
+			}
+		}
+	}
+
+	/*
+	 * Strip temporary global load/unload function pointer objects
+	 * used by the kpatch_[load|unload]() macros.
+	 */
+	list_for_each_entry(sym, &kelf->symbols, list)
+		if (!strcmp(sym->name, "kpatch_load_data") ||
+		    !strcmp(sym->name, "kpatch_unload_data"))
+			sym->include = 0;
+}
+
 int kpatch_include_changed_functions(struct kpatch_elf *kelf)
 {
 	struct symbol *sym;
@@ -1029,6 +1069,7 @@ int is_null_sym(struct symbol *sym)
 
 int is_file_sym(struct symbol *sym)
 {
+	log_debug("here!");
 	return sym->type == STT_FILE;
 }
 
@@ -1826,6 +1867,34 @@ void kpatch_create_dynamic_rela_sections(struct kpatch_elf *kelf,
 	sec->sh.sh_size = sec->data->d_size;
 }
 
+void kpatch_create_hooks_objname_rela(struct kpatch_elf *kelf, char *objname)
+{
+	struct section *sec;
+	struct rela *rela;
+	struct symbol *strsym;
+	int objname_offset;
+
+	/* lookup strings symbol */
+	strsym = find_symbol_by_name(&kelf->symbols, ".kpatch.strings");
+	if (!strsym)
+		ERROR("can't find .kpatch.strings symbol");
+
+	/* add objname to strings */
+	objname_offset = offset_of_string(&kelf->strings, objname);
+
+	list_for_each_entry(sec, &kelf->sections, list) {
+		if (strcmp(sec->name, ".rela.kpatch.hooks.load") &&
+		    strcmp(sec->name, ".rela.kpatch.hooks.unload"))
+			continue;
+
+		ALLOC_LINK(rela, &sec->relas);
+		rela->sym = strsym;
+		rela->type = R_X86_64_64;
+		rela->addend = objname_offset;
+		rela->offset = offsetof(struct kpatch_patch_hook, objname);
+	}
+}
+
 /*
  * This function strips out symbols that were referenced by changed rela
  * sections, but the rela entries that referenced them were converted to
@@ -2100,7 +2169,7 @@ int main(int argc, char *argv[])
 	struct lookup_table *lookup;
 	struct section *sec, *symtab;
 	struct symbol *sym;
-	char *hint, *name, *pos;
+	char *hint = NULL, *name, *pos;
 
 	arguments.debug = 0;
 	argp_parse (&argp, argc, argv, 0, 0, &arguments);
@@ -2145,6 +2214,7 @@ int main(int argc, char *argv[])
 	kpatch_include_standard_elements(kelf_patched);
 	num_changed = kpatch_include_changed_functions(kelf_patched);
 	kpatch_include_debug_sections(kelf_patched);
+	kpatch_include_hook_elements(kelf_patched);
 	kpatch_dump_kelf(kelf_patched);
 	kpatch_verify_patchability(kelf_patched);
 
@@ -2170,6 +2240,8 @@ int main(int argc, char *argv[])
 			break;
 		}
 	}
+	if (!hint)
+		ERROR("FILE symbol not found in output. Stripped?\n");
 
 	/* create symbol lookup table */
 	lookup = lookup_open(arguments.args[2]);
@@ -2193,6 +2265,7 @@ int main(int argc, char *argv[])
 	kpatch_create_strings_elements(kelf_out);
 	kpatch_create_patches_sections(kelf_out, lookup, hint, name);
 	kpatch_create_dynamic_rela_sections(kelf_out, lookup, hint, name);
+	kpatch_create_hooks_objname_rela(kelf_out, name);
 	kpatch_build_strings_section_data(kelf_out);
 
 	/*

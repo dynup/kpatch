@@ -303,6 +303,8 @@ static int kpatch_apply_patch(void *data)
 {
 	struct kpatch_module *kpmod = data;
 	struct kpatch_func *func;
+	struct kpatch_hook *hook;
+	struct kpatch_object *object;
 	int ret;
 
 	ret = kpatch_verify_activeness_safety(kpmod);
@@ -335,6 +337,17 @@ static int kpatch_apply_patch(void *data)
 		return -EBUSY;
 	}
 
+	/* run any user-defined load hooks */
+	list_for_each_entry(object, &kpmod->objects, list) {
+		if (!kpatch_object_linked(object))
+			continue;
+		list_for_each_entry(hook, &object->hooks_load, list) {
+			/* TODO: ignoring return code for now */
+			(*hook->hook)();
+		}
+	}
+
+
 	return 0;
 }
 
@@ -343,6 +356,8 @@ static int kpatch_remove_patch(void *data)
 {
 	struct kpatch_module *kpmod = data;
 	struct kpatch_func *func;
+	struct kpatch_hook *hook;
+	struct kpatch_object *object;
 	int ret;
 
 	ret = kpatch_verify_activeness_safety(kpmod);
@@ -360,6 +375,16 @@ static int kpatch_remove_patch(void *data)
 	do_for_each_linked_func(kpmod, func) {
 		hash_del_rcu(&func->node);
 	} while_for_each_linked_func();
+
+	/* run any user-defined unload hooks */
+	list_for_each_entry(object, &kpmod->objects, list) {
+		if (!kpatch_object_linked(object))
+			continue;
+		list_for_each_entry(hook, &object->hooks_unload, list) {
+			/* TODO: ignoring return code for now */
+			(*hook->hook)();
+		}
+	}
 
 	return 0;
 }

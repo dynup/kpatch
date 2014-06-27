@@ -341,6 +341,7 @@ echo "Testing patch file"
 cd "$SRCDIR" || die
 patch -N -p1 --dry-run < "$PATCHFILE" || die "source patch file failed to apply"
 cp "$PATCHFILE" "$APPLIEDPATCHFILE" || die
+cp "$SCRIPTDIR/kpatch-hooks.h" "$SRCDIR/include/linux"
 
 echo "Building original kernel"
 make mrproper >> "$LOGFILE" 2>&1 || die
