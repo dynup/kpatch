@@ -50,11 +50,15 @@ TEMPDIR=
 APPLIEDPATCHFILE="kpatch.patch"
 DEBUG=0
 
+warn() {
+	echo "ERROR: $1" >&2
+}
+
 die() {
 	if [[ -z $1 ]]; then
-		echo "ERROR: kpatch build failed. Check $LOGFILE for more details." >&2
+		warn "kpatch build failed. Check $LOGFILE for more details."
 	else
-		echo "ERROR: $1" >&2
+		warn "$1"
 	fi
 	exit 1
 }
@@ -196,7 +200,7 @@ while [[ $# -gt 0 ]]; do
 		;;
 	--)
 		if [[ -z "$2" ]]; then
-			echo "ERROR: no patch file specified" >&2
+			warn "no patch file specified"
 			usage
 			exit 1
 		fi
@@ -407,7 +411,18 @@ for i in $FILES; do
 	debugopt=
 	[[ $DEBUG -eq 1 ]] && debugopt=-d
 	"$TOOLSDIR"/create-diff-object $debugopt "orig/$i" "patched/$i" "$KOBJFILE" "output/$i" 2>&1 |tee -a "$LOGFILE"
-	[[ "${PIPESTATUS[0]}" -eq 0 ]] || die
+	rc="${PIPESTATUS[0]}"
+	if [[ $rc = 139 ]]; then
+		warn "create-diff-object SIGSEGV"
+		if ls core* &> /dev/null; then
+			cp core* /tmp
+			warn "core file at /tmp/$(ls core*)"
+		else
+			warn "no core file found, run 'ulimit -c unlimited' and try to recreate"
+		fi
+		exit 1
+	fi
+	[[ $rc -eq 0 ]] || die
 done
 
 echo -n "Patched objects:"
