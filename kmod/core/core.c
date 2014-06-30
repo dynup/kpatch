@@ -583,7 +583,7 @@ static int kpatch_write_relocations(struct kpatch_module *kpmod,
 				size = 8;
 				break;
 			default:
-				printk("unsupported rela type %ld for source %s (0x%lx <- 0x%lx)\n",
+				pr_err("unsupported rela type %ld for source %s (0x%lx <- 0x%lx)\n",
 				       dynrela->type, dynrela->name,
 				       dynrela->dest, dynrela->src);
 				return -EINVAL;
