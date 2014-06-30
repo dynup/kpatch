@@ -78,7 +78,8 @@ cleanup() {
 }
 
 clean_cache() {
-	rm -rf "$SRCDIR" "$OBJDIR" "$OBJDIR2" "$VERSIONFILE"
+	[[ -z $USERSRCDIR ]] && rm -rf "$SRCDIR"
+	rm -rf "$OBJDIR" "$OBJDIR2" "$VERSIONFILE"
 	mkdir -p "$OBJDIR"
 }
 
