@@ -41,4 +41,9 @@ struct kpatch_patch_dynrela {
 	int addend;
 };
 
+struct kpatch_patch_hook {
+	void (*hook)(void);
+	char *objname;
+};
+
 #endif /* _KPATCH_PATCH_H_ */

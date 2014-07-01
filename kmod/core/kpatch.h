@@ -57,11 +57,18 @@ struct kpatch_dynrela {
 	struct list_head list;
 };
 
+struct kpatch_hook {
+	struct list_head list;
+	void (*hook)(void);
+};
+
 struct kpatch_object {
 	struct list_head list;
 	const char *name;
 	struct list_head funcs;
 	struct list_head dynrelas;
+	struct list_head hooks_load;
+	struct list_head hooks_unload;
 
 	/* private */
 	struct module *mod;
