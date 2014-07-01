@@ -459,21 +459,20 @@ static int kpatch_ftrace_remove_func(unsigned long ip)
 	if (kpatch_get_func(ip))
 		return 0;
 
+	if (kpatch_num_patched == 1) {
+		ret = unregister_ftrace_function(&kpatch_ftrace_ops);
+		if (ret) {
+			pr_err("can't unregister ftrace handler\n");
+			return ret;
+		}
+	}
+	kpatch_num_patched--;
+
 	ret = ftrace_set_filter_ip(&kpatch_ftrace_ops, ip, 1, 0);
 	if (ret) {
 		pr_err("can't remove ftrace filter at address 0x%lx\n", ip);
 		return ret;
 	}
-
-	if (kpatch_num_patched == 1) {
-		ret = unregister_ftrace_function(&kpatch_ftrace_ops);
-		if (ret) {
-			pr_err("can't unregister ftrace handler\n");
-			ftrace_set_filter_ip(&kpatch_ftrace_ops, ip, 0, 0);
-			return ret;
-		}
-	}
-	kpatch_num_patched--;
 
 	return 0;
 }
