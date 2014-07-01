@@ -102,6 +102,25 @@ find_dirs() {
 	return 1
 }
 
+gcc_version_check() {
+	# ensure gcc version matches that used to build the kernel
+	local gccver=$(gcc --version |head -n1 |cut -d' ' -f3-)
+	local kgccver=$(strings $VMLINUX |grep "GCC:" |cut -d' ' -f3-)
+	if [[ $gccver != $kgccver ]]; then
+		warn "gcc/kernel version mismatch"
+		return 1
+	fi
+
+	# ensure gcc version is >= 4.8
+	gccver=$(echo $gccver |cut -d'.' -f1,2)
+	if [[ $gccver < 4.8 ]]; then
+		warn "gcc >= 4.8 required"
+		return 1
+	fi
+
+	return
+}
+
 find_parent_obj() {
 	dir=$(dirname $1)
 	file=$(basename $1)
@@ -265,6 +284,8 @@ elif [[ $DISTRO = ubuntu ]] || [[ $DISTRO = debian ]]; then
 
 	export PATH=/usr/lib/ccache:$PATH
 fi
+
+gcc_version_check || die
 
 if [[ -n "$USERSRCDIR" ]]; then
 	echo "Using source directory at $USERSRCDIR"
