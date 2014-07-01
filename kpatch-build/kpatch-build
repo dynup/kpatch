@@ -253,9 +253,15 @@ if [[ $DISTRO = fedora ]] || [[ $DISTRO = rhel ]]; then
 
 	export PATH=/usr/lib64/ccache:$PATH
 
-elif [[ $DISTRO = ubuntu ]]; then
+elif [[ $DISTRO = ubuntu ]] || [[ $DISTRO = debian ]]; then
 	[[ -z $VMLINUX ]] && VMLINUX=/usr/lib/debug/boot/vmlinux-$ARCHVERSION
-	[[ -e "$VMLINUX" ]] || die "linux-image-$ARCHVERSION-dbgsym not installed"
+
+	if [[ $DISTRO = ubuntu ]]; then
+		[[ -e "$VMLINUX" ]] || die "linux-image-$ARCHVERSION-dbgsym not installed"
+
+        elif [[ $DISTRO = debian ]]; then
+		[[ -e "$VMLINUX" ]] || die "linux-image-$ARCHVERSION-dbg not installed"
+	fi
 
 	export PATH=/usr/lib/ccache:$PATH
 fi
@@ -306,13 +312,30 @@ else
 
 		echo $ARCHVERSION > "$VERSIONFILE" || die
 
-	elif [[ $DISTRO = ubuntu ]]; then
+	elif [[ $DISTRO = ubuntu ]] || [[ $DISTRO = debian ]]; then
 
 		echo "Debian/Ubuntu distribution detected"
 
-		# url may be changed for a different mirror
-		url="http://us.archive.ubuntu.com/ubuntu/pool/main/l/linux"
-		# The linux-source packages are formatted like the following: linux-source-3.13.0_3.13.0-24.46_all.deb
+		if [[ $DISTRO = ubuntu ]]; then
+
+			# url may be changed for a different mirror
+			url="http://us.archive.ubuntu.com/ubuntu/pool/main/l/linux"
+			extension="bz2"
+			sublevel="SUBLEVEL = 0"
+			taroptions="xvjf"
+
+		elif [[ $DISTRO = debian ]]; then
+
+			# url may be changed for a different mirror
+			url="http://ftp.debian.org/debian/pool/main/l/linux"
+			extension="xz"
+			sublevel="SUBLEVEL ="
+			taroptions="xvf"
+		fi
+
+		# The linux-source packages are formatted like the following for:
+		# ubuntu: linux-source-3.13.0_3.13.0-24.46_all.deb
+		# debian: linux-source-3.14_3.14.7-1_all.deb
 		pkgver="${ARCHVERSION%%-*}_$(dpkg-query -W -f='${Version}' linux-image-$(uname -r))"
 		pkgname="linux-source-${pkgver}_all"
 
@@ -324,14 +347,14 @@ else
 		echo "Unpacking kernel source"
 		dpkg -x ${pkgname}.deb $TEMPDIR >> "$LOGFILE" || die "dpkg: Could not extract ${pkgname}.deb"
 		# extract and move to SRCDIR
-		tar xvjf usr/src/linux-source-${ARCHVERSION%%-*}.tar.bz2 >> "$LOGFILE" || die "tar: Failed to extract kernel source package"
+		tar $taroptions usr/src/linux-source-${ARCHVERSION%%-*}.tar.${extension} >> "$LOGFILE" || die "tar: Failed to extract kernel source package"
 		clean_cache
 		mv linux-source-${ARCHVERSION%%-*} "$SRCDIR" || die
 		cp "/boot/config-${ARCHVERSION}" "$OBJDIR/.config" || die
 		echo "-${ARCHVERSION#*-}" > "$SRCDIR/localversion" || die
 		# for some reason the Ubuntu kernel versions don't follow the
 		# upstream SUBLEVEL; they are always at SUBLEVEL 0
-		sed -i "s/^SUBLEVEL.*/SUBLEVEL = 0/" "$SRCDIR/Makefile" || die
+		sed -i "s/^SUBLEVEL.*/${sublevel}/" "$SRCDIR/Makefile" || die
 		echo $ARCHVERSION > "$VERSIONFILE" || die
 
 	else
