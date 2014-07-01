@@ -59,7 +59,7 @@ struct kpatch_dynrela {
 
 struct kpatch_hook {
 	struct list_head list;
-	int (*hook)(void);
+	void (*hook)(void);
 };
 
 struct kpatch_object {

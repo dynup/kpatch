@@ -1069,7 +1069,6 @@ int is_null_sym(struct symbol *sym)
 
 int is_file_sym(struct symbol *sym)
 {
-	log_debug("here!");
 	return sym->type == STT_FILE;
 }
 

@@ -341,10 +341,8 @@ static int kpatch_apply_patch(void *data)
 	list_for_each_entry(object, &kpmod->objects, list) {
 		if (!kpatch_object_linked(object))
 			continue;
-		list_for_each_entry(hook, &object->hooks_load, list) {
-			/* TODO: ignoring return code for now */
+		list_for_each_entry(hook, &object->hooks_load, list)
 			(*hook->hook)();
-		}
 	}
 
 
@@ -380,10 +378,8 @@ static int kpatch_remove_patch(void *data)
 	list_for_each_entry(object, &kpmod->objects, list) {
 		if (!kpatch_object_linked(object))
 			continue;
-		list_for_each_entry(hook, &object->hooks_unload, list) {
-			/* TODO: ignoring return code for now */
+		list_for_each_entry(hook, &object->hooks_unload, list)
 			(*hook->hook)();
-		}
 	}
 
 	return 0;
@@ -745,6 +741,7 @@ static int kpatch_module_notify(struct notifier_block *nb, unsigned long action,
 	struct kpatch_module *kpmod;
 	struct kpatch_object *object;
 	struct kpatch_func *func;
+	struct kpatch_hook *hook;
 	int ret = 0;
 	bool found = false;
 
@@ -774,6 +771,10 @@ done:
 	BUG_ON(!object->mod);
 
 	pr_notice("patching newly loaded module '%s'\n", object->name);
+
+	/* run any user-defined load hooks */
+	list_for_each_entry(hook, &object->hooks_load, list)
+		(*hook->hook)();
 
 	/* add to the global func hash */
 	list_for_each_entry(func, &object->funcs, list)

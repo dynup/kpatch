@@ -42,7 +42,7 @@ struct kpatch_patch_dynrela {
 };
 
 struct kpatch_patch_hook {
-	int (*hook)(void);
+	void (*hook)(void);
 	char *objname;
 };
 

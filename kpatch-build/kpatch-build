@@ -75,6 +75,7 @@ cleanup() {
 		[[ -e $TEMPDIR/.config ]] && cp -f $TEMPDIR/.config $USERSRCDIR
 	fi
 	[[ "$DEBUG" -eq 0 ]] && rm -rf "$TEMPDIR"
+	unset KCFLAGS
 }
 
 clean_cache() {
@@ -341,12 +342,12 @@ echo "Testing patch file"
 cd "$SRCDIR" || die
 patch -N -p1 --dry-run < "$PATCHFILE" || die "source patch file failed to apply"
 cp "$PATCHFILE" "$APPLIEDPATCHFILE" || die
-cp "$SCRIPTDIR/kpatch-hooks.h" "$SRCDIR/include/linux"
+cp -LR "$DATADIR/patch" "$TEMPDIR" || die
+export KCFLAGS="-I$DATADIR/patch" # for kpatch-macros.h
 
 echo "Building original kernel"
 make mrproper >> "$LOGFILE" 2>&1 || die
 make "-j$CPUS" $TARGETS "O=$OBJDIR" >> "$LOGFILE" 2>&1 || die
-cp -LR "$DATADIR/patch" "$TEMPDIR" || die
 
 echo "Building patched kernel"
 patch -N -p1 < "$APPLIEDPATCHFILE" >> "$LOGFILE" 2>&1 || die
@@ -377,8 +378,9 @@ rm -rf "$OBJDIR2"
 mkdir -p "$OBJDIR2"
 cp "$OBJDIR/.config" "$OBJDIR2" || die
 mkdir "$TEMPDIR/patched"
+export KCFLAGS="$KCFLAGS -ffunction-sections -fdata-sections"
 for i in $(cat $TEMPDIR/changed_objs); do
-	KCFLAGS="-ffunction-sections -fdata-sections" make "$i" "O=$OBJDIR2" >> "$LOGFILE" 2>&1 || die
+	make "$i" "O=$OBJDIR2" >> "$LOGFILE" 2>&1 || die
 	mkdir -p "$TEMPDIR/patched/$(dirname $i)"
 	cp -f "$OBJDIR2/$i" "$TEMPDIR/patched/$i" || die
 done
@@ -387,7 +389,7 @@ rm -f "$APPLIEDPATCHFILE"
 mkdir "$TEMPDIR/orig"
 for i in $(cat $TEMPDIR/changed_objs); do
 	rm -f "$i"
-	KCFLAGS="-ffunction-sections -fdata-sections" make "$i" "O=$OBJDIR2" >> "$LOGFILE" 2>&1 || die
+	make "$i" "O=$OBJDIR2" >> "$LOGFILE" 2>&1 || die
 	mkdir -p "$TEMPDIR/orig/$(dirname $i)"
 	cp -f "$OBJDIR2/$i" "$TEMPDIR/orig/$i" || die
 done
