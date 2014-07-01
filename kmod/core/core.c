@@ -49,8 +49,9 @@
 #if !defined(CONFIG_FUNCTION_TRACER) || \
 	!defined(CONFIG_HAVE_FENTRY) || \
 	!defined(CONFIG_MODULES) || \
-	!defined(CONFIG_SYSFS)
-#error "CONFIG_FUNCTION_TRACER, CONFIG_HAVE_FENTRY, CONFIG_MODULES, and CONFIG_SYSFS kernel config options are required"
+	!defined(CONFIG_SYSFS) || \
+	!defined(CONFIG_KALLSYMS_ALL)
+#error "CONFIG_FUNCTION_TRACER, CONFIG_HAVE_FENTRY, CONFIG_MODULES, CONFIG_SYSFS, CONFIG_KALLSYMS_ALL kernel config options are required"
 #endif
 
 #define KPATCH_HASH_BITS 8
