@@ -364,7 +364,7 @@ else
 		echo "-${ARCHVERSION#*-}" > "$SRCDIR/localversion" || die
 		# for some reason the Debian kernel versions don't follow the
 		# upstream SUBLEVEL; they are always at SUBLEVEL 0
-		sed -i "s/^SUBLEVEL.*/SUBLEVEL = 0/" "$SRCDIR/Makefile" || die
+		sed -i "s/^SUBLEVEL.*/SUBLEVEL =/" "$SRCDIR/Makefile" || die
 		echo $ARCHVERSION > "$VERSIONFILE" || die
 
 	else
