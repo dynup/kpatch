@@ -414,7 +414,7 @@ kpatch_ftrace_handler(unsigned long ip, unsigned long parent_ip,
 	}
 done:
 	if (func)
-		regs->ip = func->new_addr;
+		regs->ip = func->new_addr + MCOUNT_INSN_SIZE;
 
 	preempt_enable_notrace();
 }
