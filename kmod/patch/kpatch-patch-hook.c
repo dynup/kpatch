@@ -34,6 +34,7 @@ extern struct kpatch_patch_func __kpatch_funcs[], __kpatch_funcs_end[];
 extern struct kpatch_patch_dynrela __kpatch_dynrelas[], __kpatch_dynrelas_end[];
 extern struct kpatch_patch_hook __kpatch_hooks_load[], __kpatch_hooks_load_end[];
 extern struct kpatch_patch_hook __kpatch_hooks_unload[], __kpatch_hooks_unload_end[];
+extern unsigned long __kpatch_force_funcs[], __kpatch_force_funcs_end[];
 
 static struct kpatch_module kpmod;
 static struct kobject *patch_kobj;
@@ -221,6 +222,15 @@ static void patch_free_objects(void)
 
 }
 
+static int is_func_forced(unsigned long addr)
+{
+	unsigned long *a;
+	for (a = __kpatch_force_funcs; a < __kpatch_force_funcs_end; a++)
+		if (*a == addr)
+			return 1;
+	return 0;
+}
+
 static int patch_make_funcs_list(struct list_head *objects)
 {
 	struct kpatch_object *object;
@@ -250,6 +260,7 @@ static int patch_make_funcs_list(struct list_head *objects)
 		func->old_offset = p_func->old_offset;
 		func->old_size = p_func->old_size;
 		func->name = p_func->name;
+		func->force = is_func_forced(func->new_addr);
 		list_add_tail(&func->list, &object->funcs);
 
 		func_obj = func_kobj_alloc();

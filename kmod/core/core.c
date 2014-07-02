@@ -205,6 +205,9 @@ static void kpatch_backtrace_address_verify(void *data, unsigned long address,
 		const char *func_name;
 		struct kpatch_func *active_func;
 
+		if (func->force)
+			continue;
+
 		active_func = kpatch_get_func(func->old_addr);
 		if (!active_func) {
 			/* patching an unpatched func */
