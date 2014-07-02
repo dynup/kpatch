@@ -40,7 +40,7 @@ struct kpatch_unload {
 	};
 
 /*
- * KPATCH_UNLOAD_HOOK
+ * KPATCH_UNLOAD_HOOK macro
  *
  * Same as LOAD hook with s/load/unload/
  */
@@ -50,5 +50,18 @@ struct kpatch_unload {
 		.fn = _fn, \
 		.objname = NULL \
 	};
+/*
+ * KPATCH_FORCE_UNSAFE macro
+ *
+ * USE WITH EXTREME CAUTION!
+ *
+ * Allows patch authors to bypass the activeness safety check at patch
+ * load time. Do this ONLY IF 1) the patch application will always/likely
+ * fail due to the function being on the stack of at least one thread at
+ * all times and 2) it is safe for both the original and patched versions
+ * of the function to run concurrently.
+ */
+#define KPATCH_FORCE_UNSAFE(_fn) \
+	void *__kpatch_force_func_##_fn __section(.kpatch.force) = _fn;
 
-#endif /* __KPATCH_HOOKS_H_ */
+#endif /* __KPATCH_MACROS_H_ */

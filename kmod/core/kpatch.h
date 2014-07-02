@@ -40,6 +40,7 @@ struct kpatch_func {
 	unsigned long old_size;
 	const char *name;
 	struct list_head list;
+	int force;
 
 	/* private */
 	struct hlist_node node;

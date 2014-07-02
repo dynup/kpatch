@@ -23,4 +23,10 @@ SECTIONS
     __kpatch_hooks_unload_end = . ;
     QUAD(0);
   }
+  .kpatch.force : {
+    __kpatch_force_funcs = . ;
+    *(.kpatch.force)
+    __kpatch_force_funcs_end = . ;
+    QUAD(0);
+  }
 }

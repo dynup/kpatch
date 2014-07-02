@@ -1025,6 +1025,36 @@ void kpatch_include_hook_elements(struct kpatch_elf *kelf)
 			sym->include = 0;
 }
 
+void kpatch_include_force_elements(struct kpatch_elf *kelf)
+{
+	struct section *sec;
+	struct symbol *sym;
+	struct rela *rela;
+
+	/* include force sections */
+	list_for_each_entry(sec, &kelf->sections, list) {
+		if (!strcmp(sec->name, ".kpatch.force") ||
+		    !strcmp(sec->name, ".rela.kpatch.force")) {
+			sec->include = 1;
+			if (!is_rela_section(sec)) {
+				/* .kpatch.force */
+				sec->secsym->include = 1;
+				continue;
+			}
+			/* .rela.kpatch.force */
+			list_for_each_entry(rela, &sec->relas, list)
+				log_normal("function '%s' marked with KPATCH_FORCE_UNSAFE!\n",
+				           rela->sym->name);
+		}
+	}
+
+	/* strip temporary global kpatch_force_func_* symbols */
+	list_for_each_entry(sym, &kelf->symbols, list)
+		if (!strncmp(sym->name, "__kpatch_force_func_",
+		            strlen("__kpatch_force_func_")))
+			sym->include = 0;
+}
+
 int kpatch_include_changed_functions(struct kpatch_elf *kelf)
 {
 	struct symbol *sym;
@@ -2266,6 +2296,7 @@ int main(int argc, char *argv[])
 	num_changed = kpatch_include_changed_functions(kelf_patched);
 	kpatch_include_debug_sections(kelf_patched);
 	kpatch_include_hook_elements(kelf_patched);
+	kpatch_include_force_elements(kelf_patched);
 	kpatch_dump_kelf(kelf_patched);
 	kpatch_verify_patchability(kelf_patched);
 
