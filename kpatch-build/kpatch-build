@@ -321,12 +321,12 @@ else
 		echo "Unpacking kernel source"
 		rpmdev-setuptree >> "$LOGFILE" 2>&1 || die
 		rpm -ivh "$SRCRPM" >> "$LOGFILE" 2>&1 || die
-		rpmbuild -bp "--target=$(uname -m)" "$HOME/rpmbuild/SPECS/kernel.spec" >> "$LOGFILE" 2>&1 ||
+		rpmbuild -bp "--target=$(uname -m)" "$(rpm --eval %{_specdir})"/kernel.spec >> "$LOGFILE" 2>&1 ||
 			die "rpmbuild -bp failed.  you may need to run 'yum-builddep kernel' first."
 
 		clean_cache
 
-		mv "$HOME"/rpmbuild/BUILD/kernel-*/linux-"$ARCHVERSION" "$SRCDIR" >> "$LOGFILE" 2>&1 || die
+		mv "$(rpm --eval %{_builddir})"/kernel-*/linux-"$ARCHVERSION" "$SRCDIR" >> "$LOGFILE" 2>&1 || die
 
 		cp "$SRCDIR/.config" "$OBJDIR" || die
 		echo "-${ARCHVERSION##*-}" > "$SRCDIR/localversion" || die
