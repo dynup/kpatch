@@ -105,7 +105,7 @@ find_dirs() {
 gcc_version_check() {
 	# ensure gcc version matches that used to build the kernel
 	local gccver=$(gcc --version |head -n1 |cut -d' ' -f3-)
-	local kgccver=$(strings $VMLINUX |grep "GCC:" |head -n1 |cut -d' ' -f3-)
+	local kgccver=$(strings -a $VMLINUX |grep "GCC:" |head -n1 |cut -d' ' -f3-)
 	if [[ $gccver != $kgccver ]]; then
 		warn "gcc/kernel version mismatch"
 		return 1
