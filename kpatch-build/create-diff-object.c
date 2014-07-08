@@ -1134,6 +1134,9 @@ void kpatch_migrate_included_elements(struct kpatch_elf *kelf, struct kpatch_elf
 		list_del(&sec->list);
 		list_add_tail(&sec->list, &out->sections);
 		sec->index = 0;
+		if (!is_rela_section(sec) && sec->secsym && !sec->secsym->include)
+			/* break link to non-included section symbol */
+			sec->secsym = NULL;
 	}
 
 	/* migrate included symbols from kelf to out */
