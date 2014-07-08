@@ -84,7 +84,7 @@ apt-get update && apt-get install linux-image-$(uname -r)-dbgsym
 
 Install the dependencies for compiling kpatch:
 
-    apt-get install make gcc libelf-dev
+    apt-get install make gcc libelf-dev build-essential
 
 Install and prepare the kernel sources:
 
