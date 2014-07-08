@@ -1816,8 +1816,22 @@ void kpatch_create_dynamic_rela_sections(struct kpatch_elf *kelf,
 			} else {
 				/*
 				 * We have a patch to a module which references
-				 * a global symbol.  First try to find it in
-				 * the module being patched.
+				 * a global symbol.
+				 */
+
+				/*
+				 * __fentry__ relas can't be converted to
+				 * dynrelas because the ftrace module init code
+				 * runs before the dynrela code can initialize
+				 * them.  __fentry__ is exported by the kernel,
+				 * so leave it as a normal rela.
+				 */
+				if (!strcmp(rela->sym->name, "__fentry__"))
+					continue;
+
+				/*
+				 * Try to find the symbol in the module being
+				 * patched.
 				 */
 				if (lookup_global_symbol(table, rela->sym->name,
 							 &result))
