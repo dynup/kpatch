@@ -229,7 +229,7 @@ static void kpatch_backtrace_address_verify(void *data, unsigned long address,
 
 	/* in the replace case, need to check the func hash as well */
 	hash_for_each_rcu(kpatch_func_hash, i, func, node) {
-		if (func->op == KPATCH_OP_UNPATCH) {
+		if (func->op == KPATCH_OP_UNPATCH && !func->force) {
 			args->ret = kpatch_compare_addresses(address,
 			                        func->new_addr,
 			                        func->new_size,
