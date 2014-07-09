@@ -77,6 +77,38 @@ wget -Nq http://ddebs.ubuntu.com/dbgsym-release-key.asc -O- | sudo apt-key add -
 apt-get update && apt-get install linux-image-$(uname -r)-dbgsym
 ```
 
+####Debian 8.0
+
+*NOTE: You'll need about 15GB of free disk space for the kpatch-build cache in
+`~/.kpatch` and for ccache.*
+
+Install the dependencies for compiling kpatch:
+
+    apt-get install make gcc libelf-dev build-essential
+
+Install and prepare the kernel sources:
+
+    apt-get install linux-source-$(uname -r)
+    cd /usr/src && tar xvf linux-source-$(uname -r).tar.xz && ln -s linux-source-$(uname -r) linux && cd linux
+    cp /boot/config-$(uname -r) .config
+    for OPTION in CONFIG_KALLSYMS_ALL CONFIG_FUNCTION_TRACER ; do sed -i "s/# $OPTION is not set/$OPTION=y/g" .config ; done
+    sed -i "s/^SUBLEVEL.*/SUBLEVEL =/" Makefile
+    make -j`getconf _NPROCESSORS_CONF` deb-pkg KDEB_PKGVERSION=$(uname -r).9-1
+
+Install the kernel packages and reboot
+
+    dpkg -i /usr/src/*.deb
+    reboot
+
+Install the dependencies for the "kpatch-build" command:
+
+    apt-get install dpkg-dev
+    apt-get build-dep linux
+
+    # optional, but highly recommended
+    apt-get install ccache
+    ccache --max-size=5G
+
 ###Build
 
 Compile kpatch:
