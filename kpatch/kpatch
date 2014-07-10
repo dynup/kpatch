@@ -114,12 +114,11 @@ unload_module () {
 		echo "disabling patch module: $PATCH"
 		echo 0 > $ENABLED || die "can't disable $PATCH"
 	fi
-	echo "unloading patch module: $PATCH"
-	rmmod $PATCH 2> /dev/null
 
+	echo "unloading patch module: $PATCH"
 	# ignore any error here because rmmod can fail if the module used
 	# KPATCH_FORCE_UNSAFE.
-	return
+	rmmod $PATCH 2> /dev/null || return 0
 }
 
 unload_disabled_modules() {
