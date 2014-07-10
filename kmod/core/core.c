@@ -794,7 +794,7 @@ out:
 
 int kpatch_register(struct kpatch_module *kpmod, bool replace)
 {
-	int ret, i;
+	int ret, i, force = 0;
 	struct kpatch_object *object;
 	struct kpatch_func *func;
 
@@ -856,6 +856,8 @@ int kpatch_register(struct kpatch_module *kpmod, bool replace)
 		hash_for_each_rcu(kpatch_func_hash, i, func, node) {
 			if (func->op != KPATCH_OP_UNPATCH)
 				continue;
+			if (func->force)
+				force = 1;
 			hash_del_rcu(&func->node);
 			WARN_ON(kpatch_ftrace_remove_func(func->old_addr));
 		}
@@ -867,7 +869,14 @@ int kpatch_register(struct kpatch_module *kpmod, bool replace)
 			kpmod2->enabled = false;
 			pr_notice("unloaded patch module '%s'\n",
 				  kpmod2->mod->name);
-			module_put(kpmod2->mod);
+
+			/*
+			 * Don't allow modules with forced functions to be
+			 * removed because they might still be in use.
+			 */
+			if (!force)
+				module_put(kpmod2->mod);
+
 			list_del(&kpmod2->list);
 		}
 	}
@@ -926,7 +935,7 @@ int kpatch_unregister(struct kpatch_module *kpmod)
 {
 	struct kpatch_object *object;
 	struct kpatch_func *func;
-	int ret;
+	int ret, force = 0;
 
 	if (!kpmod->enabled)
 		return -EINVAL;
@@ -935,6 +944,8 @@ int kpatch_unregister(struct kpatch_module *kpmod)
 
 	do_for_each_linked_func(kpmod, func) {
 		func->op = KPATCH_OP_UNPATCH;
+		if (func->force)
+			force = 1;
 	} while_for_each_linked_func();
 
 	/* memory barrier between func hash and state write */
@@ -974,7 +985,14 @@ int kpatch_unregister(struct kpatch_module *kpmod)
 	pr_notice("unloaded patch module '%s'\n", kpmod->mod->name);
 
 	kpmod->enabled = false;
-	module_put(kpmod->mod);
+
+	/*
+	 * Don't allow modules with forced functions to be removed because they
+	 * might still be in use.
+	 */
+	if (!force)
+		module_put(kpmod->mod);
+
 	list_del(&kpmod->list);
 
 out:
