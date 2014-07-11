@@ -165,7 +165,7 @@ case "$1" in
 "unload")
 	[[ "$#" -ne 2 ]] && usage
 	[[ $2 =~ ^- ]] && usage
-	unload_module "$2" || die "failed to unload module $2"
+	unload_module "$(basename $2)" || die "failed to unload module $2"
 	;;
 
 "install")
