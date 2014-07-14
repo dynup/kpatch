@@ -132,6 +132,7 @@ static atomic_t kpatch_state;
 static inline void kpatch_state_idle(void)
 {
 	int state = atomic_read(&kpatch_state);
+
 	WARN_ON(state != KPATCH_STATE_SUCCESS && state != KPATCH_STATE_FAILURE);
 	atomic_set(&kpatch_state, KPATCH_STATE_IDLE);
 }
@@ -146,6 +147,7 @@ static inline void kpatch_state_updating(void)
 static inline int kpatch_state_finish(int state)
 {
 	int result;
+
 	WARN_ON(state != KPATCH_STATE_SUCCESS && state != KPATCH_STATE_FAILURE);
 	result = atomic_cmpxchg(&kpatch_state, KPATCH_STATE_UPDATING, state);
 	return result == KPATCH_STATE_UPDATING ? state : result;
@@ -231,9 +233,9 @@ static void kpatch_backtrace_address_verify(void *data, unsigned long address,
 	hash_for_each_rcu(kpatch_func_hash, i, func, node) {
 		if (func->op == KPATCH_OP_UNPATCH && !func->force) {
 			args->ret = kpatch_compare_addresses(address,
-			                        func->new_addr,
-			                        func->new_size,
-						func->name);
+							     func->new_addr,
+							     func->new_size,
+							     func->name);
 			if (args->ret)
 				return;
 		}
@@ -588,29 +590,29 @@ static int kpatch_write_relocations(struct kpatch_module *kpmod,
 		}
 
 		switch (dynrela->type) {
-			case R_X86_64_NONE:
-				continue;
-			case R_X86_64_PC32:
-				loc = dynrela->dest;
-				val = (u32)(dynrela->src + dynrela->addend -
-				            dynrela->dest);
-				size = 4;
-				break;
-			case R_X86_64_32S:
-				loc = dynrela->dest;
-				val = (s32)dynrela->src + dynrela->addend;
-				size = 4;
-				break;
-			case R_X86_64_64:
-				loc = dynrela->dest;
-				val = dynrela->src;
-				size = 8;
-				break;
-			default:
-				pr_err("unsupported rela type %ld for source %s (0x%lx <- 0x%lx)\n",
-				       dynrela->type, dynrela->name,
-				       dynrela->dest, dynrela->src);
-				return -EINVAL;
+		case R_X86_64_NONE:
+			continue;
+		case R_X86_64_PC32:
+			loc = dynrela->dest;
+			val = (u32)(dynrela->src + dynrela->addend -
+				    dynrela->dest);
+			size = 4;
+			break;
+		case R_X86_64_32S:
+			loc = dynrela->dest;
+			val = (s32)dynrela->src + dynrela->addend;
+			size = 4;
+			break;
+		case R_X86_64_64:
+			loc = dynrela->dest;
+			val = dynrela->src;
+			size = 8;
+			break;
+		default:
+			pr_err("unsupported rela type %ld for source %s (0x%lx <- 0x%lx)\n",
+			       dynrela->type, dynrela->name, dynrela->dest,
+			       dynrela->src);
+			return -EINVAL;
 		}
 
 		if (loc >= core && loc < core + core_ro_size)
