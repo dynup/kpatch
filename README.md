@@ -18,6 +18,11 @@ Here's a video of kpatch in action:
 
 [![kpatch video](http://img.youtube.com/vi/juyQ5TsJRTA/0.jpg)](http://www.youtube.com/watch?v=juyQ5TsJRTA)
 
+And a few more:
+
+- https://www.youtube.com/watch?v=rN0sFjrJQfU
+- https://www.youtube.com/watch?v=Mftc80KyjA4
+
 Installation
 ------------
 
