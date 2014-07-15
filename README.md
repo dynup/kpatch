@@ -47,6 +47,25 @@ Install the dependencies for the "kpatch-build" command:
     sudo yum install ccache
     ccache --max-size=5G
 
+####RHEL 7
+
+*NOTE: You'll need about 15GB of free disk space for the kpatch-build cache in
+`~/.kpatch` and for ccache.*
+
+Install the dependencies for compiling kpatch:
+
+    sudo yum install gcc kernel-devel elfutils elfutils-devel
+
+Install the dependencies for the "kpatch-build" command:
+
+    sudo yum install rpmdevtools pesign yum-utils zlib-devel binutils-devel newt-devel python-devel perl-ExtUtils-Embed audit-libs-devel numactl-devel pciutils-devel bison
+    sudo yum-builddep kernel
+    sudo debuginfo-install kernel
+
+    # optional, but highly recommended
+    sudo yum install ccache
+    ccache --max-size=5G
+
 ####Ubuntu 14.04
 
 *NOTE: You'll need about 15GB of free disk space for the kpatch-build cache in
