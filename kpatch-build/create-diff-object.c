@@ -913,8 +913,8 @@ void kpatch_verify_patchability(struct kpatch_elf *kelf)
 
 	list_for_each_entry(sec, &kelf->sections, list) {
 		if (sec->status == CHANGED && !sec->include) {
-			log_normal("%s: changed section %s not selected for inclusion\n",
-				   objname, sec->name);
+			log_normal("changed section %s not selected for inclusion\n",
+				   sec->name);
 			errs++;
 		}
 
@@ -922,8 +922,8 @@ void kpatch_verify_patchability(struct kpatch_elf *kelf)
 		if (sec->include &&
 		    (!strncmp(sec->name, ".data", 5) ||
 		     !strncmp(sec->name, ".bss", 4))) {
-			log_normal("%s: data section %s selected for inclusion\n",
-				   objname, sec->name);
+			log_normal("data section %s selected for inclusion\n",
+				   sec->name);
 			errs++;
 		}
 	}
