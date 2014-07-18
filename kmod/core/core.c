@@ -720,9 +720,15 @@ static int kpatch_link_object(struct kpatch_module *kpmod,
 							 old_addr);
 			if (ret)
 				goto err_unlink;
-		} else
-			old_addr = (unsigned long)mod->module_core +
-				   func->old_offset;
+		} else {
+			old_addr = kpatch_find_module_symbol(mod, func->name);
+			if (!old_addr) {
+				pr_err("unable to find symbol '%s' in module '%s\n",
+				       func->name, mod->name);
+				ret = -EINVAL;
+				goto err_unlink;
+			}
+		}
 
 		/* add to ftrace filter and register handler if needed */
 		ret = kpatch_ftrace_add_func(old_addr);
