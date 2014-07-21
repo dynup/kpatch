@@ -112,12 +112,14 @@ Install the dependencies for compiling kpatch:
 
 Install and prepare the kernel sources:
 
-    apt-get install linux-source-$(uname -r)
-    cd /usr/src && tar xvf linux-source-$(uname -r).tar.xz && ln -s linux-source-$(uname -r) linux && cd linux
-    cp /boot/config-$(uname -r) .config
-    for OPTION in CONFIG_KALLSYMS_ALL CONFIG_FUNCTION_TRACER ; do sed -i "s/# $OPTION is not set/$OPTION=y/g" .config ; done
-    sed -i "s/^SUBLEVEL.*/SUBLEVEL =/" Makefile
-    make -j`getconf _NPROCESSORS_CONF` deb-pkg KDEB_PKGVERSION=$(uname -r).9-1
+```bash
+apt-get install linux-source-$(uname -r)
+cd /usr/src && tar xvf linux-source-$(uname -r).tar.xz && ln -s linux-source-$(uname -r) linux && cd linux
+cp /boot/config-$(uname -r) .config
+for OPTION in CONFIG_KALLSYMS_ALL CONFIG_FUNCTION_TRACER ; do sed -i "s/# $OPTION is not set/$OPTION=y/g" .config ; done
+sed -i "s/^SUBLEVEL.*/SUBLEVEL =/" Makefile
+make -j`getconf _NPROCESSORS_CONF` deb-pkg KDEB_PKGVERSION=$(uname -r).9-1
+```
 
 Install the kernel packages and reboot
 
@@ -132,6 +134,41 @@ Install the dependencies for the "kpatch-build" command:
     # optional, but highly recommended
     apt-get install ccache
     ccache --max-size=5G
+
+####Debian 7.x
+
+*NOTE: You'll need about 15GB of free disk space for the kpatch-build cache in
+`~/.kpatch` and for ccache.*
+
+Add backports repositories:
+
+```bash
+echo "deb http://http.debian.net/debian wheezy-backports main" > /etc/apt/sources.list.d/wheezy-backports.list
+echo "deb http://packages.incloudus.com backports-incloudus main" > /etc/apt/sources.list.d/incloudus.list
+wget http://packages.incloudus.com/incloudus/incloudus.pub -O- | apt-key add -
+aptitude update
+```
+
+Install the linux kernel, symbols and gcc 4.9:
+
+    aptitude install -t wheezy-backports -y initramfs-tools
+    aptitude install -y gcc gcc-4.9 linux-image-3.14 linux-image-3.14-dbg
+
+Configure gcc 4.9 as the default gcc compiler:
+
+    update-alternatives --install /usr/bin/gcc gcc /usr/bin/gcc-4.7 20
+    update-alternatives --install /usr/bin/gcc gcc /usr/bin/gcc-4.9 50
+    update-alternatives --install /usr/bin/g++ g++ /usr/bin/g++-4.7 20
+    update-alternatives --install /usr/bin/g++ g++ /usr/bin/g++-4.9 50
+
+Install kpatch and these dependencies:
+
+    aptitude install kpatch
+
+Configure ccache (installed by kpatch package):
+
+    ccache --max-size=5G
+
 
 ###Build
 
