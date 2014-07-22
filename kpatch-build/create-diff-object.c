@@ -190,6 +190,16 @@ int is_debug_section(struct section *sec)
 	return !strncmp(name, ".debug_", 7);
 }
 
+int is_ignore_section(struct section *sec)
+{
+	char *name;
+	if (is_rela_section(sec))
+		name = sec->base->name;
+	else
+		name = sec->name;
+	return !strcmp(name, ".kpatch.ignore");
+}
+
 struct section *find_section_by_index(struct list_head *list, unsigned int index)
 {
 	struct section *sec;
@@ -671,7 +681,8 @@ void kpatch_correlate_symbols(struct list_head *symlist1, struct list_head *syml
 	list_for_each_entry(sym1, symlist1, list) {
 		list_for_each_entry(sym2, symlist2, list) {
 			if (!strcmp(sym1->name, sym2->name) &&
-			    sym1->type == sym2->type) {
+			    sym1->type == sym2->type &&
+			    (!sym2->sec || !is_ignore_section(sym2->sec))) {
 				sym1->twin = sym2;
 				sym2->twin = sym1;
 				/* set initial status, might change */
@@ -1374,6 +1385,20 @@ void kpatch_include_debug_sections(struct kpatch_elf *kelf)
 			if (!rela->sym->sec->include)
 				list_del(&rela->list);
 	}
+}
+
+void kpatch_mark_ignored_elements_same(struct kpatch_elf *kelf)
+{
+	struct section *sec;
+	struct symbol *sym;
+
+	list_for_each_entry(sec, &kelf->sections, list)
+		if (is_ignore_section(sec))
+			sec->status = SAME;
+
+	list_for_each_entry(sym, &kelf->symbols, list)
+		if (sym->sec && is_ignore_section(sym->sec))
+			sym->status = SAME;
 }
 
 void kpatch_process_special_sections(struct kpatch_elf *kelf)
@@ -2308,7 +2333,7 @@ int main(int argc, char *argv[])
 	kpatch_replace_sections_syms(kelf_patched);
 
 	kpatch_process_special_sections(kelf_patched);
-
+	kpatch_mark_ignored_elements_same(kelf_patched);
 	kpatch_include_standard_elements(kelf_patched);
 	num_changed = kpatch_include_changed_functions(kelf_patched);
 	kpatch_include_debug_sections(kelf_patched);
