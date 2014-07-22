@@ -18,6 +18,14 @@ struct kpatch_unload {
 };
 
 /*
+ * __kpatch_ignore
+ *
+ * Add this to a function definition if you want kpatch to ignore changes in
+ * that function
+ */
+#define __kpatch_ignore __section(.kpatch.ignore)
+
+/*
  * KPATCH_LOAD_HOOK macro
  *
  * The first line only ensures that the hook being registered has the required
