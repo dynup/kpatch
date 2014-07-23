@@ -1477,12 +1477,12 @@ void kpatch_include_debug_sections(struct kpatch_elf *kelf)
 	}
 }
 
-void kpatch_mark_ignored_funcs_same(struct kpatch_elf *kelf)
+void kpatch_mark_ignored_functions_same(struct kpatch_elf *kelf)
 {
 	struct section *sec;
 	struct rela *rela;
 
-	sec = find_section_by_name(&kelf->sections, ".kpatch.ignore.funcs");
+	sec = find_section_by_name(&kelf->sections, ".kpatch.ignore.functions");
 	if (!sec)
 		return;
 
@@ -1493,7 +1493,7 @@ void kpatch_mark_ignored_funcs_same(struct kpatch_elf *kelf)
 			ERROR("expected function symbol");
 		log_normal("ignoring function %s\n", rela->sym->name);
 		if (rela->sym->status != CHANGED)
-			log_normal("NOTICE: no change detected in function %s, unnecessary KPATCH_IGNORE_FUNC()?\n", rela->sym->name);
+			log_normal("NOTICE: no change detected in function %s, unnecessary KPATCH_IGNORE_FUNCTION()?\n", rela->sym->name);
 		rela->sym->status = SAME;
 		rela->sym->sec->status = SAME;
 		if (rela->sym->sec->secsym)
@@ -2428,7 +2428,7 @@ int main(int argc, char *argv[])
 	kpatch_elf_teardown(kelf_base);
 	kpatch_elf_free(kelf_base);
 
-	kpatch_mark_ignored_funcs_same(kelf_patched);
+	kpatch_mark_ignored_functions_same(kelf_patched);
 
 	kpatch_process_special_sections(kelf_patched);
 

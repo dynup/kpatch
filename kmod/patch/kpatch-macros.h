@@ -26,7 +26,7 @@ struct kpatch_unload {
  * detected as changed when, in fact, there has been no functional change.
  */
 #define KPATCH_IGNORE_FUNCTION(_fn) \
-	void *__kpatch_ignore_func_##_fn __section(.kpatch.ignore.funcs) = _fn;
+	void *__kpatch_ignore_func_##_fn __section(.kpatch.ignore.functions) = _fn;
 
 /*
  * KPATCH_LOAD_HOOK macro
