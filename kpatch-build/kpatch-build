@@ -44,7 +44,6 @@ CPUS="$(getconf _NPROCESSORS_ONLN)"
 CACHEDIR="$HOME/.kpatch"
 SRCDIR="$CACHEDIR/src"
 OBJDIR="$CACHEDIR/obj"
-OBJDIR2="$CACHEDIR/obj2"
 VERSIONFILE="$CACHEDIR/version"
 TEMPDIR=
 APPLIEDPATCHFILE="kpatch.patch"
@@ -80,7 +79,7 @@ cleanup() {
 
 clean_cache() {
 	[[ -z $USERSRCDIR ]] && rm -rf "$SRCDIR"
-	rm -rf "$OBJDIR" "$OBJDIR2" "$VERSIONFILE"
+	rm -rf "$OBJDIR" "$VERSIONFILE"
 	mkdir -p "$OBJDIR"
 }
 
@@ -388,7 +387,7 @@ cd "$SRCDIR" || die
 patch -N -p1 --dry-run < "$PATCHFILE" || die "source patch file failed to apply"
 cp "$PATCHFILE" "$APPLIEDPATCHFILE" || die
 cp -LR "$DATADIR/patch" "$TEMPDIR" || die
-export KCFLAGS="-I$DATADIR/patch" # for kpatch-macros.h
+export KCFLAGS="-I$DATADIR/patch -ffunction-sections -fdata-sections"
 
 echo "Building original kernel"
 make mrproper >> "$LOGFILE" 2>&1 || die
@@ -418,25 +417,20 @@ done < "$TEMPDIR/patched_build.log"
 
 [[ ! -s "$TEMPDIR/changed_objs" ]] && die "no changed objects were detected"
 
-echo "Rebuilding changed objects"
-rm -rf "$OBJDIR2"
-mkdir -p "$OBJDIR2"
-cp "$OBJDIR/.config" "$OBJDIR2" || die
 mkdir "$TEMPDIR/patched"
-export KCFLAGS="$KCFLAGS -ffunction-sections -fdata-sections"
 for i in $(cat $TEMPDIR/changed_objs); do
-	make "$i" "O=$OBJDIR2" >> "$LOGFILE" 2>&1 || die
 	mkdir -p "$TEMPDIR/patched/$(dirname $i)"
-	cp -f "$OBJDIR2/$i" "$TEMPDIR/patched/$i" || die
+	cp -f "$OBJDIR/$i" "$TEMPDIR/patched/$i" || die
 done
+
+echo "Rebuilding original objects"
 patch -R -p1 < "$APPLIEDPATCHFILE" >> "$LOGFILE" 2>&1
 rm -f "$APPLIEDPATCHFILE"
+make "-j$CPUS" $TARGETS "O=$OBJDIR" >> "$LOGFILE" 2>&1 || die
 mkdir "$TEMPDIR/orig"
 for i in $(cat $TEMPDIR/changed_objs); do
-	rm -f "$i"
-	make "$i" "O=$OBJDIR2" >> "$LOGFILE" 2>&1 || die
 	mkdir -p "$TEMPDIR/orig/$(dirname $i)"
-	cp -f "$OBJDIR2/$i" "$TEMPDIR/orig/$i" || die
+	cp -f "$OBJDIR/$i" "$TEMPDIR/orig/$i" || die
 done
 
 echo "Extracting new and modified ELF sections"
