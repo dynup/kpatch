@@ -18,6 +18,17 @@ struct kpatch_unload {
 };
 
 /*
+ * KPATCH_IGNORE_FUNCTION macro
+ *
+ * This macro is for ignoring functions that may change as a side effect of a
+ * change in another function.  The WARN class of macros, for example, embed
+ * the line number in an instruction, which will cause the function to be
+ * detected as changed when, in fact, there has been no functional change.
+ */
+#define KPATCH_IGNORE_FUNCTION(_fn) \
+	void *__kpatch_ignore_func_##_fn __section(.kpatch.ignore.funcs) = _fn;
+
+/*
  * KPATCH_LOAD_HOOK macro
  *
  * The first line only ensures that the hook being registered has the required

@@ -1376,6 +1376,32 @@ void kpatch_include_debug_sections(struct kpatch_elf *kelf)
 	}
 }
 
+void kpatch_mark_ignored_funcs_same(struct kpatch_elf *kelf)
+{
+	struct section *sec;
+	struct rela *rela;
+
+	sec = find_section_by_name(&kelf->sections, ".kpatch.ignore.funcs");
+	if (!sec)
+		return;
+
+	list_for_each_entry(rela, &sec->rela->relas, list) {
+		if (!rela->sym->sec)
+			ERROR("expected bundled symbol");
+		if (rela->sym->type != STT_FUNC)
+			ERROR("expected function symbol");
+		log_normal("ignoring function %s\n", rela->sym->name);
+		if (rela->sym->status != CHANGED)
+			log_normal("NOTICE: no change detected in function %s, unnecessary KPATCH_IGNORE_FUNC()?\n", rela->sym->name);
+		rela->sym->status = SAME;
+		rela->sym->sec->status = SAME;
+		if (rela->sym->sec->secsym)
+			rela->sym->sec->secsym->status = SAME;
+		if (rela->sym->sec->rela)
+			rela->sym->sec->rela->status = SAME;
+	}
+}
+
 void kpatch_process_special_sections(struct kpatch_elf *kelf)
 {
 	struct special_section *special;
@@ -2306,6 +2332,7 @@ int main(int argc, char *argv[])
 	 * in vmlinux can be linked to.
 	 */
 	kpatch_replace_sections_syms(kelf_patched);
+	kpatch_mark_ignored_funcs_same(kelf_patched);
 
 	kpatch_process_special_sections(kelf_patched);
 
