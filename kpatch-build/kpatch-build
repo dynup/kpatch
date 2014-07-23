@@ -79,6 +79,7 @@ cleanup() {
 
 clean_cache() {
 	[[ -z $USERSRCDIR ]] && rm -rf "$SRCDIR"
+	rm -rf "$OBJDIR" "$VERSIONFILE"
 	mkdir -p "$OBJDIR"
 }
 
@@ -416,7 +417,6 @@ done < "$TEMPDIR/patched_build.log"
 
 [[ ! -s "$TEMPDIR/changed_objs" ]] && die "no changed objects were detected"
 
-echo "Copying changed objects"
 mkdir "$TEMPDIR/patched"
 for i in $(cat $TEMPDIR/changed_objs); do
 	mkdir -p "$TEMPDIR/patched/$(dirname $i)"
