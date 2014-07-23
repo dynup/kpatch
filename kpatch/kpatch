@@ -42,6 +42,7 @@ usage () {
 	usage_cmd "load --all" "load all installed patch modules into the running kernel"
 	usage_cmd "load <module>" "load patch module into the running kernel"
 	usage_cmd "replace <module>" "load patch module into the running kernel, replacing all other modules"
+	usage_cmd "unload --all" "unload all patch modules from the running kernel"
 	usage_cmd "unload <module>" "unload patch module from the running kernel"
 	echo >&2
 	usage_cmd "info <module>" "show information about a patch module"
@@ -164,8 +165,17 @@ case "$1" in
 
 "unload")
 	[[ "$#" -ne 2 ]] && usage
-	[[ $2 =~ ^- ]] && usage
-	unload_module "$(basename $2)" || die "failed to unload module $2"
+	case "$2" in
+	"--all")
+		for module in /sys/kernel/kpatch/patches/*; do
+			[[ -e $module ]] || continue
+			unload_module $(basename $module) || die "failed to unload module $module"
+		done
+		;;
+	*)
+		unload_module "$(basename $2)" || die "failed to unload module $2"
+		;;
+	esac
 	;;
 
 "install")
