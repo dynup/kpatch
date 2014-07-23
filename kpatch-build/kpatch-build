@@ -424,20 +424,24 @@ mkdir -p "$OBJDIR2"
 cp "$OBJDIR/.config" "$OBJDIR2" || die
 mkdir "$TEMPDIR/patched"
 export KCFLAGS="$KCFLAGS -ffunction-sections -fdata-sections"
+make all O=$OBJDIR2 2>&1 || die
 for i in $(cat $TEMPDIR/changed_objs); do
-	make "$i" "O=$OBJDIR2" >> "$LOGFILE" 2>&1 || die
 	mkdir -p "$TEMPDIR/patched/$(dirname $i)"
 	cp -f "$OBJDIR2/$i" "$TEMPDIR/patched/$i" || die
 done
+rm -rf $OBJDIR2 || die
+
+cp "$OBJDIR/.config"  "$OBJDIR2" || die
 patch -R -p1 < "$APPLIEDPATCHFILE" >> "$LOGFILE" 2>&1
 rm -f "$APPLIEDPATCHFILE"
+make all O=$SELINUX_TEMPDIR_ORIG 2>&1 || die
 mkdir "$TEMPDIR/orig"
 for i in $(cat $TEMPDIR/changed_objs); do
 	rm -f "$i"
-	make "$i" "O=$OBJDIR2" >> "$LOGFILE" 2>&1 || die
 	mkdir -p "$TEMPDIR/orig/$(dirname $i)"
 	cp -f "$OBJDIR2/$i" "$TEMPDIR/orig/$i" || die
 done
+rm -rf $OBJDIR2 || :
 
 echo "Extracting new and modified ELF sections"
 cd "$TEMPDIR/orig"
