@@ -620,10 +620,14 @@ void kpatch_compare_correlated_symbol(struct symbol *sym)
 
 	if (sym1->sym.st_info != sym2->sym.st_info ||
 	    sym1->sym.st_other != sym2->sym.st_other ||
-	    (sym1->sec && sym2->sec && sym1->sec->twin != sym2->sec) ||
 	    (sym1->sec && !sym2->sec) ||
 	    (sym2->sec && !sym1->sec))
 		DIFF_FATAL("symbol info mismatch: %s", sym1->name);
+
+	if (sym1->sec && sym2->sec && sym1->sec->twin != sym2->sec) {
+		log_normal("NOTICE: symbol %s has changed sections\n", sym1->name);
+		sym1->status = CHANGED;
+	}
 
 	if (sym1->type == STT_OBJECT &&
 	    sym1->sym.st_size != sym2->sym.st_size)
@@ -1481,6 +1485,52 @@ void kpatch_include_debug_sections(struct kpatch_elf *kelf)
 		list_for_each_entry_safe(rela, saferela, &sec->relas, list)
 			if (!rela->sym->sec->include)
 				list_del(&rela->list);
+	}
+}
+
+void kpatch_mark_ignored_sections_same(struct kpatch_elf *kelf)
+{
+	struct section *sec, *strsec, *ignoresec;
+	struct symbol *sym;
+	struct rela *rela;
+	char *name;
+
+	sec = find_section_by_name(&kelf->sections, ".kpatch.ignore.sections");
+	if (!sec)
+		return;
+
+	list_for_each_entry(rela, &sec->rela->relas, list) {
+		strsec = rela->sym->sec;
+		strsec->status = CHANGED;
+		/*
+		 * Include the string section here.  This is because the
+		 * KPATCH_IGNORE_SECTION() macro is passed a literal string
+		 * by the patch author, resulting in a change to the string
+		 * section.  If we don't include it, then we will potentially
+		 * get a "changed section not included" error in
+		 * kpatch_verify_patchability() if not other function based change
+		 * also changes the string section.  We could try to exclude each
+		 * literal string added to the section by KPATCH_IGNORE_SECTION()
+		 * from the section data comparison, but this is a simpler way.
+		 */
+		strsec->include = 1;
+		name = strsec->data->d_buf + rela->addend;
+		ignoresec = find_section_by_name(&kelf->sections, name);
+		if (!ignoresec)
+			ERROR("expected ignored section");
+		log_normal("ignoring section %s\n", name);
+		if (ignoresec->status != CHANGED)
+			ERROR("no change detected in ignored section %s\n", ignoresec->name);
+		ignoresec->status = SAME;
+		if (ignoresec->secsym)
+			ignoresec->secsym->status = SAME;
+		if (ignoresec->rela)
+			ignoresec->rela->status = SAME;
+		list_for_each_entry(sym, &kelf->symbols, list) {
+			if (sym->sec != sec)
+				continue;
+			sym->status = SAME;
+		}
 	}
 }
 
@@ -2436,6 +2486,7 @@ int main(int argc, char *argv[])
 	kpatch_elf_free(kelf_base);
 
 	kpatch_mark_ignored_functions_same(kelf_patched);
+	kpatch_mark_ignored_sections_same(kelf_patched);
 
 	kpatch_process_special_sections(kelf_patched);
 
