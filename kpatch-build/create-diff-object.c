@@ -796,6 +796,13 @@ void rela_insn(struct section *sec, struct rela *rela, struct insn *insn)
 	}
 }
 
+/*
+ * Mangle the relas a little.  The compiler will sometimes use section symbols
+ * to reference local objects and functions rather than the object or function
+ * symbols themselves.  We substitute the object/function symbols for the
+ * section symbol in this case so that the relas can be properly correlated and
+ * so that the existing object/function in vmlinux can be linked to.
+ */
 void kpatch_replace_sections_syms(struct kpatch_elf *kelf)
 {
 	struct section *sec;
@@ -2311,9 +2318,12 @@ int main(int argc, char *argv[])
 	kpatch_check_program_headers(kelf_base->elf);
 	kpatch_check_program_headers(kelf_patched->elf);
 
+	kpatch_replace_sections_syms(kelf_base);
+	kpatch_replace_sections_syms(kelf_patched);
 	kpatch_rename_mangled_functions(kelf_base, kelf_patched);
 
 	kpatch_correlate_elfs(kelf_base, kelf_patched);
+
 	/*
 	 * After this point, we don't care about kelf_base anymore.
 	 * We access its sections via the twin pointers in the
@@ -2323,15 +2333,6 @@ int main(int argc, char *argv[])
 	kpatch_elf_teardown(kelf_base);
 	kpatch_elf_free(kelf_base);
 
-	/*
-	 * Mangle the relas a little.  The compiler will sometimes
-	 * use section symbols to reference local objects and functions
-	 * rather than the object or function symbols themselves.
-	 * We substitute the object/function symbols for the section
-	 * symbol in this case so that the existing object/function
-	 * in vmlinux can be linked to.
-	 */
-	kpatch_replace_sections_syms(kelf_patched);
 	kpatch_mark_ignored_funcs_same(kelf_patched);
 
 	kpatch_process_special_sections(kelf_patched);
