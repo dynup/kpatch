@@ -764,6 +764,101 @@ void kpatch_rename_mangled_functions(struct kpatch_elf *base,
 	}
 }
 
+/*
+ * gcc renames static local variables by appending a period and a number.  For
+ * example, __key could be renamed to __key.31452.  Unfortunately this number
+ * can arbitrarily change.  Try to rename the patched version of the symbol to
+ * match the base version and then correlate them.
+ */
+void kpatch_correlate_static_local_variables(struct kpatch_elf *base,
+					     struct kpatch_elf *patched)
+{
+	struct symbol *sym, *basesym;
+	struct section *tmpsec, *sec;
+	struct rela *rela;
+	int prefixlen;
+	char *dot;
+
+	list_for_each_entry(sym, &patched->symbols, list) {
+		if (sym->type != STT_OBJECT || sym->bind != STB_LOCAL ||
+		    sym->twin)
+			continue;
+
+		dot = strchr(sym->name, '.');
+		if (!dot)
+			continue;
+		prefixlen = dot - sym->name;
+		if (sym->name[prefixlen+1] < '0' ||
+		    sym->name[prefixlen+1] > '9')
+			continue;
+
+		/* find the patched function which uses the static variable */
+		sec = NULL;
+		list_for_each_entry(tmpsec, &patched->sections, list) {
+			if (!is_rela_section(tmpsec) ||
+			    is_debug_section(tmpsec))
+				continue;
+			list_for_each_entry(rela, &tmpsec->relas, list) {
+				if (rela->sym != sym)
+					continue;
+				if (sec)
+					ERROR("static local variable %s used by two functions",
+					      sym->name);
+				sec = tmpsec;
+				break;
+			}
+		}
+		if (!sec)
+			ERROR("static local variable %s not used", sym->name);
+
+		if (!sec->twin)
+			continue;
+
+		/*
+		 * Ensure there are no other orphaned static variables with the
+		 * same prefix in the function.  This is possible if the
+		 * variables are in different scopes (using C braces).
+		 */
+		list_for_each_entry(rela, &sec->relas, list) {
+			if (rela->sym == sym || rela->sym->twin)
+				continue;
+			if (!strncmp(rela->sym->name, sym->name, prefixlen))
+				ERROR("found another static local variable matching %s in patched %s",
+				      sym->name, sec->name);
+		}
+
+		/* find the base object's corresponding variable */
+		basesym = NULL;
+		list_for_each_entry(rela, &sec->twin->relas, list) {
+			if (rela->sym->twin)
+				continue;
+			if (strncmp(rela->sym->name, sym->name, prefixlen))
+				continue;
+			if (basesym)
+				ERROR("found two static local variables matching %s in orig %s",
+				      sym->name, sec->name);
+
+			basesym = rela->sym;
+		}
+		if (!basesym)
+			continue;
+
+		if (sym != sym->sec->sym)
+			ERROR("expected bundled section for %s", sym->name);
+		if (basesym != basesym->sec->sym)
+			ERROR("expected bundled section for %s",basesym->name);
+
+		log_debug("renaming and correlating %s to %s\n",
+			  sym->name, basesym->name);
+		sym->name = strdup(basesym->name);
+		sym->twin = basesym;
+		basesym->twin = sym;
+		sym->sec->twin = basesym->sec;
+		basesym->sec->twin = sym->sec;
+		sym->status = basesym->status = SAME;
+	}
+}
+
 void kpatch_correlate_elfs(struct kpatch_elf *kelf1, struct kpatch_elf *kelf2)
 {
 	kpatch_correlate_sections(&kelf1->sections, &kelf2->sections);
@@ -796,6 +891,13 @@ void rela_insn(struct section *sec, struct rela *rela, struct insn *insn)
 	}
 }
 
+/*
+ * Mangle the relas a little.  The compiler will sometimes use section symbols
+ * to reference local objects and functions rather than the object or function
+ * symbols themselves.  We substitute the object/function symbols for the
+ * section symbol in this case so that the relas can be properly correlated and
+ * so that the existing object/function in vmlinux can be linked to.
+ */
 void kpatch_replace_sections_syms(struct kpatch_elf *kelf)
 {
 	struct section *sec;
@@ -2311,9 +2413,13 @@ int main(int argc, char *argv[])
 	kpatch_check_program_headers(kelf_base->elf);
 	kpatch_check_program_headers(kelf_patched->elf);
 
+	kpatch_replace_sections_syms(kelf_base);
+	kpatch_replace_sections_syms(kelf_patched);
 	kpatch_rename_mangled_functions(kelf_base, kelf_patched);
 
 	kpatch_correlate_elfs(kelf_base, kelf_patched);
+	kpatch_correlate_static_local_variables(kelf_base, kelf_patched);
+
 	/*
 	 * After this point, we don't care about kelf_base anymore.
 	 * We access its sections via the twin pointers in the
@@ -2323,15 +2429,6 @@ int main(int argc, char *argv[])
 	kpatch_elf_teardown(kelf_base);
 	kpatch_elf_free(kelf_base);
 
-	/*
-	 * Mangle the relas a little.  The compiler will sometimes
-	 * use section symbols to reference local objects and functions
-	 * rather than the object or function symbols themselves.
-	 * We substitute the object/function symbols for the section
-	 * symbol in this case so that the existing object/function
-	 * in vmlinux can be linked to.
-	 */
-	kpatch_replace_sections_syms(kelf_patched);
 	kpatch_mark_ignored_funcs_same(kelf_patched);
 
 	kpatch_process_special_sections(kelf_patched);
