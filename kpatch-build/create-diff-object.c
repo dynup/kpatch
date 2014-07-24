@@ -571,6 +571,13 @@ void kpatch_compare_correlated_section(struct section *sec)
 	    sec1->sh.sh_entsize != sec2->sh.sh_entsize)
 		DIFF_FATAL("%s section header details differ", sec1->name);
 
+	/* Short circuit for mcount sections, we rebuild regardless */
+	if (!strcmp(sec->name, ".rela__mcount_loc") ||
+	    !strcmp(sec->name, "__mcount_loc")) {
+		sec->status = SAME;
+		goto out;
+	}
+
 	if (sec1->sh.sh_size != sec2->sh.sh_size ||
 	    sec1->data->d_size != sec2->data->d_size) {
 		sec->status = CHANGED;
