@@ -569,7 +569,7 @@ void kpatch_compare_correlated_section(struct section *sec)
 	    sec1->sh.sh_addr != sec2->sh.sh_addr ||
 	    sec1->sh.sh_addralign != sec2->sh.sh_addralign ||
 	    sec1->sh.sh_entsize != sec2->sh.sh_entsize ||
-	    sec1->sh.sh_link != sec1->sh.sh_link)
+	    sec1->sh.sh_link != sec2->sh.sh_link)
 		DIFF_FATAL("%s section header details differ", sec1->name);
 
 	if (sec1->sh.sh_size != sec2->sh.sh_size ||
