@@ -1,6 +1,6 @@
 Name: kpatch
 Summary: Dynamic kernel patching
-Version: 0.1.7
+Version: 0.1.9
 License: GPLv2 
 Group: System Environment/Kernel
 URL: http://github.com/dynup/kpatch
@@ -85,7 +85,7 @@ rm -rf %{buildroot}
 
 %files %{KVER}
 %defattr(-,root,root,-)
-%{_usr}/lib/modules/%{KVER}/extra/%{name}/*
+%{_usr}/lib/kpatch/%{KVER}
 
 %files build
 %defattr(-,root,root,-)
@@ -95,6 +95,10 @@ rm -rf %{buildroot}
 %{_mandir}/man1/kpatch-build.1*
 
 %changelog
+* Mon Jul 28 2014 Josh Poimboeuf <jpoimboe@redhat.com> - 0.1.9-1
+- moved core module to /usr/lib/kpatch
+- rebased to current version
+
 * Mon Jul 07 2014 Udo Seidel <udoseidel@gmx.de> - 0.1.7-1
 - rebased to current version
 

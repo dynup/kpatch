@@ -26,7 +26,7 @@ install() {
     inst /usr/bin/dirname
     
     # install core module
-    inst_any -d /usr/lib/modules/$kernel/extra/kpatch/kpatch.ko /usr/local/lib/modules/$kernel/extra/kpatch/kpatch.ko /usr/lib/modules/$kernel/extra/kpatch/kpatch.ko
+    inst_any -d /usr/lib/modules/$kernel/extra/kpatch/kpatch.ko /usr/local/lib/modules/$kernel/extra/kpatch/kpatch.ko /usr/lib/modules/$kernel/extra/kpatch/kpatch.ko /usr/lib/kpatch/$kernel/kpatch.ko /usr/local/lib/kpatch/$kernel/kpatch.ko
 
     # install patch modules
     if [[ -e /var/lib/kpatch/$kernel ]]; then
