@@ -4,13 +4,14 @@ CC    = gcc
 INSTALL = /usr/bin/install
 
 PREFIX    ?= /usr/local
+LIBDIR    ?= lib
 BINDIR     = $(DESTDIR)$(PREFIX)/bin
 SBINDIR    = $(DESTDIR)$(PREFIX)/sbin
-MODULESDIR = $(DESTDIR)$(PREFIX)/lib/modules
+MODULESDIR = $(DESTDIR)$(PREFIX)/$(LIBDIR)/modules
 LIBEXECDIR = $(DESTDIR)$(PREFIX)/libexec/kpatch
 DATADIR    = $(DESTDIR)$(PREFIX)/share/kpatch
 MANDIR     = $(DESTDIR)$(PREFIX)/share/man/man1
-DRACUTDIR  = $(DESTDIR)/usr/lib/dracut/modules.d/99kpatch
+DRACUTDIR  = $(DESTDIR)/usr/$(LIBDIR)/dracut/modules.d/99kpatch
 
 .PHONY: all install clean
 .DEFAULT: all
