@@ -2,7 +2,6 @@
 #define __KPATCH_MACROS_H_
 
 #include <linux/compiler.h>
-#include <linux/bug.h>
 
 typedef void (*kpatch_loadcall_t)(void);
 typedef void (*kpatch_unloadcall_t)(void);
@@ -86,44 +85,5 @@ struct kpatch_unload {
  */
 #define KPATCH_FORCE_UNSAFE(_fn) \
 	void *__kpatch_force_func_##_fn __section(.kpatch.force) = _fn;
-
-
-/*
- * KPATCH_WARN_*_LINE macros
- *
- * WARN macros are problematic because they embed the line number in an
- * instruction.  As a result, when a function is changed higher in a file, the
- * line numbers for any WARN calls below that function in the file can result
- * in unnecessarily changed functions.
- *
- * These macros allow a patch author to hard code the line numbers in WARN
- * macros to prevent functions from otherwise changing and getting pulled into
- * a patch module unnecessarily.
- *
- * TODO: consider moving these __WARN_*_line variants upstream to bug.h
- */
-#ifndef __WARN_TAINT
-#define __WARN_line(line) warn_slowpath_null(__FILE__, line)
-#define __WARN_printf_line(line, arg...) warn_slowpath_fmt(__FILE__, line, arg)
-#define __WARN_printf_taint_line(line, taint, arg...) \
-	warn_slowpath_fmt_taint(__FILE__, line, taint, arg)
-#else
-#error __WARN_TAINT not yet supported
-#endif
-
-#define KPATCH_WARN_LINE(line, condition, format...) ({			\
-	int __ret_warn_on = !!(condition);				\
-	if (unlikely(__ret_warn_on))					\
-		 __WARN_printf_line(line, format);			\
-	unlikely(__ret_warn_on);					\
-})
-#define KPATCH_WARN_ON_LINE(line, condition) ({				\
-	int __ret_warn_on = !!(condition);				\
-	if (unlikely(__ret_warn_on))					\
-		__WARN_line(line);					\
-	unlikely(__ret_warn_on);					\
-})
-#define KPATCH_WARN_ON_SMP_LINE(line, condition) \
-	KPATCH_WARN_ON_LINE(line, condition)
 
 #endif /* __KPATCH_MACROS_H_ */
