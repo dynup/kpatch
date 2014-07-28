@@ -18,6 +18,17 @@ struct kpatch_unload {
 };
 
 /*
+ * KPATCH_IGNORE_SECTION macro
+ *
+ * This macro is for ignoring sections that may change as a side effect of
+ * another change or might be a non-bundlable section; that is one that does
+ * not honor -ffunction-section and create a one-to-one relation from function
+ * symbol to section.
+ */
+#define KPATCH_IGNORE_SECTION(_sec) \
+	char *__UNIQUE_ID(kpatch_ignore_section_) __section(.kpatch.ignore.sections) = _sec;
+
+/*
  * KPATCH_IGNORE_FUNCTION macro
  *
  * This macro is for ignoring functions that may change as a side effect of a
@@ -26,7 +37,7 @@ struct kpatch_unload {
  * detected as changed when, in fact, there has been no functional change.
  */
 #define KPATCH_IGNORE_FUNCTION(_fn) \
-	void *__kpatch_ignore_func_##_fn __section(.kpatch.ignore.funcs) = _fn;
+	void *__kpatch_ignore_func_##_fn __section(.kpatch.ignore.functions) = _fn;
 
 /*
  * KPATCH_LOAD_HOOK macro
