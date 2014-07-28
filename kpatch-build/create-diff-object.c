@@ -100,6 +100,7 @@ struct section {
 	int index;
 	enum status status;
 	int include;
+	int ignore;
 	union {
 		struct { /* if (is_rela_section()) */
 			struct section *base;
@@ -624,9 +625,16 @@ void kpatch_compare_correlated_symbol(struct symbol *sym)
 	    (sym2->sec && !sym1->sec))
 		DIFF_FATAL("symbol info mismatch: %s", sym1->name);
 
+	/*
+	 * If two symbols are correlated but their sections are not, then the
+	 * symbol has changed sections.  This is only allowed if the symbol is
+	 * moving out of an ignored section.
+	 */
 	if (sym1->sec && sym2->sec && sym1->sec->twin != sym2->sec) {
-		log_normal("NOTICE: symbol %s has changed sections\n", sym1->name);
-		sym1->status = CHANGED;
+		if (sym2->sec->twin && sym2->sec->twin->ignore)
+			sym->status = CHANGED;
+		else
+			DIFF_FATAL("symbol changed sections: %s", sym1->name);
 	}
 
 	if (sym1->type == STT_OBJECT &&
@@ -1490,10 +1498,9 @@ void kpatch_include_debug_sections(struct kpatch_elf *kelf)
 	}
 }
 
-void kpatch_mark_ignored_sections_same(struct kpatch_elf *kelf)
+void kpatch_mark_ignored_sections(struct kpatch_elf *kelf)
 {
 	struct section *sec, *strsec, *ignoresec;
-	struct symbol *sym;
 	struct rela *rela;
 	char *name;
 
@@ -1510,7 +1517,7 @@ void kpatch_mark_ignored_sections_same(struct kpatch_elf *kelf)
 		 * by the patch author, resulting in a change to the string
 		 * section.  If we don't include it, then we will potentially
 		 * get a "changed section not included" error in
-		 * kpatch_verify_patchability() if not other function based change
+		 * kpatch_verify_patchability() if no other function based change
 		 * also changes the string section.  We could try to exclude each
 		 * literal string added to the section by KPATCH_IGNORE_SECTION()
 		 * from the section data comparison, but this is a simpler way.
@@ -1521,13 +1528,25 @@ void kpatch_mark_ignored_sections_same(struct kpatch_elf *kelf)
 		if (!ignoresec)
 			ERROR("expected ignored section");
 		log_normal("ignoring section %s\n", name);
-		if (ignoresec->status != CHANGED)
-			ERROR("no change detected in ignored section %s\n", ignoresec->name);
-		ignoresec->status = SAME;
-		if (ignoresec->secsym)
-			ignoresec->secsym->status = SAME;
-		if (ignoresec->rela)
-			ignoresec->rela->status = SAME;
+		ignoresec->ignore = 1;
+		if (ignoresec->twin)
+			ignoresec->twin->ignore = 1;
+	}
+}
+
+void kpatch_mark_ignored_sections_same(struct kpatch_elf *kelf)
+{
+	struct section *sec;
+	struct symbol *sym;
+
+	list_for_each_entry(sec, &kelf->sections, list) {
+		if (!sec->ignore)
+			continue;
+		sec->status = SAME;
+		if (sec->secsym)
+			sec->secsym->status = SAME;
+		if (sec->rela)
+			sec->rela->status = SAME;
 		list_for_each_entry(sym, &kelf->symbols, list) {
 			if (sym->sec != sec)
 				continue;
@@ -2483,6 +2502,7 @@ int main(int argc, char *argv[])
 	 * We access its sections via the twin pointers in the
 	 * section, symbol, and rela lists of kelf_patched.
 	 */
+	kpatch_mark_ignored_sections(kelf_patched);
 	kpatch_compare_correlated_elements(kelf_patched);
 	kpatch_elf_teardown(kelf_base);
 	kpatch_elf_free(kelf_base);
