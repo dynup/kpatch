@@ -250,7 +250,7 @@ fi
 
 [[ -z $TARGETS ]] && TARGETS="vmlinux modules"
 
-PATCHNAME="$(basename $PATCHFILE)"
+PATCHNAME=$(basename "$PATCHFILE")
 if [[ "$PATCHNAME" =~ \.patch ]] || [[ "$PATCHNAME" =~ \.diff ]]; then
 	PATCHNAME="${PATCHNAME%.*}"
 fi
