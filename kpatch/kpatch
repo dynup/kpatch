@@ -82,6 +82,12 @@ find_core_module() {
 	COREMOD="$SCRIPTDIR"/../kmod/core/kpatch.ko
 	[[ -f "$COREMOD" ]] && return
 
+	COREMOD="/usr/local/lib/kpatch/$(uname -r)/kpatch.ko"
+	[[ -f "$COREMOD" ]] && return
+
+	COREMOD="/usr/lib/kpatch/$(uname -r)/kpatch.ko"
+	[[ -f "$COREMOD" ]] && return
+
 	COREMOD="/usr/local/lib/modules/$(uname -r)/extra/kpatch/kpatch.ko"
 	[[ -f "$COREMOD" ]] && return
 
