@@ -166,7 +166,7 @@ find_kobj() {
 }
 
 usage() {
-	echo "usage: $0 [options] <patch file>" >&2
+	echo "usage: $(basename $0) [options] <patch file>" >&2
 	echo "		-h, --help	Show this help message" >&2
 	echo "		-r, --sourcerpm	Specify kernel source RPM" >&2
 	echo "		-s, --sourcedir	Specify kernel source directory" >&2
