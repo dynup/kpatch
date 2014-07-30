@@ -79,7 +79,8 @@ ccache --max-size=5G
 
 ####Ubuntu 14.04
 
-*NOTE: You'll need about 15GB of free disk space for the kpatch-build cache in `~/.kpatch` and for ccache.*
+*NOTE: You'll need about 15GB of free disk space for the kpatch-build cache in
+`~/.kpatch` and for ccache.*
 
 Install the dependencies for compiling kpatch:
 
@@ -196,13 +197,16 @@ OPTIONAL: Install kpatch to `/usr/local`:
 
     sudo make install
 
-Alternatively, the kpatch and kpatch-build scripts can be run directly from the git tree.
+Alternatively, the kpatch and kpatch-build scripts can be run directly from the
+git tree.
 
 
 Quick start
 -----------
 
-> NOTE: While kpatch is designed to work with any recent Linux kernel on any distribution, the `kpatch-build` command has **ONLY** been tested to work on Fedora 20, RHEL 7 and Ubuntu 14.04.
+> NOTE: While kpatch is designed to work with any recent Linux
+kernel on any distribution, the `kpatch-build` command has **ONLY** been tested
+and confirmed to work on Fedora 20, RHEL 7 and Ubuntu 14.04.
 
 First, make a source code patch against the kernel tree using diff, git, or
 quilt.
