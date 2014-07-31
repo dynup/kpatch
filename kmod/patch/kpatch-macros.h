@@ -2,6 +2,7 @@
 #define __KPATCH_MACROS_H_
 
 #include <linux/compiler.h>
+#include <linux/jiffies.h>
 
 typedef void (*kpatch_loadcall_t)(void);
 typedef void (*kpatch_unloadcall_t)(void);
@@ -92,5 +93,26 @@ struct kpatch_unload {
  */
 #define KPATCH_FORCE_UNSAFE(_fn) \
 	void *__kpatch_force_func_##_fn __section(.kpatch.force) = _fn;
+
+/*
+ * KPATCH_PRINTK macro
+ *
+ * Use this instead of calling printk to avoid unwanted compiler optimizations
+ * which cause kpatch-build errors.
+ *
+ * The printk function is annotated with the __cold attribute, which tells gcc
+ * that the function is unlikely to be called.  A side effect of this is that
+ * code paths containing calls to printk might also be marked cold, leading to
+ * other functions called in those code paths getting moved into .text.unlikely
+ * or being uninlined.
+ *
+ * This macro places printk in its own code path so as not to make the
+ * surrounding code path cold.
+ */
+#define KPATCH_PRINTK(_fmt, ...) \
+({ \
+	if (jiffies) \
+		printk(_fmt, ## __VA_ARGS__); \
+})
 
 #endif /* __KPATCH_MACROS_H_ */
