@@ -72,6 +72,7 @@ struct kpatch_unload {
 		.fn = _fn, \
 		.objname = NULL \
 	};
+
 /*
  * KPATCH_FORCE_UNSAFE macro
  *
@@ -82,6 +83,12 @@ struct kpatch_unload {
  * fail due to the function being on the stack of at least one thread at
  * all times and 2) it is safe for both the original and patched versions
  * of the function to run concurrently.
+ *
+ * WARNING: Use of this macro will prevent the patch module from ever being
+ * rmmod'ed, though it can still be disabled.  This is because the patched
+ * function may still be in use after disabling it.  This means you can "kpatch
+ * unload" it, but you can't do a "kpatch load" of the same module again later
+ * on.
  */
 #define KPATCH_FORCE_UNSAFE(_fn) \
 	void *__kpatch_force_func_##_fn __section(.kpatch.force) = _fn;
