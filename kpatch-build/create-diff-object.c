@@ -319,10 +319,13 @@ void kpatch_create_rela_list(struct kpatch_elf *kelf, struct section *sec)
 		rela->sym = find_symbol_by_index(&kelf->symbols, symndx);
 		if (!rela->sym)
 			ERROR("could not find rela entry symbol\n");
-		if (rela->sym->sec && (rela->sym->sec->sh.sh_flags & SHF_STRINGS)) {
+		if (rela->sym->sec &&
+		    ((rela->sym->sec->sh.sh_flags & SHF_STRINGS) ||
+		     !strncmp(rela->sym->name, ".rodata.__func__.", 17))) {
 			rela->string = rela->sym->sec->data->d_buf + rela->addend;
 			if (!rela->string)
-				ERROR("could not lookup rela string\n");
+				ERROR("could not lookup rela string for %s+%d",
+				      rela->sym->name, rela->addend);
 		}
 
 		if (skip)
@@ -821,6 +824,15 @@ void kpatch_correlate_static_local_variables(struct kpatch_elf *base,
 		prefixlen = dot - sym->name;
 		if (sym->name[prefixlen+1] < '0' ||
 		    sym->name[prefixlen+1] > '9')
+			continue;
+
+		/*
+		 * __func__'s are special gcc static variables which contain
+		 * the function name.  There's no need to correlate them
+		 * because they're read-only and their comparison is done in
+		 * rela_equal() by comparing the literal strings.
+		 */
+		if (!strncmp(sym->name, "__func__", prefixlen))
 			continue;
 
 		/* find the patched function which uses the static variable */
