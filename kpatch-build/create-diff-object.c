@@ -319,10 +319,13 @@ void kpatch_create_rela_list(struct kpatch_elf *kelf, struct section *sec)
 		rela->sym = find_symbol_by_index(&kelf->symbols, symndx);
 		if (!rela->sym)
 			ERROR("could not find rela entry symbol\n");
-		if (rela->sym->sec && (rela->sym->sec->sh.sh_flags & SHF_STRINGS)) {
+		if (rela->sym->sec &&
+		    ((rela->sym->sec->sh.sh_flags & SHF_STRINGS) ||
+		     !strncmp(rela->sym->name, ".rodata.__func__.", 17))) {
 			rela->string = rela->sym->sec->data->d_buf + rela->addend;
 			if (!rela->string)
-				ERROR("could not lookup rela string\n");
+				ERROR("could not lookup rela string for %s+%d",
+				      rela->sym->name, rela->addend);
 		}
 
 		if (skip)
@@ -401,6 +404,11 @@ int is_bundleable(struct symbol *sym)
 	if (sym->type == STT_OBJECT &&
 	   !strncmp(sym->sec->name, ".data.",6) &&
 	   !strcmp(sym->sec->name + 6, sym->name))
+		return 1;
+
+	if (sym->type == STT_OBJECT &&
+	   !strncmp(sym->sec->name, ".rodata.",8) &&
+	   !strcmp(sym->sec->name + 8, sym->name))
 		return 1;
 
 	if (sym->type == STT_OBJECT &&
@@ -802,12 +810,29 @@ void kpatch_correlate_static_local_variables(struct kpatch_elf *base,
 		    sym->twin)
 			continue;
 
+		/*
+		 * The static variables in the __verbose section contain
+		 * debugging information specific to the patched object and
+		 * shouldn't be correlated.
+		 */
+		if (!strcmp(sym->sec->name, "__verbose"))
+			continue;
+
 		dot = strchr(sym->name, '.');
 		if (!dot)
 			continue;
 		prefixlen = dot - sym->name;
 		if (sym->name[prefixlen+1] < '0' ||
 		    sym->name[prefixlen+1] > '9')
+			continue;
+
+		/*
+		 * __func__'s are special gcc static variables which contain
+		 * the function name.  There's no need to correlate them
+		 * because they're read-only and their comparison is done in
+		 * rela_equal() by comparing the literal strings.
+		 */
+		if (!strncmp(sym->name, "__func__", prefixlen))
 			continue;
 
 		/* find the patched function which uses the static variable */
