@@ -802,6 +802,14 @@ void kpatch_correlate_static_local_variables(struct kpatch_elf *base,
 		    sym->twin)
 			continue;
 
+		/*
+		 * The static variables in the __verbose section contain
+		 * debugging information specific to the patched object and
+		 * shouldn't be correlated.
+		 */
+		if (!strcmp(sym->sec->name, "__verbose"))
+			continue;
+
 		dot = strchr(sym->name, '.');
 		if (!dot)
 			continue;
