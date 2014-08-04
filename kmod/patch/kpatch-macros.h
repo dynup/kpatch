@@ -2,6 +2,7 @@
 #define __KPATCH_MACROS_H_
 
 #include <linux/compiler.h>
+#include <linux/jiffies.h>
 
 typedef void (*kpatch_loadcall_t)(void);
 typedef void (*kpatch_unloadcall_t)(void);
@@ -72,6 +73,7 @@ struct kpatch_unload {
 		.fn = _fn, \
 		.objname = NULL \
 	};
+
 /*
  * KPATCH_FORCE_UNSAFE macro
  *
@@ -82,8 +84,35 @@ struct kpatch_unload {
  * fail due to the function being on the stack of at least one thread at
  * all times and 2) it is safe for both the original and patched versions
  * of the function to run concurrently.
+ *
+ * WARNING: Use of this macro will prevent the patch module from ever being
+ * rmmod'ed, though it can still be disabled.  This is because the patched
+ * function may still be in use after disabling it.  This means you can "kpatch
+ * unload" it, but you can't do a "kpatch load" of the same module again later
+ * on.
  */
 #define KPATCH_FORCE_UNSAFE(_fn) \
 	void *__kpatch_force_func_##_fn __section(.kpatch.force) = _fn;
+
+/*
+ * KPATCH_PRINTK macro
+ *
+ * Use this instead of calling printk to avoid unwanted compiler optimizations
+ * which cause kpatch-build errors.
+ *
+ * The printk function is annotated with the __cold attribute, which tells gcc
+ * that the function is unlikely to be called.  A side effect of this is that
+ * code paths containing calls to printk might also be marked cold, leading to
+ * other functions called in those code paths getting moved into .text.unlikely
+ * or being uninlined.
+ *
+ * This macro places printk in its own code path so as not to make the
+ * surrounding code path cold.
+ */
+#define KPATCH_PRINTK(_fmt, ...) \
+({ \
+	if (jiffies) \
+		printk(_fmt, ## __VA_ARGS__); \
+})
 
 #endif /* __KPATCH_MACROS_H_ */
