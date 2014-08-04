@@ -340,7 +340,7 @@ else
 		if [[ $DISTRO = ubuntu ]]; then
 
 			# url may be changed for a different mirror
-			url="http://us.archive.ubuntu.com/ubuntu/pool/main/l/linux"
+			url="http://archive.ubuntu.com/ubuntu/pool/main/l/linux"
 			extension="bz2"
 			sublevel="SUBLEVEL = 0"
 			taroptions="xvjf"

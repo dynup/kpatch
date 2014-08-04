@@ -35,17 +35,21 @@ Installation
 
 Install the dependencies for compiling kpatch:
 
-    sudo yum install gcc kernel-devel elfutils elfutils-devel
+```bash
+sudo yum install gcc kernel-devel elfutils elfutils-devel
+```
 
 Install the dependencies for the "kpatch-build" command:
 
-    sudo yum install rpmdevtools pesign yum-utils
-    sudo yum-builddep kernel
-    sudo debuginfo-install kernel
+```bash
+sudo yum install rpmdevtools pesign yum-utils
+sudo yum-builddep kernel
+sudo debuginfo-install kernel
 
-    # optional, but highly recommended
-    sudo yum install ccache
-    ccache --max-size=5G
+# optional, but highly recommended
+sudo yum install ccache
+ccache --max-size=5G
+```
 
 ####RHEL 7
 
@@ -54,17 +58,24 @@ Install the dependencies for the "kpatch-build" command:
 
 Install the dependencies for compiling kpatch:
 
-    sudo yum install gcc kernel-devel elfutils elfutils-devel
+```bash
+sudo yum install gcc kernel-devel elfutils elfutils-devel
+```
 
 Install the dependencies for the "kpatch-build" command:
 
-    sudo yum install rpmdevtools pesign yum-utils zlib-devel binutils-devel newt-devel python-devel perl-ExtUtils-Embed audit-libs-devel numactl-devel pciutils-devel bison
-    sudo yum-builddep kernel
-    sudo debuginfo-install kernel
+```bash
+sudo yum install rpmdevtools pesign yum-utils zlib-devel \
+  binutils-devel newt-devel python-devel perl-ExtUtils-Embed \
+  audit-libs devel numactl-devel pciutils-devel bison
 
-    # optional, but highly recommended
-    sudo yum install ccache
-    ccache --max-size=5G
+sudo yum-builddep kernel
+sudo debuginfo-install kernel
+
+# optional, but highly recommended
+sudo yum install ccache
+ccache --max-size=5G
+```
 
 ####Ubuntu 14.04
 
@@ -73,16 +84,20 @@ Install the dependencies for the "kpatch-build" command:
 
 Install the dependencies for compiling kpatch:
 
-    apt-get install make gcc libelf-dev
+```bash
+apt-get install make gcc libelf-dev
+```
 
 Install the dependencies for the "kpatch-build" command:
 
-    apt-get install dpkg-dev
-    apt-get build-dep linux
+```bash
+apt-get install dpkg-dev
+apt-get build-dep linux
 
-    # optional, but highly recommended
-    apt-get install ccache
-    ccache --max-size=5G
+# optional, but highly recommended
+apt-get install ccache
+ccache --max-size=5G
+```
 
 Install kernel debug symbols:
 
@@ -178,7 +193,7 @@ Compile kpatch:
 
 ###Install
 
-OPTIONAL: Install kpatch to /usr/local:
+OPTIONAL: Install kpatch to `/usr/local`:
 
     sudo make install
 
@@ -189,9 +204,9 @@ git tree.
 Quick start
 -----------
 
-*NOTE: While kpatch is designed to work with any recent Linux
-kernel on any distribution, the "kpatch-build" command currently only works on
-Fedora 20 and Ubuntu 14.04.*
+> NOTE: While kpatch is designed to work with any recent Linux
+kernel on any distribution, the `kpatch-build` command has **ONLY** been tested
+and confirmed to work on Fedora 20, RHEL 7 and Ubuntu 14.04.
 
 First, make a source code patch against the kernel tree using diff, git, or
 quilt.
