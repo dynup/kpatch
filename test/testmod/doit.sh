@@ -17,7 +17,7 @@ make || exit 1
 cd ../../kmod/patch || exit 1
 make clean || exit 1
 cp ../../test/testmod/output.o . || exit 1
-make || exit 1
+KBUILD_EXTRA_SYMBOLS="$(readlink -e ../../kmod/core/Module.symvers)" make || exit 1
 cd ../../test/testmod
 
 if [[ -z "$REMOTE" ]]
