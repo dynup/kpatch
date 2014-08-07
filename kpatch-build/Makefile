@@ -14,7 +14,7 @@ create-diff-object: create-diff-object.c list.h lookup.c lookup.h insn/insn.c \
 
 install: all
 	$(INSTALL) -d $(LIBEXECDIR)
-	$(INSTALL) $(TARGETS) $(LIBEXECDIR)
+	$(INSTALL) $(TARGETS) kpatch-gcc $(LIBEXECDIR)
 	$(INSTALL) -d $(BINDIR)
 	$(INSTALL) kpatch-build $(BINDIR)
 

@@ -1,0 +1,33 @@
+#!/bin/bash
+
+set -x
+
+TOOLCHAINCMD="$1"
+shift
+
+if [[ "$TOOLCHAINCMD" != "gcc" ]] || [[ -z "$TEMPDIR" ]]; then
+    exec "$TOOLCHAINCMD" "$@"
+fi
+
+declare -a args=($@)
+
+while [ "$#" -gt 0 ]; do
+	if [ "$1" = "-o" ]; then
+		case "$2" in
+			*.mod.o|*built-in.o|vmlinux.o|.tmp_kallsyms1.o|.tmp_kallsyms2.o|init/version.o|arch/x86/boot/version.o|arch/x86/boot/compressed/eboot.o|arch/x86/boot/header.o|arch/x86/boot/compressed/efi_stub_64.o|arch/x86/boot/compressed/piggy.o|.*.o)
+			break;
+			;;
+		*.o)
+			mkdir -p "$TEMPDIR/orig/$(dirname $2)"
+			cp -f "$2" "$TEMPDIR/orig/$2"
+			echo "$2" >> "$TEMPDIR/changed_objs"
+			;;
+		*)
+			break
+			;;
+		esac
+	fi
+	shift
+done
+
+exec "$TOOLCHAINCMD" "${args[@]}"

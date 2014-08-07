@@ -392,46 +392,23 @@ export KCFLAGS="-I$DATADIR/patch -ffunction-sections -fdata-sections"
 
 echo "Building original kernel"
 make mrproper >> "$LOGFILE" 2>&1 || die
-make "-j$CPUS" $TARGETS "O=$OBJDIR" >> "$LOGFILE" 2>&1 || die
+CROSS_COMPILE="$TOOLSDIR/kpatch-gcc " make "-j$CPUS" $TARGETS "O=$OBJDIR" >> "$LOGFILE" 2>&1 || die
 
 echo "Building patched kernel"
 patch -N -p1 < "$APPLIEDPATCHFILE" >> "$LOGFILE" 2>&1 || die
-make "-j$CPUS" $TARGETS "O=$OBJDIR" 2>&1 | tee -a "$TEMPDIR/patched_build.log" >> "$LOGFILE"
+mkdir -p "$TEMPDIR/orig" "$TEMPDIR/patched"
+export TEMPDIR
+CROSS_COMPILE="$TOOLSDIR/kpatch-gcc " make "-j$CPUS" $TARGETS "O=$OBJDIR"  >> "$LOGFILE" 2>&1 || die
 [[ "${PIPESTATUS[0]}" -eq 0 ]] || die
 
-echo "Detecting changed objects"
-while read line; do
-	[[ "$line" =~ CC ]] || continue
-	eval set -- "$line"
-	case $2 in
-		init/version.o) continue ;;
-		scripts/mod/devicetable-offsets.s) continue ;;
-		scripts/mod/file2alias.o) continue ;;
-		*.mod.o) continue ;;
-		arch/x86/kernel/asm-offsets.s) die "a struct definition change was detected" ;;
-		\[M\]) obj=$3 ;;
-		*) obj=$2 ;;
-	esac
+if [[ ! -e "$TEMPDIR/changed_objs" ]]; then
+	die "no changed objects found"
+fi
 
-	echo $obj >> $TEMPDIR/changed_objs
-done < "$TEMPDIR/patched_build.log"
-
-[[ ! -s "$TEMPDIR/changed_objs" ]] && die "no changed objects were detected"
-
-mkdir "$TEMPDIR/patched"
-for i in $(cat $TEMPDIR/changed_objs); do
-	mkdir -p "$TEMPDIR/patched/$(dirname $i)"
+for i in $(cat "$TEMPDIR/changed_objs")
+do
+	mkdir -p "$TEMPDIR/patched/$(dirname $i)" || die
 	cp -f "$OBJDIR/$i" "$TEMPDIR/patched/$i" || die
-done
-
-echo "Rebuilding original objects"
-patch -R -p1 < "$APPLIEDPATCHFILE" >> "$LOGFILE" 2>&1
-rm -f "$APPLIEDPATCHFILE"
-make "-j$CPUS" $TARGETS "O=$OBJDIR" >> "$LOGFILE" 2>&1 || die
-mkdir "$TEMPDIR/orig"
-for i in $(cat $TEMPDIR/changed_objs); do
-	mkdir -p "$TEMPDIR/orig/$(dirname $i)"
-	cp -f "$OBJDIR/$i" "$TEMPDIR/orig/$i" || die
 done
 
 echo "Extracting new and modified ELF sections"
