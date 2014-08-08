@@ -417,11 +417,11 @@ FILES="$(find * -type f)"
 cd "$TEMPDIR"
 mkdir output
 declare -A objnames
+CHANGED=0
 for i in $FILES; do
 	mkdir -p "output/$(dirname $i)"
 	cd "$OBJDIR"
 	find_kobj $i
-	objnames[$KOBJFILE]=1
 	if [[ $KOBJFILE = vmlinux ]]; then
 		KOBJFILE=$VMLINUX
 	else
@@ -442,8 +442,17 @@ for i in $FILES; do
 		fi
 		exit 1
 	fi
-	[[ $rc -eq 0 ]] || die
+	# create-diff-object returns 3 if no functional change is found
+	[[ $rc -eq 0 ]] || [[ $rc -eq 3 ]] || die
+	if [[ $rc -eq 0 ]]; then
+		CHANGED=1
+		objnames[$KOBJFILE]=1
+	fi
 done
+
+if [[ $CHANGED -eq 0 ]]; then
+	die "no functional changes found"
+fi
 
 echo -n "Patched objects:"
 for i in "${!objnames[@]}"; do echo -n " $(basename $i)"; done
