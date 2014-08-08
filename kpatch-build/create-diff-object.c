@@ -765,9 +765,6 @@ void kpatch_rename_mangled_functions(struct kpatch_elf *base,
 		    !strstr(sym->name, ".part."))
 			continue;
 
-		if (sym != sym->sec->sym)
-			ERROR("expected bundled section for %s\n", sym->name);
-
 		/* prefix of foo.isra.1.constprop.2 is foo.isra */
 		prefix = strdup(sym->name);
 		dot = strchr(prefix, '.');
@@ -784,6 +781,10 @@ void kpatch_rename_mangled_functions(struct kpatch_elf *base,
 
 		log_debug("renaming %s to %s\n", sym->name, basesym->name);
 		sym->name = strdup(basesym->name);
+
+		if (sym != sym->sec->sym)
+			continue;
+
 		sym->sec->name = strdup(basesym->sec->name);
 		if (sym->sec->rela)
 			sym->sec->rela->name = strdup(basesym->sec->rela->name);
