@@ -463,7 +463,7 @@ cp "$OBJDIR/.config" "$SRCDIR"
 cd "$SRCDIR"
 make prepare >> "$LOGFILE" 2>&1 || die
 cd "$TEMPDIR/output"
-ld -r -o ../patch/output.o $FILES >> "$LOGFILE" 2>&1 || die
+ld -r -o ../patch/output.o $(find . -name "*.o") >> "$LOGFILE" 2>&1 || die
 cd "$TEMPDIR/patch"
 KPATCH_BUILD="$SRCDIR" KPATCH_NAME="$PATCHNAME" KBUILD_EXTRA_SYMBOLS="$SYMVERSFILE" make "O=$OBJDIR" >> "$LOGFILE" 2>&1 || die
 
