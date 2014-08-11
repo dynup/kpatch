@@ -708,19 +708,21 @@ void kpatch_correlate_symbols(struct list_head *symlist1, struct list_head *syml
 
 	list_for_each_entry(sym1, symlist1, list) {
 		list_for_each_entry(sym2, symlist2, list) {
-			if (!strcmp(sym1->name, sym2->name) &&
-			    sym1->type == sym2->type) {
-				/* group section symbols must have correlated sections */
-				if (sym1->sec &&
-				    sym1->sec->sh.sh_type == SHT_GROUP &&
-				    sym1->sec->twin != sym2->sec)
-					continue;
-				sym1->twin = sym2;
-				sym2->twin = sym1;
-				/* set initial status, might change */
-				sym1->status = sym2->status = SAME;
-				break;
-			}
+			if (strcmp(sym1->name, sym2->name) ||
+			    sym1->type != sym2->type)
+				continue;
+
+			/* group section symbols must have correlated sections */
+			if (sym1->sec &&
+			    sym1->sec->sh.sh_type == SHT_GROUP &&
+			    sym1->sec->twin != sym2->sec)
+				continue;
+
+			sym1->twin = sym2;
+			sym2->twin = sym1;
+			/* set initial status, might change */
+			sym1->status = sym2->status = SAME;
+			break;
 		}
 	}
 }
