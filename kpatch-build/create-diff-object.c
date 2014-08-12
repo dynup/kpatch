@@ -1110,7 +1110,7 @@ void kpatch_verify_patchability(struct kpatch_elf *kelf)
 			errs++;
 		}
 
-		if (sec->status == CHANGED && sec->grouped) {
+		if (sec->status != SAME && sec->grouped) {
 			log_normal("changed section %s is part of a section group\n",
 				   sec->name);
 			errs++;
