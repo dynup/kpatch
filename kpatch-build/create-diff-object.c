@@ -101,6 +101,7 @@ struct section {
 	enum status status;
 	int include;
 	int ignore;
+	int grouped;
 	union {
 		struct { /* if (is_rela_section()) */
 			struct section *base;
@@ -681,6 +682,17 @@ void kpatch_correlate_sections(struct list_head *seclist1, struct list_head *sec
 		list_for_each_entry(sec2, seclist2, list) {
 			if (strcmp(sec1->name, sec2->name))
 				continue;
+			/*
+			 * Group sections must match exactly to be correlated.
+			 * Changed group sections are currently not supported.
+			 */
+			if (sec1->sh.sh_type == SHT_GROUP) {
+				if (sec1->data->d_size != sec2->data->d_size)
+					continue;
+				if (memcmp(sec1->data->d_buf, sec2->data->d_buf,
+				           sec1->data->d_size))
+					continue;
+			}
 			sec1->twin = sec2;
 			sec2->twin = sec1;
 			/* set initial status, might change */
@@ -696,14 +708,21 @@ void kpatch_correlate_symbols(struct list_head *symlist1, struct list_head *syml
 
 	list_for_each_entry(sym1, symlist1, list) {
 		list_for_each_entry(sym2, symlist2, list) {
-			if (!strcmp(sym1->name, sym2->name) &&
-			    sym1->type == sym2->type) {
-				sym1->twin = sym2;
-				sym2->twin = sym1;
-				/* set initial status, might change */
-				sym1->status = sym2->status = SAME;
-				break;
-			}
+			if (strcmp(sym1->name, sym2->name) ||
+			    sym1->type != sym2->type)
+				continue;
+
+			/* group section symbols must have correlated sections */
+			if (sym1->sec &&
+			    sym1->sec->sh.sh_type == SHT_GROUP &&
+			    sym1->sec->twin != sym2->sec)
+				continue;
+
+			sym1->twin = sym2;
+			sym2->twin = sym1;
+			/* set initial status, might change */
+			sym1->status = sym2->status = SAME;
+			break;
 		}
 	}
 }
@@ -741,6 +760,31 @@ void kpatch_check_program_headers(Elf *elf)
 	if (ph_nr != 0)
 		DIFF_FATAL("ELF contains program header");
 }
+
+
+void kpatch_mark_grouped_sections(struct kpatch_elf *kelf)
+{
+	struct section *groupsec, *sec;
+	unsigned int *data, *end;
+
+	list_for_each_entry(groupsec, &kelf->sections, list) {
+		if (groupsec->sh.sh_type != SHT_GROUP)
+			continue;
+		data = groupsec->data->d_buf;
+		end = groupsec->data->d_buf + groupsec->data->d_size;
+		data++; /* skip first flag word (e.g. GRP_COMDAT) */
+		while (data < end) {
+			sec = find_section_by_index(&kelf->sections, *data);
+			if (!sec)
+				ERROR("group section not found");
+			sec->grouped = 1;
+			log_debug("marking section %s (%d) as grouped\n",
+			          sec->name, sec->index);
+			data++;
+		}
+	}
+}
+
 
 /*
  * When gcc makes compiler optimizations which affect a function's calling
@@ -1063,6 +1107,17 @@ void kpatch_verify_patchability(struct kpatch_elf *kelf)
 		if (sec->status == CHANGED && !sec->include) {
 			log_normal("changed section %s not selected for inclusion\n",
 				   sec->name);
+			errs++;
+		}
+
+		if (sec->status != SAME && sec->grouped) {
+			log_normal("changed section %s is part of a section group\n",
+				   sec->name);
+			errs++;
+		}
+
+		if (sec->sh.sh_type == SHT_GROUP && sec->status == NEW) {
+			log_normal("new/changed group sections are not supported\n");
 			errs++;
 		}
 
@@ -2516,6 +2571,7 @@ int main(int argc, char *argv[])
 	kpatch_check_program_headers(kelf_base->elf);
 	kpatch_check_program_headers(kelf_patched->elf);
 
+	kpatch_mark_grouped_sections(kelf_patched);
 	kpatch_replace_sections_syms(kelf_base);
 	kpatch_replace_sections_syms(kelf_patched);
 	kpatch_rename_mangled_functions(kelf_base, kelf_patched);
