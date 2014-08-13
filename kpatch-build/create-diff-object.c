@@ -1519,6 +1519,10 @@ void kpatch_regenerate_special_section(struct special_section *special,
 				rela->rela.r_offset = rela->offset;
 
 				rela->sym->include = 1;
+				if (rela->sym->sec &&
+				    (rela->sym->sec->sh.sh_flags & SHF_STRINGS))
+					rela->sym->sec->include = 1;
+					rela->sym->sec->secsym->include = 1;
 			}
 		}
 
@@ -2173,10 +2177,10 @@ void kpatch_create_dynamic_rela_sections(struct kpatch_elf *kelf,
 			dynrela->offset = index * sizeof(*dynrelas) +
 				offsetof(struct kpatch_patch_dynrela, objname);
 
+			rela->sym->strip = 1;
 			list_del(&rela->list);
 			free(rela);
 
-			rela->sym->strip = 1;
 			index++;
 		}
 	}
