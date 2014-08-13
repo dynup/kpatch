@@ -1,0 +1,20 @@
+Index: src/fs/aio.c
+===================================================================
+--- src.orig/fs/aio.c
++++ src/fs/aio.c
+@@ -1642,3 +1642,15 @@ SYSCALL_DEFINE5(io_getevents, aio_contex
+ 	}
+ 	return ret;
+ }
++
++void kpatch_load_aio_max_nr(void)
++{
++	aio_max_nr = 0x40000;
++}
++void kpatch_unload_aio_max_nr(void)
++{
++	aio_max_nr = 0x10000;
++}
++#include "kpatch-macros.h"
++KPATCH_LOAD_HOOK(kpatch_load_aio_max_nr);
++KPATCH_UNLOAD_HOOK(kpatch_unload_aio_max_nr);
