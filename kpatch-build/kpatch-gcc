@@ -13,7 +13,9 @@ declare -a args=($@)
 
 while [ "$#" -gt 0 ]; do
 	if [ "$1" = "-o" ]; then
-		case "$2" in
+		obj=$2
+		[[ $2 = */.tmp_*.o ]] && obj=${2/.tmp_/}
+		case "$obj" in
 			*.mod.o|\
 			*built-in.o|\
 			vmlinux.o|\
@@ -27,12 +29,13 @@ while [ "$#" -gt 0 ]; do
 			arch/x86/boot/compressed/piggy.o|\
 			kernel/system_certificates.o|\
 			.*.o)
-			break;
+			break
 			;;
 		*.o)
-			mkdir -p "$TEMPDIR/orig/$(dirname $2)"
-			cp -f "$2" "$TEMPDIR/orig/$2"
-			echo "$2" >> "$TEMPDIR/changed_objs"
+			mkdir -p "$TEMPDIR/orig/$(dirname $obj)"
+			cp -f "$obj" "$TEMPDIR/orig/$obj"
+			echo "$obj" >> "$TEMPDIR/changed_objs"
+			break
 			;;
 		*)
 			break
