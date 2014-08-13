@@ -1188,11 +1188,12 @@ void kpatch_include_standard_elements(struct kpatch_elf *kelf)
 	list_entry(kelf->symbols.next, struct symbol, list)->include = 1;
 }
 
-void kpatch_include_hook_elements(struct kpatch_elf *kelf)
+int kpatch_include_hook_elements(struct kpatch_elf *kelf)
 {
 	struct section *sec;
 	struct symbol *sym;
 	struct rela *rela;
+	int found = 0;
 
 	/* include load/unload sections */
 	list_for_each_entry(sec, &kelf->sections, list) {
@@ -1201,6 +1202,7 @@ void kpatch_include_hook_elements(struct kpatch_elf *kelf)
 		    !strcmp(sec->name, ".rela.kpatch.hooks.load") ||
 		    !strcmp(sec->name, ".rela.kpatch.hooks.unload")) {
 			sec->include = 1;
+			found = 1;
 			if (is_rela_section(sec)) {
 				/* include hook dependencies */
 				rela = list_entry(sec->relas.next,
@@ -1226,6 +1228,8 @@ void kpatch_include_hook_elements(struct kpatch_elf *kelf)
 		if (!strcmp(sym->name, "kpatch_load_data") ||
 		    !strcmp(sym->name, "kpatch_unload_data"))
 			sym->include = 0;
+
+	return found;
 }
 
 void kpatch_include_force_elements(struct kpatch_elf *kelf)
@@ -2549,7 +2553,7 @@ int main(int argc, char *argv[])
 {
 	struct kpatch_elf *kelf_base, *kelf_patched, *kelf_out;
 	struct arguments arguments;
-	int num_changed;
+	int num_changed, hooks_exist;
 	struct lookup_table *lookup;
 	struct section *sec, *symtab;
 	struct symbol *sym;
@@ -2597,14 +2601,18 @@ int main(int argc, char *argv[])
 	kpatch_include_standard_elements(kelf_patched);
 	num_changed = kpatch_include_changed_functions(kelf_patched);
 	kpatch_include_debug_sections(kelf_patched);
-	kpatch_include_hook_elements(kelf_patched);
+	hooks_exist = kpatch_include_hook_elements(kelf_patched);
 	kpatch_include_force_elements(kelf_patched);
 	kpatch_dump_kelf(kelf_patched);
 	kpatch_verify_patchability(kelf_patched);
 
 	if (!num_changed) {
-		log_normal("no changed functions were found\n");
-		return 3; /* 1 is ERROR, 2 is DIFF_FATAL */
+		if (hooks_exist)
+			log_normal("no changed functions were found, but hooks exist\n");
+		else {
+			log_normal("no changed functions were found\n");
+			return 3; /* 1 is ERROR, 2 is DIFF_FATAL */
+		}
 	}
 
 	/* this is destructive to kelf_patched */
