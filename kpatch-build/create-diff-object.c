@@ -1519,6 +1519,10 @@ void kpatch_regenerate_special_section(struct special_section *special,
 				rela->rela.r_offset = rela->offset;
 
 				rela->sym->include = 1;
+				if (rela->sym->sec &&
+				    (rela->sym->sec->sh.sh_flags & SHF_STRINGS))
+					rela->sym->sec->include = 1;
+					rela->sym->sec->secsym->include = 1;
 			}
 		}
 
