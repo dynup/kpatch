@@ -2173,10 +2173,10 @@ void kpatch_create_dynamic_rela_sections(struct kpatch_elf *kelf,
 			dynrela->offset = index * sizeof(*dynrelas) +
 				offsetof(struct kpatch_patch_dynrela, objname);
 
+			rela->sym->strip = 1;
 			list_del(&rela->list);
 			free(rela);
 
-			rela->sym->strip = 1;
 			index++;
 		}
 	}
