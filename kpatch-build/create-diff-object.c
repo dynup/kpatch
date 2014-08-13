@@ -1212,6 +1212,7 @@ int kpatch_include_hook_elements(struct kpatch_elf *kelf)
 				kpatch_include_symbol(sym, 0);
 				/* strip the hook symbol */
 				sym->include = 0;
+				sym->sec->sym = NULL;
 				/* use section symbol instead */
 				rela->sym = sym->sec->secsym;
 			} else {
