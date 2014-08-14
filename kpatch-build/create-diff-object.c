@@ -1179,9 +1179,13 @@ void kpatch_include_standard_elements(struct kpatch_elf *kelf)
 	list_for_each_entry(sec, &kelf->sections, list) {
 		/* include these sections even if they haven't changed */
 		if (!strcmp(sec->name, ".shstrtab") ||
-		     !strcmp(sec->name, ".strtab") ||
-		     !strcmp(sec->name, ".symtab"))
+		    !strcmp(sec->name, ".strtab") ||
+		    !strcmp(sec->name, ".symtab") ||
+		    !strncmp(sec->name, ".rodata.str1.", 13)) {
 			sec->include = 1;
+			if (sec->secsym)
+				sec->secsym->include = 1;
+		}
 	}
 
 	/* include the NULL symbol */
@@ -2173,10 +2177,10 @@ void kpatch_create_dynamic_rela_sections(struct kpatch_elf *kelf,
 			dynrela->offset = index * sizeof(*dynrelas) +
 				offsetof(struct kpatch_patch_dynrela, objname);
 
+			rela->sym->strip = 1;
 			list_del(&rela->list);
 			free(rela);
 
-			rela->sym->strip = 1;
 			index++;
 		}
 	}
