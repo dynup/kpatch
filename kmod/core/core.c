@@ -711,16 +711,15 @@ static int kpatch_link_object(struct kpatch_module *kpmod,
 		goto err_unlink;
 
 	list_for_each_entry(func, &object->funcs, list) {
-		unsigned long old_addr;
 
 		/* calculate actual old location */
 		if (vmlinux) {
-			old_addr = func->old_offset;
 			ret = kpatch_verify_symbol_match(func->name,
-							 old_addr);
+							 func->old_addr);
 			if (ret)
 				goto err_unlink;
 		} else {
+			unsigned long old_addr;
 			old_addr = kpatch_find_module_symbol(mod, func->name);
 			if (!old_addr) {
 				pr_err("unable to find symbol '%s' in module '%s\n",
@@ -728,14 +727,14 @@ static int kpatch_link_object(struct kpatch_module *kpmod,
 				ret = -EINVAL;
 				goto err_unlink;
 			}
+			func->old_addr = old_addr;
 		}
 
 		/* add to ftrace filter and register handler if needed */
-		ret = kpatch_ftrace_add_func(old_addr);
+		ret = kpatch_ftrace_add_func(func->old_addr);
 		if (ret)
 			goto err_unlink;
 
-		func->old_addr = old_addr;
 	}
 
 	return 0;

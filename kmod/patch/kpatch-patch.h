@@ -25,7 +25,7 @@
 struct kpatch_patch_func {
 	unsigned long new_addr;
 	unsigned long new_size;
-	unsigned long old_offset;
+	unsigned long old_addr;
 	unsigned long old_size;
 	char *name;
 	char *objname;

@@ -257,9 +257,8 @@ static int patch_make_funcs_list(struct list_head *objects)
 		func->new_addr = p_func->new_addr;
 		func->new_size = p_func->new_size;
 
-		/* find correct func->old_offset */
 		if (!strcmp("vmlinux", object->name))
-			func->old_offset = p_func->old_offset;
+			func->old_addr = p_func->old_addr;
 		else
 			func->old_addr = 0x0;
 
