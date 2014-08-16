@@ -1992,7 +1992,7 @@ void kpatch_create_patches_sections(struct kpatch_elf *kelf,
 			          sym->name, result.value, result.size);
 
 			/* add entry in text section */
-			funcs[index].old_offset = result.value;
+			funcs[index].old_addr = result.value;
 			funcs[index].old_size = result.size;
 			funcs[index].new_size = sym->sym.st_size;
 

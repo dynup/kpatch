@@ -36,7 +36,7 @@ struct kpatch_func {
 	/* public */
 	unsigned long new_addr;
 	unsigned long new_size;
-	unsigned long old_offset;
+	unsigned long old_addr;
 	unsigned long old_size;
 	const char *name;
 	struct list_head list;
@@ -44,7 +44,6 @@ struct kpatch_func {
 
 	/* private */
 	struct hlist_node node;
-	unsigned long old_addr;
 	enum kpatch_op op;
 };
 

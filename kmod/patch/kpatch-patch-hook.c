@@ -42,8 +42,7 @@ static struct kobject *functions_kobj;
 
 struct kpatch_func_obj {
 	struct kobject kobj;
-	struct kpatch_patch_func *func;
-	char name[KSYM_NAME_LEN];
+	struct kpatch_func *func;
 };
 
 static struct kpatch_func_obj **func_objs = NULL;
@@ -91,7 +90,7 @@ static ssize_t func_old_addr_show(struct kobject *kobj,
 	struct kpatch_func_obj *func =
 		container_of(kobj, struct kpatch_func_obj, kobj);
 
-	return sprintf(buf, "0x%lx\n", func->func->old_offset);
+	return sprintf(buf, "0x%lx\n", func->func->old_addr);
 }
 
 static ssize_t func_new_addr_show(struct kobject *kobj,
@@ -257,7 +256,12 @@ static int patch_make_funcs_list(struct list_head *objects)
 
 		func->new_addr = p_func->new_addr;
 		func->new_size = p_func->new_size;
-		func->old_offset = p_func->old_offset;
+
+		if (!strcmp("vmlinux", object->name))
+			func->old_addr = p_func->old_addr;
+		else
+			func->old_addr = 0x0;
+
 		func->old_size = p_func->old_size;
 		func->name = p_func->name;
 		func->force = is_func_forced(func->new_addr);
@@ -267,13 +271,11 @@ static int patch_make_funcs_list(struct list_head *objects)
 		if (!func_obj)
 			return -ENOMEM;
 
-		func_obj->func = p_func;
+		func_obj->func = func;
 		func_objs[i++] = func_obj;
-		sprint_symbol_no_offset(func_obj->name,
-					p_func->old_offset);
 
 		ret = kobject_add(&func_obj->kobj, functions_kobj,
-				  "%s", func_obj->name);
+				  "%s", func->name);
 		if (ret)
 			return ret;
 	}
