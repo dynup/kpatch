@@ -77,6 +77,67 @@ sudo yum install ccache
 ccache --max-size=5G
 ```
 
+####CentOS 7
+
+*NOTE: You'll need about 15GB of free disk space for the kpatch-build cache in
+`~/.kpatch` and for ccache.*
+
+Install the dependencies for compiling kpatch:
+
+```bash
+sudo yum install gcc kernel-devel elfutils elfutils-devel
+```
+
+Install the dependencies for the "kpatch-build" command:
+
+```bash
+sudo yum install rpmdevtools pesign yum-utils zlib-devel \
+  binutils-devel newt-devel python-devel perl-ExtUtils-Embed \
+  audit-libs audit-libs-devel numactl-devel pciutils-devel bison
+
+# enable CentOS 7 debug repo
+sudo yum-config-manager --enable debug
+
+sudo yum-builddep kernel
+sudo debuginfo-install kernel
+
+# optional, but highly recommended - enable EPEL 7
+sudo yum install ccache
+ccache --max-size=5G
+```
+
+####Oracle Linux 7
+
+*NOTE: You'll need about 15GB of free disk space for the kpatch-build cache in
+`~/.kpatch` and for ccache.*
+
+Install the dependencies for compiling kpatch:
+
+```bash
+sudo yum install gcc kernel-devel elfutils elfutils-devel
+```
+
+Install the dependencies for the "kpatch-build" command:
+
+```bash
+sudo yum install rpmdevtools pesign yum-utils zlib-devel \
+  binutils-devel newt-devel python-devel perl-ExtUtils-Embed \
+  audit-libs numactl-devel pciutils-devel bison
+
+# enable ol7_optional_latest repo
+sudo yum-config-manager --enable ol7_optional_latest
+
+sudo yum-builddep kernel
+
+# manually install kernel debuginfo packages
+rpm -ivh https://oss.oracle.com/ol7/debuginfo/kernel-debuginfo-$(uname -r).rpm
+rpm -ivh https://oss.oracle.com/ol7/debuginfo/kernel-debuginfo-common-x86_64-$(uname -r).rpm
+
+# optional, but highly recommended - enable EPEL 7
+sudo yum install ccache
+ccache --max-size=5G
+```
+
 ####Ubuntu 14.04
 
 *NOTE: You'll need about 15GB of free disk space for the kpatch-build cache in
@@ -206,7 +267,7 @@ Quick start
 
 > NOTE: While kpatch is designed to work with any recent Linux
 kernel on any distribution, the `kpatch-build` command has **ONLY** been tested
-and confirmed to work on Fedora 20, RHEL 7 and Ubuntu 14.04.
+and confirmed to work on Fedora 20, RHEL 7, Oracle Linux 7, CentOS 7 and Ubuntu 14.04.
 
 First, make a source code patch against the kernel tree using diff, git, or
 quilt.
