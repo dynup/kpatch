@@ -266,7 +266,7 @@ find_dirs || die "can't find supporting tools"
 
 source /etc/os-release
 DISTRO=$ID
-if [[ $DISTRO = fedora ]] || [[ $DISTRO = rhel ]]; then
+if [[ $DISTRO = fedora ]] || [[ $DISTRO = rhel ]] || [[ $DISTRO = ol ]] || [[ $DISTRO = centos ]]; then
 	[[ -z $VMLINUX ]] && VMLINUX=/usr/lib/debug/lib/modules/$ARCHVERSION/vmlinux
 	[[ -e "$VMLINUX" ]] || die "kernel-debuginfo-$ARCHVERSION not installed"
 
@@ -305,7 +305,7 @@ elif [[ -e "$SRCDIR" ]] && [[ -e "$VERSIONFILE" ]] && [[ $(cat "$VERSIONFILE") =
 	echo "Using cache at $SRCDIR"
 
 else
-	if [[ $DISTRO = fedora ]] || [[ $DISTRO = rhel ]]; then
+	if [[ $DISTRO = fedora ]] || [[ $DISTRO = rhel ]] || [[ $DISTRO = ol ]] || [[ $DISTRO = centos ]]; then
 
 		echo "Fedora/Red Hat distribution detected"
 		rpm -q --quiet rpmdevtools || die "rpmdevtools not installed"
