@@ -228,7 +228,7 @@ aptitude update
 Install the linux kernel, symbols and gcc 4.9:
 
     aptitude install -t wheezy-backports -y initramfs-tools
-    aptitude install -y gcc gcc-4.9 linux-image-3.14 linux-image-3.14-dbg
+    aptitude install -y gcc gcc-4.9 g++-4.9 linux-image-3.14 linux-image-3.14-dbg
 
 Configure gcc 4.9 as the default gcc compiler:
 
