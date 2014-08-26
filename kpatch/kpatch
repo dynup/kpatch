@@ -75,7 +75,7 @@ __find_module () {
 
 find_module () {
 	arg="$1"
-	__find_module "${arg}"
+	__find_module "${arg}" || __find_module "${arg}.ko"
 }
 
 find_core_module() {
@@ -217,6 +217,10 @@ case "$1" in
 	echo "installing $PATCH ($KVER)"
 	mkdir -p $INSTALLDIR/$KVER || die "failed to create install directory"
 	cp -f "$PATCH" $INSTALLDIR/$KVER || die "failed to install module $PATCH"
+	PATCHNAME=$(basename "$PATCH")
+	MODNAME="${PATCHNAME//-/_}"
+	MODNAME="${MODNAME%.ko}"
+	ln -r -s "$INSTALLDIR/$KVER/$PATCHNAME" "$INSTALLDIR/$KVER/$MODNAME" || die "failed to create module symlink $MODNAME"
 
 	if lsinitrd -k $KVER &> /dev/null; then
 		echo "rebuilding $KVER initramfs"
@@ -248,6 +252,9 @@ case "$1" in
 
 	echo "uninstalling $PATCH ($KVER)"
 	rm -f $INSTALLDIR/$KVER/"$PATCH" || die "failed to uninstall module $PATCH"
+	MODNAME="${1//-/_}"
+	MODNAME="${PATCH%.ko}"
+	rm -f $INSTALLDIR/$KVER/"$MODNAME" || die "failed to uninstall module symlink $MODNAME"
 	if lsinitrd -k $KVER &> /dev/null; then
 		echo "rebuilding $KVER initramfs"
 		dracut -f --kver $KVER || die "dracut failed"
@@ -268,7 +275,9 @@ case "$1" in
 		[[ -e "$kdir" ]] || continue
 		for module in $kdir/*; do
 			[[ -e "$module" ]] || continue
-			echo "$(basename $module) ($(basename $kdir))"
+			NAME=$(basename $module)
+			NAME=${NAME%.*}
+			echo "$NAME ($(basename $kdir))"
 		done
 	done
 	;;
