@@ -73,9 +73,29 @@ __find_module () {
 	return 1
 }
 
+mod_name () {
+	MODNAME="$(basename $1)"
+	MODNAME="${MODNAME%.ko}"
+	MODNAME="${MODNAME//-/_}"
+}
+
 find_module () {
 	arg="$1"
-	__find_module "${arg}"
+	if [[ "$arg" =~ \.ko ]]; then
+		__find_module "$arg" || return 1
+		mod_name "$MODULE"
+		return
+	else
+		for i in $INSTALLDIR/$(uname -r)/*; do
+			mod_name "$i"
+			if [[ $MODNAME == $arg ]]; then
+				MODULE="$i"
+				return
+			fi
+		done
+	fi
+
+	return 1
 }
 
 find_core_module() {
@@ -268,7 +288,8 @@ case "$1" in
 		[[ -e "$kdir" ]] || continue
 		for module in $kdir/*; do
 			[[ -e "$module" ]] || continue
-			echo "$(basename $module) ($(basename $kdir))"
+			mod_name "$module"
+			echo "$MODNAME ($(basename $kdir))"
 		done
 	done
 	;;
