@@ -264,10 +264,24 @@ case "$1" in
 		shift
 	done
 
-	[[ ! -e $INSTALLDIR/$KVER/"$PATCH" ]] && die "$PATCH is not installed for kernel $KVER"
+	MODULE=$INSTALLDIR/$KVER/"$PATCH"
+	if [[ ! -f "$MODULE" ]]; then
+		mod_name "$PATCH"
+		PATCHNAME=$MODNAME
+		for i in $INSTALLDIR/$KVER/*; do
+			mod_name "$i"
+			if [[ $MODNAME == $PATCHNAME ]]; then
+				MODULE="$i"
+				break
+			fi
+		done
+	fi
+
+	[[ ! -e $MODULE ]] && die "$PATCH is not installed for kernel $KVER"
+	
 
 	echo "uninstalling $PATCH ($KVER)"
-	rm -f $INSTALLDIR/$KVER/"$PATCH" || die "failed to uninstall module $PATCH"
+	rm -f $MODULE || die "failed to uninstall module $PATCH"
 	if lsinitrd -k $KVER &> /dev/null; then
 		echo "rebuilding $KVER initramfs"
 		dracut -f --kver $KVER || die "dracut failed"
