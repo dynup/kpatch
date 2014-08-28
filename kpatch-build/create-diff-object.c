@@ -1617,7 +1617,7 @@ void kpatch_mark_ignored_sections(struct kpatch_elf *kelf)
 		ignoresec = find_section_by_name(&kelf->sections, name);
 		if (!ignoresec)
 			ERROR("expected ignored section");
-		log_normal("ignoring section %s\n", name);
+		log_normal("ignoring section: %s\n", name);
 		ignoresec->ignore = 1;
 		if (ignoresec->twin)
 			ignoresec->twin->ignore = 1;
@@ -1659,7 +1659,7 @@ void kpatch_mark_ignored_functions_same(struct kpatch_elf *kelf)
 			ERROR("expected bundled symbol");
 		if (rela->sym->type != STT_FUNC)
 			ERROR("expected function symbol");
-		log_normal("ignoring function %s\n", rela->sym->name);
+		log_normal("ignoring function: %s\n", rela->sym->name);
 		if (rela->sym->status != CHANGED)
 			log_normal("NOTICE: no change detected in function %s, unnecessary KPATCH_IGNORE_FUNCTION()?\n", rela->sym->name);
 		rela->sym->status = SAME;
