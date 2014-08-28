@@ -798,7 +798,8 @@ void kpatch_rename_mangled_functions(struct kpatch_elf *base,
 				     struct kpatch_elf *patched)
 {
 	struct symbol *sym, *basesym;
-	char *prefix, *dot;
+	char *prefix, *dot, name[256], *origname;
+	struct section *sec, *basesec;
 
 	list_for_each_entry(sym, &patched->symbols, list) {
 		if (sym->type != STT_FUNC)
@@ -824,6 +825,7 @@ void kpatch_rename_mangled_functions(struct kpatch_elf *base,
 			continue;
 
 		log_debug("renaming %s to %s\n", sym->name, basesym->name);
+		origname = sym->name;
 		sym->name = strdup(basesym->name);
 
 		if (sym != sym->sec->sym)
@@ -832,6 +834,24 @@ void kpatch_rename_mangled_functions(struct kpatch_elf *base,
 		sym->sec->name = strdup(basesym->sec->name);
 		if (sym->sec->rela)
 			sym->sec->rela->name = strdup(basesym->sec->rela->name);
+
+		/*
+		 * When function foo.isra.1 has a switch statement, it might
+		 * have a corresponding bundled .rodata.foo.isra.1 section (in
+		 * addition to .text.foo.isra.1 which we renamed above).
+		 */
+		sprintf(name, ".rodata.%s", origname);
+		sec = find_section_by_name(&patched->sections, name);
+		if (!sec)
+			continue;
+		sprintf(name, ".rodata.%s", basesym->name);
+		basesec = find_section_by_name(&base->sections, name);
+		if (!basesec)
+			continue;
+		sec->name = strdup(basesec->name);
+		sec->secsym->name = sec->name;
+		if (sec->rela)
+			sec->rela->name = strdup(basesec->rela->name);
 	}
 }
 
