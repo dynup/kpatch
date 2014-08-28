@@ -73,9 +73,29 @@ __find_module () {
 	return 1
 }
 
+mod_name () {
+	MODNAME="$(basename $1)"
+	MODNAME="${MODNAME%.ko}"
+	MODNAME="${MODNAME//-/_}"
+}
+
 find_module () {
 	arg="$1"
-	__find_module "${arg}"
+	if [[ "$arg" =~ \.ko ]]; then
+		__find_module "$arg" || return 1
+		mod_name "$MODULE"
+		return
+	else
+		for i in $INSTALLDIR/$(uname -r)/*; do
+			mod_name "$i"
+			if [[ $MODNAME == $arg ]]; then
+				MODULE="$i"
+				return
+			fi
+		done
+	fi
+
+	return 1
 }
 
 find_core_module() {
@@ -244,10 +264,24 @@ case "$1" in
 		shift
 	done
 
-	[[ ! -e $INSTALLDIR/$KVER/"$PATCH" ]] && die "$PATCH is not installed for kernel $KVER"
+	MODULE=$INSTALLDIR/$KVER/"$PATCH"
+	if [[ ! -f "$MODULE" ]]; then
+		mod_name "$PATCH"
+		PATCHNAME=$MODNAME
+		for i in $INSTALLDIR/$KVER/*; do
+			mod_name "$i"
+			if [[ $MODNAME == $PATCHNAME ]]; then
+				MODULE="$i"
+				break
+			fi
+		done
+	fi
+
+	[[ ! -e $MODULE ]] && die "$PATCH is not installed for kernel $KVER"
+	
 
 	echo "uninstalling $PATCH ($KVER)"
-	rm -f $INSTALLDIR/$KVER/"$PATCH" || die "failed to uninstall module $PATCH"
+	rm -f $MODULE || die "failed to uninstall module $PATCH"
 	if lsinitrd -k $KVER &> /dev/null; then
 		echo "rebuilding $KVER initramfs"
 		dracut -f --kver $KVER || die "dracut failed"
@@ -268,7 +302,8 @@ case "$1" in
 		[[ -e "$kdir" ]] || continue
 		for module in $kdir/*; do
 			[[ -e "$module" ]] || continue
-			echo "$(basename $module) ($(basename $kdir))"
+			mod_name "$module"
+			echo "$MODNAME ($(basename $kdir))"
 		done
 	done
 	;;
