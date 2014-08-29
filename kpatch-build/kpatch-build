@@ -398,8 +398,14 @@ echo "Building patched kernel"
 patch -N -p1 < "$APPLIEDPATCHFILE" >> "$LOGFILE" 2>&1 || die
 mkdir -p "$TEMPDIR/orig" "$TEMPDIR/patched"
 export TEMPDIR
-CROSS_COMPILE="$TOOLSDIR/kpatch-gcc " make "-j$CPUS" $TARGETS "O=$OBJDIR"  >> "$LOGFILE" 2>&1 || die
+# TODO: remove custom LDFLAGS and ugly "undefined reference" grep when core
+# module gets moved to the kernel tree
+CROSS_COMPILE="$TOOLSDIR/kpatch-gcc " \
+	LDFLAGS_vmlinux="--warn-unresolved-symbols" \
+	LDFLAGS_MODULE="--warn-unresolved-symbols" \
+	make "-j$CPUS" $TARGETS "O=$OBJDIR"  >> "$LOGFILE" 2>&1 || die
 [[ "${PIPESTATUS[0]}" -eq 0 ]] || die
+grep -q "undefined reference" "$LOGFILE" | grep -qv kpatch_shadow && die
 
 if [[ ! -e "$TEMPDIR/changed_objs" ]]; then
 	die "no changed objects found"

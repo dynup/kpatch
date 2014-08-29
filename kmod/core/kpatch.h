@@ -91,4 +91,8 @@ extern struct kobject *kpatch_patches_kobj;
 extern int kpatch_register(struct kpatch_module *kpmod, bool replace);
 extern int kpatch_unregister(struct kpatch_module *kpmod);
 
+extern void *kpatch_shadow_alloc(void *obj, char *var, size_t size, gfp_t gfp);
+extern void kpatch_shadow_free(void *obj, char *var);
+extern void *kpatch_shadow_get(void *obj, char *var);
+
 #endif /* _KPATCH_H_ */
