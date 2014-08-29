@@ -2044,7 +2044,7 @@ void kpatch_create_dynamic_rela_sections(struct kpatch_elf *kelf,
                                          char *objname)
 {
 	int nr, index, objname_offset;
-	struct section *sec, *sec2, *relasec;
+	struct section *sec, *dynsec, *relasec;
 	struct rela *rela, *dynrela, *safe;
 	struct symbol *strsym;
 	struct lookup_result result;
@@ -2065,9 +2065,9 @@ void kpatch_create_dynamic_rela_sections(struct kpatch_elf *kelf,
 	}
 
 	/* create text/rela section pair */
-	sec = create_section_pair(kelf, ".kpatch.dynrelas", sizeof(*dynrelas), nr);
-	relasec = sec->rela;
-	dynrelas = sec->data->d_buf;
+	dynsec = create_section_pair(kelf, ".kpatch.dynrelas", sizeof(*dynrelas), nr);
+	relasec = dynsec->rela;
+	dynrelas = dynsec->data->d_buf;
 
 	/* lookup strings symbol */
 	strsym = find_symbol_by_name(&kelf->symbols, ".kpatch.strings");
@@ -2079,13 +2079,13 @@ void kpatch_create_dynamic_rela_sections(struct kpatch_elf *kelf,
 
 	/* populate sections */
 	index = 0;
-	list_for_each_entry(sec2, &kelf->sections, list) {
-		if (!is_rela_section(sec2))
+	list_for_each_entry(sec, &kelf->sections, list) {
+		if (!is_rela_section(sec))
 			continue;
-		if (!strcmp(sec2->name, ".rela.kpatch.patches") ||
-		    !strcmp(sec2->name, ".rela.kpatch.dynrelas"))
+		if (!strcmp(sec->name, ".rela.kpatch.patches") ||
+		    !strcmp(sec->name, ".rela.kpatch.dynrelas"))
 			continue;
-		list_for_each_entry_safe(rela, safe, &sec2->relas, list) {
+		list_for_each_entry_safe(rela, safe, &sec->relas, list) {
 			if (rela->sym->sec)
 				continue;
 
@@ -2096,7 +2096,7 @@ void kpatch_create_dynamic_rela_sections(struct kpatch_elf *kelf,
 				if (lookup_local_symbol(table, rela->sym->name,
 				                        hint, &result))
 					ERROR("lookup_local_symbol %s (%s) needed for %s",
-			               rela->sym->name, hint, sec2->base->name);
+			               rela->sym->name, hint, sec->base->name);
 			}
 			else if (vmlinux) {
 				/*
@@ -2110,7 +2110,7 @@ void kpatch_create_dynamic_rela_sections(struct kpatch_elf *kelf,
 							 &result))
 					ERROR("lookup_global_symbol failed for %s, needed for %s\n",
 					      rela->sym->name,
-					      sec2->base->name);
+					      sec->base->name);
 			} else {
 				/*
 				 * We have a patch to a module which references
@@ -2154,10 +2154,10 @@ void kpatch_create_dynamic_rela_sections(struct kpatch_elf *kelf,
 
 			/* add rela to fill in dest field */
 			ALLOC_LINK(dynrela, &relasec->relas);
-			if (sec2->base->sym)
-				dynrela->sym = sec2->base->sym;
+			if (sec->base->sym)
+				dynrela->sym = sec->base->sym;
 			else
-				dynrela->sym = sec2->base->secsym;
+				dynrela->sym = sec->base->secsym;
 			dynrela->type = R_X86_64_64;
 			dynrela->addend = rela->offset;
 			dynrela->offset = index * sizeof(*dynrelas);
@@ -2186,8 +2186,8 @@ void kpatch_create_dynamic_rela_sections(struct kpatch_elf *kelf,
 	}
 
 	/* set size to actual number of dynrelas */
-	sec->data->d_size = index * sizeof(struct kpatch_patch_dynrela);
-	sec->sh.sh_size = sec->data->d_size;
+	dynsec->data->d_size = index * sizeof(struct kpatch_patch_dynrela);
+	dynsec->sh.sh_size = dynsec->data->d_size;
 }
 
 void kpatch_create_hooks_objname_rela(struct kpatch_elf *kelf, char *objname)
