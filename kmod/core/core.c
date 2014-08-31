@@ -77,8 +77,7 @@ struct kpatch_kallsyms_args {
 	unsigned long addr;
 };
 
-int ftrace_disabled;
-unsigned long *ftrace_disabled_addr;
+int *ftrace_disabled;
 
 /* this is a double loop, use goto instead of break */
 #define do_for_each_linked_func(kpmod, func) {				\
@@ -470,10 +469,7 @@ static int kpatch_ftrace_add_func(unsigned long ip)
 	if (!kpatch_num_patched) {
 		ret = register_ftrace_function(&kpatch_ftrace_ops);
 
-		/* ftrace_disabled gets set to 1 if register triggered ftrace_bug() */
-		memcpy(&ftrace_disabled, ftrace_disabled_addr, sizeof(int));
-
-		if (ftrace_disabled) {
+		if (*ftrace_disabled) {
 			pr_err("Call to register_ftrace_function() triggered ftrace_bug()\n");
 			ret = -ENODEV;
 		}
@@ -823,10 +819,7 @@ int kpatch_register(struct kpatch_module *kpmod, bool replace)
 	if (!kpmod->mod || list_empty(&kpmod->objects))
 		return -EINVAL;
 
-	/* is the ftrace system enabled? */
-	memcpy(&ftrace_disabled, ftrace_disabled_addr, sizeof(int));
-
-	if (ftrace_disabled) {
+	if (*ftrace_disabled) {
 		pr_err("The ftrace system is disabled, unable to continue\n");
 		return -ENODEV;
 	}
@@ -1054,18 +1047,16 @@ static int kpatch_init(void)
 		goto err_root_kobj;
 	}
 
-	ftrace_disabled_addr = (unsigned long *)kallsyms_lookup_name("ftrace_disabled");
+	ftrace_disabled = (int *)kallsyms_lookup_name("ftrace_disabled");
 
-	if (!ftrace_disabled_addr) {
+	if (!ftrace_disabled) {
 		pr_err("Unable to find address for symbol 'ftrace_disabled'\n");
 		ret = -ENODEV;
 		goto err_root_kobj;
 	}
 
 	/* is the ftrace system enabled? */
-	memcpy(&ftrace_disabled, ftrace_disabled_addr, sizeof(int));
-
-	if (ftrace_disabled) {
+	if (*ftrace_disabled) {
 		pr_err("The ftrace system is disabled, unable to continue\n");
 		ret = -ENODEV;
 		goto err_root_kobj;
