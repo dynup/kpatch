@@ -77,6 +77,9 @@ struct kpatch_kallsyms_args {
 	unsigned long addr;
 };
 
+int *ftrace_disabled_ptr;
+int *ftrace_enabled_ptr;
+
 /* this is a double loop, use goto instead of break */
 #define do_for_each_linked_func(kpmod, func) {				\
 	struct kpatch_object *_object;					\
@@ -466,6 +469,12 @@ static int kpatch_ftrace_add_func(unsigned long ip)
 
 	if (!kpatch_num_patched) {
 		ret = register_ftrace_function(&kpatch_ftrace_ops);
+
+		if (*ftrace_disabled_ptr) {
+			pr_err("Call to register_ftrace_function() triggered ftrace_bug()\n");
+			ret = -ENODEV;
+		}
+
 		if (ret) {
 			pr_err("can't register ftrace handler\n");
 			ftrace_set_filter_ip(&kpatch_ftrace_ops, ip, 1, 0);
@@ -654,6 +663,8 @@ static int kpatch_unlink_object(struct kpatch_object *object)
 	list_for_each_entry(func, &object->funcs, list) {
 		if (!func->old_addr)
 			continue;
+		if (!func->active)
+			continue;
 		ret = kpatch_ftrace_remove_func(func->old_addr);
 		if (ret) {
 			WARN(1, "can't unregister ftrace for address 0x%lx\n",
@@ -735,6 +746,7 @@ static int kpatch_link_object(struct kpatch_module *kpmod,
 		if (ret)
 			goto err_unlink;
 
+		func->active = true;
 	}
 
 	return 0;
@@ -808,6 +820,16 @@ int kpatch_register(struct kpatch_module *kpmod, bool replace)
 	if (!kpmod->mod || list_empty(&kpmod->objects))
 		return -EINVAL;
 
+	if (*ftrace_disabled_ptr) {
+		pr_err("The ftrace system is disabled, unable to continue\n");
+		return -ENODEV;
+	}
+
+	if (!*ftrace_enabled_ptr) {
+		pr_err("The ftrace system is turned off, you need to enable it before inserting kpatch; sysctl kernel.ftrace_enabled=1\n");
+		return -ENODEV;
+	}
+
 	down(&kpatch_mutex);
 
 	kpmod->enabled = false;
@@ -862,6 +884,8 @@ int kpatch_register(struct kpatch_module *kpmod, bool replace)
 
 		hash_for_each_rcu(kpatch_func_hash, i, func, node) {
 			if (func->op != KPATCH_OP_UNPATCH)
+				continue;
+			if (!func->active)
 				continue;
 			if (func->force)
 				force = 1;
@@ -1017,6 +1041,32 @@ static struct notifier_block kpatch_module_nb = {
 static int kpatch_init(void)
 {
 	int ret;
+
+	ftrace_disabled_ptr = (int *)kallsyms_lookup_name("ftrace_disabled");
+
+	if (!ftrace_disabled_ptr) {
+		pr_err("Unable to find address for symbol 'ftrace_disabled'\n");
+		return -ENODEV;
+	}
+
+	/* has the ftrace system been disabled? */
+	if (*ftrace_disabled_ptr) {
+		pr_err("The ftrace system is disabled, unable to continue\n");
+		return -ENODEV;
+	}
+
+	ftrace_enabled_ptr = (int *)kallsyms_lookup_name("ftrace_enabled");
+
+	if (!ftrace_enabled_ptr) {
+		pr_err("Unable to find address for symbol 'ftrace_enabled'\n");
+		return -ENODEV;
+	}
+
+	/* is the ftrace system enabled? */
+	if (!*ftrace_enabled_ptr) {
+		pr_err("The ftrace system is turned off, you need to enable it before inserting kpatch; sysctl kernel.ftrace_enabled=1\n");
+		return -ENODEV;
+	}
 
 	kpatch_root_kobj = kobject_create_and_add("kpatch", kernel_kobj);
 	if (!kpatch_root_kobj)

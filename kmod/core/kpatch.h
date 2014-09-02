@@ -41,6 +41,7 @@ struct kpatch_func {
 	const char *name;
 	struct list_head list;
 	int force;
+	bool active;
 
 	/* private */
 	struct hlist_node node;
