@@ -2126,11 +2126,15 @@ void kpatch_create_dynamic_rela_sections(struct kpatch_elf *kelf,
 				 */
 				if (lookup_is_exported_symbol(table, rela->sym->name))
 					continue;
+
+				/*
+				 * If lookup_global_symbol() fails, assume the
+				 * symbol is defined in another object in the
+				 * patch module.
+				 */
 				if (lookup_global_symbol(table, rela->sym->name,
 							 &result))
-					ERROR("lookup_global_symbol failed for %s, needed for %s\n",
-					      rela->sym->name,
-					      sec->base->name);
+					continue;
 			} else {
 				/*
 				 * We have a patch to a module which references
