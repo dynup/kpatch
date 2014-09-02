@@ -706,10 +706,6 @@ static int kpatch_link_object(struct kpatch_module *kpmod,
 		object->mod = mod;
 	}
 
-	ret = kpatch_write_relocations(kpmod, object);
-	if (ret)
-		goto err_unlink;
-
 	list_for_each_entry(func, &object->funcs, list) {
 
 		/* calculate actual old location */
@@ -717,7 +713,7 @@ static int kpatch_link_object(struct kpatch_module *kpmod,
 			ret = kpatch_verify_symbol_match(func->name,
 							 func->old_addr);
 			if (ret)
-				goto err_unlink;
+				goto err_verify;
 		} else {
 			unsigned long old_addr;
 			old_addr = kpatch_find_module_symbol(mod, func->name);
@@ -725,10 +721,25 @@ static int kpatch_link_object(struct kpatch_module *kpmod,
 				pr_err("unable to find symbol '%s' in module '%s\n",
 				       func->name, mod->name);
 				ret = -EINVAL;
-				goto err_unlink;
+				goto err_verify;
 			}
 			func->old_addr = old_addr;
 		}
+
+		/* does this function start with OP_JMP_REL32?  */
+		if (*(u8 *)func->old_addr == 0xe9) {
+			pr_err("symbol '%s' at address 0x%lx starts with a OP_JMP_REL32\n", func->name, func->old_addr);
+			ret = -EINVAL;
+			goto err_verify;
+		}
+
+	}
+
+	ret = kpatch_write_relocations(kpmod, object);
+	if (ret)
+		goto err_unlink;
+
+	list_for_each_entry(func, &object->funcs, list) {
 
 		/* add to ftrace filter and register handler if needed */
 		ret = kpatch_ftrace_add_func(func->old_addr);
@@ -741,6 +752,7 @@ static int kpatch_link_object(struct kpatch_module *kpmod,
 
 err_unlink:
 	kpatch_unlink_object(object);
+err_verify:
 	return ret;
 }
 
