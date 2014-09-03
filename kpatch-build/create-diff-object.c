@@ -942,7 +942,7 @@ void kpatch_correlate_static_local_variables(struct kpatch_elf *base,
 				continue;
 			if (strncmp(rela->sym->name, sym->name, prefixlen))
 				continue;
-			if (basesym)
+			if (basesym && basesym != rela->sym)
 				ERROR("found two static local variables matching %s in orig %s",
 				      sym->name, sec->name);
 
