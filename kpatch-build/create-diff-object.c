@@ -867,7 +867,7 @@ void kpatch_correlate_static_local_variables(struct kpatch_elf *base,
 	struct symbol *sym, *basesym;
 	struct section *tmpsec, *sec;
 	struct rela *rela;
-	int prefixlen, bundled1, bundled2;
+	int prefixlen, bundled, basebundled;
 	char *dot;
 
 	list_for_each_entry(sym, &patched->symbols, list) {
@@ -951,11 +951,11 @@ void kpatch_correlate_static_local_variables(struct kpatch_elf *base,
 		if (!basesym)
 			continue;
 
-		bundled1 = sym == sym->sec->sym;
-		bundled2 = basesym == basesym->sec->sym;
-		if (bundled1 != bundled2)
+		bundled = sym == sym->sec->sym;
+		basebundled = basesym == basesym->sec->sym;
+		if (bundled != basebundled)
 			ERROR("bundle mismatch for symbol %s", sym->name);
-		if (!bundled1 && sym->sec->twin != basesym->sec)
+		if (!bundled && sym->sec->twin != basesym->sec)
 			ERROR("sections %s and %s aren't correlated",
 			      sym->sec->name, basesym->sec->name);
 
@@ -966,7 +966,7 @@ void kpatch_correlate_static_local_variables(struct kpatch_elf *base,
 		basesym->twin = sym;
 		sym->status = basesym->status = SAME;
 
-		if (bundled1) {
+		if (bundled) {
 			sym->sec->twin = basesym->sec;
 			basesym->sec->twin = sym->sec;
 		}
