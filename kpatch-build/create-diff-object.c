@@ -1293,6 +1293,22 @@ void kpatch_include_force_elements(struct kpatch_elf *kelf)
 			sym->include = 0;
 }
 
+int kpatch_include_new_globals(struct kpatch_elf *kelf)
+{
+	struct symbol *sym;
+	int nr = 0;
+
+	list_for_each_entry(sym, &kelf->symbols, list) {
+		if (sym->bind == STB_GLOBAL && sym->sec &&
+		    sym->status == NEW) {
+			kpatch_include_symbol(sym, 0);
+			nr++;
+		}
+	}
+
+	return nr;
+}
+
 int kpatch_include_changed_functions(struct kpatch_elf *kelf)
 {
 	struct symbol *sym;
@@ -2588,7 +2604,7 @@ int main(int argc, char *argv[])
 {
 	struct kpatch_elf *kelf_base, *kelf_patched, *kelf_out;
 	struct arguments arguments;
-	int num_changed, hooks_exist;
+	int num_changed, hooks_exist, new_globals_exist;
 	struct lookup_table *lookup;
 	struct section *sec, *symtab;
 	struct symbol *sym;
@@ -2638,12 +2654,13 @@ int main(int argc, char *argv[])
 	kpatch_include_debug_sections(kelf_patched);
 	hooks_exist = kpatch_include_hook_elements(kelf_patched);
 	kpatch_include_force_elements(kelf_patched);
+	new_globals_exist = kpatch_include_new_globals(kelf_patched);
 	kpatch_dump_kelf(kelf_patched);
 	kpatch_verify_patchability(kelf_patched);
 
 	if (!num_changed) {
-		if (hooks_exist)
-			log_normal("no changed functions were found, but hooks exist\n");
+		if (hooks_exist || new_globals_exist)
+			log_normal("no changed functions were found, but hooks or new globals exist\n");
 		else {
 			log_normal("no changed functions were found\n");
 			return 3; /* 1 is ERROR, 2 is DIFF_FATAL */
