@@ -867,7 +867,7 @@ void kpatch_correlate_static_local_variables(struct kpatch_elf *base,
 	struct symbol *sym, *basesym;
 	struct section *tmpsec, *sec;
 	struct rela *rela;
-	int prefixlen;
+	int prefixlen, bundled, basebundled;
 	char *dot;
 
 	list_for_each_entry(sym, &patched->symbols, list) {
@@ -942,7 +942,7 @@ void kpatch_correlate_static_local_variables(struct kpatch_elf *base,
 				continue;
 			if (strncmp(rela->sym->name, sym->name, prefixlen))
 				continue;
-			if (basesym)
+			if (basesym && basesym != rela->sym)
 				ERROR("found two static local variables matching %s in orig %s",
 				      sym->name, sec->name);
 
@@ -951,19 +951,25 @@ void kpatch_correlate_static_local_variables(struct kpatch_elf *base,
 		if (!basesym)
 			continue;
 
-		if (sym != sym->sec->sym)
-			ERROR("expected bundled section for %s", sym->name);
-		if (basesym != basesym->sec->sym)
-			ERROR("expected bundled section for %s",basesym->name);
+		bundled = sym == sym->sec->sym;
+		basebundled = basesym == basesym->sec->sym;
+		if (bundled != basebundled)
+			ERROR("bundle mismatch for symbol %s", sym->name);
+		if (!bundled && sym->sec->twin != basesym->sec)
+			ERROR("sections %s and %s aren't correlated",
+			      sym->sec->name, basesym->sec->name);
 
 		log_debug("renaming and correlating %s to %s\n",
 			  sym->name, basesym->name);
 		sym->name = strdup(basesym->name);
 		sym->twin = basesym;
 		basesym->twin = sym;
-		sym->sec->twin = basesym->sec;
-		basesym->sec->twin = sym->sec;
 		sym->status = basesym->status = SAME;
+
+		if (bundled) {
+			sym->sec->twin = basesym->sec;
+			basesym->sec->twin = sym->sec;
+		}
 	}
 }
 
