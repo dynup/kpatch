@@ -1320,7 +1320,6 @@ int kpatch_include_changed_functions(struct kpatch_elf *kelf)
 		if (sym->status == CHANGED &&
 		    sym->type == STT_FUNC) {
 			changed_nr++;
-			log_normal("changed function: %s\n", sym->name);
 			kpatch_include_symbol(sym, 0);
 		}
 
@@ -1329,6 +1328,20 @@ int kpatch_include_changed_functions(struct kpatch_elf *kelf)
 	}
 
 	return changed_nr;
+}
+
+void kpatch_print_changes(struct kpatch_elf *kelf)
+{
+	struct symbol *sym;
+
+	list_for_each_entry(sym, &kelf->symbols, list) {
+		if (!sym->include || !sym->sec || sym->type != STT_FUNC)
+			continue;
+		if (sym->status == NEW)
+			log_normal("new function: %s\n", sym->name);
+		else if (sym->status == CHANGED)
+			log_normal("changed function: %s\n", sym->name);
+	}
 }
 
 void kpatch_migrate_symbols(struct list_head *src,
@@ -2655,12 +2668,13 @@ int main(int argc, char *argv[])
 	hooks_exist = kpatch_include_hook_elements(kelf_patched);
 	kpatch_include_force_elements(kelf_patched);
 	new_globals_exist = kpatch_include_new_globals(kelf_patched);
+	kpatch_print_changes(kelf_patched);
 	kpatch_dump_kelf(kelf_patched);
 	kpatch_verify_patchability(kelf_patched);
 
-	if (!num_changed) {
-		if (hooks_exist || new_globals_exist)
-			log_normal("no changed functions were found, but hooks or new globals exist\n");
+	if (!num_changed && !new_globals_exist) {
+		if (hooks_exist)
+			log_normal("no changed functions were found, but hooks exist\n");
 		else {
 			log_normal("no changed functions were found\n");
 			return 3; /* 1 is ERROR, 2 is DIFF_FATAL */
