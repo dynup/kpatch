@@ -35,6 +35,7 @@ extern struct kpatch_patch_dynrela __kpatch_dynrelas[], __kpatch_dynrelas_end[];
 extern struct kpatch_patch_hook __kpatch_hooks_load[], __kpatch_hooks_load_end[];
 extern struct kpatch_patch_hook __kpatch_hooks_unload[], __kpatch_hooks_unload_end[];
 extern unsigned long __kpatch_force_funcs[], __kpatch_force_funcs_end[];
+extern char __kpatch_checksum[];
 
 static struct kpatch_module kpmod;
 static struct kobject *patch_kobj;
@@ -60,29 +61,43 @@ static ssize_t patch_enabled_store(struct kobject *kobj,
 	int ret;
 	unsigned long val;
 
-	/* only disabling is supported */
-	if (!kpmod.enabled)
-		return -EINVAL;
-
 	ret = kstrtoul(buf, 10, &val);
 	if (ret)
 		return ret;
 
 	val = !!val;
 
-	/* only disabling is supported */
 	if (val)
-		return -EINVAL;
+		ret = kpatch_register(&kpmod, replace);
+	else
+		ret = kpatch_unregister(&kpmod);
 
-	ret = kpatch_unregister(&kpmod);
 	if (ret)
 		return ret;
 
 	return count;
 }
 
+static ssize_t checksum_show(struct kobject *kobj,
+				  struct kobj_attribute *attr, char *buf)
+{
+	return snprintf(buf, PAGE_SIZE, "%s\n", __kpatch_checksum);
+}
+
 static struct kobj_attribute patch_enabled_attr =
 	__ATTR(enabled, 0644, patch_enabled_show, patch_enabled_store);
+static struct kobj_attribute checksum_attr =
+	__ATTR(checksum, 0444, checksum_show, NULL);
+
+static struct attribute *kpatch_attrs[] = {
+	&patch_enabled_attr.attr,
+	&checksum_attr.attr,
+	NULL,
+};
+
+static struct attribute_group kpatch_attr_group = {
+	.attrs = kpatch_attrs,
+};
 
 static ssize_t func_old_addr_show(struct kobject *kobj,
 				  struct kobj_attribute *attr, char *buf)
@@ -356,14 +371,10 @@ static int __init patch_init(void)
 	if (!patch_kobj)
 		return -ENOMEM;
 
-	ret = sysfs_create_file(patch_kobj, &patch_enabled_attr.attr);
-	if (ret)
-		goto err_patch;
-
 	functions_kobj = kobject_create_and_add("functions", patch_kobj);
 	if (!functions_kobj) {
 		ret = -ENOMEM;
-		goto err_sysfs;
+		goto err_patch;
 	}
 
 	kpmod.mod = THIS_MODULE;
@@ -385,13 +396,17 @@ static int __init patch_init(void)
 	if (ret)
 		goto err_objects;
 
+	ret = sysfs_create_group(patch_kobj, &kpatch_attr_group);
+	if (ret)
+		goto err_sysfs;
+
 	return 0;
 
+err_sysfs:
+	kpatch_unregister(&kpmod);
 err_objects:
 	patch_free_objects();
 	kobject_put(functions_kobj);
-err_sysfs:
-	sysfs_remove_file(patch_kobj, &patch_enabled_attr.attr);
 err_patch:
 	kobject_put(patch_kobj);
 	return ret;
@@ -403,7 +418,7 @@ static void __exit patch_exit(void)
 
 	patch_free_objects();
 	kobject_put(functions_kobj);
-	sysfs_remove_file(patch_kobj, &patch_enabled_attr.attr);
+	sysfs_remove_group(patch_kobj, &kpatch_attr_group);
 	kobject_put(patch_kobj);
 }
 

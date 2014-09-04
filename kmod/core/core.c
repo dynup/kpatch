@@ -810,12 +810,16 @@ int kpatch_register(struct kpatch_module *kpmod, bool replace)
 
 	down(&kpatch_mutex);
 
-	kpmod->enabled = false;
+	if (kpmod->enabled) {
+		ret = -EINVAL;
+		goto err_up;
+	}
+
 	list_add_tail(&kpmod->list, &kpmod_list);
 
 	if (!try_module_get(kpmod->mod)) {
 		ret = -ENODEV;
-		goto err_up;
+		goto err_list;
 	}
 
 	list_for_each_entry(object, &kpmod->objects, list) {
@@ -931,8 +935,9 @@ err_unlink:
 		if (kpatch_object_linked(object))
 			kpatch_unlink_object(object);
 	module_put(kpmod->mod);
-err_up:
+err_list:
 	list_del(&kpmod->list);
+err_up:
 	up(&kpatch_mutex);
 	return ret;
 }
@@ -944,10 +949,12 @@ int kpatch_unregister(struct kpatch_module *kpmod)
 	struct kpatch_func *func;
 	int ret, force = 0;
 
-	if (!kpmod->enabled)
-		return -EINVAL;
-
 	down(&kpatch_mutex);
+
+	if (!kpmod->enabled) {
+	    ret = -EINVAL;
+	    goto out;
+	}
 
 	do_for_each_linked_func(kpmod, func) {
 		func->op = KPATCH_OP_UNPATCH;
