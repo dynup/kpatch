@@ -2155,8 +2155,10 @@ void kpatch_create_dynamic_rela_sections(struct kpatch_elf *kelf,
 				 * patch module.
 				 */
 				if (lookup_global_symbol(table, rela->sym->name,
-							 &result))
+							 &result)) {
+					log_normal("new function: %s\n", rela->sym->name);
 					continue;
+				}
 			} else {
 				/*
 				 * We have a patch to a module which references
