@@ -55,10 +55,13 @@ warn() {
 
 die() {
 	if [[ -z $1 ]]; then
-		warn "kpatch build failed. Check $LOGFILE for more details."
+		msg="kpatch build failed"
 	else
-		warn "$1"
+		msg="$1"
 	fi
+
+	warn "$msg. Check $LOGFILE for more details."
+
 	exit 1
 }
 
