@@ -62,7 +62,7 @@ sacrificing security or stability.
 %prep
 %setup -q 
 cp Makefile.inc Makefile.inc.ORG
-%{__sed} 's%/usr/local%/usr%' Makefile.inc.ORG > Makefile.inc
+%{__sed} 's|/usr/local|/%{_usr}|' Makefile.inc.ORG > Makefile.inc
 
 %build
 make %{_smp_mflags} 
