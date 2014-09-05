@@ -55,10 +55,13 @@ warn() {
 
 die() {
 	if [[ -z $1 ]]; then
-		warn "kpatch build failed. Check $LOGFILE for more details."
+		msg="kpatch build failed"
 	else
-		warn "$1"
+		msg="$1"
 	fi
+
+	warn "$msg. Check $LOGFILE for more details."
+
 	exit 1
 }
 
@@ -436,11 +439,9 @@ for i in $FILES; do
 		warn "create-diff-object SIGSEGV"
 		if ls core* &> /dev/null; then
 			cp core* /tmp
-			warn "core file at /tmp/$(ls core*)"
-		else
-			warn "no core file found, run 'ulimit -c unlimited' and try to recreate"
+			die "core file at /tmp/$(ls core*)"
 		fi
-		exit 1
+		die "no core file found, run 'ulimit -c unlimited' and try to recreate"
 	fi
 	# create-diff-object returns 3 if no functional change is found
 	[[ $rc -eq 0 ]] || [[ $rc -eq 3 ]] || die
