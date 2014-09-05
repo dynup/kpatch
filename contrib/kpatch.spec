@@ -108,7 +108,7 @@ rm -rf %{buildroot}
 * Sat May 24 2014 Udo Seidel <udoseidel@gmx.de> - 0.1.1-1
 - rebased to current version
 
-* Tue Apr 10 2014 Udo Seidel <udoseidel@gmx.de> - 0.0.1-3
+* Thu Apr 10 2014 Udo Seidel <udoseidel@gmx.de> - 0.0.1-3
 - added dracut module
 
 * Tue Mar 25 2014 Udo Seidel <udoseidel@gmx.de> - 0.0.1-2
