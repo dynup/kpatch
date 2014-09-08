@@ -52,7 +52,10 @@
 #include "kpatch-patch.h"
 
 #define ERROR(format, ...) \
-	error(1, 0, "%s: %d: " format, __FUNCTION__, __LINE__, ##__VA_ARGS__)
+({ \
+	printf("%s: ", objname); \
+	error(1, 0, "%s: %d: " format, __FUNCTION__, __LINE__, ##__VA_ARGS__); \
+})
 
 #define DIFF_FATAL(format, ...) \
 ({ \
