@@ -53,13 +53,13 @@
 
 #define ERROR(format, ...) \
 ({ \
-	printf("%s: ", objname); \
+	fprintf(stderr, "%s: ", objname); \
 	error(1, 0, "%s: %d: " format, __FUNCTION__, __LINE__, ##__VA_ARGS__); \
 })
 
 #define DIFF_FATAL(format, ...) \
 ({ \
-	printf("%s: " format "\n", objname, ##__VA_ARGS__); \
+	fprintf(stderr, "%s: " format "\n", objname, ##__VA_ARGS__); \
 	error(2, 0, "unreconcilable difference"); \
 })
 
