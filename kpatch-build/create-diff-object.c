@@ -2325,7 +2325,7 @@ void kpatch_create_mcount_sections(struct kpatch_elf *kelf)
 		sym->sec->data->d_buf = newdata;
 		insn = newdata;
 		if (insn[0] != 0xf)
-			ERROR("bad first instruction in %s", sym->name);
+			ERROR("bad first instruction '0x%x' in %s, should be 0xf", insn[0], sym->name);
 		insn[0] = 0xe8;
 		insn[1] = 0;
 		insn[2] = 0;
