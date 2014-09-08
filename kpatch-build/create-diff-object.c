@@ -2094,6 +2094,13 @@ void kpatch_create_patches_sections(struct kpatch_elf *kelf,
 
 }
 
+static int kpatch_is_core_module_symbol(char *name)
+{
+	return (!strcmp(name, "kpatch_shadow_alloc") ||
+		!strcmp(name, "kpatch_shadow_free") ||
+		!strcmp(name, "kpatch_shadow_get"));
+}
+
 void kpatch_create_dynamic_rela_sections(struct kpatch_elf *kelf,
                                          struct lookup_table *table, char *hint,
                                          char *objname)
@@ -2142,6 +2149,14 @@ void kpatch_create_dynamic_rela_sections(struct kpatch_elf *kelf,
 			continue;
 		list_for_each_entry_safe(rela, safe, &sec->relas, list) {
 			if (rela->sym->sec)
+				continue;
+			/*
+			 * Allow references to core module symbols to remain as
+			 * normal relas, since the core module may not be
+			 * compiled into the kernel, and they should be
+			 * exported anyway.
+			 */
+			if (kpatch_is_core_module_symbol(rela->sym->name))
 				continue;
 
 			exported = 0;

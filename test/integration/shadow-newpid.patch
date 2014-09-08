@@ -1,0 +1,72 @@
+Index: src/kernel/fork.c
+===================================================================
+--- src.orig/kernel/fork.c
++++ src/kernel/fork.c
+@@ -1572,6 +1572,7 @@ struct task_struct *fork_idle(int cpu)
+  * It copies the process, and if successful kick-starts
+  * it and waits for it to finish using the VM if required.
+  */
++#include "kpatch.h"
+ long do_fork(unsigned long clone_flags,
+ 	      unsigned long stack_start,
+ 	      unsigned long stack_size,
+@@ -1622,6 +1623,13 @@ long do_fork(unsigned long clone_flags,
+ 	if (!IS_ERR(p)) {
+ 		struct completion vfork;
+ 		struct pid *pid;
++		int *newpid;
++		static int ctr = 0;
++
++		newpid = kpatch_shadow_alloc(p, "newpid", sizeof(*newpid),
++					     GFP_KERNEL);
++		if (newpid)
++			*newpid = ctr++;
+ 
+ 		trace_sched_process_fork(current, p);
+ 
+Index: src/fs/proc/array.c
+===================================================================
+--- src.orig/fs/proc/array.c
++++ src/fs/proc/array.c
+@@ -337,13 +337,20 @@ static inline void task_seccomp(struct s
+ #endif
+ }
+ 
++#include "kpatch.h"
+ static inline void task_context_switch_counts(struct seq_file *m,
+ 						struct task_struct *p)
+ {
++	int *newpid;
++
+ 	seq_printf(m,	"voluntary_ctxt_switches:\t%lu\n"
+ 			"nonvoluntary_ctxt_switches:\t%lu\n",
+ 			p->nvcsw,
+ 			p->nivcsw);
++
++	newpid = kpatch_shadow_get(p, "newpid");
++	if (newpid)
++		seq_printf(m, "newpid:\t%d\n", *newpid);
+ }
+ 
+ static void task_cpus_allowed(struct seq_file *m, struct task_struct *task)
+Index: src/kernel/exit.c
+===================================================================
+--- src.orig/kernel/exit.c
++++ src/kernel/exit.c
+@@ -694,6 +694,7 @@ static void check_stack_usage(void)
+ static inline void check_stack_usage(void) {}
+ #endif
+ 
++#include "kpatch.h"
+ void do_exit(long code)
+ {
+ 	struct task_struct *tsk = current;
+@@ -790,6 +791,8 @@ void do_exit(long code)
+ 	exit_task_work(tsk);
+ 	exit_thread();
+ 
++	kpatch_shadow_free(tsk, "newpid");
++
+ 	/*
+ 	 * Flush inherited counters to the parent - before the parent
+ 	 * gets woken up by child-exit notifications.
