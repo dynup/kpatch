@@ -53,9 +53,33 @@ struct kpatch_shadow {
 	struct hlist_node node;
 	struct rcu_head rcu_head;
 	void *obj;
-	char *var;
+	union {
+		char *var; /* assumed to be 4-byte aligned */
+		unsigned long flags;
+	};
 	void *data;
 };
+
+#define SHADOW_FLAG_INPLACE 0x1
+#define SHADOW_FLAG_RESERVED0 0x2 /* reserved for future use */
+
+#define SHADOW_FLAG_MASK 0x3
+#define SHADOW_PTR_MASK (~(SHADOW_FLAG_MASK))
+
+static inline void shadow_set_inplace(struct kpatch_shadow *shadow)
+{
+	shadow->flags |= SHADOW_FLAG_INPLACE;
+}
+
+static inline int shadow_is_inplace(struct kpatch_shadow *shadow)
+{
+	return shadow->flags & SHADOW_FLAG_INPLACE;
+}
+
+static inline char *shadow_var(struct kpatch_shadow *shadow)
+{
+	return (char *)((unsigned long)shadow->var & SHADOW_PTR_MASK);
+}
 
 void *kpatch_shadow_alloc(void *obj, char *var, size_t size, gfp_t gfp)
 {
@@ -72,10 +96,15 @@ void *kpatch_shadow_alloc(void *obj, char *var, size_t size, gfp_t gfp)
 	if (!shadow->var)
 		return NULL;
 
-	shadow->data = kmalloc(size, gfp);
-	if (!shadow->data) {
-		kfree(shadow->var);
-		return NULL;
+	if (size <= sizeof(shadow->data)) {
+		shadow->data = &shadow->data;
+		shadow_set_inplace(shadow);
+	} else {
+		shadow->data = kmalloc(size, gfp);
+		if (!shadow->data) {
+			kfree(shadow->var);
+			return NULL;
+		}
 	}
 
 	spin_lock_irqsave(&kpatch_shadow_lock, flags);
@@ -92,8 +121,9 @@ static void kpatch_shadow_rcu_free(struct rcu_head *head)
 
 	shadow = container_of(head, struct kpatch_shadow, rcu_head);
 
-	kfree(shadow->data);
-	kfree(shadow->var);
+	if (!shadow_is_inplace(shadow))
+		kfree(shadow->data);
+	kfree(shadow_var(shadow));
 	kfree(shadow);
 }
 
@@ -106,7 +136,7 @@ void kpatch_shadow_free(void *obj, char *var)
 
 	hash_for_each_possible(kpatch_shadow_hash, shadow, node,
 			       (unsigned long)obj) {
-		if (shadow->obj == obj && !strcmp(shadow->var, var)) {
+		if (shadow->obj == obj && !strcmp(shadow_var(shadow), var)) {
 			hash_del_rcu(&shadow->node);
 			spin_unlock_irqrestore(&kpatch_shadow_lock, flags);
 			call_rcu(&shadow->rcu_head, kpatch_shadow_rcu_free);
@@ -126,7 +156,7 @@ void *kpatch_shadow_get(void *obj, char *var)
 
 	hash_for_each_possible_rcu(kpatch_shadow_hash, shadow, node,
 				   (unsigned long)obj) {
-		if (shadow->obj == obj && !strcmp(shadow->var, var)) {
+		if (shadow->obj == obj && !strcmp(shadow_var(shadow), var)) {
 			rcu_read_unlock();
 			return shadow->data;
 		}
