@@ -2340,7 +2340,7 @@ void kpatch_create_mcount_sections(struct kpatch_elf *kelf)
 		sym->sec->data->d_buf = newdata;
 		insn = newdata;
 		if (insn[0] != 0xf)
-			ERROR("bad first instruction in %s", sym->name);
+			ERROR("function '%s' has no fentry call; unable to patch", sym->name);
 		insn[0] = 0xe8;
 		insn[1] = 0;
 		insn[2] = 0;
@@ -2351,7 +2351,7 @@ void kpatch_create_mcount_sections(struct kpatch_elf *kelf)
 					list);
 		if (rela->type != R_X86_64_NONE ||
 		    strcmp(rela->sym->name, "__fentry__"))
-			ERROR("bad first rela in %s", sym->sec->rela->name);
+			ERROR("function '%s' has no fentry call; unable to patch", sym->name);
 		rela->type = R_X86_64_PC32;
 
 		index++;
