@@ -459,7 +459,7 @@ for i in $FILES; do
 done
 
 if [[ $ERROR -ne 0 ]]; then
-	die "create-diff-object failed on $ERROR of the objects"
+	die "$ERROR error(s) encountered"
 fi
 
 if [[ $CHANGED -eq 0 ]]; then

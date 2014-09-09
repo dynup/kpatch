@@ -52,11 +52,11 @@
 #include "kpatch-patch.h"
 
 #define ERROR(format, ...) \
-	error(1, 0, "%s: %s: %d: " format, objname, __FUNCTION__, __LINE__, ##__VA_ARGS__)
+	error(1, 0, "ERROR: %s: %s: %d: " format, objname, __FUNCTION__, __LINE__, ##__VA_ARGS__)
 
 #define DIFF_FATAL(format, ...) \
 ({ \
-	fprintf(stderr, "%s: " format "\n", objname, ##__VA_ARGS__); \
+	fprintf(stderr, "ERROR: %s: " format "\n", objname, ##__VA_ARGS__); \
 	error(2, 0, "unreconcilable difference"); \
 })
 
