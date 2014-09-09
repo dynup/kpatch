@@ -1,0 +1,20 @@
+Index: src/kernel/reboot.c
+===================================================================
+--- src.orig/kernel/reboot.c
++++ src/kernel/reboot.c
+@@ -285,8 +285,15 @@ SYSCALL_DEFINE4(reboot, int, magic1, int
+ 	return ret;
+ }
+ 
++void kpatch_foo(void)
++{
++	if (!jiffies)
++		printk("kpatch_foo\n");
++}
++
+ static void deferred_cad(struct work_struct *dummy)
+ {
++	kpatch_foo();
+ 	kernel_restart(NULL);
+ }
+ 
