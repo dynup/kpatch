@@ -17,6 +17,9 @@ make || exit 1
 cd ../../kmod/patch || exit 1
 make clean || exit 1
 cp ../../test/testmod/output.o . || exit 1
+md5sum output.o | awk '{printf "%s\0", $1}' > checksum.tmp || exit 1
+objcopy --add-section .kpatch.checksum=checksum.tmp --set-section-flags .kpatch.checksum=alloc,load,contents,readonly output.o || exit 1
+rm -f checksum.tmp
 KBUILD_EXTRA_SYMBOLS="$(readlink -e ../../kmod/core/Module.symvers)" make || exit 1
 cd ../../test/testmod
 

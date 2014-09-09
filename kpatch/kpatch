@@ -121,6 +121,21 @@ core_module_loaded () {
 	grep -q "T kpatch_register" /proc/kallsyms
 }
 
+get_module_name () {
+	echo $(readelf -p .gnu.linkonce.this_module $1 | grep '\[.*\]' | awk '{print $3}')
+}
+
+verify_module_checksum () {
+    modname=$(get_module_name $1)
+    [[ -z $modname ]] && return 1
+
+    checksum=$(readelf -p .kpatch.checksum $1 | grep '\[.*\]' | awk '{print $3}')
+    [[ -z $checksum ]] && return 1
+
+    sysfs_checksum=$(cat /sys/kernel/kpatch/patches/${modname}/checksum)
+    [[ $checksum == $sysfs_checksum ]] || return 1
+}
+
 load_module () {
 	if ! core_module_loaded; then
 		if modprobe -q kpatch; then
@@ -131,6 +146,23 @@ load_module () {
 			insmod "$COREMOD" || die "failed to load core module"
 		fi
 	fi
+
+	modname=$(get_module_name $1)
+	moddir=/sys/kernel/kpatch/patches/$modname
+	if [[ -d $moddir ]] ; then
+		if [[ $(cat "${moddir}/enabled") -eq 0 ]]; then
+			if verify_module_checksum $1; then # same checksum
+				echo "module already loaded, re-enabling"
+				echo 1 > ${moddir}/enabled || die "failed to re-enable module $modname"
+				return
+			else
+				die "error: cannot re-enable patch module $modname, cannot verify checksum match"
+			fi
+		else
+			die "error: module named $modname already loaded and enabled"
+		fi
+	fi
+
 	echo "loading patch module: $1"
 	insmod "$1" "$2"
 }
