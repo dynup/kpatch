@@ -427,6 +427,7 @@ cd "$TEMPDIR"
 mkdir output
 declare -A objnames
 CHANGED=0
+ERROR=0
 for i in $FILES; do
 	mkdir -p "output/$(dirname $i)"
 	cd "$OBJDIR"
@@ -450,12 +451,16 @@ for i in $FILES; do
 		die "no core file found, run 'ulimit -c unlimited' and try to recreate"
 	fi
 	# create-diff-object returns 3 if no functional change is found
-	[[ $rc -eq 0 ]] || [[ $rc -eq 3 ]] || die
+	[[ $rc -eq 0 ]] || [[ $rc -eq 3 ]] || ERROR=$(expr $ERROR "+" 1)
 	if [[ $rc -eq 0 ]]; then
 		CHANGED=1
 		objnames[$KOBJFILE]=1
 	fi
 done
+
+if [[ $ERROR -ne 0 ]]; then
+	die "create-diff-object failed on $ERROR of the objects"
+fi
 
 if [[ $CHANGED -eq 0 ]]; then
 	die "no functional changes found"
