@@ -2351,7 +2351,7 @@ void kpatch_create_mcount_sections(struct kpatch_elf *kelf)
 					list);
 		if (rela->type != R_X86_64_NONE ||
 		    strcmp(rela->sym->name, "__fentry__"))
-			ERROR("rela '%s' has no fentry section; unable to patch", sym->sec->rela->name);
+			ERROR("function '%s' has no fentry call; unable to patch", sym->sec->rela->name);
 		rela->type = R_X86_64_PC32;
 
 		index++;
