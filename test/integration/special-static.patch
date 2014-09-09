@@ -1,0 +1,23 @@
+Index: src/kernel/fork.c
+===================================================================
+--- src.orig/kernel/fork.c
++++ src/kernel/fork.c
+@@ -1029,10 +1029,18 @@ static void posix_cpu_timers_init_group(
+ 	INIT_LIST_HEAD(&sig->cpu_timers[2]);
+ }
+ 
++void kpatch_foo(void)
++{
++	if (!jiffies)
++		printk("kpatch copy signal\n");
++}
++
+ static int copy_signal(unsigned long clone_flags, struct task_struct *tsk)
+ {
+ 	struct signal_struct *sig;
+ 
++	kpatch_foo();
++
+ 	if (clone_flags & CLONE_THREAD)
+ 		return 0;
+ 
