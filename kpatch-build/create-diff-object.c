@@ -1070,7 +1070,8 @@ void kpatch_replace_sections_syms(struct kpatch_elf *kelf)
 	int add_off;
 
 	list_for_each_entry(sec, &kelf->sections, list) {
-		if (!is_rela_section(sec))
+		if (!is_rela_section(sec) ||
+		    is_debug_section(sec))
 			continue;
 
 		list_for_each_entry(rela, &sec->relas, list) {
