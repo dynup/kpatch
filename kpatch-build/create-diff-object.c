@@ -1052,7 +1052,7 @@ void kpatch_replace_sections_syms(struct kpatch_elf *kelf)
 			    strcmp(rela->sym->name, ".data..read_mostly") &&
 			    strcmp(rela->sym->name, ".data.unlikely") &&
 			    !(rela->sym->type == STT_SECTION && rela->sym->sec &&
-			      (rela->sym->sec->sh.sh_flags & SHF_EXECINSTR)))
+			      is_text_section(rela->sym->sec)))
 				continue;
 			list_for_each_entry(sym, &kelf->symbols, list) {
 
