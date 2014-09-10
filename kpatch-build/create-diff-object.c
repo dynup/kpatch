@@ -1673,6 +1673,8 @@ void kpatch_mark_ignored_sections(struct kpatch_elf *kelf)
 		if (!ignoresec)
 			ERROR("KPATCH_IGNORE_SECTION: can't find %s", name);
 		log_normal("ignoring section: %s\n", name);
+		if (is_rela_section(ignoresec))
+			ignoresec = ignoresec->base;
 		ignoresec->ignore = 1;
 		if (ignoresec->twin)
 			ignoresec->twin->ignore = 1;
