@@ -182,6 +182,12 @@ int is_rela_section(struct section *sec)
 	return (sec->sh.sh_type == SHT_RELA);
 }
 
+int is_text_section(struct section *sec)
+{
+	return (sec->sh.sh_type == SHT_PROGBITS &&
+		(sec->sh.sh_flags & SHF_EXECINSTR));
+}
+
 int is_debug_section(struct section *sec)
 {
 	char *name;
@@ -904,6 +910,7 @@ void kpatch_correlate_static_local_variables(struct kpatch_elf *base,
 		sec = NULL;
 		list_for_each_entry(tmpsec, &patched->sections, list) {
 			if (!is_rela_section(tmpsec) ||
+			    !is_text_section(tmpsec->base) ||
 			    is_debug_section(tmpsec))
 				continue;
 			list_for_each_entry(rela, &tmpsec->relas, list) {
@@ -1045,7 +1052,7 @@ void kpatch_replace_sections_syms(struct kpatch_elf *kelf)
 			    strcmp(rela->sym->name, ".data..read_mostly") &&
 			    strcmp(rela->sym->name, ".data.unlikely") &&
 			    !(rela->sym->type == STT_SECTION && rela->sym->sec &&
-			      (rela->sym->sec->sh.sh_flags & SHF_EXECINSTR)))
+			      is_text_section(rela->sym->sec)))
 				continue;
 			list_for_each_entry(sym, &kelf->symbols, list) {
 
