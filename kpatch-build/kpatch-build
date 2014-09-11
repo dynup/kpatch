@@ -332,7 +332,9 @@ else
 		mv "$(rpm --eval %{_builddir})"/kernel-*/linux-"$ARCHVERSION" "$SRCDIR" >> "$LOGFILE" 2>&1 || die
 
 		cp "$SRCDIR/.config" "$OBJDIR" || die
-		echo "-${ARCHVERSION##*-}" > "$SRCDIR/localversion" || die
+		if [[ "$ARCHVERSION" == *-* ]]; then
+			echo "-${ARCHVERSION##*-}" > "$SRCDIR/localversion" || die
+		fi
 
 		echo $ARCHVERSION > "$VERSIONFILE" || die
 
@@ -375,7 +377,9 @@ else
 		clean_cache
 		mv linux-source-${ARCHVERSION%%-*} "$SRCDIR" || die
 		cp "/boot/config-${ARCHVERSION}" "$OBJDIR/.config" || die
-		echo "-${ARCHVERSION#*-}" > "$SRCDIR/localversion" || die
+		if [[ "$ARCHVERSION" == *-* ]]; then
+			echo "-${ARCHVERSION#*-}" > "$SRCDIR/localversion" || die
+		fi
 		# for some reason the Ubuntu kernel versions don't follow the
 		# upstream SUBLEVEL; they are always at SUBLEVEL 0
 		sed -i "s/^SUBLEVEL.*/${sublevel}/" "$SRCDIR/Makefile" || die
