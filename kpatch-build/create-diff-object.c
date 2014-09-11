@@ -236,19 +236,6 @@ struct symbol *find_symbol_by_name(struct list_head *list, const char *name)
 	return NULL;
 }
 
-struct symbol *find_symbol_by_name_prefix(struct list_head *list,
-					  const char *name)
-{
-	struct symbol *sym;
-	int namelen = strlen(name);
-
-	list_for_each_entry(sym, list, list)
-		if (!strncmp(sym->name, name, namelen))
-			return sym;
-
-	return NULL;
-}
-
 #define ALLOC_LINK(_new, _list) \
 { \
 	(_new) = malloc(sizeof(*(_new))); \
@@ -785,6 +772,30 @@ void kpatch_mark_grouped_sections(struct kpatch_elf *kelf)
 	}
 }
 
+/*
+ * This is like strcmp, but for gcc-mangled function names.  It skips the
+ * comparison of any substring which consists of '.' followed by any number of
+ * digits.
+ */
+static int kpatch_mangled_strcmp(char *s1, char *s2)
+{
+	while (*s1 == *s2) {
+		if (!*s1)
+			return 0;
+		if (*s1 == '.' && isdigit(s1[1])) {
+			if (!isdigit(s2[1]))
+				return 1;
+			while (isdigit(*++s1))
+				;
+			while (isdigit(*++s2))
+				;
+		} else {
+			s1++;
+			s2++;
+		}
+	}
+	return 1;
+}
 
 /*
  * When gcc makes compiler optimizations which affect a function's calling
@@ -798,8 +809,9 @@ void kpatch_rename_mangled_functions(struct kpatch_elf *base,
 				     struct kpatch_elf *patched)
 {
 	struct symbol *sym, *basesym;
-	char *prefix, *dot, name[256], *origname;
+	char name[256], *origname;
 	struct section *sec, *basesec;
+	int found;
 
 	list_for_each_entry(sym, &patched->symbols, list) {
 		if (sym->type != STT_FUNC)
@@ -810,15 +822,15 @@ void kpatch_rename_mangled_functions(struct kpatch_elf *base,
 		    !strstr(sym->name, ".part."))
 			continue;
 
-		/* prefix of foo.isra.1.constprop.2 is foo.isra */
-		prefix = strdup(sym->name);
-		dot = strchr(prefix, '.');
-		dot = strchr(dot+1, '.');
-		*dot = '\0';
+		found = 0;
+		list_for_each_entry(basesym, &base->symbols, list) {
+			if (!kpatch_mangled_strcmp(basesym->name, sym->name)) {
+				found = 1;
+				break;
+			}
+		}
 
-		basesym = find_symbol_by_name_prefix(&base->symbols, prefix);
-		free(prefix);
-		if (!basesym)
+		if (!found)
 			continue;
 
 		if (!strcmp(sym->name, basesym->name))
