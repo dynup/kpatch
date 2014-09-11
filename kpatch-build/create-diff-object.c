@@ -773,9 +773,8 @@ void kpatch_mark_grouped_sections(struct kpatch_elf *kelf)
 }
 
 /*
- * This is like strcmp, but for gcc-mangled function names.  It skips the
- * comparison of any substring which consists of '.' followed by any number of
- * digits.
+ * This is like strcmp, but for gcc-mangled symbols.  It skips the comparison
+ * of any substring which consists of '.' followed by any number of digits.
  */
 static int kpatch_mangled_strcmp(char *s1, char *s2)
 {
@@ -879,8 +878,7 @@ void kpatch_correlate_static_local_variables(struct kpatch_elf *base,
 	struct symbol *sym, *basesym;
 	struct section *tmpsec, *sec;
 	struct rela *rela;
-	int prefixlen, bundled, basebundled;
-	char *dot;
+	int bundled, basebundled;
 
 	list_for_each_entry(sym, &patched->symbols, list) {
 		if (sym->type != STT_OBJECT || sym->bind != STB_LOCAL ||
@@ -895,12 +893,7 @@ void kpatch_correlate_static_local_variables(struct kpatch_elf *base,
 		if (!strcmp(sym->sec->name, "__verbose"))
 			continue;
 
-		dot = strchr(sym->name, '.');
-		if (!dot)
-			continue;
-		prefixlen = dot - sym->name;
-		if (sym->name[prefixlen+1] < '0' ||
-		    sym->name[prefixlen+1] > '9')
+		if (!strchr(sym->name, '.'))
 			continue;
 
 		/*
@@ -909,7 +902,7 @@ void kpatch_correlate_static_local_variables(struct kpatch_elf *base,
 		 * because they're read-only and their comparison is done in
 		 * rela_equal() by comparing the literal strings.
 		 */
-		if (!strncmp(sym->name, "__func__", prefixlen))
+		if (!kpatch_mangled_strcmp(sym->name, "__func__.1"))
 			continue;
 
 		/* find the patched function which uses the static variable */
@@ -936,13 +929,13 @@ void kpatch_correlate_static_local_variables(struct kpatch_elf *base,
 
 		/*
 		 * Ensure there are no other orphaned static variables with the
-		 * same prefix in the function.  This is possible if the
+		 * same name in the function.  This is possible if the
 		 * variables are in different scopes (using C braces).
 		 */
 		list_for_each_entry(rela, &sec->relas, list) {
 			if (rela->sym == sym || rela->sym->twin)
 				continue;
-			if (!strncmp(rela->sym->name, sym->name, prefixlen))
+			if (!kpatch_mangled_strcmp(rela->sym->name, sym->name))
 				ERROR("found another static local variable matching %s in patched %s",
 				      sym->name, sec->name);
 		}
@@ -952,7 +945,7 @@ void kpatch_correlate_static_local_variables(struct kpatch_elf *base,
 		list_for_each_entry(rela, &sec->twin->relas, list) {
 			if (rela->sym->twin)
 				continue;
-			if (strncmp(rela->sym->name, sym->name, prefixlen))
+			if (kpatch_mangled_strcmp(rela->sym->name, sym->name))
 				continue;
 			if (basesym && basesym != rela->sym)
 				ERROR("found two static local variables matching %s in orig %s",
