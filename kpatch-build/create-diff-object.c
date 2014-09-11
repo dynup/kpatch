@@ -514,8 +514,39 @@ struct kpatch_elf *kpatch_elf_open(const char *name)
 	return kelf;
 }
 
+/*
+ * This function detects whether the given symbol is a "special" static local
+ * variable (for lack of a better term).  If so, it returns the variable's
+ * prefix string (with the trailing number removed).
+ *
+ * Special static local variables should never be correlated and should always
+ * be included if they are referenced by an included function.
+ */
+char *special_static_prefix(struct symbol *sym)
+{
+	if (!sym)
+		return NULL;
+
+	if (sym->type == STT_OBJECT &&
+	    sym->bind == STB_LOCAL) {
+		if (!strncmp(sym->name, "__key.", 6))
+			return "__key.";
+
+		if (!strncmp(sym->name, "__warned.", 9))
+			return "__warned.";
+	}
+
+	if (sym->type == STT_SECTION &&
+	    !strncmp(sym->name, ".bss.__key.", 11))
+		return ".bss.__key.";
+
+	return NULL;
+}
+
 int rela_equal(struct rela *rela1, struct rela *rela2)
 {
+	char *prefix1, *prefix2;
+
 	if (rela1->type != rela2->type ||
 	    rela1->offset != rela2->offset)
 		return 0;
@@ -525,9 +556,18 @@ int rela_equal(struct rela *rela1, struct rela *rela2)
 		    !strcmp(rela1->string, rela2->string))
 			return 1;
 	} else {
-		if (strcmp(rela1->sym->name, rela2->sym->name))
+		if (rela1->addend != rela2->addend)
 			return 0;
-		if (rela1->addend == rela2->addend)
+
+		prefix1 = special_static_prefix(rela1->sym);
+		if (prefix1) {
+			prefix2 = special_static_prefix(rela2->sym);
+			if (!prefix2)
+				return 0;
+			return !strcmp(prefix1, prefix2);
+		}
+
+		if (!strcmp(rela1->sym->name, rela2->sym->name))
 			return 1;
 	}
 
@@ -675,6 +715,10 @@ void kpatch_correlate_sections(struct list_head *seclist1, struct list_head *sec
 		list_for_each_entry(sec2, seclist2, list) {
 			if (strcmp(sec1->name, sec2->name))
 				continue;
+
+			if (special_static_prefix(sec1->secsym))
+				continue;
+
 			/*
 			 * Group sections must match exactly to be correlated.
 			 * Changed group sections are currently not supported.
@@ -703,6 +747,9 @@ void kpatch_correlate_symbols(struct list_head *symlist1, struct list_head *syml
 		list_for_each_entry(sym2, symlist2, list) {
 			if (strcmp(sym1->name, sym2->name) ||
 			    sym1->type != sym2->type)
+				continue;
+
+			if (special_static_prefix(sym1))
 				continue;
 
 			/* group section symbols must have correlated sections */
@@ -874,7 +921,7 @@ void kpatch_rename_mangled_functions(struct kpatch_elf *base,
 
 /*
  * gcc renames static local variables by appending a period and a number.  For
- * example, __key could be renamed to __key.31452.  Unfortunately this number
+ * example, __foo could be renamed to __foo.31452.  Unfortunately this number
  * can arbitrarily change.  Try to rename the patched version of the symbol to
  * match the base version and then correlate them.
  */
@@ -889,6 +936,9 @@ void kpatch_correlate_static_local_variables(struct kpatch_elf *base,
 	list_for_each_entry(sym, &patched->symbols, list) {
 		if (sym->type != STT_OBJECT || sym->bind != STB_LOCAL ||
 		    sym->twin)
+			continue;
+
+		if (special_static_prefix(sym))
 			continue;
 
 		/*
@@ -1032,7 +1082,8 @@ void kpatch_replace_sections_syms(struct kpatch_elf *kelf)
 	int add_off;
 
 	list_for_each_entry(sec, &kelf->sections, list) {
-		if (!is_rela_section(sec))
+		if (!is_rela_section(sec) ||
+		    is_debug_section(sec))
 			continue;
 
 		list_for_each_entry(rela, &sec->relas, list) {
@@ -1159,10 +1210,14 @@ void kpatch_verify_patchability(struct kpatch_elf *kelf)
 			errs++;
 		}
 
-		/* ensure we aren't including .data.* or .bss.* */
+		/*
+		 * ensure we aren't including .data.* or .bss.*
+		 * (.data.unlikely is ok b/c it only has __warned vars)
+		 */
 		if (sec->include && sec->status != NEW &&
 		    (!strncmp(sec->name, ".data", 5) ||
-		     !strncmp(sec->name, ".bss", 4))) {
+		     !strncmp(sec->name, ".bss", 4)) &&
+		    strcmp(sec->name, ".data.unlikely")) {
 			log_normal("data section %s selected for inclusion\n",
 				   sec->name);
 			errs++;
