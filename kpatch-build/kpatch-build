@@ -238,6 +238,12 @@ done
 TEMPDIR="$(mktemp -d /tmp/kpatch-build-XXXXXX)" || die "mktemp failed"
 trap cleanup EXIT INT TERM
 
+KVER=${ARCHVERSION%%-*}
+if [[ $ARCHVERSION =~ - ]]; then
+	KREL=${ARCHVERSION##*-}
+	KREL=${KREL%.*}
+fi
+
 if [[ -n $USERSRCDIR ]]; then
 	# save .config and vmlinux since they'll get removed with mrproper so
 	# we can restore them later and be able to run kpatch-build multiple
@@ -298,12 +304,6 @@ if [[ -n "$USERSRCDIR" ]]; then
 
 	cp -f "$CONFIGFILE" "$OBJDIR/.config"
 
-	echo "Detecting kernel version"
-	cd "$SRCDIR"
-	make mrproper >> "$LOGFILE" 2>&1 || die "make mrproper failed"
-	make O="$OBJDIR" prepare >> "$LOGFILE" 2>&1 || die "make prepare failed"
-	ARCHVERSION=$(make O="$OBJDIR" kernelrelease) || die "make kernelrelease failed"
-
 elif [[ -e "$SRCDIR" ]] && [[ -e "$VERSIONFILE" ]] && [[ $(cat "$VERSIONFILE") = $ARCHVERSION ]]; then
 	echo "Using cache at $SRCDIR"
 
@@ -318,7 +318,7 @@ else
 
 			echo "Downloading kernel source for $ARCHVERSION"
 			yumdownloader --source --destdir "$TEMPDIR" "kernel-$ARCHVERSION" >> "$LOGFILE" 2>&1 || die
-			SRCRPM="$TEMPDIR/kernel-${ARCHVERSION%*.*}.src.rpm"
+			SRCRPM="$TEMPDIR/kernel-$KVER-$KREL.src.rpm"
 		fi
 
 		echo "Unpacking kernel source"
@@ -362,7 +362,7 @@ else
 		# The linux-source packages are formatted like the following for:
 		# ubuntu: linux-source-3.13.0_3.13.0-24.46_all.deb
 		# debian: linux-source-3.14_3.14.7-1_all.deb
-		pkgver="${ARCHVERSION%%-*}_$(dpkg-query -W -f='${Version}' linux-image-$(uname -r))"
+		pkgver="$KVER_$(dpkg-query -W -f='${Version}' linux-image-$ARCHVERSION)"
 		pkgname="linux-source-${pkgver}_all"
 
 		cd $TEMPDIR
@@ -373,9 +373,9 @@ else
 		echo "Unpacking kernel source"
 		dpkg -x ${pkgname}.deb $TEMPDIR >> "$LOGFILE" || die "dpkg: Could not extract ${pkgname}.deb"
 		# extract and move to SRCDIR
-		tar $taroptions usr/src/linux-source-${ARCHVERSION%%-*}.tar.${extension} >> "$LOGFILE" || die "tar: Failed to extract kernel source package"
+		tar $taroptions usr/src/linux-source-$KVER.tar.${extension} >> "$LOGFILE" || die "tar: Failed to extract kernel source package"
 		clean_cache
-		mv linux-source-${ARCHVERSION%%-*} "$SRCDIR" || die
+		mv linux-source-$KVER "$SRCDIR" || die
 		cp "/boot/config-${ARCHVERSION}" "$OBJDIR/.config" || die
 		if [[ "$ARCHVERSION" == *-* ]]; then
 			echo "-${ARCHVERSION#*-}" > "$SRCDIR/localversion" || die
