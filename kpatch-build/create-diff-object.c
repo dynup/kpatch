@@ -1099,17 +1099,9 @@ void kpatch_replace_sections_syms(struct kpatch_elf *kelf)
 			}
 
 			/*
-			 * These are special data sections whose data symbols
-			 * aren't bundled with sections when using
-			 * -fdata-sections.  We need to replace the section
-			 * references with their corresponding objects.
+			 * Attempt to replace references to unbundled sections
+			 * with their symbols.
 			 */
-			if (strcmp(rela->sym->name, ".data..percpu") &&
-			    strcmp(rela->sym->name, ".data..read_mostly") &&
-			    strcmp(rela->sym->name, ".data.unlikely") &&
-			    !(rela->sym->type == STT_SECTION && rela->sym->sec &&
-			      is_text_section(rela->sym->sec)))
-				continue;
 			list_for_each_entry(sym, &kelf->symbols, list) {
 
 				if (sym->type == STT_SECTION ||
