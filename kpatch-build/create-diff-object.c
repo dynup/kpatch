@@ -155,6 +155,7 @@ struct kpatch_elf {
 struct special_section {
 	char *name;
 	int (*group_size)(struct section *sec, int offset);
+	int align;
 };
 
 /*******************
@@ -1579,6 +1580,7 @@ struct special_section special_sections[] = {
 	{
 		.name		= ".fixup",
 		.group_size	= fixup_group_size,
+		.align		= 1,
 	},
 	{},
 };
@@ -1654,7 +1656,7 @@ void kpatch_regenerate_special_section(struct special_section *special,
 	}
 
 	/* verify that group_size is a divisor of aligned section size */
-	align = sec->base->sh.sh_addralign;
+	align = special->align ? : sec->base->sh.sh_addralign;
 	aligned_size = ((sec->base->sh.sh_size + align - 1) / align) * align;
 	if (src_offset != aligned_size)
 		ERROR("group size mismatch for section %s\n", sec->base->name);
