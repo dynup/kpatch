@@ -42,7 +42,7 @@ sudo yum install gcc kernel-devel elfutils elfutils-devel
 Install the dependencies for the "kpatch-build" command:
 
 ```bash
-sudo yum install rpmdevtools pesign yum-utils
+sudo yum install rpmdevtools pesign yum-utils wget
 sudo yum-builddep kernel
 sudo debuginfo-install kernel
 
