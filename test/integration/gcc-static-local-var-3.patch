@@ -6,7 +6,7 @@ Index: src/kernel/reboot.c
  	return ret;
  }
  
-+void kpatch_foo(void)
++void kpatch_bar(void)
 +{
 +	if (!jiffies)
 +		printk("kpatch_foo\n");
@@ -14,7 +14,7 @@ Index: src/kernel/reboot.c
 +
  static void deferred_cad(struct work_struct *dummy)
  {
-+	kpatch_foo();
++	kpatch_bar();
  	kernel_restart(NULL);
  }
  
