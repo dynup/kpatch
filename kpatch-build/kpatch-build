@@ -150,14 +150,19 @@ find_parent_obj() {
 find_kobj() {
 	arg=$1
 	KOBJFILE=$arg
-	dir=$(dirname $KOBJFILE)
-	file=$(basename $KOBJFILE)
 	DEEP_FIND=0
 	while true; do
 		find_parent_obj $KOBJFILE
 		if [[ -z $PARENT ]]; then
-			[[ $KOBJFILE = *built-in.o ]] && KOBJFILE=vmlinux && return
 			[[ $KOBJFILE = *.ko ]] && return
+			case $KOBJFILE in
+				*/built-in.o|\
+				*/lib.a|\
+				arch/x86/kernel/head*.o|\
+				./security/selinux/selinux.o)
+					KOBJFILE=vmlinux
+					return
+			esac
 			if [[ $DEEP_FIND -eq 0 ]]; then
 				DEEP_FIND=1
 				continue;
