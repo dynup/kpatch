@@ -1593,7 +1593,7 @@ int should_keep_rela_group(struct section *sec, int start, int size)
 		if (rela->offset >= start &&
 		    rela->offset < start + size &&
 		    rela->sym->type == STT_FUNC &&
-		    rela->sym->sec->status != SAME) {
+		    rela->sym->sec->include) {
 			found = 1;
 			log_debug("new/changed symbol %s found in special section %s\n",
 				  rela->sym->name, sec->name);
@@ -1661,8 +1661,8 @@ void kpatch_regenerate_special_section(struct special_section *special,
 
 	if (!dest_offset) {
 		/* no changed or global functions referenced */
-		sec->status = SAME;
-		sec->base->status = SAME;
+		sec->status = sec->base->status = SAME;
+		sec->include = sec->base->include = 0;
 		return;
 	}
 
@@ -1854,8 +1854,11 @@ void kpatch_process_special_sections(struct kpatch_elf *kelf)
 			continue;
 
 		sec->status = SAME;
-		if (sec->rela)
+		sec->include = 0;
+		if (sec->rela) {
 			sec->rela->status = SAME;
+			sec->rela->include = 0;
+		}
 	}
 }
 
@@ -2744,14 +2747,14 @@ int main(int argc, char *argv[])
 	kpatch_mark_ignored_functions_same(kelf_patched);
 	kpatch_mark_ignored_sections_same(kelf_patched);
 
-	kpatch_process_special_sections(kelf_patched);
-
 	kpatch_include_standard_elements(kelf_patched);
 	num_changed = kpatch_include_changed_functions(kelf_patched);
 	kpatch_include_debug_sections(kelf_patched);
 	hooks_exist = kpatch_include_hook_elements(kelf_patched);
 	kpatch_include_force_elements(kelf_patched);
 	new_globals_exist = kpatch_include_new_globals(kelf_patched);
+	kpatch_process_special_sections(kelf_patched);
+
 	kpatch_print_changes(kelf_patched);
 	kpatch_dump_kelf(kelf_patched);
 	kpatch_verify_patchability(kelf_patched);
