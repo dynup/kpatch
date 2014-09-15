@@ -52,16 +52,16 @@
 #include "kpatch-patch.h"
 
 #define ERROR(format, ...) \
-	error(1, 0, "ERROR: %s: %s: %d: " format, objname, __FUNCTION__, __LINE__, ##__VA_ARGS__)
+	error(1, 0, "ERROR: %s: %s: %d: " format, childobj, __FUNCTION__, __LINE__, ##__VA_ARGS__)
 
 #define DIFF_FATAL(format, ...) \
 ({ \
-	fprintf(stderr, "ERROR: %s: " format "\n", objname, ##__VA_ARGS__); \
+	fprintf(stderr, "ERROR: %s: " format "\n", childobj, ##__VA_ARGS__); \
 	error(2, 0, "unreconcilable difference"); \
 })
 
 #define log_debug(format, ...) log(DEBUG, format, ##__VA_ARGS__)
-#define log_normal(format, ...) log(NORMAL, "%s: " format, objname, ##__VA_ARGS__)
+#define log_normal(format, ...) log(NORMAL, "%s: " format, childobj, ##__VA_ARGS__)
 
 #define log(level, format, ...) \
 ({ \
@@ -69,7 +69,7 @@
 		printf(format, ##__VA_ARGS__); \
 })
 
-char *objname;
+char *childobj;
 
 enum loglevel {
 	DEBUG,
@@ -2717,7 +2717,7 @@ int main(int argc, char *argv[])
 
 	elf_version(EV_CURRENT);
 
-	objname = basename(arguments.args[0]);
+	childobj = basename(arguments.args[0]);
 
 	kelf_base = kpatch_elf_open(arguments.args[0]);
 	kelf_patched = kpatch_elf_open(arguments.args[1]);
