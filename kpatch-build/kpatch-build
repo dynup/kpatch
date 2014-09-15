@@ -156,8 +156,15 @@ find_kobj() {
 	while true; do
 		find_parent_obj $KOBJFILE
 		if [[ -z $PARENT ]]; then
-			[[ $KOBJFILE = *built-in.o ]] && KOBJFILE=vmlinux && return
 			[[ $KOBJFILE = *.ko ]] && return
+			case $KOBJFILE in
+				*/built-in.o|\
+				arch/x86/lib/lib.a|\
+				arch/x86/kernel/head*.o|\
+				lib/lib.a)
+					KOBJFILE=vmlinux
+					return
+			esac
 			if [[ $DEEP_FIND -eq 0 ]]; then
 				DEEP_FIND=1
 				continue;
