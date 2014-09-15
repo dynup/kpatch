@@ -129,8 +129,16 @@ find_parent_obj() {
 	grepname=${1%.o}
 	grepname=$grepname\\\.o
 	if [[ $DEEP_FIND -eq 1 ]]; then
-		parent=$(find . -name ".*.cmd" | xargs grep -l $grepname | grep -v $dir/.${file}.cmd)
-		num=$(find . -name ".*.cmd" | xargs grep -l $grepname | grep -v $dir/.${file}.cmd | wc -l)
+		num=0
+		if [[ -n $last_deep_find ]]; then
+			parent=$(grep -l $grepname $last_deep_find/.*.cmd | grep -v $dir/.${file}.cmd)
+			num=$(grep -l $grepname $last_deep_find/.*.cmd | grep -v $dir/.${file}.cmd |wc -l)
+		fi
+		if [[ $num -eq 0 ]]; then
+			parent=$(find * -name ".*.cmd" | xargs grep -l $grepname | grep -v $dir/.${file}.cmd)
+			num=$(find * -name ".*.cmd" | xargs grep -l $grepname | grep -v $dir/.${file}.cmd | wc -l)
+			[[ $num -eq 1 ]] && last_deep_find=$(dirname $parent)
+		fi
 	else
 		parent=$(grep -l $grepname $dir/.*.cmd | grep -v $dir/.${file}.cmd)
 		num=$(grep -l $grepname $dir/.*.cmd | grep -v $dir/.${file}.cmd | wc -l)
@@ -150,11 +158,10 @@ find_parent_obj() {
 find_kobj() {
 	arg=$1
 	KOBJFILE=$arg
-	dir=$(dirname $KOBJFILE)
-	file=$(basename $KOBJFILE)
 	DEEP_FIND=0
 	while true; do
 		find_parent_obj $KOBJFILE
+		[[ -n $PARENT ]] && DEEP_FIND=0
 		if [[ -z $PARENT ]]; then
 			[[ $KOBJFILE = *.ko ]] && return
 			case $KOBJFILE in
