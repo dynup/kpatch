@@ -316,7 +316,9 @@ else
 		echo "Downloading kernel source for $ARCHVERSION"
 		if [[ -z "$SRCRPM" ]]; then
 			if [[ $DISTRO = fedora ]]; then
-				(cd $TEMPDIR && wget http://kojipkgs.fedoraproject.org/packages/kernel/$KVER/$KREL/src/kernel-$KVER-$KREL.src.rpm >> "$LOGFILE" 2>&1 || die)
+				cd $TEMPDIR
+				wget http://kojipkgs.fedoraproject.org/packages/kernel/$KVER/$KREL/src/kernel-$KVER-$KREL.src.rpm >> "$LOGFILE" 2>&1 || die
+				cd - > /dev/null
 			else
 				rpm -q --quiet yum-utils || die "yum-utils not installed"
 				yumdownloader --source --destdir "$TEMPDIR" "kernel-$ARCHVERSION" >> "$LOGFILE" 2>&1 || die
