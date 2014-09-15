@@ -27,7 +27,7 @@ test_replace() {
 }
 
 # subset
-test_replace kpatch-meminfo-cmdline.ko kpatch-cmdline-string.ko
+test_replace kpatch-meminfo-cmdline-rebuild-SLOW.ko kpatch-cmdline-string.ko
 
 # disjoint
 test_replace kpatch-cmdline-string.ko kpatch-meminfo-string.ko

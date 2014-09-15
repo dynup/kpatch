@@ -28,6 +28,8 @@
 #
 # - foo.patch: patch that should build successfully
 #
+# - foo-SLOW.patch: patch that should be skipped in the quick test
+#
 # - bar-FAIL.patch: patch that should fail to build
 #
 # - foo-LOADED.test: executable which tests whether the foo.patch module is
@@ -103,7 +105,7 @@ build_module() {
 
 	[[ $prefix = COMBINED ]] && return
 
-	if [[ $prefix = *-FAIL ]]; then
+	if [[ $prefix =~ -FAIL ]]; then
 		shouldfail=1
 	else
 		shouldfail=0
@@ -132,7 +134,7 @@ run_load_test() {
 	testprog=$prefix-LOADED.test
 
 	[[ $prefix = COMBINED ]] && return
-	[[ $prefix = *-FAIL ]] && return
+	[[ $prefix =~ -FAIL ]] && return
 
 	if [[ ! -e $module ]]; then
 		log "can't find $module, skipping"
@@ -208,8 +210,8 @@ build_combined_module() {
 	for file in *.patch; do
 		prefix=${file%%.patch}
 
-		[[ $prefix = *-FAIL ]] && continue
-		[[ $prefix = meminfo-cmdline ]] && continue # HACK
+		[[ $prefix =~ -FAIL ]] && continue
+		[[ $prefix =~ -SLOW ]] && continue
 
 		log "combine: $prefix"
 
