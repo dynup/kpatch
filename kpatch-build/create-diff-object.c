@@ -2753,11 +2753,9 @@ int main(int argc, char *argv[])
 	hooks_exist = kpatch_include_hook_elements(kelf_patched);
 	kpatch_include_force_elements(kelf_patched);
 	new_globals_exist = kpatch_include_new_globals(kelf_patched);
-	kpatch_process_special_sections(kelf_patched);
 
 	kpatch_print_changes(kelf_patched);
 	kpatch_dump_kelf(kelf_patched);
-	kpatch_verify_patchability(kelf_patched);
 
 	if (!num_changed && !new_globals_exist) {
 		if (hooks_exist)
@@ -2767,6 +2765,9 @@ int main(int argc, char *argv[])
 			return 3; /* 1 is ERROR, 2 is DIFF_FATAL */
 		}
 	}
+
+	kpatch_process_special_sections(kelf_patched);
+	kpatch_verify_patchability(kelf_patched);
 
 	/* this is destructive to kelf_patched */
 	kpatch_migrate_included_elements(kelf_patched, &kelf_out);
