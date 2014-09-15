@@ -131,21 +131,21 @@ find_parent_obj() {
 	if [[ $DEEP_FIND -eq 1 ]]; then
 		num=0
 		if [[ -n $last_deep_find ]]; then
-			parent=$(grep -l $grepname $last_deep_find/.*.cmd | grep -v $dir/.${file}.cmd)
+			parent=$(grep -l $grepname $last_deep_find/.*.cmd | grep -v $dir/.${file}.cmd |head -n1)
 			num=$(grep -l $grepname $last_deep_find/.*.cmd | grep -v $dir/.${file}.cmd |wc -l)
 		fi
 		if [[ $num -eq 0 ]]; then
-			parent=$(find * -name ".*.cmd" | xargs grep -l $grepname | grep -v $dir/.${file}.cmd)
+			parent=$(find * -name ".*.cmd" | xargs grep -l $grepname | grep -v $dir/.${file}.cmd |head -n1)
 			num=$(find * -name ".*.cmd" | xargs grep -l $grepname | grep -v $dir/.${file}.cmd | wc -l)
 			[[ $num -eq 1 ]] && last_deep_find=$(dirname $parent)
 		fi
 	else
-		parent=$(grep -l $grepname $dir/.*.cmd | grep -v $dir/.${file}.cmd)
+		parent=$(grep -l $grepname $dir/.*.cmd | grep -v $dir/.${file}.cmd |head -n1)
 		num=$(grep -l $grepname $dir/.*.cmd | grep -v $dir/.${file}.cmd | wc -l)
 	fi
 
 	[[ $num -eq 0 ]] && PARENT="" && return
-	[[ $num -gt 1 ]] && die "two parent matches for $1"
+	[[ $num -gt 1 ]] && ERROR_IF_DIFF="two parent matches for $1"
 
 	dir=$(dirname $parent)
 	PARENT=$(basename $parent)
@@ -159,6 +159,7 @@ find_kobj() {
 	arg=$1
 	KOBJFILE=$arg
 	DEEP_FIND=0
+	ERROR_IF_DIFF=
 	while true; do
 		find_parent_obj $KOBJFILE
 		[[ -n $PARENT ]] && DEEP_FIND=0
@@ -474,6 +475,7 @@ for i in $FILES; do
 	# create-diff-object returns 3 if no functional change is found
 	[[ $rc -eq 0 ]] || [[ $rc -eq 3 ]] || ERROR=$(expr $ERROR "+" 1)
 	if [[ $rc -eq 0 ]]; then
+		[[ -n $ERROR_IF_DIFF ]] && die $ERROR_IF_DIFF
 		CHANGED=1
 		objnames[$KOBJFILE]=1
 	fi
