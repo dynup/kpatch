@@ -9,7 +9,7 @@ if [[ "$TOOLCHAINCMD" != "gcc" ]] || [[ -z "$TEMPDIR" ]]; then
     exec "$TOOLCHAINCMD" "$@"
 fi
 
-declare -a args=($@)
+declare -a args=("$@")
 
 while [ "$#" -gt 0 ]; do
 	if [ "$1" = "-o" ]; then
