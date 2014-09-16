@@ -321,8 +321,8 @@ else
 				rpm -q --quiet yum-utils || die "yum-utils not installed"
 				yumdownloader --source --destdir "$TEMPDIR" "kernel-$ARCHVERSION" >> "$LOGFILE" 2>&1 || die
 			fi
+			SRCRPM="$TEMPDIR/kernel-$KVER-$KREL.src.rpm"
 		fi
-		SRCRPM="$TEMPDIR/kernel-$KVER-$KREL.src.rpm"
 
 		echo "Unpacking kernel source"
 		rpmdev-setuptree >> "$LOGFILE" 2>&1 || die
