@@ -154,7 +154,7 @@ struct kpatch_elf {
 
 struct special_section {
 	char *name;
-	int (*group_size)(struct section *sec, int offset);
+	int (*group_size)(struct kpatch_elf *kelf, int offset);
 };
 
 /*******************
@@ -1531,30 +1531,58 @@ void kpatch_reindex_elements(struct kpatch_elf *kelf)
 }
 
 
-int bug_table_group_size(struct section *sec, int offset) { return 12; }
-int smp_locks_group_size(struct section *sec, int offset) { return 4; }
-int parainstructions_group_size(struct section *sec, int offset) { return 16; }
-int ex_table_group_size(struct section *sec, int offset) { return 8; }
-int altinstructions_group_size(struct section *sec, int offset) { return 12; }
+int bug_table_group_size(struct kpatch_elf *kelf, int offset) { return 12; }
+int smp_locks_group_size(struct kpatch_elf *kelf, int offset) { return 4; }
+int parainstructions_group_size(struct kpatch_elf *kelf, int offset) { return 16; }
+int ex_table_group_size(struct kpatch_elf *kelf, int offset) { return 8; }
+int altinstructions_group_size(struct kpatch_elf *kelf, int offset) { return 12; }
 
-int fixup_group_size(struct section *sec, int offset)
+/*
+ * The rela groups in the .fixup section vary in size.  The beginning of each
+ * .fixup rela group is referenced by the __ex_table section. To find the size
+ * of a .fixup rela group, we have to traverse the __ex_table relas.
+ */
+int fixup_group_size(struct kpatch_elf *kelf, int offset)
 {
-	unsigned char *insn, *start, *end;
+	struct section *sec;
+	struct rela *rela;
+	int found;
 
-	/*
-	 * Each fixup group is a collection of instructions.  The last
-	 * instruction is always 'jmpq'.
-	 */
-	start = sec->data->d_buf + offset;
-	end = start + sec->sh.sh_size;
-	for (insn = start; insn < end; insn++) {
-		/* looking for the pattern "e9 00 00 00 00" */
-		if (*insn == 0xe9 && *(uint32_t *)(insn + 1) == 0)
-			return insn + 5 - start;
+	sec = find_section_by_name(&kelf->sections, ".rela__ex_table");
+	if (!sec)
+		ERROR("missing .rela__ex_table section");
+
+	/* find beginning of this group */
+	found = 0;
+	list_for_each_entry(rela, &sec->relas, list) {
+		if (!strcmp(rela->sym->name, ".fixup") &&
+		    rela->addend == offset) {
+				found = 1;
+				break;
+		}
 	}
 
-	ERROR("can't find jump instruction in .fixup section");
-	return 0;
+	if (!found)
+		ERROR("can't find .fixup rela group at offset %d\n", offset);
+
+	/* find beginning of next group */
+	found = 0;
+	list_for_each_entry_continue(rela, &sec->relas, list) {
+		if (!strcmp(rela->sym->name, ".fixup") &&
+		    rela->addend > offset) {
+			found = 1;
+			break;
+		}
+	}
+
+	if (!found) {
+		/* last group */
+		struct section *fixupsec;
+		fixupsec = find_section_by_name(&kelf->sections, ".fixup");
+		return fixupsec->sh.sh_size - offset;
+	}
+
+	return rela->addend - offset;
 }
 
 struct special_section special_sections[] = {
@@ -1571,16 +1599,16 @@ struct special_section special_sections[] = {
 		.group_size	= parainstructions_group_size,
 	},
 	{
+		.name		= ".fixup",
+		.group_size	= fixup_group_size,
+	},
+	{
 		.name		= "__ex_table",
 		.group_size	= ex_table_group_size,
 	},
 	{
 		.name		= ".altinstructions",
 		.group_size	= altinstructions_group_size,
-	},
-	{
-		.name		= ".fixup",
-		.group_size	= fixup_group_size,
 	},
 	{},
 };
@@ -1605,7 +1633,8 @@ int should_keep_rela_group(struct section *sec, int start, int size)
 	return found;
 }
 
-void kpatch_regenerate_special_section(struct special_section *special,
+void kpatch_regenerate_special_section(struct kpatch_elf *kelf,
+				       struct special_section *special,
 				       struct section *sec)
 {
 	struct rela *rela, *safe;
@@ -1625,7 +1654,7 @@ void kpatch_regenerate_special_section(struct special_section *special,
 	dest_offset = 0;
 	for ( ; src_offset < sec->base->sh.sh_size; src_offset += group_size) {
 
-		group_size = special->group_size(sec->base, src_offset);
+		group_size = special->group_size(kelf, src_offset);
 		include = should_keep_rela_group(sec, src_offset, group_size);
 
 		if (!include)
@@ -1813,7 +1842,7 @@ void kpatch_process_special_sections(struct kpatch_elf *kelf)
 		if (!sec)
 			continue;
 
-		kpatch_regenerate_special_section(special, sec);
+		kpatch_regenerate_special_section(kelf, special, sec);
 	}
 
 	/*
@@ -2755,11 +2784,9 @@ int main(int argc, char *argv[])
 	hooks_exist = kpatch_include_hook_elements(kelf_patched);
 	kpatch_include_force_elements(kelf_patched);
 	new_globals_exist = kpatch_include_new_globals(kelf_patched);
-	kpatch_process_special_sections(kelf_patched);
 
 	kpatch_print_changes(kelf_patched);
 	kpatch_dump_kelf(kelf_patched);
-	kpatch_verify_patchability(kelf_patched);
 
 	if (!num_changed && !new_globals_exist) {
 		if (hooks_exist)
@@ -2769,6 +2796,9 @@ int main(int argc, char *argv[])
 			return 3; /* 1 is ERROR, 2 is DIFF_FATAL */
 		}
 	}
+
+	kpatch_process_special_sections(kelf_patched);
+	kpatch_verify_patchability(kelf_patched);
 
 	/* this is destructive to kelf_patched */
 	kpatch_migrate_included_elements(kelf_patched, &kelf_out);
