@@ -1552,24 +1552,26 @@ int fixup_group_size(struct kpatch_elf *kelf, int offset)
 
 	/* find beginning of this group */
 	found = 0;
-	list_for_each_entry(rela, &sec->relas, list)
+	list_for_each_entry(rela, &sec->relas, list) {
 		if (!strcmp(rela->sym->name, ".fixup") &&
 		    rela->addend == offset) {
 				found = 1;
 				break;
-			}
+		}
+	}
 
 	if (!found)
 		ERROR("can't find .fixup rela group at offset %d\n", offset);
 
 	/* find beginning of next group */
 	found = 0;
-	list_for_each_entry_continue(rela, &sec->relas, list)
+	list_for_each_entry_continue(rela, &sec->relas, list) {
 		if (!strcmp(rela->sym->name, ".fixup") &&
 		    rela->addend > offset) {
 			found = 1;
 			break;
 		}
+	}
 
 	if (!found) {
 		/* last group */
