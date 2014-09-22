@@ -60,7 +60,8 @@ die() {
 		msg="$1"
 	fi
 
-	echo "ERROR: $msg. Check $LOGFILE for more details." >&2
+	echo "ERROR: $msg." >&2
+	[[ -e $LOGFILE ]] && echo "Check $LOGFILE for more details." >&2
 
 	exit 1
 }
