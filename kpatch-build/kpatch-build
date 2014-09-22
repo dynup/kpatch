@@ -106,21 +106,18 @@ find_dirs() {
 
 gcc_version_check() {
 	# ensure gcc version matches that used to build the kernel
-	local gccver=$(gcc --version |head -n1 |cut -d' ' -f3-)
-	local kgccver=$(readelf -p .comment $VMLINUX |grep GCC: | tr -s ' ' | cut -d ' ' -f6-)
-	if [[ $gccver != $kgccver ]]; then
-		warn "gcc/kernel version mismatch"
-		return 1
-	fi
+	local gccver=$(gcc --version |head -n1 |cut -d' ' -f3)
+	local kgccver=$(readelf -p .comment $VMLINUX |grep GCC: | tr -s ' ' | cut -d ' ' -f6)
+	[[ $gccver != $kgccver ]] && die "gcc/kernel version mismatch"
 
 	# ensure gcc version is >= 4.8
 	gccver=$(echo $gccver |cut -d'.' -f1,2)
-	if [[ $gccver < 4.8 ]]; then
-		warn "gcc >= 4.8 required"
-		return 1
-	fi
+	[[ $gccver < 4.8 ]] && die "gcc >= 4.8 required"
 
-	return
+	# warn on build number or package level mismatch
+	local gccbuild=$(gcc --version |head -n1 |cut -d' ' -f4-)
+	local kgccbuild=$(readelf -p .comment $VMLINUX |grep GCC: | tr -s ' ' | cut -d ' ' -f7-)
+	[[ $gccbuild != $kgccbuild ]] && warn "gcc/kernel build or level mismatch"
 }
 
 find_parent_obj() {
@@ -309,7 +306,7 @@ elif [[ $DISTRO = ubuntu ]] || [[ $DISTRO = debian ]]; then
 	export PATH=/usr/lib/ccache:$PATH
 fi
 
-gcc_version_check || die
+gcc_version_check
 
 if [[ -n "$USERSRCDIR" ]]; then
 	echo "Using source directory at $USERSRCDIR"
