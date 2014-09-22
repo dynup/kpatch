@@ -50,7 +50,7 @@ APPLIEDPATCHFILE="kpatch.patch"
 DEBUG=0
 
 warn() {
-	echo "ERROR: $1" >&2
+	echo "WARNING: $1" >&2
 }
 
 die() {
@@ -60,7 +60,7 @@ die() {
 		msg="$1"
 	fi
 
-	warn "$msg. Check $LOGFILE for more details."
+	echo "ERROR: $msg. Check $LOGFILE for more details." >&2
 
 	exit 1
 }
@@ -235,7 +235,7 @@ while [[ $# -gt 0 ]]; do
 		;;
 	--)
 		if [[ -z "$2" ]]; then
-			warn "no patch file specified"
+			echo "ERROR: no patch file specified" >&2
 			usage
 			exit 1
 		fi
