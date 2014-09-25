@@ -5,6 +5,7 @@
 *.ko.cmd
 *.mod.c
 *.swp
+*.d
 .tmp_versions
 Module.symvers
 kpatch-build/lookup
