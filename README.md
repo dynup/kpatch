@@ -74,7 +74,7 @@ sudo yum-builddep kernel
 sudo debuginfo-install kernel
 
 # optional, but highly recommended
-sudo yum install ccache
+sudo yum install https://dl.fedoraproject.org/pub/epel/7/x86_64/c/ccache-3.1.9-3.el7.x86_64.rpm
 ccache --max-size=5G
 ```
 
