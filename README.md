@@ -65,6 +65,7 @@ sudo yum install gcc kernel-devel elfutils elfutils-devel
 Install the dependencies for the "kpatch-build" command:
 
 ```bash
+sudo yum-config-manager --enable rhel-7-server-optional-rpms
 sudo yum install rpmdevtools pesign yum-utils zlib-devel \
   binutils-devel newt-devel python-devel perl-ExtUtils-Embed \
   audit-libs-devel numactl-devel pciutils-devel bison
@@ -73,7 +74,7 @@ sudo yum-builddep kernel
 sudo debuginfo-install kernel
 
 # optional, but highly recommended
-sudo yum install ccache
+sudo yum install https://dl.fedoraproject.org/pub/epel/7/x86_64/c/ccache-3.1.9-3.el7.x86_64.rpm
 ccache --max-size=5G
 ```
 
