@@ -534,11 +534,19 @@ char *special_static_prefix(struct symbol *sym)
 
 		if (!strncmp(sym->name, "__warned.", 9))
 			return "__warned.";
+
+		if (!strncmp(sym->name, "descriptor.", 11))
+			return "descriptor.";
 	}
 
-	if (sym->type == STT_SECTION &&
-	    !strncmp(sym->name, ".bss.__key.", 11))
-		return ".bss.__key.";
+	if (sym->type == STT_SECTION) {
+		if (!strncmp(sym->name, ".bss.__key.", 11))
+			return ".bss.__key.";
+
+		/* __verbose section contains the descriptor variables */
+		if (!strcmp(sym->name, "__verbose"))
+			return sym->name;
+	}
 
 	return NULL;
 }
@@ -939,14 +947,6 @@ void kpatch_correlate_static_local_variables(struct kpatch_elf *base,
 			continue;
 
 		if (special_static_prefix(sym))
-			continue;
-
-		/*
-		 * The static variables in the __verbose section contain
-		 * debugging information specific to the patched object and
-		 * shouldn't be correlated.
-		 */
-		if (!strcmp(sym->sec->name, "__verbose"))
 			continue;
 
 		if (!strchr(sym->name, '.'))
