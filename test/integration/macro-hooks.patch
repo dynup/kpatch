@@ -2,19 +2,24 @@ Index: src/fs/aio.c
 ===================================================================
 --- src.orig/fs/aio.c
 +++ src/fs/aio.c
-@@ -1642,3 +1642,15 @@ SYSCALL_DEFINE5(io_getevents, aio_contex
- 	}
+@@ -1626,6 +1626,20 @@ SYSCALL_DEFINE3(io_cancel, aio_context_t
  	return ret;
  }
-+
+ 
++static int aio_max_nr_orig;
 +void kpatch_load_aio_max_nr(void)
 +{
++	aio_max_nr_orig = aio_max_nr;
 +	aio_max_nr = 0x40000;
 +}
 +void kpatch_unload_aio_max_nr(void)
 +{
-+	aio_max_nr = 0x10000;
++	aio_max_nr = aio_max_nr_orig;
 +}
 +#include "kpatch-macros.h"
 +KPATCH_LOAD_HOOK(kpatch_load_aio_max_nr);
 +KPATCH_UNLOAD_HOOK(kpatch_unload_aio_max_nr);
++
+ /* io_getevents:
+  *	Attempts to read at least min_nr events and up to nr events from
+  *	the completion queue for the aio_context specified by ctx_id. If
