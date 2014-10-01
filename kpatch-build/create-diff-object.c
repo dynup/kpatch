@@ -2790,9 +2790,9 @@ int main(int argc, char *argv[])
 
 	if (!num_changed && !new_globals_exist) {
 		if (hooks_exist)
-			log_normal("no changed functions were found, but hooks exist\n");
+			log_debug("no changed functions were found, but hooks exist\n");
 		else {
-			log_normal("no changed functions were found\n");
+			log_debug("no changed functions were found\n");
 			return 3; /* 1 is ERROR, 2 is DIFF_FATAL */
 		}
 	}
