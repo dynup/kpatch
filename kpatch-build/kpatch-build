@@ -190,13 +190,13 @@ find_kobj() {
 
 usage() {
 	echo "usage: $(basename $0) [options] <patch file>" >&2
-	echo "		-h, --help	Show this help message" >&2
-	echo "		-r, --sourcerpm	Specify kernel source RPM" >&2
-	echo "		-s, --sourcedir	Specify kernel source directory" >&2
-	echo "		-c, --config	Specify kernel config file" >&2
-	echo "		-v, --vmlinux	Specify original vmlinux" >&2
-	echo "		-t, --target	Specify custom kernel build targets" >&2
-	echo "		-d, --debug	Keep scratch files in /tmp" >&2
+	echo "		-h, --help	   Show this help message" >&2
+	echo "		-r, --sourcerpm	   Specify kernel source RPM" >&2
+	echo "		-s, --sourcedir	   Specify kernel source directory" >&2
+	echo "		-c, --config	   Specify kernel config file" >&2
+	echo "		-v, --vmlinux	   Specify original vmlinux" >&2
+	echo "		-t, --target	   Specify custom kernel build targets" >&2
+	echo "		-d, --debug	   Keep scratch files in /tmp" >&2
 	echo "		--skip-gcc-check   Skip gcc version matching check" >&2
 	echo "		                   (not recommended)" >&2
 }
