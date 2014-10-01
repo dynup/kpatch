@@ -60,7 +60,11 @@ die() {
 		msg="$1"
 	fi
 
-	warn "$msg. Check $LOGFILE for more details."
+	if [[ -e $LOGFILE ]]; then
+		warn "$msg. Check $LOGFILE for more details."
+	else
+		warn "$msg."
+	fi
 
 	exit 1
 }
