@@ -37,6 +37,15 @@ to work on other distros.
 -d|--debug
    Keep scratch files in /tmp
 
+--skip-gcc-check
+   Skips check that ensures that the system gcc version and
+   the gcc version that built the kernel match.  Skipping this
+   check is not recommended, but is useful if the exact gcc
+   version is not available or is not easily installed. Use
+   only when confident that the two versions of gcc output
+   identical objects for a given target.  Otherwise, use of
+   this option might result in unexpected changed objects
+   being detected.
 
 .SH SEE ALSO
 kpatch(1)

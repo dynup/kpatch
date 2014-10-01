@@ -48,6 +48,7 @@ VERSIONFILE="$CACHEDIR/version"
 TEMPDIR=
 APPLIEDPATCHFILE="kpatch.patch"
 DEBUG=0
+SKIPGCCCHECK=0
 
 warn() {
 	echo "ERROR: $1" >&2
@@ -114,6 +115,10 @@ gcc_version_check() {
 	local kgccver=$(readelf -p .comment $VMLINUX |grep GCC: | tr -s ' ' | cut -d ' ' -f6-)
 	if [[ $gccver != $kgccver ]]; then
 		warn "gcc/kernel version mismatch"
+		echo "gcc version:    $gccver"
+		echo "kernel version: $kgccver"
+		echo "Install the matching gcc version (recommended) or use --skip-gcc-check"
+		echo "to skip the version matching enforcement (not recommended)"
 		return 1
 	fi
 
@@ -189,16 +194,18 @@ find_kobj() {
 
 usage() {
 	echo "usage: $(basename $0) [options] <patch file>" >&2
-	echo "		-h, --help	Show this help message" >&2
-	echo "		-r, --sourcerpm	Specify kernel source RPM" >&2
-	echo "		-s, --sourcedir	Specify kernel source directory" >&2
-	echo "		-c, --config	Specify kernel config file" >&2
-	echo "		-v, --vmlinux	Specify original vmlinux" >&2
-	echo "		-t, --target	Specify custom kernel build targets" >&2
-	echo "		-d, --debug	Keep scratch files in /tmp" >&2
+	echo "		-h, --help	   Show this help message" >&2
+	echo "		-r, --sourcerpm	   Specify kernel source RPM" >&2
+	echo "		-s, --sourcedir	   Specify kernel source directory" >&2
+	echo "		-c, --config	   Specify kernel config file" >&2
+	echo "		-v, --vmlinux	   Specify original vmlinux" >&2
+	echo "		-t, --target	   Specify custom kernel build targets" >&2
+	echo "		-d, --debug	   Keep scratch files in /tmp" >&2
+	echo "		--skip-gcc-check   Skip gcc version matching check" >&2
+	echo "		                   (not recommended)" >&2
 }
 
-options=$(getopt -o hr:s:c:v:t:d -l "help,sourcerpm:,sourcedir:,config:,vmlinux:,target:,debug" -- "$@") || die "getopt failed"
+options=$(getopt -o hr:s:c:v:t:d -l "help,sourcerpm:,sourcedir:,config:,vmlinux:,target:,debug,skip-gcc-check" -- "$@") || die "getopt failed"
 
 eval set -- "$options"
 
@@ -239,6 +246,10 @@ while [[ $# -gt 0 ]]; do
 		echo "DEBUG mode enabled"
 		DEBUG=1
 		set -o xtrace
+		;;
+	--skip-gcc-check)
+		echo "WARNING: Skipping gcc version matching check (not recommended)"
+		SKIPGCCCHECK=1
 		;;
 	--)
 		if [[ -z "$2" ]]; then
@@ -313,7 +324,9 @@ elif [[ $DISTRO = ubuntu ]] || [[ $DISTRO = debian ]]; then
 	export PATH=/usr/lib/ccache:$PATH
 fi
 
-gcc_version_check || die
+if [[ $SKIPGCCCHECK -eq 0 ]]; then
+	gcc_version_check || die
+fi
 
 if [[ -n "$USERSRCDIR" ]]; then
 	echo "Using source directory at $USERSRCDIR"
