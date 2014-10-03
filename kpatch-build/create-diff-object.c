@@ -957,7 +957,12 @@ void kpatch_correlate_static_local_variables(struct kpatch_elf *base,
 		if (!strchr(sym->name, '.'))
 			continue;
 
-		/* find the patched function which uses the static variable */
+		/*
+		 * Find the first function which uses the static variable.
+		 * It's possible for multiple functions to use the same static
+		 * variable if the containing function is inlined, but we only
+		 * need to find one of them to do the correlation.
+		 */
 		sec = NULL;
 		list_for_each_entry(tmpsec, &patched->sections, list) {
 			if (!is_rela_section(tmpsec) ||
@@ -967,13 +972,11 @@ void kpatch_correlate_static_local_variables(struct kpatch_elf *base,
 			list_for_each_entry(rela, &tmpsec->relas, list) {
 				if (rela->sym != sym)
 					continue;
-				if (sec)
-					ERROR("static local variable %s used by two functions",
-					      sym->name);
 				sec = tmpsec;
-				break;
+				goto done;
 			}
 		}
+done:
 		if (!sec)
 			ERROR("static local variable %s not used", sym->name);
 
