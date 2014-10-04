@@ -53,7 +53,7 @@ struct kpatch_dynrela {
 	unsigned long type;
 	const char *name;
 	int addend;
-	int exported;
+	int external;
 	struct list_head list;
 };
 

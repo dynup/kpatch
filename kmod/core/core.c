@@ -534,16 +534,6 @@ static int kpatch_verify_symbol_match(const char *name, unsigned long addr)
 	return 0;
 }
 
-static unsigned long kpatch_find_exported_symbol(const char *name)
-{
-	const struct kernel_symbol *sym;
-
-	preempt_disable();
-	sym = find_symbol(name, NULL, NULL, true, true);
-	preempt_enable();
-	return sym ? sym->value : 0;
-}
-
 static unsigned long kpatch_find_module_symbol(struct module *mod,
 					       const char *name)
 {
@@ -562,6 +552,26 @@ static unsigned long kpatch_find_module_symbol(struct module *mod,
 	strcat(buf, name);
 
 	return kallsyms_lookup_name(buf);
+}
+
+/*
+ * External symbols are located outside the parent object (where the parent
+ * object is either vmlinux or the kmod being patched).
+ */
+static unsigned long kpatch_find_external_symbol(struct kpatch_module *kpmod,
+						 const char *name)
+{
+	const struct kernel_symbol *sym;
+
+	/* first, check if it's an exported symbol */
+	preempt_disable();
+	sym = find_symbol(name, NULL, NULL, true, true);
+	preempt_enable();
+	if (sym)
+		return sym->value;
+
+	/* otherwise check if it's in another .o within the patch module */
+	return kpatch_find_module_symbol(kpmod->mod, name);
 }
 
 static int kpatch_write_relocations(struct kpatch_module *kpmod,
@@ -584,8 +594,9 @@ static int kpatch_write_relocations(struct kpatch_module *kpmod,
 		} else {
 			/* module, dynrela->src needs to be discovered */
 
-			if (dynrela->exported)
-				src = kpatch_find_exported_symbol(dynrela->name);
+			if (dynrela->external)
+				src = kpatch_find_external_symbol(kpmod,
+								  dynrela->name);
 			else
 				src = kpatch_find_module_symbol(object->mod,
 								dynrela->name);
