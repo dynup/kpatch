@@ -5,45 +5,64 @@ set -x
 TOOLCHAINCMD="$1"
 shift
 
-if [[ "$TOOLCHAINCMD" != "gcc" ]] || [[ -z "$TEMPDIR" ]]; then
+if [[ -z "$TEMPDIR" ]]; then
     exec "$TOOLCHAINCMD" "$@"
 fi
 
 declare -a args=("$@")
 
-while [ "$#" -gt 0 ]; do
-	if [ "$1" = "-o" ]; then
-		obj=$2
-		[[ $2 = */.tmp_*.o ]] && obj=${2/.tmp_/}
-		case "$obj" in
-			*.mod.o|\
-			*built-in.o|\
-			vmlinux.o|\
-			.tmp_kallsyms1.o|\
-			.tmp_kallsyms2.o|\
-			init/version.o|\
-			arch/x86/boot/version.o|\
-			arch/x86/boot/compressed/eboot.o|\
-			arch/x86/boot/header.o|\
-			arch/x86/boot/compressed/efi_stub_64.o|\
-			arch/x86/boot/compressed/piggy.o|\
-			kernel/system_certificates.o|\
-			arch/x86/vdso/*|\
-			.*.o)
-			break
-			;;
-		*.o)
-			mkdir -p "$TEMPDIR/orig/$(dirname $obj)"
-			cp -f "$obj" "$TEMPDIR/orig/$obj"
-			echo "$obj" >> "$TEMPDIR/changed_objs"
-			break
-			;;
-		*)
-			break
-			;;
-		esac
-	fi
-	shift
-done
+if [[ "$TOOLCHAINCMD" = "gcc" ]] ; then
+	while [ "$#" -gt 0 ]; do
+		if [ "$1" = "-o" ]; then
+			obj=$2
+			[[ $2 = */.tmp_*.o ]] && obj=${2/.tmp_/}
+			case "$obj" in
+				*.mod.o|\
+				*built-in.o|\
+				vmlinux.o|\
+				.tmp_kallsyms1.o|\
+				.tmp_kallsyms2.o|\
+				init/version.o|\
+				arch/x86/boot/version.o|\
+				arch/x86/boot/compressed/eboot.o|\
+				arch/x86/boot/header.o|\
+				arch/x86/boot/compressed/efi_stub_64.o|\
+				arch/x86/boot/compressed/piggy.o|\
+				kernel/system_certificates.o|\
+				arch/x86/vdso/*|\
+				.*.o)
+					break
+					;;
+				*.o)
+					mkdir -p "$TEMPDIR/orig/$(dirname $obj)"
+					cp -f "$obj" "$TEMPDIR/orig/$obj"
+					echo "$obj" >> "$TEMPDIR/changed_objs"
+					break
+					;;
+				*)
+					break
+					;;
+			esac
+		fi
+		shift
+	done
+elif [[ "$TOOLCHAINCMD" = "ld" ]] ; then
+	while [ "$#" -gt 0 ]; do
+		if [ "$1" = "-o" ]; then
+			obj=$2
+			case "$obj" in
+				*.ko)
+					mkdir -p "$TEMPDIR/module/$(dirname $obj)"
+					cp -f "$obj" "$TEMPDIR/module/$obj"
+					break
+					;;
+				*)
+					break
+					;;
+			esac
+		fi
+		shift
+	done
+fi
 
 exec "$TOOLCHAINCMD" "${args[@]}"
