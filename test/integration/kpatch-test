@@ -205,7 +205,7 @@ build_combined_module() {
 		return
 	fi
 
-	rm -f COMBINED.patch
+	rm -f COMBINED.patch TMP.patch
 	first=1
 	for file in *.patch; do
 		prefix=${file%%.patch}
