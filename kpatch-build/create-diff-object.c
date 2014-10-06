@@ -522,35 +522,38 @@ struct kpatch_elf *kpatch_elf_open(const char *name)
  */
 static int is_special_static(struct symbol *sym)
 {
+	static char *prefixes[] = {
+		"__key.",
+		"__warned.",
+		"descriptor.",
+		"__func__.",
+		NULL,
+	};
+	char **prefix;
+
 	if (!sym)
 		return 0;
 
-	if (sym->type == STT_OBJECT &&
-	    sym->bind == STB_LOCAL) {
-		if (!strncmp(sym->name, "__key.", 6))
-			return 1;
-
-		if (!strncmp(sym->name, "__warned.", 9))
-			return 1;
-
-		if (!strncmp(sym->name, "descriptor.", 11))
-			return 1;
-
-		if (!strncmp(sym->name, "__func__.", 9))
-			return 1;
-	}
-
 	if (sym->type == STT_SECTION) {
-		if (!strncmp(sym->name, ".bss.__key.", 11))
-			return 1;
-
-		if (!strncmp(sym->name, ".rodata.__func__.", 17))
-			return 1;
+		if (is_rela_section(sym->sec))
+			sym = sym->sec->base->secsym;
 
 		/* __verbose section contains the descriptor variables */
 		if (!strcmp(sym->name, "__verbose"))
 			return 1;
+
+		if (!sym->sec->sym)
+			return 0;
+
+		sym = sym->sec->sym;
 	}
+
+	if (sym->type != STT_OBJECT || sym->bind != STB_LOCAL)
+		return 0;
+
+	for (prefix = prefixes; *prefix; prefix++)
+		if (!strncmp(sym->name, *prefix, strlen(*prefix)))
+			return 1;
 
 	return 0;
 }
