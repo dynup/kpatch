@@ -527,6 +527,7 @@ static int is_special_static(struct symbol *sym)
 		"__warned.",
 		"descriptor.",
 		"__func__.",
+		"_rs.",
 		NULL,
 	};
 	char **prefix;
