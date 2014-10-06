@@ -564,27 +564,21 @@ int rela_equal(struct rela *rela1, struct rela *rela2)
 	    rela1->offset != rela2->offset)
 		return 0;
 
-	if (rela1->string) {
-		if (rela2->string &&
-		    !strcmp(rela1->string, rela2->string))
-			return 1;
-	} else {
-		if (rela1->addend != rela2->addend)
+	if (rela1->string)
+		return rela2->string && !strcmp(rela1->string, rela2->string);
+
+	if (rela1->addend != rela2->addend)
+		return 0;
+
+	prefix1 = special_static_prefix(rela1->sym);
+	if (prefix1) {
+		prefix2 = special_static_prefix(rela2->sym);
+		if (!prefix2)
 			return 0;
-
-		prefix1 = special_static_prefix(rela1->sym);
-		if (prefix1) {
-			prefix2 = special_static_prefix(rela2->sym);
-			if (!prefix2)
-				return 0;
-			return !strcmp(prefix1, prefix2);
-		}
-
-		if (!strcmp(rela1->sym->name, rela2->sym->name))
-			return 1;
+		return !strcmp(prefix1, prefix2);
 	}
 
-	return 0;
+	return !strcmp(rela1->sym->name, rela2->sym->name);
 }
 
 void kpatch_compare_correlated_rela_section(struct section *sec)
