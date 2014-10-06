@@ -515,45 +515,44 @@ struct kpatch_elf *kpatch_elf_open(const char *name)
 
 /*
  * This function detects whether the given symbol is a "special" static local
- * variable (for lack of a better term).  If so, it returns the variable's
- * prefix string (with the trailing number removed).
+ * variable (for lack of a better term).
  *
  * Special static local variables should never be correlated and should always
  * be included if they are referenced by an included function.
  */
-char *special_static_prefix(struct symbol *sym)
+static int is_special_static(struct symbol *sym)
 {
 	if (!sym)
-		return NULL;
+		return 0;
 
 	if (sym->type == STT_OBJECT &&
 	    sym->bind == STB_LOCAL) {
 		if (!strncmp(sym->name, "__key.", 6))
-			return "__key.";
+			return 1;
 
 		if (!strncmp(sym->name, "__warned.", 9))
-			return "__warned.";
+			return 1;
 
 		if (!strncmp(sym->name, "descriptor.", 11))
-			return "descriptor.";
+			return 1;
 
 		if (!strncmp(sym->name, "__func__.", 9))
-			return "__func__.";
+			return 1;
 	}
 
 	if (sym->type == STT_SECTION) {
 		if (!strncmp(sym->name, ".bss.__key.", 11))
-			return ".bss.__key.";
+			return 1;
 
 		if (!strncmp(sym->name, ".rodata.__func__.", 17))
-			return ".rodata.__func__.";
+			return 1;
 
 		/* __verbose section contains the descriptor variables */
 		if (!strcmp(sym->name, "__verbose"))
-			return sym->name;
+			return 1;
 	}
 
-	return NULL;
+	return 0;
 }
 
 /*
@@ -592,7 +591,7 @@ int rela_equal(struct rela *rela1, struct rela *rela2)
 	if (rela1->addend != rela2->addend)
 		return 0;
 
-	if (special_static_prefix(rela1->sym))
+	if (is_special_static(rela1->sym))
 		return !kpatch_mangled_strcmp(rela1->sym->name,
 					      rela2->sym->name);
 
@@ -741,7 +740,7 @@ void kpatch_correlate_sections(struct list_head *seclist1, struct list_head *sec
 			if (strcmp(sec1->name, sec2->name))
 				continue;
 
-			if (special_static_prefix(sec1->secsym))
+			if (is_special_static(sec1->secsym))
 				continue;
 
 			/*
@@ -774,7 +773,7 @@ void kpatch_correlate_symbols(struct list_head *symlist1, struct list_head *syml
 			    sym1->type != sym2->type)
 				continue;
 
-			if (special_static_prefix(sym1))
+			if (is_special_static(sym1))
 				continue;
 
 			/* group section symbols must have correlated sections */
@@ -991,7 +990,7 @@ void kpatch_correlate_static_local_variables(struct kpatch_elf *base,
 		    sym->twin)
 			continue;
 
-		if (special_static_prefix(sym))
+		if (is_special_static(sym))
 			continue;
 
 		if (!strchr(sym->name, '.'))
