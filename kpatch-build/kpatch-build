@@ -475,7 +475,7 @@ for i in $FILES; do
 	if [[ $KOBJFILE = vmlinux ]]; then
 		KOBJFILE=$VMLINUX
 	else
-		KOBJFILE="$(readlink -f $KOBJFILE)"
+		KOBJFILE="$TEMPDIR/module/$KOBJFILE"
 	fi
 	cd $TEMPDIR
 	debugopt=
