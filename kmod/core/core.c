@@ -534,6 +534,16 @@ static int kpatch_verify_symbol_match(const char *name, unsigned long addr)
 	return 0;
 }
 
+static unsigned long kpatch_find_exported_symbol(const char *name)
+{
+	const struct kernel_symbol *sym;
+
+	preempt_disable();
+	sym = find_symbol(name, NULL, NULL, true, true);
+	preempt_enable();
+	return sym ? sym->value : 0;
+}
+
 static unsigned long kpatch_find_module_symbol(struct module *mod,
 					       const char *name)
 {
@@ -575,7 +585,7 @@ static int kpatch_write_relocations(struct kpatch_module *kpmod,
 			/* module, dynrela->src needs to be discovered */
 
 			if (dynrela->exported)
-				src = (unsigned long)__symbol_get(dynrela->name);
+				src = kpatch_find_exported_symbol(dynrela->name);
 			else
 				src = kpatch_find_module_symbol(object->mod,
 								dynrela->name);
@@ -648,7 +658,6 @@ static int kpatch_write_relocations(struct kpatch_module *kpmod,
 static int kpatch_unlink_object(struct kpatch_object *object)
 {
 	struct kpatch_func *func;
-	struct kpatch_dynrela *dynrela;
 	int ret;
 
 	list_for_each_entry(func, &object->funcs, list) {
@@ -661,10 +670,6 @@ static int kpatch_unlink_object(struct kpatch_object *object)
 			return ret;
 		}
 	}
-
-	list_for_each_entry(dynrela, &object->dynrelas, list)
-		if (dynrela->src && dynrela->exported)
-			__symbol_put(dynrela->name);
 
 	if (object->mod)
 		module_put(object->mod);
@@ -684,7 +689,7 @@ static int kpatch_link_object(struct kpatch_module *kpmod,
 			      struct kpatch_object *object)
 {
 	struct module *mod = NULL;
-	struct kpatch_func *func;
+	struct kpatch_func *func, *func_err = NULL;
 	int ret;
 	bool vmlinux = !strcmp(object->name, "vmlinux");
 
@@ -708,7 +713,7 @@ static int kpatch_link_object(struct kpatch_module *kpmod,
 
 	ret = kpatch_write_relocations(kpmod, object);
 	if (ret)
-		goto err_unlink;
+		goto err_put;
 
 	list_for_each_entry(func, &object->funcs, list) {
 
@@ -716,31 +721,42 @@ static int kpatch_link_object(struct kpatch_module *kpmod,
 		if (vmlinux) {
 			ret = kpatch_verify_symbol_match(func->name,
 							 func->old_addr);
-			if (ret)
-				goto err_unlink;
+			if (ret) {
+				func_err = func;
+				goto err_ftrace;
+			}
 		} else {
 			unsigned long old_addr;
 			old_addr = kpatch_find_module_symbol(mod, func->name);
 			if (!old_addr) {
 				pr_err("unable to find symbol '%s' in module '%s\n",
 				       func->name, mod->name);
+				func_err = func;
 				ret = -EINVAL;
-				goto err_unlink;
+				goto err_ftrace;
 			}
 			func->old_addr = old_addr;
 		}
 
 		/* add to ftrace filter and register handler if needed */
 		ret = kpatch_ftrace_add_func(func->old_addr);
-		if (ret)
-			goto err_unlink;
-
+		if (ret) {
+			func_err = func;
+			goto err_ftrace;
+		}
 	}
 
 	return 0;
 
-err_unlink:
-	kpatch_unlink_object(object);
+err_ftrace:
+	list_for_each_entry(func, &object->funcs, list) {
+		if (func == func_err)
+			break;
+		WARN_ON(kpatch_ftrace_remove_func(func->old_addr));
+	}
+err_put:
+	if (!vmlinux)
+		module_put(mod);
 	return ret;
 }
 
@@ -802,7 +818,7 @@ out:
 int kpatch_register(struct kpatch_module *kpmod, bool replace)
 {
 	int ret, i, force = 0;
-	struct kpatch_object *object;
+	struct kpatch_object *object, *object_err = NULL;
 	struct kpatch_func *func;
 
 	if (!kpmod->mod || list_empty(&kpmod->objects))
@@ -825,8 +841,10 @@ int kpatch_register(struct kpatch_module *kpmod, bool replace)
 	list_for_each_entry(object, &kpmod->objects, list) {
 
 		ret = kpatch_link_object(kpmod, object);
-		if (ret)
+		if (ret) {
+			object_err = object;
 			goto err_unlink;
+		}
 
 		if (!kpatch_object_linked(object)) {
 			pr_notice("delaying patch of unloaded module '%s'\n",
@@ -931,9 +949,13 @@ err_ops:
 		hash_for_each_rcu(kpatch_func_hash, i, func, node)
 			func->op = KPATCH_OP_NONE;
 err_unlink:
-	list_for_each_entry(object, &kpmod->objects, list)
-		if (kpatch_object_linked(object))
-			kpatch_unlink_object(object);
+	list_for_each_entry(object, &kpmod->objects, list) {
+		if (object == object_err)
+			break;
+		if (!kpatch_object_linked(object))
+			continue;
+		WARN_ON(!kpatch_unlink_object(object));
+	}
 	module_put(kpmod->mod);
 err_list:
 	list_del(&kpmod->list);
