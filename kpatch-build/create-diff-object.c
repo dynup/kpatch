@@ -556,10 +556,32 @@ char *special_static_prefix(struct symbol *sym)
 	return NULL;
 }
 
+/*
+ * This is like strcmp, but for gcc-mangled symbols.  It skips the comparison
+ * of any substring which consists of '.' followed by any number of digits.
+ */
+static int kpatch_mangled_strcmp(char *s1, char *s2)
+{
+	while (*s1 == *s2) {
+		if (!*s1)
+			return 0;
+		if (*s1 == '.' && isdigit(s1[1])) {
+			if (!isdigit(s2[1]))
+				return 1;
+			while (isdigit(*++s1))
+				;
+			while (isdigit(*++s2))
+				;
+		} else {
+			s1++;
+			s2++;
+		}
+	}
+	return 1;
+}
+
 int rela_equal(struct rela *rela1, struct rela *rela2)
 {
-	char *prefix1, *prefix2;
-
 	if (rela1->type != rela2->type ||
 	    rela1->offset != rela2->offset)
 		return 0;
@@ -570,13 +592,9 @@ int rela_equal(struct rela *rela1, struct rela *rela2)
 	if (rela1->addend != rela2->addend)
 		return 0;
 
-	prefix1 = special_static_prefix(rela1->sym);
-	if (prefix1) {
-		prefix2 = special_static_prefix(rela2->sym);
-		if (!prefix2)
-			return 0;
-		return !strcmp(prefix1, prefix2);
-	}
+	if (special_static_prefix(rela1->sym))
+		return !kpatch_mangled_strcmp(rela1->sym->name,
+					      rela2->sym->name);
 
 	return !strcmp(rela1->sym->name, rela2->sym->name);
 }
@@ -830,30 +848,6 @@ void kpatch_mark_grouped_sections(struct kpatch_elf *kelf)
 			data++;
 		}
 	}
-}
-
-/*
- * This is like strcmp, but for gcc-mangled symbols.  It skips the comparison
- * of any substring which consists of '.' followed by any number of digits.
- */
-static int kpatch_mangled_strcmp(char *s1, char *s2)
-{
-	while (*s1 == *s2) {
-		if (!*s1)
-			return 0;
-		if (*s1 == '.' && isdigit(s1[1])) {
-			if (!isdigit(s2[1]))
-				return 1;
-			while (isdigit(*++s1))
-				;
-			while (isdigit(*++s2))
-				;
-		} else {
-			s1++;
-			s2++;
-		}
-	}
-	return 1;
 }
 
 /*
