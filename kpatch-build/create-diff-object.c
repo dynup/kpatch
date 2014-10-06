@@ -314,8 +314,7 @@ void kpatch_create_rela_list(struct kpatch_elf *kelf, struct section *sec)
 		if (!rela->sym)
 			ERROR("could not find rela entry symbol\n");
 		if (rela->sym->sec &&
-		    ((rela->sym->sec->sh.sh_flags & SHF_STRINGS) ||
-		     !strncmp(rela->sym->name, ".rodata.__func__.", 17))) {
+		    (rela->sym->sec->sh.sh_flags & SHF_STRINGS)) {
 			rela->string = rela->sym->sec->data->d_buf + rela->addend;
 			if (!rela->string)
 				ERROR("could not lookup rela string for %s+%d",
@@ -537,11 +536,17 @@ char *special_static_prefix(struct symbol *sym)
 
 		if (!strncmp(sym->name, "descriptor.", 11))
 			return "descriptor.";
+
+		if (!strncmp(sym->name, "__func__.", 9))
+			return "__func__.";
 	}
 
 	if (sym->type == STT_SECTION) {
 		if (!strncmp(sym->name, ".bss.__key.", 11))
 			return ".bss.__key.";
+
+		if (!strncmp(sym->name, ".rodata.__func__.", 17))
+			return ".rodata.__func__.";
 
 		/* __verbose section contains the descriptor variables */
 		if (!strcmp(sym->name, "__verbose"))
@@ -953,15 +958,11 @@ void kpatch_correlate_static_local_variables(struct kpatch_elf *base,
 			continue;
 
 		/*
-		 * __func__'s are special gcc static variables which contain
-		 * the function name.  There's no need to correlate them
-		 * because they're read-only and their comparison is done in
-		 * rela_equal() by comparing the literal strings.
+		 * Find the first function which uses the static variable.
+		 * It's possible for multiple functions to use the same static
+		 * variable if the containing function is inlined, but we only
+		 * need to find one of them to do the correlation.
 		 */
-		if (!kpatch_mangled_strcmp(sym->name, "__func__.1"))
-			continue;
-
-		/* find the patched function which uses the static variable */
 		sec = NULL;
 		list_for_each_entry(tmpsec, &patched->sections, list) {
 			if (!is_rela_section(tmpsec) ||
@@ -971,13 +972,11 @@ void kpatch_correlate_static_local_variables(struct kpatch_elf *base,
 			list_for_each_entry(rela, &tmpsec->relas, list) {
 				if (rela->sym != sym)
 					continue;
-				if (sec)
-					ERROR("static local variable %s used by two functions",
-					      sym->name);
 				sec = tmpsec;
-				break;
+				goto done;
 			}
 		}
+done:
 		if (!sec)
 			ERROR("static local variable %s not used", sym->name);
 
