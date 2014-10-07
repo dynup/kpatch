@@ -11,19 +11,3 @@ Index: src/arch/x86/kvm/x86.c
  	if (slot >= shared_msrs_global.nr)
  		shared_msrs_global.nr = slot + 1;
  	shared_msrs_global.msrs[slot] = msr;
-@@ -6307,6 +6309,7 @@ static int complete_emulated_mmio(struct
- }
- 
- 
-+#include "kpatch-macros.h"
- int kvm_arch_vcpu_ioctl_run(struct kvm_vcpu *vcpu, struct kvm_run *kvm_run)
- {
- 	int r;
-@@ -6352,6 +6355,7 @@ out:
- 
- 	return r;
- }
-+KPATCH_IGNORE_FUNCTION(kvm_arch_vcpu_ioctl_run);
- 
- int kvm_arch_vcpu_ioctl_get_regs(struct kvm_vcpu *vcpu, struct kvm_regs *regs)
- {

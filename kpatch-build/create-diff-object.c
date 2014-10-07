@@ -649,17 +649,118 @@ out:
 		log_debug("section %s has changed\n", sec->name);
 }
 
+/*
+ * Determine if a section has changed only due to a WARN* macro call's
+ * embedding of the line number into an instruction operand.
+ *
+ * Warning: Hackery lies herein.  It's hopefully justified by the fact that
+ * this issue is very common.
+ *
+ * base object:
+ *
+ *   28e:   be de 10 00 00          mov    $0x10de,%esi
+ *   293:   48 c7 c7 00 00 00 00    mov    $0x0,%rdi
+ *   29a:   e8 00 00 00 00          callq  29f <emulator_read_write_onepage+0x29f>
+ *
+ * patched object:
+ *
+ *   28e:   be df 10 00 00          mov    $0x10df,%esi
+ *   293:   48 c7 c7 00 00 00 00    mov    $0x0,%rdi
+ *   29a:   e8 00 00 00 00          callq  29f <emulator_read_write_onepage+0x29f>
+ */
+static int kpatch_warn_only_change(struct section *sec)
+{
+	struct insn insn1, insn2;
+	unsigned long start1, start2, size, offset, length;
+	struct rela *rela;
+	int warnonly = 0, found;
+
+	if (sec->status != CHANGED ||
+	    is_rela_section(sec) ||
+	    !is_text_section(sec) ||
+	    sec->sh.sh_size != sec->twin->sh.sh_size ||
+	    !sec->rela ||
+	    sec->rela->status != SAME)
+		return 0;
+
+	start1 = (unsigned long)sec->twin->data->d_buf;
+	start2 = (unsigned long)sec->data->d_buf;
+	size = sec->sh.sh_size;
+	for (offset = 0; offset < size; offset += length) {
+		insn_init(&insn1, (void *)(start1 + offset), 1);
+		insn_init(&insn2, (void *)(start2 + offset), 1);
+		insn_get_length(&insn1);
+		insn_get_length(&insn2);
+		length = insn1.length;
+
+		if (!insn1.length || !insn2.length)
+			ERROR("can't decode instruction in section %s at offset 0x%lx",
+			      sec->name, offset);
+
+		if (insn1.length != insn2.length)
+			return 0;
+
+		if (!memcmp((void *)start1 + offset, (void *)start2 + offset,
+			    length))
+			continue;
+
+		/* verify it's a mov immediate to %esi */
+		insn_get_opcode(&insn1);
+		insn_get_opcode(&insn2);
+		if (insn1.opcode.value != 0xbe || insn2.opcode.value != 0xbe)
+			return 0;
+
+		/* verify the next instruction is mov $0x0,%rdi */
+		if (*(unsigned int *)(start1 + offset + length) != 0xc7c748)
+			return 0;
+
+		/* verify the instruction after that is callq */
+		if (*(unsigned int *)(start1 + offset + length + 7) != 0xe8)
+			return 0;
+
+		/* verify the callq's rela is for warn_slowpath_null */
+		found = 0;
+		list_for_each_entry(rela, &sec->rela->relas, list) {
+			if (rela->offset == offset + length + 8 &&
+			    !strcmp(rela->sym->name, "warn_slowpath_null")) {
+				found = 1;
+				break;
+			}
+		}
+		if (!found)
+			return 0;
+
+		warnonly = 1;
+	}
+
+	if (!warnonly)
+		ERROR("no instruction changes detected for changed section %s", sec->name);
+
+	return 1;
+}
+
 void kpatch_compare_sections(struct list_head *seclist)
 {
 	struct section *sec;
 
+	/* compare all sections */
 	list_for_each_entry(sec, seclist, list) {
 		if (sec->twin)
 			kpatch_compare_correlated_section(sec);
 		else
 			sec->status = NEW;
+	}
 
-		/* sync symbol status */
+	/* exclude WARN-only changes */
+	list_for_each_entry(sec, seclist, list)
+		if (kpatch_warn_only_change(sec)) {
+			log_debug("reverting WARN-only section %s status to SAME\n",
+				  sec->name);
+			sec->status = SAME;
+		}
+
+	/* sync symbol status */
+	list_for_each_entry(sec, seclist, list) {
 		if (is_rela_section(sec)) {
 			if (sec->base->sym && sec->base->sym->status != CHANGED)
 				sec->base->sym->status = sec->status;
