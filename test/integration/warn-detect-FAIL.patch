@@ -1,0 +1,9 @@
+Index: src/arch/x86/kvm/x86.c
+===================================================================
+--- src.orig/arch/x86/kvm/x86.c
++++ src/arch/x86/kvm/x86.c
+@@ -1,3 +1,4 @@
++
+ /*
+  * Kernel-based Virtual Machine driver for Linux
+  *
