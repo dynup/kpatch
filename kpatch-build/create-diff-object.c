@@ -1038,6 +1038,7 @@ void kpatch_correlate_static_local_variables(struct kpatch_elf *base,
 					basesym = tmpsym;
 
 				sec = tmpsec;
+				break;
 			}
 		}
 
