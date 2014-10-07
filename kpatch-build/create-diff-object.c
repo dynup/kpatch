@@ -932,6 +932,58 @@ void kpatch_rename_mangled_functions(struct kpatch_elf *base,
 	}
 }
 
+static char *kpatch_section_function_name(struct section *sec)
+{
+	if (is_rela_section(sec))
+		sec = sec->base;
+	return sec->sym ? sec->sym->name : sec->name;
+}
+
+/*
+ * Given a static local variable symbol and a section which references it in
+ * the patched object, find a corresponding usage of a similarly named symbol
+ * in the base object.
+ */
+static struct symbol *kpatch_find_static_twin(struct section *sec,
+					      struct symbol *sym)
+{
+	struct rela *rela;
+	struct symbol *basesym;
+
+	if (!sec->twin)
+		return NULL;
+
+	/*
+	 * Ensure there are no other orphaned static variables with the
+	 * same name in the function.  This is possible if the
+	 * variables are in different scopes or if one of them is part of an
+	 * inlined function.
+	 */
+	list_for_each_entry(rela, &sec->relas, list) {
+		if (rela->sym == sym || rela->sym->twin)
+			continue;
+		if (!kpatch_mangled_strcmp(rela->sym->name, sym->name))
+			ERROR("found another static local variable matching %s in patched %s",
+			      sym->name, kpatch_section_function_name(sec));
+	}
+
+	/* find the base object's corresponding variable */
+	basesym = NULL;
+	list_for_each_entry(rela, &sec->twin->relas, list) {
+		if (rela->sym->twin)
+			continue;
+		if (kpatch_mangled_strcmp(rela->sym->name, sym->name))
+			continue;
+		if (basesym && basesym != rela->sym)
+			ERROR("found two static local variables matching %s in orig %s",
+			      sym->name, kpatch_section_function_name(sec));
+
+		basesym = rela->sym;
+	}
+
+	return basesym;
+}
+
 /*
  * gcc renames static local variables by appending a period and a number.  For
  * example, __foo could be renamed to __foo.31452.  Unfortunately this number
@@ -941,7 +993,7 @@ void kpatch_rename_mangled_functions(struct kpatch_elf *base,
 void kpatch_correlate_static_local_variables(struct kpatch_elf *base,
 					     struct kpatch_elf *patched)
 {
-	struct symbol *sym, *basesym;
+	struct symbol *sym, *basesym, *tmpsym;
 	struct section *tmpsec, *sec;
 	struct rela *rela;
 	int bundled, basebundled;
@@ -958,12 +1010,16 @@ void kpatch_correlate_static_local_variables(struct kpatch_elf *base,
 			continue;
 
 		/*
-		 * Find the first function which uses the static variable.
+		 * For each function which uses the variable in the patched
+		 * object, look for a corresponding use in the function's twin
+		 * in the base object.
+		 *
 		 * It's possible for multiple functions to use the same static
-		 * variable if the containing function is inlined, but we only
-		 * need to find one of them to do the correlation.
+		 * local variable if the variable is defined in an inlined
+		 * function.
 		 */
 		sec = NULL;
+		basesym = NULL;
 		list_for_each_entry(tmpsec, &patched->sections, list) {
 			if (!is_rela_section(tmpsec) ||
 			    !is_text_section(tmpsec->base) ||
@@ -972,45 +1028,30 @@ void kpatch_correlate_static_local_variables(struct kpatch_elf *base,
 			list_for_each_entry(rela, &tmpsec->relas, list) {
 				if (rela->sym != sym)
 					continue;
+
+				tmpsym = kpatch_find_static_twin(tmpsec, sym);
+				if (basesym && tmpsym && basesym != tmpsym)
+					ERROR("found two twins for static local variable %s: %s and %s",
+					      sym->name, basesym->name,
+					      tmpsym->name);
+				if (tmpsym && !basesym)
+					basesym = tmpsym;
+
 				sec = tmpsec;
-				goto done;
+				break;
 			}
 		}
-done:
+
 		if (!sec)
 			ERROR("static local variable %s not used", sym->name);
 
-		if (!sec->twin)
+		if (!basesym) {
+			log_normal("WARNING: unable to correlate static local variable %s used by %s, assuming variable is new\n",
+				   sym->name,
+				   kpatch_section_function_name(sec));
 			continue;
-
-		/*
-		 * Ensure there are no other orphaned static variables with the
-		 * same name in the function.  This is possible if the
-		 * variables are in different scopes (using C braces).
-		 */
-		list_for_each_entry(rela, &sec->relas, list) {
-			if (rela->sym == sym || rela->sym->twin)
-				continue;
-			if (!kpatch_mangled_strcmp(rela->sym->name, sym->name))
-				ERROR("found another static local variable matching %s in patched %s",
-				      sym->name, sec->name);
 		}
 
-		/* find the base object's corresponding variable */
-		basesym = NULL;
-		list_for_each_entry(rela, &sec->twin->relas, list) {
-			if (rela->sym->twin)
-				continue;
-			if (kpatch_mangled_strcmp(rela->sym->name, sym->name))
-				continue;
-			if (basesym && basesym != rela->sym)
-				ERROR("found two static local variables matching %s in orig %s",
-				      sym->name, sec->name);
-
-			basesym = rela->sym;
-		}
-		if (!basesym)
-			continue;
 
 		bundled = sym == sym->sec->sym;
 		basebundled = basesym == basesym->sec->sym;
