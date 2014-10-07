@@ -954,7 +954,7 @@ err_unlink:
 			break;
 		if (!kpatch_object_linked(object))
 			continue;
-		WARN_ON(!kpatch_unlink_object(object));
+		WARN_ON(kpatch_unlink_object(object));
 	}
 	module_put(kpmod->mod);
 err_list:
