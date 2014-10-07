@@ -1142,38 +1142,43 @@ void kpatch_replace_sections_syms(struct kpatch_elf *kelf)
 				continue;
 			}
 
+			if (rela->type == R_X86_64_PC32) {
+				struct insn insn;
+				rela_insn(sec, rela, &insn);
+				add_off = (long)insn.next_byte -
+					  (long)sec->base->data->d_buf -
+					  rela->offset;
+			} else if (rela->type == R_X86_64_64 ||
+				   rela->type == R_X86_64_32S)
+				add_off = 0;
+			else
+				continue;
+
 			/*
 			 * Attempt to replace references to unbundled sections
 			 * with their symbols.
 			 */
 			list_for_each_entry(sym, &kelf->symbols, list) {
+				int start, end;
 
 				if (sym->type == STT_SECTION ||
 				    sym->sec != rela->sym->sec)
 					continue;
 
-				if (rela->type == R_X86_64_PC32) {
-					struct insn insn;
-					rela_insn(sec, rela, &insn);
-					add_off = (long)insn.next_byte -
-						  (long)sec->base->data->d_buf -
-						  rela->offset;
-				} else if (rela->type == R_X86_64_64 ||
-					   rela->type == R_X86_64_32S)
-					add_off = 0;
-				else
-					continue;
+				start = sym->sym.st_value;
+				end = sym->sym.st_value + sym->sym.st_size;
 
-				if (sym->sym.st_value != rela->addend + add_off)
+				if (rela->addend + add_off < start ||
+				    rela->addend + add_off >= end)
 					continue;
 
 				log_debug("%s: replacing %s+%d reference with %s+%d\n",
 					  sec->name,
 					  rela->sym->name, rela->addend,
-					  sym->name, rela->addend - add_off);
+					  sym->name, rela->addend - start);
 
 				rela->sym = sym;
-				rela->addend = -add_off;
+				rela->addend -= start;
 				break;
 			}
 		}
