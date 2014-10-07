@@ -1118,21 +1118,26 @@ void kpatch_replace_sections_syms(struct kpatch_elf *kelf)
 			 * with their symbols.
 			 */
 			list_for_each_entry(sym, &kelf->symbols, list) {
+				int start, end;
 
 				if (sym->type == STT_SECTION ||
 				    sym->sec != rela->sym->sec)
 					continue;
 
-				if (sym->sym.st_value != rela->addend + add_off)
+				start = sym->sym.st_value;
+				end = sym->sym.st_value + sym->sym.st_size;
+
+				if (rela->addend + add_off < start ||
+				    rela->addend + add_off >= end)
 					continue;
 
 				log_debug("%s: replacing %s+%d reference with %s+%d\n",
 					  sec->name,
 					  rela->sym->name, rela->addend,
-					  sym->name, rela->addend - add_off);
+					  sym->name, rela->addend - start);
 
 				rela->sym = sym;
-				rela->addend = -add_off;
+				rela->addend -= start;
 				break;
 			}
 		}
