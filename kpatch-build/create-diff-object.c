@@ -752,12 +752,13 @@ void kpatch_compare_sections(struct list_head *seclist)
 	}
 
 	/* exclude WARN-only changes */
-	list_for_each_entry(sec, seclist, list)
+	list_for_each_entry(sec, seclist, list) {
 		if (kpatch_warn_only_change(sec)) {
 			log_debug("reverting WARN-only section %s status to SAME\n",
 				  sec->name);
 			sec->status = SAME;
 		}
+	}
 
 	/* sync symbol status */
 	list_for_each_entry(sec, seclist, list) {
