@@ -515,76 +515,90 @@ struct kpatch_elf *kpatch_elf_open(const char *name)
 
 /*
  * This function detects whether the given symbol is a "special" static local
- * variable (for lack of a better term).  If so, it returns the variable's
- * prefix string (with the trailing number removed).
+ * variable (for lack of a better term).
  *
  * Special static local variables should never be correlated and should always
  * be included if they are referenced by an included function.
  */
-char *special_static_prefix(struct symbol *sym)
+static int is_special_static(struct symbol *sym)
 {
+	static char *prefixes[] = {
+		"__key.",
+		"__warned.",
+		"descriptor.",
+		"__func__.",
+		"_rs.",
+		NULL,
+	};
+	char **prefix;
+
 	if (!sym)
-		return NULL;
-
-	if (sym->type == STT_OBJECT &&
-	    sym->bind == STB_LOCAL) {
-		if (!strncmp(sym->name, "__key.", 6))
-			return "__key.";
-
-		if (!strncmp(sym->name, "__warned.", 9))
-			return "__warned.";
-
-		if (!strncmp(sym->name, "descriptor.", 11))
-			return "descriptor.";
-
-		if (!strncmp(sym->name, "__func__.", 9))
-			return "__func__.";
-	}
+		return 0;
 
 	if (sym->type == STT_SECTION) {
-		if (!strncmp(sym->name, ".bss.__key.", 11))
-			return ".bss.__key.";
-
-		if (!strncmp(sym->name, ".rodata.__func__.", 17))
-			return ".rodata.__func__.";
-
 		/* __verbose section contains the descriptor variables */
 		if (!strcmp(sym->name, "__verbose"))
-			return sym->name;
+			return 1;
+
+		/* otherwise make sure section is bundled */
+		if (!sym->sec->sym)
+			return 0;
+
+		/* use bundled object/function symbol for matching */
+		sym = sym->sec->sym;
 	}
 
-	return NULL;
+	if (sym->type != STT_OBJECT || sym->bind != STB_LOCAL)
+		return 0;
+
+	for (prefix = prefixes; *prefix; prefix++)
+		if (!strncmp(sym->name, *prefix, strlen(*prefix)))
+			return 1;
+
+	return 0;
+}
+
+/*
+ * This is like strcmp, but for gcc-mangled symbols.  It skips the comparison
+ * of any substring which consists of '.' followed by any number of digits.
+ */
+static int kpatch_mangled_strcmp(char *s1, char *s2)
+{
+	while (*s1 == *s2) {
+		if (!*s1)
+			return 0;
+		if (*s1 == '.' && isdigit(s1[1])) {
+			if (!isdigit(s2[1]))
+				return 1;
+			while (isdigit(*++s1))
+				;
+			while (isdigit(*++s2))
+				;
+		} else {
+			s1++;
+			s2++;
+		}
+	}
+	return 1;
 }
 
 int rela_equal(struct rela *rela1, struct rela *rela2)
 {
-	char *prefix1, *prefix2;
-
 	if (rela1->type != rela2->type ||
 	    rela1->offset != rela2->offset)
 		return 0;
 
-	if (rela1->string) {
-		if (rela2->string &&
-		    !strcmp(rela1->string, rela2->string))
-			return 1;
-	} else {
-		if (rela1->addend != rela2->addend)
-			return 0;
+	if (rela1->string)
+		return rela2->string && !strcmp(rela1->string, rela2->string);
 
-		prefix1 = special_static_prefix(rela1->sym);
-		if (prefix1) {
-			prefix2 = special_static_prefix(rela2->sym);
-			if (!prefix2)
-				return 0;
-			return !strcmp(prefix1, prefix2);
-		}
+	if (rela1->addend != rela2->addend)
+		return 0;
 
-		if (!strcmp(rela1->sym->name, rela2->sym->name))
-			return 1;
-	}
+	if (is_special_static(rela1->sym))
+		return !kpatch_mangled_strcmp(rela1->sym->name,
+					      rela2->sym->name);
 
-	return 0;
+	return !strcmp(rela1->sym->name, rela2->sym->name);
 }
 
 void kpatch_compare_correlated_rela_section(struct section *sec)
@@ -831,7 +845,9 @@ void kpatch_correlate_sections(struct list_head *seclist1, struct list_head *sec
 			if (strcmp(sec1->name, sec2->name))
 				continue;
 
-			if (special_static_prefix(sec1->secsym))
+			if (is_special_static(is_rela_section(sec1) ?
+					      sec1->base->secsym :
+					      sec1->secsym))
 				continue;
 
 			/*
@@ -864,7 +880,7 @@ void kpatch_correlate_symbols(struct list_head *symlist1, struct list_head *syml
 			    sym1->type != sym2->type)
 				continue;
 
-			if (special_static_prefix(sym1))
+			if (is_special_static(sym1))
 				continue;
 
 			/* group section symbols must have correlated sections */
@@ -938,30 +954,6 @@ void kpatch_mark_grouped_sections(struct kpatch_elf *kelf)
 			data++;
 		}
 	}
-}
-
-/*
- * This is like strcmp, but for gcc-mangled symbols.  It skips the comparison
- * of any substring which consists of '.' followed by any number of digits.
- */
-static int kpatch_mangled_strcmp(char *s1, char *s2)
-{
-	while (*s1 == *s2) {
-		if (!*s1)
-			return 0;
-		if (*s1 == '.' && isdigit(s1[1])) {
-			if (!isdigit(s2[1]))
-				return 1;
-			while (isdigit(*++s1))
-				;
-			while (isdigit(*++s2))
-				;
-		} else {
-			s1++;
-			s2++;
-		}
-	}
-	return 1;
 }
 
 /*
@@ -1105,7 +1097,7 @@ void kpatch_correlate_static_local_variables(struct kpatch_elf *base,
 		    sym->twin)
 			continue;
 
-		if (special_static_prefix(sym))
+		if (is_special_static(sym))
 			continue;
 
 		if (!strchr(sym->name, '.'))
