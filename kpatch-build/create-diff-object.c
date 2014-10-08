@@ -672,15 +672,20 @@ out:
  *
  * base object:
  *
- *   28e:   be de 10 00 00          mov    $0x10de,%esi
- *   293:   48 c7 c7 00 00 00 00    mov    $0x0,%rdi
- *   29a:   e8 00 00 00 00          callq  29f <emulator_read_write_onepage+0x29f>
+ * be 5e 04 00 00          mov    $0x45e,%esi
+ * 48 c7 c7 ff 5a a1 81    mov    $0xffffffff81a15aff,%rdi
+ * e8 26 13 08 00          callq  ffffffff8108d0d0 <warn_slowpath_fmt>
  *
  * patched object:
  *
- *   28e:   be df 10 00 00          mov    $0x10df,%esi
- *   293:   48 c7 c7 00 00 00 00    mov    $0x0,%rdi
- *   29a:   e8 00 00 00 00          callq  29f <emulator_read_write_onepage+0x29f>
+ * be 5e 04 00 00          mov    $0x45f,%esi
+ * 48 c7 c7 ff 5a a1 81    mov    $0xffffffff81a15aff,%rdi
+ * e8 26 13 08 00          callq  ffffffff8108d0d0 <warn_slowpath_fmt>
+ *
+ * The above is the most common case.  The pattern which applies to all cases
+ * is an immediate move of the line number to %esi followed by zero or more
+ * relas to a string section followed by a rela to warn_slowpath_*.
+ *
  */
 static int kpatch_warn_only_change(struct section *sec)
 {
@@ -724,22 +729,21 @@ static int kpatch_warn_only_change(struct section *sec)
 		if (insn1.opcode.value != 0xbe || insn2.opcode.value != 0xbe)
 			return 0;
 
-		/* verify the next instruction is mov $0x0,%rdi */
-		if (*(unsigned int *)(start1 + offset + length) != 0xc7c748)
-			return 0;
-
-		/* verify the instruction after that is callq */
-		if (*(unsigned int *)(start1 + offset + length + 7) != 0xe8)
-			return 0;
-
-		/* verify the callq's rela is for warn_slowpath_null */
+		/*
+		 * Verify zero or more string relas followed by a
+		 * warn_slowpath_* rela.
+		 */
 		found = 0;
 		list_for_each_entry(rela, &sec->rela->relas, list) {
-			if (rela->offset == offset + length + 8 &&
-			    !strcmp(rela->sym->name, "warn_slowpath_null")) {
+			if (rela->offset < offset + length)
+				continue;
+			if (rela->string)
+				continue;
+			if (!strncmp(rela->sym->name, "warn_slowpath_", 14)) {
 				found = 1;
 				break;
 			}
+			return 0;
 		}
 		if (!found)
 			return 0;
@@ -748,7 +752,8 @@ static int kpatch_warn_only_change(struct section *sec)
 	}
 
 	if (!warnonly)
-		ERROR("no instruction changes detected for changed section %s", sec->name);
+		ERROR("no instruction changes detected for changed section %s",
+		      sec->name);
 
 	return 1;
 }
