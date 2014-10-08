@@ -721,16 +721,15 @@ static int kpatch_warn_only_change(struct section *sec)
 		 */
 		found = 0;
 		list_for_each_entry(rela, &sec->rela->relas, list) {
-			if (rela->offset >= offset + length) {
-				if (rela->string)
-					continue;
-				if (!strncmp(rela->sym->name,
-					     "warn_slowpath_", 14)) {
-					found = 1;
-					break;
-				}
-				return 0;
+			if (rela->offset < offset + length)
+				continue;
+			if (rela->string)
+				continue;
+			if (!strncmp(rela->sym->name, "warn_slowpath_", 14)) {
+				found = 1;
+				break;
 			}
+			return 0;
 		}
 		if (!found)
 			return 0;
