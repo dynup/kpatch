@@ -536,16 +536,15 @@ static int is_special_static(struct symbol *sym)
 		return 0;
 
 	if (sym->type == STT_SECTION) {
-		if (is_rela_section(sym->sec))
-			sym = sym->sec->base->secsym;
-
 		/* __verbose section contains the descriptor variables */
 		if (!strcmp(sym->name, "__verbose"))
 			return 1;
 
+		/* otherwise make sure section is bundled */
 		if (!sym->sec->sym)
 			return 0;
 
+		/* use bundled object/function symbol for matching */
 		sym = sym->sec->sym;
 	}
 
@@ -744,7 +743,9 @@ void kpatch_correlate_sections(struct list_head *seclist1, struct list_head *sec
 			if (strcmp(sec1->name, sec2->name))
 				continue;
 
-			if (is_special_static(sec1->secsym))
+			if (is_special_static(is_rela_section(sec1) ?
+					      sec1->base->secsym :
+					      sec1->secsym))
 				continue;
 
 			/*
