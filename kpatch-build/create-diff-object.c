@@ -1838,6 +1838,7 @@ void kpatch_regenerate_special_section(struct kpatch_elf *kelf,
 		/* no changed or global functions referenced */
 		sec->status = sec->base->status = SAME;
 		sec->include = sec->base->include = 0;
+		free(dest);
 		return;
 	}
 
