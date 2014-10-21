@@ -397,7 +397,7 @@ else
 		# The linux-source packages are formatted like the following for:
 		# ubuntu: linux-source-3.13.0_3.13.0-24.46_all.deb
 		# debian: linux-source-3.14_3.14.7-1_all.deb
-		pkgver="$KVER_$(dpkg-query -W -f='${Version}' linux-image-$ARCHVERSION)"
+		pkgver="${KVER}_$(dpkg-query -W -f='${Version}' linux-image-$ARCHVERSION)"
 		pkgname="linux-source-${pkgver}_all"
 
 		cd $TEMPDIR
