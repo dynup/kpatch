@@ -79,17 +79,11 @@ struct kpatch_unload {
  *
  * USE WITH EXTREME CAUTION!
  *
- * Allows patch authors to bypass the activeness safety check at patch
- * load time. Do this ONLY IF 1) the patch application will always/likely
- * fail due to the function being on the stack of at least one thread at
- * all times and 2) it is safe for both the original and patched versions
- * of the function to run concurrently.
- *
- * WARNING: Use of this macro will prevent the patch module from ever being
- * rmmod'ed, though it can still be disabled.  This is because the patched
- * function may still be in use after disabling it.  This means you can "kpatch
- * unload" it, but you can't do a "kpatch load" of the same module again later
- * on.
+ * Allows patch authors to bypass the activeness safety check at patch load
+ * time. Do this ONLY IF 1) the patch application will always/likely fail due
+ * to the function being on the stack of at least one thread at all times and
+ * 2) it is safe for both the original and patched versions of the function to
+ * run concurrently.
  */
 #define KPATCH_FORCE_UNSAFE(_fn) \
 	void *__kpatch_force_func_##_fn __section(.kpatch.force) = _fn;
