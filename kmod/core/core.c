@@ -1084,6 +1084,8 @@ err_root_kobj:
 
 static void kpatch_exit(void)
 {
+	rcu_barrier();
+
 	WARN_ON(kpatch_num_patched != 0);
 	WARN_ON(unregister_module_notifier(&kpatch_module_nb));
 	kobject_put(kpatch_patches_kobj);
