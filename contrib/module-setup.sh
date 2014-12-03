@@ -20,7 +20,7 @@ install() {
     inst_any -d /usr/sbin/kpatch /usr/local/sbin/kpatch /usr/sbin/kpatch
 
     # install kpatch script dependencies
-    inst_symlink /usr/sbin/insmod
+    inst /usr/sbin/insmod
     inst /usr/bin/dirname
     inst /usr/bin/readelf
     inst /usr/bin/awk
