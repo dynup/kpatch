@@ -133,7 +133,7 @@ struct rela {
 	struct list_head list;
 	GElf_Rela rela;
 	struct symbol *sym;
-	unsigned char type;
+	unsigned int type;
 	int addend;
 	int offset;
 	char *string;
