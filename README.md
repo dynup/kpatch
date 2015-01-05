@@ -397,12 +397,6 @@ function's arguments and stack, and "returns" to the new function.
 Limitations
 -----------
 
-- Patches to functions which are always on the stack of at least one
-  process in the system are not supported.  Examples: schedule(),
-  sys_poll(), sys_select(), sys_read(), sys_nanosleep().  Attempting to
-  apply such a patch will cause the insmod of the patch module to return
-  an error.
-
 - Patches which modify init functions (annotated with `__init`) are not
   supported.  kpatch-build will return an error if the patch attempts
   to do so.
@@ -558,6 +552,19 @@ There could be a variety of reasons for this, such as:
   reason, you can change the source patch to redefine the WARN macro for the
   affected files, such that it hard codes the old line number instead of using
   `__LINE__`, for example.
+
+**Q. How do I patch a function which is always on the stack of at least one
+task, such as schedule(), sys_poll(), sys_select(), sys_read(),
+sys_nanosleep(), etc?**
+
+- If you're sure it would be safe for the old function and the new function to
+  run simultaneously, use the `KPATCH_FORCE_UNSAFE` macro to skip the
+  activeness safety check for the function.  See `kmod/patch/kpatch-macros.h`
+  for more details.
+
+**Q. Are patching of kernel modules supported?**
+
+- Yes.
 
 
 Get involved
