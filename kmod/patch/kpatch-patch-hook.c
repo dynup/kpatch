@@ -118,10 +118,10 @@ static ssize_t patch_func_new_addr_show(struct kobject *kobj,
 }
 
 static struct kobj_attribute patch_old_addr_attr =
-	__ATTR(old_addr, S_IRUGO, patch_func_old_addr_show, NULL);
+	__ATTR(old_addr, S_IRUSR, patch_func_old_addr_show, NULL);
 
 static struct kobj_attribute patch_new_addr_attr =
-	__ATTR(new_addr, S_IRUGO, patch_func_new_addr_show, NULL);
+	__ATTR(new_addr, S_IRUSR, patch_func_new_addr_show, NULL);
 
 static void patch_func_kobj_free(struct kobject *kobj)
 {
