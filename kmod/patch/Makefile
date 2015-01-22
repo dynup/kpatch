@@ -11,7 +11,7 @@ all: kpatch-$(KPATCH_NAME).ko
 kpatch-$(KPATCH_NAME).ko:
 	$(KPATCH_MAKE) kpatch-$(KPATCH_NAME).ko
 
-patch-hook.o: patch-hook.c
+patch-hook.o: patch-hook.c kpatch-patch-hook.c livepatch-patch-hook.c
 	$(KPATCH_MAKE) patch-hook.o
 
 clean:
