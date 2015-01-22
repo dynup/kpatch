@@ -90,8 +90,10 @@ static int patch_add_func_to_object(struct kpatch_patch_func *kfunc)
 	func->kfunc = kfunc;
 
 	object = patch_find_object_by_name(kfunc->objname);
-	if (!object)
+	if (!object) {
+		kfree(func);
 		return -ENOMEM;
+	}
 	list_add(&func->list, &object->funcs);
 	object->funcs_nr++;
 	return 0;
@@ -109,8 +111,10 @@ static int patch_add_reloc_to_object(struct kpatch_patch_dynrela *dynrela)
 	reloc->kdynrela = dynrela;
 
 	object = patch_find_object_by_name(dynrela->objname);
-	if (!object)
+	if (!object) {
+		kfree(reloc);
 		return -ENOMEM;
+	}
 	list_add(&reloc->list, &object->relocs);
 	object->relocs_nr++;
 	return 0;
@@ -142,65 +146,17 @@ static void patch_free_livepatch(struct klp_patch *patch)
 	struct klp_object *object;
 
 	if (patch) {
-		object = patch->objs;
-		while (object && object->funcs) {
+		for (object = patch->objs; object && object->funcs; object++) {
 			if (object->funcs)
 				kfree(object->funcs);
 			if (object->relocs)
 				kfree(object->relocs);
-			object++;
 		}
 		if (patch->objs)
 			kfree(patch->objs);
 		kfree(patch);
 	}
 }
-
-/* debug */
-#if 0
-static void print_object(struct klp_object *object)
-{
-	pr_info("object '%s':\n", (object->name) ? object->name : "vmlinux");
-}
-
-static void print_func(struct klp_func *func)
-{
-	pr_info("  func: '%s' @ 0x%016lx, new @ 0x%016lx\n",
-	        func->old_name, func->old_addr,
-		(unsigned long)func->new_func);
-}
-
-static void print_reloc(struct klp_reloc *reloc)
-{
-	pr_info(" reloc: sym '%s', dest 0x%016lx, src 0x%016lx\n",
-	        reloc->name, reloc->loc, reloc->val);
-}
-
-static void print_livepatch(struct klp_patch *patch)
-{
-	struct klp_object *object;
-	struct klp_func *func;
-	struct klp_reloc *reloc;
-
-	if (patch) {
-		object = patch->objs;
-		while (object && object->funcs) {
-			print_object(object);
-			func = object->funcs;
-			while (func && func->old_name) {
-				print_func(func);
-				func++;
-			}
-			reloc = object->relocs;
-			while (reloc && reloc->name) {
-				print_reloc(reloc);
-				reloc++;
-			}
-			object++;
-		}
-	}
-}
-#endif
 
 extern struct kpatch_patch_func __kpatch_funcs[], __kpatch_funcs_end[];
 extern struct kpatch_patch_dynrela __kpatch_dynrelas[], __kpatch_dynrelas_end[];
@@ -243,7 +199,7 @@ static int __init patch_init(void)
 		goto out;
 
 	lobjects = kzalloc(sizeof(*lobjects) * (patch_objects_nr+1),
-	                      GFP_KERNEL);
+			   GFP_KERNEL);
 	if (!lobjects)
 		goto out;
 	patch->mod = THIS_MODULE;
@@ -268,14 +224,14 @@ static int __init patch_init(void)
 		}
 
 		lrelocs = kzalloc(sizeof(struct klp_reloc) *
-		                    (object->relocs_nr+1), GFP_KERNEL);
+				  (object->relocs_nr+1), GFP_KERNEL);
 		if (!lrelocs)
 			goto out;
 		lobject->relocs = lrelocs;
 		j = 0;
 		list_for_each_entry(reloc, &object->relocs, list) {
 			lreloc = &lrelocs[j];
-			lreloc->loc = reloc ->kdynrela->dest;
+			lreloc->loc = reloc->kdynrela->dest;
 			lreloc->val = reloc->kdynrela->src;
 			lreloc->type = reloc->kdynrela->type;
 			lreloc->name = reloc->kdynrela->name;
@@ -315,7 +271,6 @@ out:
 
 static void __exit patch_exit(void)
 {
-	WARN_ON(klp_disable_patch(patch));
 	WARN_ON(klp_unregister_patch(patch));
 }
 
