@@ -29,7 +29,25 @@
 
 #include "kpatch-patch.h"
 
-struct klp_patch *patch;
+/*
+ * There are quite a few similar structures at play in this file:
+ * - livepatch.h structs prefixed with klp_*
+ * - kpatch-patch.h structs prefixed with kpatch_patch_*
+ * - local scaffolding structs prefixed with patch_*
+ *
+ * The naming of the struct variables follows this convention:
+ * - livepatch struct being with "l" (e.g. lfunc)
+ * - kpatch_patch structs being with "k" (e.g. kfunc)
+ * - local scaffolding structs have no prefix (e.g. func)
+ *
+ *  The program reads in kpatch_patch structures, arranges them into the
+ *  scaffold structures, then creates a livepatch structure suitable for
+ *  registration with the livepatch kernel API.  The scaffold structs only
+ *  exist to allow the construction of the klp_patch struct.  Once that is
+ *  done, the scaffold structs are no longer needed.
+ */
+
+struct klp_patch *lpatch;
 
 static LIST_HEAD(patch_objects);
 static int patch_objects_nr;
@@ -99,7 +117,7 @@ static int patch_add_func_to_object(struct kpatch_patch_func *kfunc)
 	return 0;
 }
 
-static int patch_add_reloc_to_object(struct kpatch_patch_dynrela *dynrela)
+static int patch_add_reloc_to_object(struct kpatch_patch_dynrela *kdynrela)
 {
 	struct patch_reloc *reloc;
 	struct patch_object *object;
@@ -108,9 +126,9 @@ static int patch_add_reloc_to_object(struct kpatch_patch_dynrela *dynrela)
 	if (!reloc)
 		return -ENOMEM;
 	INIT_LIST_HEAD(&reloc->list);
-	reloc->kdynrela = dynrela;
+	reloc->kdynrela = kdynrela;
 
-	object = patch_find_object_by_name(dynrela->objname);
+	object = patch_find_object_by_name(kdynrela->objname);
 	if (!object) {
 		kfree(reloc);
 		return -ENOMEM;
@@ -164,7 +182,7 @@ extern struct kpatch_patch_dynrela __kpatch_dynrelas[], __kpatch_dynrelas_end[];
 static int __init patch_init(void)
 {
 	struct kpatch_patch_func *kfunc;
-	struct kpatch_patch_dynrela *dynrela;
+	struct kpatch_patch_dynrela *kdynrela;
 	struct klp_object *lobjects, *lobject;
 	struct klp_func *lfuncs, *lfunc;
 	struct klp_reloc *lrelocs, *lreloc;
@@ -182,10 +200,10 @@ static int __init patch_init(void)
 			goto out;
 	}
 
-	for (dynrela = __kpatch_dynrelas;
-	     dynrela != __kpatch_dynrelas_end;
-	     dynrela++) {
-		ret = patch_add_reloc_to_object(dynrela);
+	for (kdynrela = __kpatch_dynrelas;
+	     kdynrela != __kpatch_dynrelas_end;
+	     kdynrela++) {
+		ret = patch_add_reloc_to_object(kdynrela);
 		if (ret)
 			goto out;
 	}
@@ -194,16 +212,16 @@ static int __init patch_init(void)
 	ret = -ENOMEM;
 
 	/* allocate and fill livepatch structures */
-	patch = kzalloc(sizeof(*patch), GFP_KERNEL);
-	if (!patch)
+	lpatch = kzalloc(sizeof(*lpatch), GFP_KERNEL);
+	if (!lpatch)
 		goto out;
 
 	lobjects = kzalloc(sizeof(*lobjects) * (patch_objects_nr+1),
 			   GFP_KERNEL);
 	if (!lobjects)
 		goto out;
-	patch->mod = THIS_MODULE;
-	patch->objs = lobjects;
+	lpatch->mod = THIS_MODULE;
+	lpatch->objs = lobjects;
 
 	i = 0;
 	list_for_each_entry(object, &patch_objects, list) {
@@ -249,29 +267,29 @@ static int __init patch_init(void)
 	 */
 	patch_free_scaffold();
 
-	ret = klp_register_patch(patch);
+	ret = klp_register_patch(lpatch);
 	if (ret) {
-		patch_free_livepatch(patch);
+		patch_free_livepatch(lpatch);
 		return ret;
 	}
 
-	ret = klp_enable_patch(patch);
+	ret = klp_enable_patch(lpatch);
 	if (ret) {
-		WARN_ON(klp_unregister_patch(patch));
-		patch_free_livepatch(patch);
+		WARN_ON(klp_unregister_patch(lpatch));
+		patch_free_livepatch(lpatch);
 		return ret;
 	}
 
 	return 0;
 out:
-	patch_free_livepatch(patch);
+	patch_free_livepatch(lpatch);
 	patch_free_scaffold();
 	return ret;
 }
 
 static void __exit patch_exit(void)
 {
-	WARN_ON(klp_unregister_patch(patch));
+	WARN_ON(klp_unregister_patch(lpatch));
 }
 
 module_init(patch_init);
