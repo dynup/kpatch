@@ -71,6 +71,7 @@ die() {
 }
 
 cleanup() {
+	rm -f "$SRCDIR/.scmversion"
 	if [[ -e "$SRCDIR/$APPLIEDPATCHFILE" ]]; then
 		patch -p1 -R -d "$SRCDIR" < "$SRCDIR/$APPLIEDPATCHFILE" &> /dev/null
 		rm -f "$SRCDIR/$APPLIEDPATCHFILE"
@@ -433,6 +434,7 @@ cp -LR "$DATADIR/patch" "$TEMPDIR" || die
 export KCFLAGS="-I$DATADIR/patch -ffunction-sections -fdata-sections"
 
 echo "Building original kernel"
+./scripts/setlocalversion --save-scmversion || die
 make mrproper >> "$LOGFILE" 2>&1 || die
 CROSS_COMPILE="$TOOLSDIR/kpatch-gcc " make "-j$CPUS" $TARGETS "O=$OBJDIR" >> "$LOGFILE" 2>&1 || die
 
