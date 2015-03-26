@@ -8,9 +8,6 @@ without having to wait for long-running tasks to complete, for users to log
 off, or for scheduled reboot windows.  It gives more control over uptime
 without sacrificing security or stability.
 
-kpatch is currently in active development.  For now, it should _not_ be used
-in production environments.
-
 **WARNING: Use with caution!  Kernel crashes, spontaneous reboots, and data loss
 may occur!**
 
@@ -424,6 +421,21 @@ Limitations
 
 Frequently Asked Questions
 --------------------------
+
+**Q. What's the relationship between kpatch and the upstream Linux live kernel
+patching component (livepatch)?**
+
+Starting with Linux 4.0, the Linux kernel will have livepatch, which is a new
+converged live kernel patching framework.  Livepatch is similar in
+functionality to the kpatch core module, though it doesn't yet have all the
+features that kpatch does.
+
+kpatch-build already works with both livepatch and kpatch.  If your kernel has
+CONFIG\_LIVEPATCH enabled, it detects that and builds a patch module in the
+livepatch format.  Otherwise it builds a kpatch patch module.
+
+Soon the kpatch script will also support both patch module formats (TODO issue
+[#479](https://github.com/dynup/kpatch/issues/479)).
 
 **Q. Isn't this just a virus/rootkit injection framework?**
 
