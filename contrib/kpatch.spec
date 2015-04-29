@@ -61,8 +61,6 @@ sacrificing security or stability.
 
 %prep
 %setup -q 
-cp Makefile.inc Makefile.inc.ORG
-%{__sed} 's|/usr/local|/%{_usr}|' Makefile.inc.ORG > Makefile.inc
 
 %build
 make %{_smp_mflags} 
@@ -70,7 +68,7 @@ make %{_smp_mflags}
 %install
 rm -rf %{buildroot}
 
-make install DESTDIR=%{buildroot}
+PREFIX=/usr make install DESTDIR=%{buildroot}
 
 %clean
 rm -rf %{buildroot}
