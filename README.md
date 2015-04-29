@@ -25,7 +25,7 @@ Installation
 
 ###Prerequisites
 
-####Fedora 20
+####Fedora 21
 
 *NOTE: You'll need about 15GB of free disk space for the kpatch-build cache in
 `~/.kpatch` and for ccache.*
@@ -39,7 +39,7 @@ sudo yum install gcc kernel-devel elfutils elfutils-devel
 Install the dependencies for the "kpatch-build" command:
 
 ```bash
-sudo yum install rpmdevtools pesign yum-utils openssl wget
+sudo yum install rpmdevtools pesign yum-utils openssl wget numactl-devel
 sudo yum-builddep kernel
 sudo debuginfo-install kernel
 
