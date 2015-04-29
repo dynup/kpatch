@@ -68,7 +68,7 @@ make %{_smp_mflags}
 %install
 rm -rf %{buildroot}
 
-PREFIX=/usr make install DESTDIR=%{buildroot}
+make install PREFIX=/%{_usr} DESTDIR=%{buildroot}
 
 %clean
 rm -rf %{buildroot}

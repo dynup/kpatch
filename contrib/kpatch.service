@@ -3,7 +3,9 @@ Description="Apply kpatch kernel patches"
 
 [Service]
 Type=oneshot
+RemainAfterExit=yes
 ExecStart=/usr/sbin/kpatch load --all
+ExecStop=/usr/sbin/kpatch unload --all
 
 [Install]
 WantedBy=multi-user.target
