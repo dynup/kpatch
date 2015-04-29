@@ -1,0 +1,9 @@
+[Unit]
+Description="Apply kpatch kernel patches"
+
+[Service]
+Type=oneshot
+ExecStart=/usr/sbin/kpatch load --all
+
+[Install]
+WantedBy=multi-user.target

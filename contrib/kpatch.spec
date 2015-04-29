@@ -80,6 +80,7 @@ rm -rf %{buildroot}
 %doc COPYING README.md
 %{_sbindir}/kpatch
 %{_mandir}/man1/kpatch.1*
+%{_usr}/lib/systemd/system/*
 
 %files %{KVER}
 %defattr(-,root,root,-)
