@@ -80,8 +80,6 @@ rm -rf %{buildroot}
 %doc COPYING README.md
 %{_sbindir}/kpatch
 %{_mandir}/man1/kpatch.1*
-%{_usr}/lib/dracut/modules.d/99%{name}/*
-
 
 %files %{KVER}
 %defattr(-,root,root,-)
