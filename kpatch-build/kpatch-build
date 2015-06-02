@@ -365,7 +365,7 @@ else
 
 		clean_cache
 
-		mv "$(rpm --eval %{_builddir})"/kernel-*/linux-"$ARCHVERSION" "$SRCDIR" >> "$LOGFILE" 2>&1 || die
+		mv "$(rpm --eval %{_builddir})"/kernel-*/linux-"${ARCHVERSION%.*}"*"${ARCHVERSION##*.}" "$SRCDIR" >> "$LOGFILE" 2>&1 || die
 
 		cp "$SRCDIR/.config" "$OBJDIR" || die
 		if [[ "$ARCHVERSION" == *-* ]]; then
