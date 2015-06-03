@@ -5,8 +5,9 @@ all:
 install: all
 	$(INSTALL) -d $(SYSTEMDDIR)
 	$(INSTALL) kpatch.service $(SYSTEMDDIR)
+	sed -i 's~PREFIX~$(PREFIX)~' $(SYSTEMDDIR)/kpatch.service
 
 uninstall:
-	$(RM) -f $(SYSTEMDDIR)/kpatch.service
+	$(RM) $(SYSTEMDDIR)/kpatch.service
 
 clean:
