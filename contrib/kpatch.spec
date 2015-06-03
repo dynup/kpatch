@@ -61,8 +61,6 @@ sacrificing security or stability.
 
 %prep
 %setup -q 
-cp Makefile.inc Makefile.inc.ORG
-%{__sed} 's|/usr/local|/%{_usr}|' Makefile.inc.ORG > Makefile.inc
 
 %build
 make %{_smp_mflags} 
@@ -70,7 +68,7 @@ make %{_smp_mflags}
 %install
 rm -rf %{buildroot}
 
-make install DESTDIR=%{buildroot}
+make install PREFIX=/%{_usr} DESTDIR=%{buildroot}
 
 %clean
 rm -rf %{buildroot}
@@ -80,8 +78,7 @@ rm -rf %{buildroot}
 %doc COPYING README.md
 %{_sbindir}/kpatch
 %{_mandir}/man1/kpatch.1*
-%{_usr}/lib/dracut/modules.d/99%{name}/*
-
+%{_usr}/lib/systemd/system/*
 
 %files %{KVER}
 %defattr(-,root,root,-)

@@ -269,11 +269,7 @@ case "$1" in
 	echo "installing $PATCH ($KVER)"
 	mkdir -p $INSTALLDIR/$KVER || die "failed to create install directory"
 	cp -f "$PATCH" $INSTALLDIR/$KVER || die "failed to install module $PATCH"
-
-	if lsinitrd -k $KVER &> /dev/null; then
-		echo "rebuilding $KVER initramfs"
-		dracut -f --kver $KVER || die "dracut failed"
-	fi
+	systemctl enable kpatch.service
 	;;
 
 "uninstall")
@@ -314,10 +310,6 @@ case "$1" in
 
 	echo "uninstalling $PATCH ($KVER)"
 	rm -f $MODULE || die "failed to uninstall module $PATCH"
-	if lsinitrd -k $KVER &> /dev/null; then
-		echo "rebuilding $KVER initramfs"
-		dracut -f --kver $KVER || die "dracut failed"
-	fi
 	;;
 
 "list")

@@ -1,0 +1,11 @@
+[Unit]
+Description="Apply kpatch kernel patches"
+
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+ExecStart=PREFIX/sbin/kpatch load --all
+ExecStop=PREFIX/sbin/kpatch unload --all
+
+[Install]
+WantedBy=multi-user.target
