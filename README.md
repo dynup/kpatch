@@ -425,7 +425,7 @@ Frequently Asked Questions
 **Q. What's the relationship between kpatch and the upstream Linux live kernel
 patching component (livepatch)?**
 
-Starting with Linux 4.0, the Linux kernel will have livepatch, which is a new
+Starting with Linux 4.0, the Linux kernel has livepatch, which is a new
 converged live kernel patching framework.  Livepatch is similar in
 functionality to the kpatch core module, though it doesn't yet have all the
 features that kpatch does.
@@ -517,12 +517,6 @@ We hope to make the following changes to other projects:
 - kernel:
 	- ftrace improvements to close any windows that would allow a patch to
 	  be inadvertently disabled
-	- hot patch taint flag
-	- possibly the kpatch core module itself
-
-- crash:
-	- point it to where the patch modules and corresponding debug symbols
-	  live on the file system
 
 **Q: Is it possible to register a function that gets called atomically with
 `stop_machine` when the patch module loads and unloads?**
@@ -555,15 +549,6 @@ There could be a variety of reasons for this, such as:
 - The compiler decided to inline a changed function, resulting in the outer
   function getting recompiled.  This is common in the case where the inner
   function is static and is only called once.
-- The function uses a WARN() or WARN_ON() macro.  These macros embed the source
-  code line number (`__LINE__`) into an instruction.  If a function was changed
-  higher up in the file, it will affect the line numbers for all subsequent
-  WARN calls in the file, resulting in recompilation of their functions.  If
-  this happens to you, you can usually just ignore it, as patching a few extra
-  functions isn't typically a problem.  If it becomes a problem for whatever
-  reason, you can change the source patch to redefine the WARN macro for the
-  affected files, such that it hard codes the old line number instead of using
-  `__LINE__`, for example.
 
 **Q. How do I patch a function which is always on the stack of at least one
 task, such as schedule(), sys_poll(), sys_select(), sys_read(),
