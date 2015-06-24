@@ -578,6 +578,12 @@ sys_nanosleep(), etc?**
 
 - Yes.
 
+**Q. Can you patch out-of-tree modules?**
+
+- Yes, though it's currently a bit of a manual process.  See this
+  [message](https://www.redhat.com/archives/kpatch/2015-June/msg00004.html) on
+  the kpatch mailing list for more information.
+
 
 Get involved
 ------------
