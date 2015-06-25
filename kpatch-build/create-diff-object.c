@@ -134,6 +134,7 @@ struct rela {
 	GElf_Rela rela;
 	struct symbol *sym;
 	unsigned int type;
+	unsigned long r_info;
 	int addend;
 	int offset;
 	char *string;
@@ -307,6 +308,7 @@ void kpatch_create_rela_list(struct kpatch_elf *kelf, struct section *sec)
 		index++;
 
 		rela->type = GELF_R_TYPE(rela->rela.r_info);
+		rela->r_info = rela->rela.r_info;
 		rela->addend = rela->rela.r_addend;
 		rela->offset = rela->rela.r_offset;
 		symndx = GELF_R_SYM(rela->rela.r_info);
@@ -2473,6 +2475,7 @@ void kpatch_create_dynamic_rela_sections(struct kpatch_elf *kelf,
 				dynrelas[index].src = 0;
 			dynrelas[index].addend = rela->addend;
 			dynrelas[index].type = rela->type;
+			dynrelas[index].r_info = rela->r_info;
 			dynrelas[index].external = external;
 
 			/* add rela to fill in dest field */
