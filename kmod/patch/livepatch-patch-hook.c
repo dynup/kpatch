@@ -252,6 +252,7 @@ static int __init patch_init(void)
 			lreloc->loc = reloc->kdynrela->dest;
 			lreloc->val = reloc->kdynrela->src;
 			lreloc->type = reloc->kdynrela->type;
+			lreloc->r_info = reloc->kdynrela->r_info;
 			lreloc->name = reloc->kdynrela->name;
 			lreloc->addend = reloc->kdynrela->addend;
 			lreloc->external = reloc->kdynrela->external;

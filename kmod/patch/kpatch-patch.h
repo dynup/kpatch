@@ -35,6 +35,7 @@ struct kpatch_patch_dynrela {
 	unsigned long dest;
 	unsigned long src;
 	unsigned long type;
+	unsigned long r_info;
 	char *name;
 	char *objname;
 	int external;
