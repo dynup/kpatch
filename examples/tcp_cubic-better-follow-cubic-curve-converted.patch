@@ -1,0 +1,105 @@
+The original patch changes the initialization of 'cubictcp' instance of
+struct tcp_congestion_ops ('cubictcp.cwnd_event' field). Kpatch
+intentionally rejects to process such changes.
+
+This modification of the patch uses Kpatch load/unload hooks to set
+'cubictcp.cwnd_event' when the binary patch is loaded and reset it to NULL
+when the patch is unloaded.
+
+It is still needed to check if changing that field could be problematic
+due to concurrency issues, etc.
+
+'cwnd_event' callback is used only via tcp_ca_event() function.
+
+include/net/tcp.h:
+
+static inline void tcp_ca_event(struct sock *sk, const enum tcp_ca_event event)
+{
+	const struct inet_connection_sock *icsk = inet_csk(sk);
+
+	if (icsk->icsk_ca_ops->cwnd_event)
+		icsk->icsk_ca_ops->cwnd_event(sk, event);
+}
+
+In turn, tcp_ca_event() is called in a number of places in
+net/ipv4/tcp_output.c and net/ipv4/tcp_input.c.
+
+One problem with this modification of the patch is that it may not be safe
+to unload it. If it is possible for tcp_ca_event() to run concurrently with
+the unloading of the patch, it may happen that 'icsk->icsk_ca_ops->cwnd_event'
+is the address of bictcp_cwnd_event() when tcp_ca_event() checks it but is
+set to NULL right after. So 'icsk->icsk_ca_ops->cwnd_event(sk, event)' would
+result in a kernel oops.
+
+Whether such scenario is possible or not, it should be analyzed. If it is,
+then at least, the body of tcp_ca_event() should be made atomic w.r.t.
+changing 'cwnd_event' in the patch somehow. Perhaps, RCU could be suitable
+for that: a read-side critical section for the body of tcp_ca_event() with
+a single read of icsk->icsk_ca_ops->cwnd_event pointer with rcu_dereference().
+The pointer could be set by the patch with rcu_assign_pointer().
+
+An alternative suggested by Josh Poimboeuf would be to patch the functions
+that call 'cwnd_event' callback (tcp_ca_event() in this case) so that they
+call bictcp_cwnd_event() directly when they detect the cubictcp struct [1].
+
+Note that tcp_ca_event() is inlined in a number of places, so the binary
+patch will provide replacements for all of the corresponding functions
+rather than for just one. It is still needed to check if replacing these
+functions in runtime is safe.
+
+References:
+[1] https://www.redhat.com/archives/kpatch/2015-September/msg00005.html
+
+diff --git a/net/ipv4/tcp_cubic.c b/net/ipv4/tcp_cubic.c
+index 894b7ce..9bff8a0 100644
+--- a/net/ipv4/tcp_cubic.c
++++ b/net/ipv4/tcp_cubic.c
+@@ -153,6 +153,27 @@ static void bictcp_init(struct sock *sk)
+ 		tcp_sk(sk)->snd_ssthresh = initial_ssthresh;
+ }
+
++static void bictcp_cwnd_event(struct sock *sk, enum tcp_ca_event event)
++{
++	if (event == CA_EVENT_TX_START) {
++		struct bictcp *ca = inet_csk_ca(sk);
++		u32 now = tcp_time_stamp;
++		s32 delta;
++
++		delta = now - tcp_sk(sk)->lsndtime;
++
++		/* We were application limited (idle) for a while.
++		 * Shift epoch_start to keep cwnd growth to cubic curve.
++		 */
++		if (ca->epoch_start && delta > 0) {
++			ca->epoch_start += delta;
++			if (after(ca->epoch_start, now))
++				ca->epoch_start = now;
++		}
++		return;
++	}
++}
++
+ /* calculate the cubic root of x using a table lookup followed by one
+  * Newton-Raphson iteration.
+  * Avg err ~= 0.195%
+@@ -444,6 +465,20 @@ static struct tcp_congestion_ops cubictcp __read_mostly = {
+ 	.name		= "cubic",
+ };
+
++void kpatch_load_cubictcp_cwnd_event(void)
++{
++	cubictcp.cwnd_event = bictcp_cwnd_event;
++}
++
++void kpatch_unload_cubictcp_cwnd_event(void)
++{
++	cubictcp.cwnd_event = NULL;
++}
++
++#include "kpatch-macros.h"
++KPATCH_LOAD_HOOK(kpatch_load_cubictcp_cwnd_event);
++KPATCH_UNLOAD_HOOK(kpatch_unload_cubictcp_cwnd_event);
++
+ static int __init cubictcp_register(void)
+ {
+ 	BUILD_BUG_ON(sizeof(struct bictcp) > ICSK_CA_PRIV_SIZE);
