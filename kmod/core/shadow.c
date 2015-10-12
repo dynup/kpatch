@@ -158,6 +158,9 @@ void *kpatch_shadow_get(void *obj, char *var)
 				   (unsigned long)obj) {
 		if (shadow->obj == obj && !strcmp(shadow_var(shadow), var)) {
 			rcu_read_unlock();
+			if (shadow_is_inplace(shadow))
+				return &(shadow->data);
+
 			return shadow->data;
 		}
 	}
