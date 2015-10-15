@@ -2397,7 +2397,7 @@ void kpatch_create_dynamic_rela_sections(struct kpatch_elf *kelf,
 	list_for_each_entry(sec, &kelf->sections, list) {
 		if (!is_rela_section(sec))
 			continue;
-		if (!strcmp(sec->name, ".rela.kpatch.patches") ||
+		if (!strcmp(sec->name, ".rela.kpatch.funcs") ||
 		    !strcmp(sec->name, ".rela.kpatch.dynrelas"))
 			continue;
 		list_for_each_entry_safe(rela, safe, &sec->relas, list) {
