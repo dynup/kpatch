@@ -35,7 +35,7 @@ if [[ "$TOOLCHAINCMD" = "gcc" ]] ; then
 					;;
 				*.o)
 					mkdir -p "$TEMPDIR/orig/$(dirname $obj)"
-					cp -f "$obj" "$TEMPDIR/orig/$obj"
+					[[ -e $obj ]] && cp -f "$obj" "$TEMPDIR/orig/$obj"
 					echo "$obj" >> "$TEMPDIR/changed_objs"
 					break
 					;;
