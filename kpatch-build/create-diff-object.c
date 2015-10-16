@@ -2291,9 +2291,9 @@ void kpatch_create_patches_sections(struct kpatch_elf *kelf,
 					ERROR("lookup_local_symbol %s (%s)",
 					      sym->name, hint);
 			} else {
-				if(lookup_global_symbol(table, sym->name,
+				if(lookup_weak_global_symbol(table, sym->name,
 				                        &result))
-					ERROR("lookup_global_symbol %s",
+					ERROR("lookup_weak_global_symbol %s",
 					      sym->name);
 			}
 			log_debug("lookup for %s @ 0x%016lx len %lu\n",
