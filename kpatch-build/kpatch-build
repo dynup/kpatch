@@ -463,7 +463,7 @@ do
 done
 
 echo "Extracting new and modified ELF sections"
-cd "$TEMPDIR/orig"
+cd "$TEMPDIR/patched"
 FILES="$(find * -type f)"
 cd "$TEMPDIR"
 mkdir output
@@ -482,6 +482,7 @@ for i in $FILES; do
 	cd $TEMPDIR
 	debugopt=
 	[[ $DEBUG -eq 1 ]] && debugopt=-d
+	[[ ! -e "orig/$i" ]] && cp -f "patched/$i" "output/$i" && continue
 	"$TOOLSDIR"/create-diff-object $debugopt "orig/$i" "patched/$i" "$KOBJFILE" "output/$i" 2>&1 |tee -a "$LOGFILE"
 	rc="${PIPESTATUS[0]}"
 	if [[ $rc = 139 ]]; then
