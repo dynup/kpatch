@@ -463,7 +463,7 @@ do
 done
 
 echo "Extracting new and modified ELF sections"
-cd "$TEMPDIR/orig"
+cd "$TEMPDIR/patched"
 FILES="$(find * -type f)"
 cd "$TEMPDIR"
 mkdir output
@@ -482,21 +482,26 @@ for i in $FILES; do
 	cd $TEMPDIR
 	debugopt=
 	[[ $DEBUG -eq 1 ]] && debugopt=-d
-	"$TOOLSDIR"/create-diff-object $debugopt "orig/$i" "patched/$i" "$KOBJFILE" "output/$i" 2>&1 |tee -a "$LOGFILE"
-	rc="${PIPESTATUS[0]}"
-	if [[ $rc = 139 ]]; then
-		warn "create-diff-object SIGSEGV"
-		if ls core* &> /dev/null; then
-			cp core* /tmp
-			die "core file at /tmp/$(ls core*)"
+	if [[ -e "orig/$i" ]]; then
+		"$TOOLSDIR"/create-diff-object $debugopt "orig/$i" "patched/$i" "$KOBJFILE" "output/$i" 2>&1 |tee -a "$LOGFILE"
+		rc="${PIPESTATUS[0]}"
+		if [[ $rc = 139 ]]; then
+			warn "create-diff-object SIGSEGV"
+			if ls core* &> /dev/null; then
+				cp core* /tmp
+				die "core file at /tmp/$(ls core*)"
+			fi
+			die "no core file found, run 'ulimit -c unlimited' and try to recreate"
 		fi
-		die "no core file found, run 'ulimit -c unlimited' and try to recreate"
-	fi
-	# create-diff-object returns 3 if no functional change is found
-	[[ $rc -eq 0 ]] || [[ $rc -eq 3 ]] || ERROR=$(expr $ERROR "+" 1)
-	if [[ $rc -eq 0 ]]; then
-		[[ -n $ERROR_IF_DIFF ]] && die $ERROR_IF_DIFF
-		CHANGED=1
+		# create-diff-object returns 3 if no functional change is found
+		[[ $rc -eq 0 ]] || [[ $rc -eq 3 ]] || ERROR=$(expr $ERROR "+" 1)
+		if [[ $rc -eq 0 ]]; then
+			[[ -n $ERROR_IF_DIFF ]] && die $ERROR_IF_DIFF
+			CHANGED=1
+			objnames[$KOBJFILE]=1
+		fi
+	else
+		cp -f "patched/$i" "output/$i"
 		objnames[$KOBJFILE]=1
 	fi
 done
