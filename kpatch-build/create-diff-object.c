@@ -2435,7 +2435,7 @@ void kpatch_create_dynamic_rela_sections(struct kpatch_elf *kelf,
 				 * symbol is defined in another object in the
 				 * patch module.
 				 */
-				if (lookup_global_symbol(table, rela->sym->name,
+				if (lookup_weak_global_symbol(table, rela->sym->name,
 							 &result))
 					continue;
 			} else {
@@ -2458,7 +2458,7 @@ void kpatch_create_dynamic_rela_sections(struct kpatch_elf *kelf,
 				 * Try to find the symbol in the module being
 				 * patched.
 				 */
-				if (lookup_global_symbol(table, rela->sym->name,
+				if (lookup_weak_global_symbol(table, rela->sym->name,
 							 &result))
 					/*
 					 * Not there, assume it's either an
