@@ -91,7 +91,7 @@ static struct patch_object *patch_find_object_by_name(const char *name)
 
 	list_for_each_entry(object, &patch_objects, list)
 		if ((!strcmp(name, "vmlinux") && !object->name) ||
-		    !strcmp(object->name, name))
+		    (object->name && !strcmp(object->name, name)))
 			return object;
 	return patch_alloc_new_object(name);
 }
