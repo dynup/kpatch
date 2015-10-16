@@ -195,6 +195,24 @@ int lookup_global_symbol(struct lookup_table *table, char *name,
 	return 1;
 }
 
+int lookup_weak_global_symbol(struct lookup_table *table, char *name,
+                         struct lookup_result *result)
+{
+	struct symbol *sym;
+	int i;
+
+	memset(result, 0, sizeof(*result));
+	for_each_symbol(i, sym, table)
+		if (!sym->skip && (sym->bind == STB_GLOBAL || sym->bind == STB_WEAK) &&
+				!strcmp(sym->name, name)) {
+			result->value = sym->value;
+			result->size = sym->size;
+			return 0;
+		}
+
+	return 1;
+}
+
 int lookup_is_exported_symbol(struct lookup_table *table, char *name)
 {
 	struct symbol *sym;

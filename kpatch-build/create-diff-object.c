@@ -2291,9 +2291,9 @@ void kpatch_create_patches_sections(struct kpatch_elf *kelf,
 					ERROR("lookup_local_symbol %s (%s)",
 					      sym->name, hint);
 			} else {
-				if(lookup_global_symbol(table, sym->name,
+				if(lookup_weak_global_symbol(table, sym->name,
 				                        &result))
-					ERROR("lookup_global_symbol %s",
+					ERROR("lookup_weak_global_symbol %s",
 					      sym->name);
 			}
 			log_debug("lookup for %s @ 0x%016lx len %lu\n",
@@ -2435,7 +2435,7 @@ void kpatch_create_dynamic_rela_sections(struct kpatch_elf *kelf,
 				 * symbol is defined in another object in the
 				 * patch module.
 				 */
-				if (lookup_global_symbol(table, rela->sym->name,
+				if (lookup_weak_global_symbol(table, rela->sym->name,
 							 &result))
 					continue;
 			} else {
@@ -2458,7 +2458,7 @@ void kpatch_create_dynamic_rela_sections(struct kpatch_elf *kelf,
 				 * Try to find the symbol in the module being
 				 * patched.
 				 */
-				if (lookup_global_symbol(table, rela->sym->name,
+				if (lookup_weak_global_symbol(table, rela->sym->name,
 							 &result))
 					/*
 					 * Not there, assume it's either an

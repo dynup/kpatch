@@ -14,6 +14,8 @@ int lookup_local_symbol(struct lookup_table *table, char *name, char *hint,
                         struct lookup_result *result);
 int lookup_global_symbol(struct lookup_table *table, char *name,
                          struct lookup_result *result);
+int lookup_weak_global_symbol(struct lookup_table *table, char *name,
+                         struct lookup_result *result);
 int lookup_is_exported_symbol(struct lookup_table *table, char *name);
 
 #endif /* _LOOKUP_H_ */
