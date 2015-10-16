@@ -185,7 +185,7 @@ int lookup_global_symbol(struct lookup_table *table, char *name,
 
 	memset(result, 0, sizeof(*result));
 	for_each_symbol(i, sym, table)
-		if (!sym->skip && sym->bind == STB_GLOBAL &&
+		if (!sym->skip && (sym->bind == STB_GLOBAL || sym->bind == STB_WEAK) &&
 		    !strcmp(sym->name, name)) {
 			result->value = sym->value;
 			result->size = sym->size;
