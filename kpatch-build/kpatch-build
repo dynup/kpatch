@@ -104,7 +104,14 @@ find_dirs() {
 		# installation path
 		TOOLSDIR="$(readlink -f $SCRIPTDIR/../libexec/kpatch)"
 		DATADIR="$(readlink -f $SCRIPTDIR/../share/kpatch)"
-		SYMVERSFILE="$(readlink -f $SCRIPTDIR/../lib/kpatch/$(uname -r)/Module.symvers)"
+		if [[ -e $SCRIPTDIR/../lib/kpatch/$ARCHVERSION/Module.symvers ]]; then
+			SYMVERSFILE="$(readlink -f $SCRIPTDIR/../lib/kpatch/$ARCHVERSION/Module.symvers)"
+		elif [[ -e /lib/modules/$ARCHVERSION/extra/kpatch/Module.symvers ]]; then
+			SYMVERSFILE="$(readlink -f /lib/modules/$ARCHVERSION/extra/kpatch/Module.symvers)"
+		else
+			warn "unable to find Module.symvers for kpatch core module"
+			return 1
+		fi
 		return
 	fi
 
@@ -301,10 +308,6 @@ fi
 # kernel's 56-byte module name array.
 PATCHNAME=$(echo ${PATCHNAME//[^a-zA-Z0-9_-]/-} |cut -c 1-48)
 
-find_dirs || die "can't find supporting tools"
-
-[[ -e "$SYMVERSFILE" ]] || die "can't find core module Module.symvers"
-
 source /etc/os-release
 DISTRO=$ID
 if [[ $DISTRO = fedora ]] || [[ $DISTRO = rhel ]] || [[ $DISTRO = ol ]] || [[ $DISTRO = centos ]]; then
@@ -325,6 +328,11 @@ elif [[ $DISTRO = ubuntu ]] || [[ $DISTRO = debian ]]; then
 
 	export PATH=/usr/lib/ccache:$PATH
 fi
+
+find_dirs || die "can't find supporting tools"
+
+[[ -e "$SYMVERSFILE" ]] || die "can't find core module Module.symvers"
+
 
 if [[ $SKIPGCCCHECK -eq 0 ]]; then
 	gcc_version_check || die
