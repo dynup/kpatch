@@ -78,6 +78,13 @@ enum loglevel {
 
 static enum loglevel loglevel = NORMAL;
 
+enum patchtype {
+	KPATCH,
+	LIVEPATCH
+};
+
+static enum patchtype patchtype = KPATCH;
+
 /*******************
  * Data structures
  * ****************/
@@ -2802,12 +2809,14 @@ void kpatch_write_output_elf(struct kpatch_elf *kelf, Elf *elf, char *outfile)
 struct arguments {
 	char *args[4];
 	int debug;
+	int livepatch;
 };
 
 static char args_doc[] = "original.o patched.o kernel-object output.o";
 
 static struct argp_option options[] = {
 	{"debug", 'd', 0, 0, "Show debug output" },
+	{"livepatch", 'l', 0, 0, "Use LIVEPATCH mode. Default is KPATCH." },
 	{ 0 }
 };
 
@@ -2821,6 +2830,9 @@ static error_t parse_opt (int key, char *arg, struct argp_state *state)
 	{
 		case 'd':
 			arguments->debug = 1;
+			break;
+		case 'l':
+			arguments->livepatch = 1;
 			break;
 		case ARGP_KEY_ARG:
 			if (state->arg_num >= 4)
@@ -2893,9 +2905,14 @@ int main(int argc, char *argv[])
 	char *hint = NULL, *name, *pos;
 
 	arguments.debug = 0;
+	arguments.livepatch = 0;
 	argp_parse (&argp, argc, argv, 0, 0, &arguments);
 	if (arguments.debug)
 		loglevel = DEBUG;
+
+	/* Detect livepatch mode */
+	if (arguments.livepatch)
+		patchtype = LIVEPATCH;
 
 	elf_version(EV_CURRENT);
 

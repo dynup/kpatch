@@ -463,6 +463,12 @@ do
 	cp -f "$OBJDIR/$i" "$TEMPDIR/patched/$i" || die
 done
 
+# Detect patching type
+if grep -q "CONFIG_LIVEPATCH=y" "$CONFIGFILE"; then
+	PATCHTYPE="livepatch"
+fi
+echo "Detected patch type: $PATCHTYPE"
+
 echo "Extracting new and modified ELF sections"
 cd "$TEMPDIR/patched"
 FILES="$(find * -type f)"
@@ -483,8 +489,10 @@ for i in $FILES; do
 	cd $TEMPDIR
 	debugopt=
 	[[ $DEBUG -eq 1 ]] && debugopt=-d
+	livepatchopt=
+	[[ $PATCHTYPE == "livepatch" ]] && livepatchopt=-l
 	if [[ -e "orig/$i" ]]; then
-		"$TOOLSDIR"/create-diff-object $debugopt "orig/$i" "patched/$i" "$KOBJFILE" "output/$i" 2>&1 |tee -a "$LOGFILE"
+		"$TOOLSDIR"/create-diff-object $debugopt $livepatchopt "orig/$i" "patched/$i" "$KOBJFILE" "output/$i" 2>&1 |tee -a "$LOGFILE"
 		rc="${PIPESTATUS[0]}"
 		if [[ $rc = 139 ]]; then
 			warn "create-diff-object SIGSEGV"
@@ -518,11 +526,6 @@ fi
 echo -n "Patched objects:"
 for i in "${!objnames[@]}"; do echo -n " $(basename $i)"; done
 echo
-
-if grep -q "CONFIG_LIVEPATCH=y" "$OBJDIR/.config"; then
-	PATCHTYPE="livepatch"
-fi
-echo "Detected patch type: $PATCHTYPE"
 
 echo "Building patch module: $PATCHTYPE-$PATCHNAME.ko"
 cp "$OBJDIR/.config" "$SRCDIR"
