@@ -2,12 +2,12 @@ Index: src/arch/x86/kvm/x86.c
 ===================================================================
 --- src.orig/arch/x86/kvm/x86.c
 +++ src/arch/x86/kvm/x86.c
-@@ -211,6 +211,8 @@ static void shared_msr_update(unsigned s
+@@ -218,6 +218,8 @@ static void shared_msr_update(unsigned s
  
  void kvm_define_shared_msr(unsigned slot, u32 msr)
  {
 +	if (!jiffies)
 +		printk("kpatch kvm define shared msr\n");
+ 	BUG_ON(slot >= KVM_NR_SHARED_MSRS);
  	if (slot >= shared_msrs_global.nr)
  		shared_msrs_global.nr = slot + 1;
- 	shared_msrs_global.msrs[slot] = msr;
