@@ -1,4 +1,6 @@
-all: clean
+all: vagrant_slow
+
+slow: clean
 	../kpatch-test
 
 quick: clean
@@ -9,3 +11,7 @@ cached:
 
 clean:
 	rm -f *.ko *.log COMBINED.patch
+
+vagrant_slow:
+	vagrant up
+	vagrant ssh -c "cd /kpatch && make && cd /kpatch/test/integration/f22 && make slow"

@@ -1,0 +1,26 @@
+#!/bin/bash -x
+
+set -o errexit
+
+# crude workaround for a weird dnf bug where it fails to download
+install_rpms() {
+	sudo dnf install -y $* || sudo dnf install -y $*
+}
+
+# f22 bug -- grow partition and filesystem to match image size
+sudo growpart /dev/vda 1
+sudo resize2fs /dev/vda1
+
+install_rpms gcc elfutils elfutils-devel
+install_rpms rpmdevtools pesign openssl numactl-devel wget patchutils
+sudo dnf builddep -y kernel || sudo dnf builddep -y kernel
+
+# install kernel debuginfo and devel RPMs for target kernel
+KVER=4.0.4
+KREL=301.fc22
+install_rpms https://kojipkgs.fedoraproject.org/packages/kernel/$KVER/$KREL/x86_64/kernel-debuginfo-$KVER-$KREL.x86_64.rpm https://kojipkgs.fedoraproject.org/packages/kernel/$KVER/$KREL/x86_64/kernel-debuginfo-common-x86_64-$KVER-$KREL.x86_64.rpm https://kojipkgs.fedoraproject.org/packages/kernel/$KVER/$KREL/x86_64/kernel-devel-$KVER-$KREL.x86_64.rpm
+
+# install version of gcc which was used to build the target kernel
+GVER=5.1.1
+GREL=1.fc22
+install_rpms https://kojipkgs.fedoraproject.org/packages/gcc/$GVER/$GREL/x86_64/cpp-$GVER-$GREL.x86_64.rpm https://kojipkgs.fedoraproject.org/packages/gcc/$GVER/$GREL/x86_64/gcc-$GVER-$GREL.x86_64.rpm https://kojipkgs.fedoraproject.org/packages/gcc/$GVER/$GREL/x86_64/libgomp-$GVER-$GREL.x86_64.rpm
