@@ -1,8 +1,9 @@
-Index: src/kernel/timer.c
+ensure __jump_table is parsed and we can tell that it effectively didn't change
+Index: src/kernel/time/timer.c
 ===================================================================
---- src.orig/kernel/timer.c
-+++ src/kernel/timer.c
-@@ -1370,6 +1370,9 @@ static void run_timer_softirq(struct sof
+--- src.orig/kernel/time/timer.c
++++ src/kernel/time/timer.c
+@@ -1397,6 +1397,9 @@ static void run_timer_softirq(struct sof
  {
  	struct tvec_base *base = __this_cpu_read(tvec_bases);
  
