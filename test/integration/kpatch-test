@@ -256,8 +256,6 @@ run_combined_test() {
 echo "clearing printk buffer"
 sudo dmesg -C
 
-cd "$SCRIPTDIR"
-
 if [[ $QUICK != 1 ]]; then
 	for file in *.patch; do
 		build_module $file
