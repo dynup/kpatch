@@ -537,6 +537,8 @@ echo -n "Patched objects:"
 for i in "${!objnames[@]}"; do echo -n " $(basename $i)"; done
 echo
 
+export KCFLAGS="-I$DATADIR/patch"
+
 echo "Building patch module: kpatch-$PATCHNAME.ko"
 cp "$OBJDIR/.config" "$SRCDIR"
 cd "$SRCDIR"
