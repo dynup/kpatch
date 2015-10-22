@@ -127,6 +127,7 @@ struct symbol {
 		int include; /* used in the patched elf */
 		int strip; /* used in the output elf */
 	};
+	int has_fentry_call;
 };
 
 struct rela {
@@ -472,6 +473,24 @@ void kpatch_create_symbol_list(struct kpatch_elf *kelf)
 
 }
 
+/* Check which functions have fentry calls; save this info for later use. */
+static void kpatch_find_fentry_calls(struct kpatch_elf *kelf)
+{
+	struct symbol *sym;
+	struct rela *rela;
+	list_for_each_entry(sym, &kelf->symbols, list) {
+		if (sym->type != STT_FUNC || !sym->sec->rela)
+			continue;
+
+		rela = list_first_entry(&sym->sec->rela->relas, struct rela,
+					list);
+		if (rela->type != R_X86_64_NONE ||
+		    strcmp(rela->sym->name, "__fentry__"))
+			continue;
+
+		sym->has_fentry_call = 1;
+	}
+}
 
 struct kpatch_elf *kpatch_elf_open(const char *name)
 {
@@ -510,6 +529,7 @@ struct kpatch_elf *kpatch_elf_open(const char *name)
 		kpatch_create_rela_list(kelf, sec);
 	}
 
+	kpatch_find_fentry_calls(kelf);
 	return kelf;
 }
 
@@ -1336,6 +1356,25 @@ next:
 			printf(" -> %s", sym->sec->name);
 		printf("\n");
 	}
+}
+
+static void kpatch_check_fentry_calls(struct kpatch_elf *kelf)
+{
+	struct symbol *sym;
+	int errs = 0;
+
+	list_for_each_entry(sym, &kelf->symbols, list) {
+		if (sym->type != STT_FUNC || sym->status != CHANGED)
+			continue;
+		if (!sym->twin->has_fentry_call) {
+			log_normal("function %s has no fentry call, unable to patch\n",
+				   sym->name);
+			errs++;
+		}
+	}
+
+	if (errs)
+		DIFF_FATAL("%d function(s) can not be patched", errs);
 }
 
 void kpatch_verify_patchability(struct kpatch_elf *kelf)
@@ -2564,7 +2603,8 @@ void kpatch_create_mcount_sections(struct kpatch_elf *kelf)
 
 	nr = 0;
 	list_for_each_entry(sym, &kelf->symbols, list)
-		if (sym->type == STT_FUNC && sym->status != SAME)
+		if (sym->type == STT_FUNC && sym->status != SAME &&
+		    sym->has_fentry_call)
 			nr++;
 
 	/* create text/rela section pair */
@@ -2577,6 +2617,12 @@ void kpatch_create_mcount_sections(struct kpatch_elf *kelf)
 	list_for_each_entry(sym, &kelf->symbols, list) {
 		if (sym->type != STT_FUNC || sym->status == SAME)
 			continue;
+
+		if (!sym->has_fentry_call) {
+			log_debug("function %s has no fentry call, no mcount record is needed\n",
+				  sym->name);
+			continue;
+		}
 
 		/* add rela in .rela__mcount_loc to fill in function pointer */
 		ALLOC_LINK(rela, &relasec->relas);
@@ -2594,7 +2640,8 @@ void kpatch_create_mcount_sections(struct kpatch_elf *kelf)
 		sym->sec->data->d_buf = newdata;
 		insn = newdata;
 		if (insn[0] != 0xf)
-			ERROR("function '%s' has no fentry call; unable to patch", sym->name);
+			ERROR("%s: unexpected instruction at the start of the function",
+			      sym->name);
 		insn[0] = 0xe8;
 		insn[1] = 0;
 		insn[2] = 0;
@@ -2603,9 +2650,6 @@ void kpatch_create_mcount_sections(struct kpatch_elf *kelf)
 
 		rela = list_first_entry(&sym->sec->rela->relas, struct rela,
 					list);
-		if (rela->type != R_X86_64_NONE ||
-		    strcmp(rela->sym->name, "__fentry__"))
-			ERROR("function '%s' has no fentry call; unable to patch", sym->name);
 		rela->type = R_X86_64_PC32;
 
 		index++;
@@ -2923,6 +2967,7 @@ int main(int argc, char *argv[])
 	 */
 	kpatch_mark_ignored_sections(kelf_patched);
 	kpatch_compare_correlated_elements(kelf_patched);
+	kpatch_check_fentry_calls(kelf_patched);
 	kpatch_elf_teardown(kelf_base);
 	kpatch_elf_free(kelf_base);
 
