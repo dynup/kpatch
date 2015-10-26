@@ -129,6 +129,9 @@ enum {
 };
 static atomic_t kpatch_state;
 
+static int (*kpatch_set_memory_rw)(unsigned long addr, int numpages);
+static int (*kpatch_set_memory_ro)(unsigned long addr, int numpages);
+
 static inline void kpatch_state_idle(void)
 {
 	int state = atomic_read(&kpatch_state);
@@ -649,12 +652,12 @@ static int kpatch_write_relocations(struct kpatch_module *kpmod,
 		numpages = (PAGE_SIZE - (loc & ~PAGE_MASK) >= size) ? 1 : 2;
 
 		if (readonly)
-			set_memory_rw(loc & PAGE_MASK, numpages);
+			kpatch_set_memory_rw(loc & PAGE_MASK, numpages);
 
 		ret = probe_kernel_write((void *)loc, &val, size);
 
 		if (readonly)
-			set_memory_ro(loc & PAGE_MASK, numpages);
+			kpatch_set_memory_ro(loc & PAGE_MASK, numpages);
 
 		if (ret) {
 			pr_err("write to 0x%llx failed for symbol %s\n",
@@ -1057,6 +1060,18 @@ static struct notifier_block kpatch_module_nb = {
 static int kpatch_init(void)
 {
 	int ret;
+
+	kpatch_set_memory_rw = (void *)kallsyms_lookup_name("set_memory_rw");
+	if (!kpatch_set_memory_rw) {
+		pr_err("can't find set_memory_rw symbol\n");
+		return -ENXIO;
+	}
+
+	kpatch_set_memory_ro = (void *)kallsyms_lookup_name("set_memory_ro");
+	if (!kpatch_set_memory_ro) {
+		pr_err("can't find set_memory_ro symbol\n");
+		return -ENXIO;
+	}
 
 	kpatch_root_kobj = kobject_create_and_add("kpatch", kernel_kobj);
 	if (!kpatch_root_kobj)
