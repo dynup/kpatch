@@ -1680,11 +1680,70 @@ void kpatch_reindex_elements(struct kpatch_elf *kelf)
 }
 
 
-int bug_table_group_size(struct kpatch_elf *kelf, int offset) { return 12; }
-int smp_locks_group_size(struct kpatch_elf *kelf, int offset) { return 4; }
-int parainstructions_group_size(struct kpatch_elf *kelf, int offset) { return 16; }
-int ex_table_group_size(struct kpatch_elf *kelf, int offset) { return 8; }
-int altinstructions_group_size(struct kpatch_elf *kelf, int offset) { return 12; }
+int bug_table_group_size(struct kpatch_elf *kelf, int offset)
+{
+	static int size = 0;
+	char *str;
+
+	if (!size) {
+		str = getenv("BUG_STRUCT_SIZE");
+		if (!str)
+			ERROR("BUG_STRUCT_SIZE not set");
+		size = atoi(str);
+	}
+
+	return size;
+}
+
+int parainstructions_group_size(struct kpatch_elf *kelf, int offset)
+{
+	static int size = 0;
+	char *str;
+
+	if (!size) {
+		str = getenv("PARA_STRUCT_SIZE");
+		if (!str)
+			ERROR("PARA_STRUCT_SIZE not set");
+		size = atoi(str);
+	}
+
+	return size;
+}
+
+int ex_table_group_size(struct kpatch_elf *kelf, int offset)
+{
+	static int size = 0;
+	char *str;
+
+	if (!size) {
+		str = getenv("EX_STRUCT_SIZE");
+		if (!str)
+			ERROR("EX_STRUCT_SIZE not set");
+		size = atoi(str);
+	}
+
+	return size;
+}
+
+int altinstructions_group_size(struct kpatch_elf *kelf, int offset)
+{
+	static int size = 0;
+	char *str;
+
+	if (!size) {
+		str = getenv("ALT_STRUCT_SIZE");
+		if (!str)
+			ERROR("ALT_STRUCT_SIZE not set");
+		size = atoi(str);
+	}
+
+	return size;
+}
+
+int smp_locks_group_size(struct kpatch_elf *kelf, int offset)
+{
+	return 4;
+}
 
 /*
  * The rela groups in the .fixup section vary in size.  The beginning of each
@@ -1752,7 +1811,7 @@ struct special_section special_sections[] = {
 		.group_size	= fixup_group_size,
 	},
 	{
-		.name		= "__ex_table",
+		.name		= "__ex_table", /* must come after .fixup */
 		.group_size	= ex_table_group_size,
 	},
 	{

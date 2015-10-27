@@ -452,6 +452,32 @@ cp "$PATCHFILE" "$APPLIEDPATCHFILE" || die
 cp -LR "$DATADIR/patch" "$TEMPDIR" || die
 export KCFLAGS="-I$DATADIR/patch -ffunction-sections -fdata-sections"
 
+echo "Reading special section data"
+SPECIAL_VARS=$(readelf -wi "$VMLINUX" |
+	       gawk --non-decimal-data '
+	       BEGIN { a = b = p = e = 0 }
+	       a == 0 && /DW_AT_name.* alt_instr$/ {a = 1; next}
+	       b == 0 && /DW_AT_name.* bug_entry$/ {b = 1; next}
+	       p == 0 && /DW_AT_name.* paravirt_patch_site$/ {p = 1; next}
+	       e == 0 && /DW_AT_name.* exception_table_entry$/ {e = 1; next}
+	       a == 1 {printf("export ALT_STRUCT_SIZE=%d\n", $4); a = 2}
+	       b == 1 {printf("export BUG_STRUCT_SIZE=%d\n", $4); b = 2}
+	       p == 1 {printf("export PARA_STRUCT_SIZE=%d\n", $4); p = 2}
+	       e == 1 {printf("export EX_STRUCT_SIZE=%d\n", $4); e = 2}
+	       a == 2 && b == 2 && p == 2 && e == 2 {exit}')
+
+[[ -n $SPECIAL_VARS ]] && eval "$SPECIAL_VARS"
+
+if [[ -z $ALT_STRUCT_SIZE ]] || [[ -z $BUG_STRUCT_SIZE ]] ||
+   [[ -z $PARA_STRUCT_SIZE ]] || [[ -z $EX_STRUCT_SIZE ]]; then
+	die "can't find special struct size"
+fi
+for i in $ALT_STRUCT_SIZE $BUG_STRUCT_SIZE $PARA_STRUCT_SIZE $EX_STRUCT_SIZE; do
+	if [[ ! $i -gt 0 ]] || [[ ! $i -le 16 ]]; then
+		die "invalid special struct size $i"
+	fi
+done
+
 echo "Building original kernel"
 ./scripts/setlocalversion --save-scmversion || die
 make mrproper >> "$LOGFILE" 2>&1 || die
