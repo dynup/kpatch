@@ -45,6 +45,7 @@ ROOTDIR="$(readlink -f $SCRIPTDIR/../..)"
 # TODO: option to use system-installed binaries instead
 KPATCH="sudo $ROOTDIR/kpatch/kpatch"
 RMMOD="sudo rmmod"
+unset CCACHE_HASHDIR
 KPATCHBUILD="$ROOTDIR"/kpatch-build/kpatch-build
 ERROR=0
 LOG=test.log
@@ -255,8 +256,6 @@ run_combined_test() {
 
 echo "clearing printk buffer"
 sudo dmesg -C
-
-cd "$SCRIPTDIR"
 
 if [[ $QUICK != 1 ]]; then
 	for file in *.patch; do

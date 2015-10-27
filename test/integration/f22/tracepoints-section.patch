@@ -1,0 +1,15 @@
+ensure __jump_table is parsed and we can tell that it effectively didn't change
+Index: src/kernel/time/timer.c
+===================================================================
+--- src.orig/kernel/time/timer.c
++++ src/kernel/time/timer.c
+@@ -1410,6 +1410,9 @@ static void run_timer_softirq(struct sof
+ {
+ 	struct tvec_base *base = this_cpu_ptr(&tvec_bases);
+ 
++	if (!base)
++		printk("kpatch-test: testing __tracepoints section changes\n");
++
+ 	if (time_after_eq(jiffies, base->timer_jiffies))
+ 		__run_timers(base);
+ }
