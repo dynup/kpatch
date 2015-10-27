@@ -1,6 +1,6 @@
 include ../Makefile.inc
 
-CFLAGS  += -I../kmod/patch -Iinsn -Wall -g
+CFLAGS  += -I../kmod/patch -Iinsn -Wall -g -Werror
 LDFLAGS = -lelf
 
 TARGETS = create-diff-object
