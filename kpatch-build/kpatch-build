@@ -37,16 +37,16 @@
 # - Runs kpatch tools to create and link the patch kernel module
 
 BASE="$PWD"
-LOGFILE="/tmp/kpatch-build-$(date +%s).log"
 SCRIPTDIR="$(readlink -f $(dirname $(type -p $0)))"
 ARCHVERSION="$(uname -r)"
 CPUS="$(getconf _NPROCESSORS_ONLN)"
-CACHEDIR="$HOME/.kpatch"
+CACHEDIR="${CACHEDIR:-$HOME/.kpatch}"
 SRCDIR="$CACHEDIR/src"
 OBJDIR="$CACHEDIR/obj"
 TMPSRCDIR="$CACHEDIR/tempsrc"
 VERSIONFILE="$CACHEDIR/version"
-TEMPDIR=
+TEMPDIR="$CACHEDIR/tmp"
+LOGFILE="$TEMPDIR/build.log"
 APPLIEDPATCHFILE="kpatch.patch"
 DEBUG=0
 SKIPGCCCHECK=0
@@ -274,7 +274,10 @@ while [[ $# -gt 0 ]]; do
 	shift
 done
 
-TEMPDIR="$(mktemp -d /tmp/kpatch-build-XXXXXX)" || die "mktemp failed"
+# ensure cachedir and tempdir are setup properly and cleaned
+mkdir -p "$TEMPDIR" || die "Couldn't create $TEMPDIR"
+rm -rf "$TEMPDIR"/*
+
 trap cleanup EXIT INT TERM
 
 KVER=${ARCHVERSION%%-*}
