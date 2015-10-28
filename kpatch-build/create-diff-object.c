@@ -1141,8 +1141,20 @@ void kpatch_correlate_static_local_variables(struct kpatch_elf *base,
 			}
 		}
 
-		if (!sec)
+		if (!sec) {
+			/*
+			 * CSWTCH is a read-only static local array used by gcc
+			 * for some switch statements.  If two functions use
+			 * the same CSWTCH data, there can be two separate
+			 * CSWTCH symbols referring to the same bundled
+			 * .rodata.CSWTCH.xxxx section and one of them will be
+			 * unused.
+			 */
+			if (!strncmp(sym->name, "CSWTCH.", 7))
+				continue;
+
 			ERROR("static local variable %s not used", sym->name);
+		}
 
 		if (!basesym) {
 			log_normal("WARNING: unable to correlate static local variable %s used by %s, assuming variable is new\n",
