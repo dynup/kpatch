@@ -30,6 +30,7 @@ if [[ "$TOOLCHAINCMD" = "gcc" ]] ; then
 				arch/x86/boot/compressed/piggy.o|\
 				kernel/system_certificates.o|\
 				arch/x86/vdso/*|\
+				arch/x86/entry/vdso/*|\
 				.*.o)
 					break
 					;;
