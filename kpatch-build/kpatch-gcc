@@ -31,6 +31,7 @@ if [[ "$TOOLCHAINCMD" = "gcc" ]] ; then
 				kernel/system_certificates.o|\
 				arch/x86/vdso/*|\
 				arch/x86/entry/vdso/*|\
+				drivers/firmware/efi/libstub/*|\
 				.*.o)
 					break
 					;;
