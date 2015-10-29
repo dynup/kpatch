@@ -533,41 +533,6 @@ struct kpatch_elf *kpatch_elf_open(const char *name)
 	return kelf;
 }
 
-static void kpatch_strip_unused_switch_syms(struct kpatch_elf *kelf)
-{
-	struct symbol *sym, *safe;
-	char *sec_suffix;
-
-	/*
-	 * CSWTCH is a read-only static local array used by gcc for some switch
-	 * statements.  If two functions use the same CSWTCH data, there can be
-	 * two separate symbols (CSWTCH.x and CSWTCH.y) referring to the same
-	 * bundled .rodata.CSWTCH.x section.  Having two mangled symbols
-	 * associated with the same bundled section, when only one of them
-	 * matches the name of the bundled section, creates a lot of confusion
-	 * in the correlation logic.  Eliminate that confusion by getting rid
-	 * of the symbol which has a different number suffix than the bundled
-	 * section.
-	 *
-	 * Due to the behavior of -fdata-sections, there shouldn't be any
-	 * references to the symbol.  Instead, all references are to its
-	 * bundled section.  So removing it should be safe.
-	 */
-	list_for_each_entry_safe(sym, safe, &kelf->symbols, list) {
-		if (sym->type != STT_OBJECT || sym->bind != STB_LOCAL ||
-		    strncmp(sym->name, "CSWTCH.", 7))
-			continue;
-
-		sec_suffix = strstr(sym->sec->name, "CSWTCH.");
-		if (!sec_suffix)
-			ERROR("unexpected section name %s for CSWTCH symbol %s",
-			      sym->sec->name, sym->name);
-
-		if (strcmp(sym->name, sec_suffix))
-			list_del(&sym->list);
-	}
-}
-
 /*
  * This function detects whether the given symbol is a "special" static local
  * variable (for lack of a better term).
@@ -3046,8 +3011,6 @@ int main(int argc, char *argv[])
 	kpatch_check_program_headers(kelf_base->elf);
 	kpatch_check_program_headers(kelf_patched->elf);
 
-	kpatch_strip_unused_switch_syms(kelf_base);
-	kpatch_strip_unused_switch_syms(kelf_patched);
 	kpatch_mark_grouped_sections(kelf_patched);
 	kpatch_replace_sections_syms(kelf_base);
 	kpatch_replace_sections_syms(kelf_patched);
