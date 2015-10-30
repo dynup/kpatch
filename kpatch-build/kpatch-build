@@ -25,12 +25,10 @@
 # replace modified functions in the kernel such that the
 # patched code takes effect.
 
-# This script currently only works on Fedora and will need to be adapted to
-# work on other distros.
-
 # This script:
-# - Downloads the kernel src rpm for the currently running kernel
-# - Unpacks and prepares the src rpm for building
+# - Either uses a specified kernel source directory or downloads the kernel
+#   source package for the currently running kernel
+# - Unpacks and prepares the source package for building if necessary
 # - Builds the base kernel (vmlinux)
 # - Builds the patched kernel and monitors changed objects
 # - Builds the patched objects with gcc flags -f[function|data]-sections
