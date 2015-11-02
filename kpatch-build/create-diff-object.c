@@ -533,41 +533,6 @@ struct kpatch_elf *kpatch_elf_open(const char *name)
 	return kelf;
 }
 
-static void kpatch_strip_unused_switch_syms(struct kpatch_elf *kelf)
-{
-	struct symbol *sym, *safe;
-	char *sec_suffix;
-
-	/*
-	 * CSWTCH is a read-only static local array used by gcc for some switch
-	 * statements.  If two functions use the same CSWTCH data, there can be
-	 * two separate symbols (CSWTCH.x and CSWTCH.y) referring to the same
-	 * bundled .rodata.CSWTCH.x section.  Having two mangled symbols
-	 * associated with the same bundled section, when only one of them
-	 * matches the name of the bundled section, creates a lot of confusion
-	 * in the correlation logic.  Eliminate that confusion by getting rid
-	 * of the symbol which has a different number suffix than the bundled
-	 * section.
-	 *
-	 * Due to the behavior of -fdata-sections, there shouldn't be any
-	 * references to the symbol.  Instead, all references are to its
-	 * bundled section.  So removing it should be safe.
-	 */
-	list_for_each_entry_safe(sym, safe, &kelf->symbols, list) {
-		if (sym->type != STT_OBJECT || sym->bind != STB_LOCAL ||
-		    strncmp(sym->name, "CSWTCH.", 7))
-			continue;
-
-		sec_suffix = strstr(sym->sec->name, "CSWTCH.");
-		if (!sec_suffix)
-			ERROR("unexpected section name %s for CSWTCH symbol %s",
-			      sym->sec->name, sym->name);
-
-		if (strcmp(sym->name, sec_suffix))
-			list_del(&sym->list);
-	}
-}
-
 /*
  * This function detects whether the given symbol is a "special" static local
  * variable (for lack of a better term).
@@ -1094,143 +1059,220 @@ static char *kpatch_section_function_name(struct section *sec)
 }
 
 /*
- * Given a static local variable symbol and a section which references it in
- * the patched object, find a corresponding usage of a similarly named symbol
- * in the base object.
+ * Given a static local variable symbol and a rela section which references it
+ * in the base object, find a corresponding usage of a similarly named symbol
+ * in the patched object.
  */
 static struct symbol *kpatch_find_static_twin(struct section *sec,
 					      struct symbol *sym)
 {
 	struct rela *rela;
-	struct symbol *basesym;
 
 	if (!sec->twin)
 		return NULL;
 
-	/*
-	 * Ensure there are no other orphaned static variables with the
-	 * same name in the function.  This is possible if the
-	 * variables are in different scopes or if one of them is part of an
-	 * inlined function.
-	 */
-	list_for_each_entry(rela, &sec->relas, list) {
-		if (rela->sym == sym || rela->sym->twin)
-			continue;
-		if (!kpatch_mangled_strcmp(rela->sym->name, sym->name))
-			ERROR("found another static local variable matching %s in patched %s",
-			      sym->name, kpatch_section_function_name(sec));
-	}
-
-	/* find the base object's corresponding variable */
-	basesym = NULL;
+	/* find the patched object's corresponding variable */
 	list_for_each_entry(rela, &sec->twin->relas, list) {
+
 		if (rela->sym->twin)
 			continue;
+
 		if (kpatch_mangled_strcmp(rela->sym->name, sym->name))
 			continue;
-		if (basesym && basesym != rela->sym)
-			ERROR("found two static local variables matching %s in orig %s",
-			      sym->name, kpatch_section_function_name(sec));
 
-		basesym = rela->sym;
+		return rela->sym;
 	}
 
-	return basesym;
+	return NULL;
 }
 
 /*
  * gcc renames static local variables by appending a period and a number.  For
  * example, __foo could be renamed to __foo.31452.  Unfortunately this number
- * can arbitrarily change.  Try to rename the patched version of the symbol to
- * match the base version and then correlate them.
+ * can arbitrarily change.  Correlate them by comparing which functions
+ * reference them, and rename the patched symbols to match the base symbol
+ * names.
  */
 void kpatch_correlate_static_local_variables(struct kpatch_elf *base,
 					     struct kpatch_elf *patched)
 {
-	struct symbol *sym, *basesym, *tmpsym;
-	struct section *tmpsec, *sec;
+	struct symbol *sym, *patched_sym, *tmpsym;
+	struct section *sec;
 	struct rela *rela;
-	int bundled, basebundled;
+	int bundled, patched_bundled;
 
-	list_for_each_entry(sym, &patched->symbols, list) {
-		if (sym->type != STT_OBJECT || sym->bind != STB_LOCAL ||
-		    sym->twin)
-			continue;
+	list_for_each_entry(sym, &base->symbols, list) {
 
-		if (is_special_static(sym))
+		if (sym->type != STT_OBJECT || sym->bind != STB_LOCAL)
 			continue;
 
 		if (!strchr(sym->name, '.'))
 			continue;
 
+		if (is_special_static(sym))
+			continue;
+
 		/*
-		 * For each function which uses the variable in the patched
-		 * object, look for a corresponding use in the function's twin
-		 * in the base object.
-		 *
-		 * It's possible for multiple functions to use the same static
-		 * local variable if the variable is defined in an inlined
-		 * function.
+		 * Undo any previous correlation.  Two static locals can have
+		 * the same numbered suffix in the base and patched objects by
+		 * coincidence.
 		 */
-		sec = NULL;
-		basesym = NULL;
-		list_for_each_entry(tmpsec, &patched->sections, list) {
-			if (!is_rela_section(tmpsec) ||
-			    !is_text_section(tmpsec->base) ||
-			    is_debug_section(tmpsec))
+		if (sym->twin) {
+			sym->twin->twin = NULL;
+			sym->twin = NULL;
+		}
+		bundled = sym == sym->sec->sym;
+		if (bundled && sym->sec->twin) {
+			sym->sec->twin->twin = NULL;
+			sym->sec->twin = NULL;
+		}
+
+		/*
+		 *
+		 * Some surprising facts about static local variable symbols:
+		 *
+		 * - It's possible for multiple functions to use the same
+		 *   static local variable if the variable is defined in an
+		 *   inlined function.
+		 *
+		 * - It's also possible for multiple static local variables
+		 *   with the same name to be used in the same function if they
+		 *   have different scopes.  (We have to assume that in such
+		 *   cases, the order in which they're referenced remains the
+		 *   same between the base and patched objects, as there's no
+		 *   other way to distinguish them.)
+		 *
+		 * - Static locals are usually referenced by functions, but
+		 *   they can occasionally be referenced by data sections as
+		 *   well.
+		 *
+		 * For each section which references the variable in the base
+		 * object, look for a corresponding reference in the section's
+		 * twin in the patched object.
+		 */
+		patched_sym = NULL;
+		list_for_each_entry(sec, &base->sections, list) {
+
+			if (!is_rela_section(sec) ||
+			    is_debug_section(sec))
 				continue;
-			list_for_each_entry(rela, &tmpsec->relas, list) {
+
+			list_for_each_entry(rela, &sec->relas, list) {
+
 				if (rela->sym != sym)
 					continue;
 
-				tmpsym = kpatch_find_static_twin(tmpsec, sym);
-				if (basesym && tmpsym && basesym != tmpsym)
-					ERROR("found two twins for static local variable %s: %s and %s",
-					      sym->name, basesym->name,
-					      tmpsym->name);
-				if (tmpsym && !basesym)
-					basesym = tmpsym;
+				if (bundled && sym->sec == sec->base) {
+					/*
+					 * A rare case where a static local
+					 * data structure references itself.
+					 * There's no reliable way to correlate
+					 * this.  Hopefully there's another
+					 * reference to the symbol somewhere
+					 * that can be used.
+					 */
+					log_debug("can't correlate static local %s's reference to itself\n",
+						  sym->name);
+					break;
+				}
 
-				sec = tmpsec;
+				tmpsym = kpatch_find_static_twin(sec, sym);
+				if (!tmpsym)
+					DIFF_FATAL("reference to static local variable %s in %s was removed",
+						   sym->name,
+						   kpatch_section_function_name(sec));
+
+				if (patched_sym && patched_sym != tmpsym)
+					DIFF_FATAL("found two twins for static local variable %s: %s and %s",
+						   sym->name, patched_sym->name,
+						   tmpsym->name);
+
+				patched_sym = tmpsym;
+
 				break;
 			}
 		}
 
-		if (!sec)
-			ERROR("static local variable %s not used", sym->name);
-
-		if (!basesym) {
-			log_normal("WARNING: unable to correlate static local variable %s used by %s, assuming variable is new\n",
-				   sym->name,
-				   kpatch_section_function_name(sec));
+		/*
+		 * Check if the symbol is unused.  This is possible if multiple
+		 * static locals in the file refer to the same read-only data,
+		 * and their symbols point to the same bundled section.  In
+		 * such a case we can ignore the extra symbol.
+		 */
+		if (!patched_sym) {
+			log_debug("ignoring base unused static local %s\n",
+				  sym->name);
 			continue;
 		}
 
-
-		bundled = sym == sym->sec->sym;
-		basebundled = basesym == basesym->sec->sym;
-		if (bundled != basebundled)
+		patched_bundled = patched_sym == patched_sym->sec->sym;
+		if (bundled != patched_bundled)
 			ERROR("bundle mismatch for symbol %s", sym->name);
-		if (!bundled && sym->sec->twin != basesym->sec)
+		if (!bundled && sym->sec->twin != patched_sym->sec)
 			ERROR("sections %s and %s aren't correlated",
-			      sym->sec->name, basesym->sec->name);
+			      sym->sec->name, patched_sym->sec->name);
 
-		log_debug("renaming and correlating %s to %s\n",
-			  sym->name, basesym->name);
-		sym->name = strdup(basesym->name);
-		sym->twin = basesym;
-		basesym->twin = sym;
-		sym->status = basesym->status = SAME;
+		log_debug("renaming and correlating static local %s to %s\n",
+			  patched_sym->name, sym->name);
+
+		patched_sym->name = strdup(sym->name);
+		sym->twin = patched_sym;
+		patched_sym->twin = sym;
 
 		if (bundled) {
-			sym->sec->twin = basesym->sec;
-			basesym->sec->twin = sym->sec;
+			sym->sec->twin = patched_sym->sec;
+			patched_sym->sec->twin = sym->sec;
 
-			if (sym->sec->rela && basesym->sec->rela) {
-				sym->sec->rela->twin = basesym->sec->rela;
-				basesym->sec->rela->twin = sym->sec->rela;
+			if (sym->sec->rela && patched_sym->sec->rela) {
+				sym->sec->rela->twin = patched_sym->sec->rela;
+				patched_sym->sec->rela->twin = sym->sec->rela;
 			}
 		}
+	}
+
+	/*
+	 * All the base object's static local variables have been correlated.
+	 * Now go through the patched object and look for any uncorrelated
+	 * static locals to see if we need to print some warnings.
+	 */
+	list_for_each_entry(sym, &patched->symbols, list) {
+
+		if (sym->type != STT_OBJECT || sym->bind != STB_LOCAL ||
+		    sym->twin)
+			continue;
+
+		if (!strchr(sym->name, '.'))
+			continue;
+
+		if (is_special_static(sym))
+			continue;
+
+		list_for_each_entry(sec, &patched->sections, list) {
+
+			if (!is_rela_section(sec) ||
+			    is_debug_section(sec))
+				continue;
+
+			list_for_each_entry(rela, &sec->relas, list) {
+
+				if (rela->sym != sym)
+					continue;
+
+				log_normal("WARNING: unable to correlate static local variable %s used by %s, assuming variable is new\n",
+					   sym->name,
+					   kpatch_section_function_name(sec));
+				return;
+			}
+		}
+
+		/*
+		 * This symbol is unused by any functions.  This is possible if
+		 * multiple static locals in the file refer to the same
+		 * read-only data, and their symbols point to the same bundled
+		 * section.  In such a case we can ignore the extra symbol.
+		 */
+		log_debug("ignoring patched unused static local %s\n",
+			  sym->name);
 	}
 }
 
@@ -3046,8 +3088,6 @@ int main(int argc, char *argv[])
 	kpatch_check_program_headers(kelf_base->elf);
 	kpatch_check_program_headers(kelf_patched->elf);
 
-	kpatch_strip_unused_switch_syms(kelf_base);
-	kpatch_strip_unused_switch_syms(kelf_patched);
 	kpatch_mark_grouped_sections(kelf_patched);
 	kpatch_replace_sections_syms(kelf_base);
 	kpatch_replace_sections_syms(kelf_patched);
