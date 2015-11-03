@@ -44,7 +44,7 @@ OBJDIR="$CACHEDIR/obj"
 TMPSRCDIR="$CACHEDIR/tempsrc"
 VERSIONFILE="$CACHEDIR/version"
 TEMPDIR="$CACHEDIR/tmp"
-LOGFILE="$TEMPDIR/build.log"
+LOGFILE="$CACHEDIR/build.log"
 APPLIEDPATCHFILE="kpatch.patch"
 DEBUG=0
 SKIPGCCCHECK=0
@@ -275,6 +275,7 @@ done
 # ensure cachedir and tempdir are setup properly and cleaned
 mkdir -p "$TEMPDIR" || die "Couldn't create $TEMPDIR"
 rm -rf "$TEMPDIR"/*
+rm -f "$LOGFILE"
 
 trap cleanup EXIT INT TERM
 
