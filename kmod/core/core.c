@@ -584,7 +584,6 @@ static int kpatch_write_relocations(struct kpatch_module *kpmod,
 	struct kpatch_dynrela *dynrela;
 	u64 loc, val;
 	unsigned long core = (unsigned long)kpmod->mod->module_core;
-	unsigned long core_ro_size = kpmod->mod->core_ro_size;
 	unsigned long core_size = kpmod->mod->core_size;
 	unsigned long src;
 
@@ -639,15 +638,16 @@ static int kpatch_write_relocations(struct kpatch_module *kpmod,
 			return -EINVAL;
 		}
 
-		if (loc >= core && loc < core + core_ro_size)
-			readonly = 1;
-		else if (loc >= core + core_ro_size && loc < core + core_size)
-			readonly = 0;
-		else {
+		if (loc < core || loc >= core + core_size) {
 			pr_err("bad dynrela location 0x%llx for symbol %s\n",
 			       loc, dynrela->name);
 			return -EINVAL;
 		}
+
+#ifdef CONFIG_DEBUG_SET_MODULE_RONX
+		if (loc < core + kpmod->mod->core_ro_size)
+			readonly = 1;
+#endif
 
 		numpages = (PAGE_SIZE - (loc & ~PAGE_MASK) >= size) ? 1 : 2;
 
