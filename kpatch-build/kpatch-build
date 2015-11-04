@@ -41,7 +41,7 @@ CPUS="$(getconf _NPROCESSORS_ONLN)"
 CACHEDIR="${CACHEDIR:-$HOME/.kpatch}"
 SRCDIR="$CACHEDIR/src"
 OBJDIR="$CACHEDIR/obj"
-TMPBUILDROOT="$CACHEDIR/buildroot"
+RPMTOPDIR="$CACHEDIR/buildroot"
 VERSIONFILE="$CACHEDIR/version"
 TEMPDIR="$CACHEDIR/tmp"
 LOGFILE="$CACHEDIR/build.log"
@@ -82,7 +82,7 @@ cleanup() {
 		[[ -e $TEMPDIR/.config ]] && cp -f $TEMPDIR/.config $USERSRCDIR
 	fi
 	[[ "$DEBUG" -eq 0 ]] && rm -rf "$TEMPDIR"
-	rm -rf "$TMPBUILDROOT"
+	rm -rf "$RPMTOPDIR"
 	unset KCFLAGS
 }
 
@@ -373,12 +373,12 @@ else
 
 		clean_cache
 
-		rpm -D "_topdir $TMPBUILDROOT" -ivh "$SRCRPM" >> "$LOGFILE" 2>&1 || die
-		rpmbuild -D "_topdir $TMPBUILDROOT" -bp "--target=$(uname -m)" "$TMPBUILDROOT"/SPECS/kernel.spec >> "$LOGFILE" 2>&1 ||
+		rpm -D "_topdir $RPMTOPDIR" -ivh "$SRCRPM" >> "$LOGFILE" 2>&1 || die
+		rpmbuild -D "_topdir $RPMTOPDIR" -bp "--target=$(uname -m)" "$RPMTOPDIR"/SPECS/kernel.spec >> "$LOGFILE" 2>&1 ||
 			die "rpmbuild -bp failed.  you may need to run 'yum-builddep kernel' first."
 
-		mv "$TMPBUILDROOT"/BUILD/kernel-*/linux-"${ARCHVERSION%.*}"*"${ARCHVERSION##*.}" "$SRCDIR" >> "$LOGFILE" 2>&1 || die
-		rm -rf "$TMPBUILDROOT"
+		mv "$RPMTOPDIR"/BUILD/kernel-*/linux-"${ARCHVERSION%.*}"*"${ARCHVERSION##*.}" "$SRCDIR" >> "$LOGFILE" 2>&1 || die
+		rm -rf "$RPMTOPDIR"
 
 		cp "$SRCDIR/.config" "$OBJDIR" || die
 		if [[ "$ARCHVERSION" == *-* ]]; then
