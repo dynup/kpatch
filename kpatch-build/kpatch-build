@@ -41,7 +41,7 @@ CPUS="$(getconf _NPROCESSORS_ONLN)"
 CACHEDIR="${CACHEDIR:-$HOME/.kpatch}"
 SRCDIR="$CACHEDIR/src"
 OBJDIR="$CACHEDIR/obj"
-TMPSRCDIR="$CACHEDIR/tmphome"
+RPMTOPDIR="$CACHEDIR/buildroot"
 VERSIONFILE="$CACHEDIR/version"
 TEMPDIR="$CACHEDIR/tmp"
 LOGFILE="$CACHEDIR/build.log"
@@ -82,7 +82,7 @@ cleanup() {
 		[[ -e $TEMPDIR/.config ]] && cp -f $TEMPDIR/.config $USERSRCDIR
 	fi
 	[[ "$DEBUG" -eq 0 ]] && rm -rf "$TEMPDIR"
-	rm -rf "$TMPSRCDIR"
+	rm -rf "$RPMTOPDIR"
 	unset KCFLAGS
 }
 
@@ -370,26 +370,15 @@ else
 		fi
 
 		echo "Unpacking kernel source"
-		(
-			clean_cache
 
-			# By default, rpmdev-setuptree and rpmbuild use
-			# ~/rpmbuild/ tree. However, this could clobber its
-			# existing contents, so let us use a fake home directory
-			# here to avoid that.
-			mkdir -p $TMPSRCDIR
-			HOME=$TMPSRCDIR
+		clean_cache
 
-			rpmdev-setuptree >> "$LOGFILE" 2>&1 || die
-			rpm -ivh "$SRCRPM" >> "$LOGFILE" 2>&1 || die
-			rpmbuild -bp "--target=$(uname -m)" "$(rpm --eval %{_specdir})"/kernel.spec >> "$LOGFILE" 2>&1 ||
-				die "rpmbuild -bp failed.  you may need to run 'yum-builddep kernel' first."
+		rpm -D "_topdir $RPMTOPDIR" -ivh "$SRCRPM" >> "$LOGFILE" 2>&1 || die
+		rpmbuild -D "_topdir $RPMTOPDIR" -bp "--target=$(uname -m)" "$RPMTOPDIR"/SPECS/kernel.spec >> "$LOGFILE" 2>&1 ||
+			die "rpmbuild -bp failed.  you may need to run 'yum-builddep kernel' first."
 
-			RPM_BUILD_DIR=$(rpm --eval %{_builddir})
-			mv "$RPM_BUILD_DIR"/kernel-*/linux-"${ARCHVERSION%.*}"*"${ARCHVERSION##*.}" "$SRCDIR" >> "$LOGFILE" 2>&1 || die
-
-			rm -rf "$TMPSRCDIR"
-		)
+		mv "$RPMTOPDIR"/BUILD/kernel-*/linux-"${ARCHVERSION%.*}"*"${ARCHVERSION##*.}" "$SRCDIR" >> "$LOGFILE" 2>&1 || die
+		rm -rf "$RPMTOPDIR"
 
 		cp "$SRCDIR/.config" "$OBJDIR" || die
 		if [[ "$ARCHVERSION" == *-* ]]; then
