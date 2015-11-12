@@ -206,6 +206,7 @@ usage() {
 	echo "		-r, --sourcerpm	   Specify kernel source RPM" >&2
 	echo "		-s, --sourcedir	   Specify kernel source directory" >&2
 	echo "		-c, --config	   Specify kernel config file" >&2
+	echo "		-k, --kernel-version   Specify target kernel version" >&2
 	echo "		-v, --vmlinux	   Specify original vmlinux" >&2
 	echo "		-t, --target	   Specify custom kernel build targets" >&2
 	echo "		-d, --debug	   Keep scratch files in /tmp" >&2
@@ -213,7 +214,7 @@ usage() {
 	echo "		                   (not recommended)" >&2
 }
 
-options=$(getopt -o hr:s:c:v:t:d -l "help,sourcerpm:,sourcedir:,config:,vmlinux:,target:,debug,skip-gcc-check" -- "$@") || die "getopt failed"
+options=$(getopt -o hr:s:c:k:v:t:d -l "help,sourcerpm:,sourcedir:,config:,kernel-version:,vmlinux:,target:,debug,skip-gcc-check" -- "$@") || die "getopt failed"
 
 eval set -- "$options"
 
@@ -240,6 +241,10 @@ while [[ $# -gt 0 ]]; do
 		CONFIGFILE=$(readlink -f "$2")
 		shift
 		[[ ! -f "$CONFIGFILE" ]] && die "config file $CONFIGFILE not found"
+		;;
+	-k|--kernel-version)
+		ARCHVERSION="$2".$(uname -m)
+		shift
 		;;
 	-v|--vmlinux)
 		VMLINUX=$(readlink -f "$2")
