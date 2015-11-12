@@ -1096,7 +1096,7 @@ static struct symbol *kpatch_find_static_twin(struct section *sec,
 void kpatch_correlate_static_local_variables(struct kpatch_elf *base,
 					     struct kpatch_elf *patched)
 {
-	struct symbol *sym, *patched_sym, *tmpsym;
+	struct symbol *sym, *patched_sym;
 	struct section *sec;
 	struct rela *rela;
 	int bundled, patched_bundled;
@@ -1126,106 +1126,99 @@ void kpatch_correlate_static_local_variables(struct kpatch_elf *base,
 			sym->sec->twin->twin = NULL;
 			sym->sec->twin = NULL;
 		}
+	}
 
-		/*
-		 *
-		 * Some surprising facts about static local variable symbols:
-		 *
-		 * - It's possible for multiple functions to use the same
-		 *   static local variable if the variable is defined in an
-		 *   inlined function.
-		 *
-		 * - It's also possible for multiple static local variables
-		 *   with the same name to be used in the same function if they
-		 *   have different scopes.  (We have to assume that in such
-		 *   cases, the order in which they're referenced remains the
-		 *   same between the base and patched objects, as there's no
-		 *   other way to distinguish them.)
-		 *
-		 * - Static locals are usually referenced by functions, but
-		 *   they can occasionally be referenced by data sections as
-		 *   well.
-		 *
-		 * For each section which references the variable in the base
-		 * object, look for a corresponding reference in the section's
-		 * twin in the patched object.
-		 */
-		patched_sym = NULL;
-		list_for_each_entry(sec, &base->sections, list) {
+	/*
+	 *
+	 * Some surprising facts about static local variable symbols:
+	 *
+	 * - It's possible for multiple functions to use the same
+	 *   static local variable if the variable is defined in an
+	 *   inlined function.
+	 *
+	 * - It's also possible for multiple static local variables
+	 *   with the same name to be used in the same function if they
+	 *   have different scopes.  (We have to assume that in such
+	 *   cases, the order in which they're referenced remains the
+	 *   same between the base and patched objects, as there's no
+	 *   other way to distinguish them.)
+	 *
+	 * - Static locals are usually referenced by functions, but
+	 *   they can occasionally be referenced by data sections as
+	 *   well.
+	 *
+	 * For each section which references the variable in the base
+	 * object, look for a corresponding reference in the section's
+	 * twin in the patched object.
+	 */
 
-			if (!is_rela_section(sec) ||
-			    is_debug_section(sec))
+	/* This code works fine on the basis of the following assumptions:
+	 * - the static local variables can't be removed;
+	 * - the sections that reference these variables can't be removed;
+	 * - the order in which they're referenced remains the same;
+	 */
+	list_for_each_entry(sec, &base->sections, list) {
+
+		if (!is_rela_section(sec) ||
+		    is_debug_section(sec))
+			continue;
+
+		list_for_each_entry(rela, &sec->relas, list) {
+
+			sym = rela->sym;
+			if (sym->type != STT_OBJECT || sym->bind != STB_LOCAL ||
+					sym->twin)
 				continue;
 
-			list_for_each_entry(rela, &sec->relas, list) {
+			if (is_special_static(sym))
+				continue;
 
-				if (rela->sym != sym)
-					continue;
+			if (!strchr(sym->name, '.'))
+				continue;
 
-				if (bundled && sym->sec == sec->base) {
-					/*
-					 * A rare case where a static local
-					 * data structure references itself.
-					 * There's no reliable way to correlate
-					 * this.  Hopefully there's another
-					 * reference to the symbol somewhere
-					 * that can be used.
-					 */
-					log_debug("can't correlate static local %s's reference to itself\n",
-						  sym->name);
-					break;
-				}
-
-				tmpsym = kpatch_find_static_twin(sec, sym);
-				if (!tmpsym)
-					DIFF_FATAL("reference to static local variable %s in %s was removed",
-						   sym->name,
-						   kpatch_section_function_name(sec));
-
-				if (patched_sym && patched_sym != tmpsym)
-					DIFF_FATAL("found two twins for static local variable %s: %s and %s",
-						   sym->name, patched_sym->name,
-						   tmpsym->name);
-
-				patched_sym = tmpsym;
-
+			bundled = sym == sym->sec->sym;
+			if (bundled && sym->sec == sec->base) {
+				/*
+				 * A rare case where a static local
+				 * data structure references itself.
+				 * There's no reliable way to correlate
+				 * this.  Hopefully there's another
+				 * reference to the symbol somewhere
+				 * that can be used.
+				 */
+				log_debug("can't correlate static local %s's reference to itself\n",
+						sym->name);
 				break;
 			}
-		}
 
-		/*
-		 * Check if the symbol is unused.  This is possible if multiple
-		 * static locals in the file refer to the same read-only data,
-		 * and their symbols point to the same bundled section.  In
-		 * such a case we can ignore the extra symbol.
-		 */
-		if (!patched_sym) {
-			log_debug("ignoring base unused static local %s\n",
-				  sym->name);
-			continue;
-		}
+			patched_sym = kpatch_find_static_twin(sec, sym);
+			if (!patched_sym)
+				DIFF_FATAL("reference to static local variable %s in %s was removed",
+						sym->name,
+						kpatch_section_function_name(sec));
 
-		patched_bundled = patched_sym == patched_sym->sec->sym;
-		if (bundled != patched_bundled)
-			ERROR("bundle mismatch for symbol %s", sym->name);
-		if (!bundled && sym->sec->twin != patched_sym->sec)
-			ERROR("sections %s and %s aren't correlated",
-			      sym->sec->name, patched_sym->sec->name);
+			patched_bundled = patched_sym == patched_sym->sec->sym;
+			if (bundled != patched_bundled)
+				ERROR("bundle mismatch for symbol %s", sym->name);
+			if (!bundled && sym->sec->twin != patched_sym->sec)
+				ERROR("sections %s and %s aren't correlated",
+						sym->sec->name, patched_sym->sec->name);
 
-		log_debug("renaming and correlating static local %s to %s\n",
-			  patched_sym->name, sym->name);
+			log_debug("renaming and correlating static local %s to %s\n",
+					patched_sym->name, sym->name);
 
-		patched_sym->name = strdup(sym->name);
-		sym->twin = patched_sym;
-		patched_sym->twin = sym;
+			patched_sym->name = strdup(sym->name);
+			sym->twin = patched_sym;
+			patched_sym->twin = sym;
 
-		if (bundled) {
-			sym->sec->twin = patched_sym->sec;
-			patched_sym->sec->twin = sym->sec;
+			if (bundled) {
+				sym->sec->twin = patched_sym->sec;
+				patched_sym->sec->twin = sym->sec;
 
-			if (sym->sec->rela && patched_sym->sec->rela) {
-				sym->sec->rela->twin = patched_sym->sec->rela;
-				patched_sym->sec->rela->twin = sym->sec->rela;
+				if (sym->sec->rela && patched_sym->sec->rela) {
+					sym->sec->rela->twin = patched_sym->sec->rela;
+					patched_sym->sec->rela->twin = sym->sec->rela;
+				}
 			}
 		}
 	}
