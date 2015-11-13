@@ -278,7 +278,7 @@ mkdir -p "$TEMPDIR" || die "Couldn't create $TEMPDIR"
 rm -rf "$TEMPDIR"/*
 rm -f "$LOGFILE"
 
-trap cleanup EXIT INT TERM
+trap cleanup EXIT INT TERM HUP
 
 KVER=${ARCHVERSION%%-*}
 if [[ $ARCHVERSION =~ - ]]; then
