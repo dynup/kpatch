@@ -142,18 +142,21 @@ gcc_version_check() {
 
 find_parent_obj() {
 	dir=$(dirname $1)
+	absdir=$(readlink -f $dir)
+	pwddir=$(readlink -f .)
+	pdir=${absdir#$pwddir/}
 	file=$(basename $1)
 	grepname=${1%.o}
 	grepname=$grepname\\\.o
 	if [[ $DEEP_FIND -eq 1 ]]; then
 		num=0
 		if [[ -n $last_deep_find ]]; then
-			parent=$(grep -l $grepname $last_deep_find/.*.cmd | grep -v $dir/.${file}.cmd |head -n1)
-			num=$(grep -l $grepname $last_deep_find/.*.cmd | grep -v $dir/.${file}.cmd |wc -l)
+			parent=$(grep -l $grepname $last_deep_find/.*.cmd | grep -v $pdir/.${file}.cmd |head -n1)
+			num=$(grep -l $grepname $last_deep_find/.*.cmd | grep -v $pdir/.${file}.cmd |wc -l)
 		fi
 		if [[ $num -eq 0 ]]; then
-			parent=$(find * -name ".*.cmd" | xargs grep -l $grepname | grep -v $dir/.${file}.cmd |head -n1)
-			num=$(find * -name ".*.cmd" | xargs grep -l $grepname | grep -v $dir/.${file}.cmd | wc -l)
+			parent=$(find * -name ".*.cmd" | xargs grep -l $grepname | grep -v $pdir/.${file}.cmd |head -n1)
+			num=$(find * -name ".*.cmd" | xargs grep -l $grepname | grep -v $pdir/.${file}.cmd | wc -l)
 			[[ $num -eq 1 ]] && last_deep_find=$(dirname $parent)
 		fi
 	else
@@ -502,8 +505,7 @@ do
 done
 
 echo "Extracting new and modified ELF sections"
-cd "$TEMPDIR/patched"
-FILES="$(find * -type f)"
+FILES="$(cat "$TEMPDIR/changed_objs")"
 cd "$TEMPDIR"
 mkdir output
 declare -A objnames
