@@ -1369,8 +1369,45 @@ void kpatch_replace_sections_syms(struct kpatch_elf *kelf)
 				start = sym->sym.st_value;
 				end = sym->sym.st_value + sym->sym.st_size;
 
-				if (rela->addend + add_off < start ||
-				    rela->addend + add_off >= end)
+				if (!is_text_section(sym->sec) &&
+				    rela->type == R_X86_64_32S &&
+				    rela->addend == sym->sec->sh.sh_size &&
+				    end == sym->sec->sh.sh_size) {
+
+					/*
+					 * A special case where gcc needs a
+					 * pointer to the address at the end of
+					 * a data section.
+					 *
+					 * This is usually used with a compare
+					 * instruction to determine when to end
+					 * a loop.  The code doesn't actually
+					 * dereference the pointer so this is
+					 * "normal" and we just replace the
+					 * section reference with a reference
+					 * to the last symbol in the section.
+					 *
+					 * Note that this only catches the
+					 * issue when it happens at the end of
+					 * a section.  It can also happen in
+					 * the middle of a section.  In that
+					 * case, the wrong symbol will be
+					 * associated with the reference.  But
+					 * that's ok because:
+					 *
+					 * 1) This situation only occurs when
+					 *    gcc is trying to get the address
+					 *    of the symbol, not the contents
+					 *    of its data; and
+					 *
+					 * 2) Because kpatch doesn't allow data
+					 *    sections to change,
+					 *    &(var1+sizeof(var1)) will always
+					 *    be the same as &var2.
+					 */
+
+				} else if (rela->addend + add_off < start ||
+					   rela->addend + add_off >= end)
 					continue;
 
 				log_debug("%s: replacing %s+%d reference with %s+%d\n",
