@@ -42,7 +42,6 @@ usage () {
 	echo >&2
 	usage_cmd "load --all" "load all installed patch modules into the running kernel"
 	usage_cmd "load <module>" "load patch module into the running kernel"
-	usage_cmd "replace <module>" "load patch module into the running kernel, replacing all other modules"
 	usage_cmd "unload --all" "unload all patch modules from the running kernel"
 	usage_cmd "unload <module>" "unload patch module from the running kernel"
 	echo >&2
@@ -183,14 +182,6 @@ unload_module () {
 	rmmod $PATCH 2> /dev/null || return 0
 }
 
-unload_disabled_modules() {
-	for module in /sys/kernel/kpatch/patches/*; do
-		if [[ $(cat $module/enabled) -eq 0 ]]; then
-			unload_module $(basename $module) || die "failed to unload $module"
-		fi
-	done
-}
-
 get_module_version() {
 	MODVER=$(modinfo -F vermagic "$1") || return 1
 	MODVER=${MODVER/ */}
@@ -214,14 +205,6 @@ case "$1" in
 		load_module "$MODULE" || die "failed to load module $PATCH"
 		;;
 	esac
-	;;
-
-"replace")
-	[[ "$#" -ne 2 ]] && usage
-	PATCH="$2"
-	find_module "$PATCH" || die "can't find $PATCH"
-	load_module "$MODULE" replace=1 || die "failed to load module $PATCH"
-	unload_disabled_modules || die "failed to unload old modules"
 	;;
 
 "unload")
