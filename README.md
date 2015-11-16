@@ -322,6 +322,15 @@ Done!  The kernel is now patched.
     $ grep -i chunk /proc/meminfo
     VMALLOCCHUNK:   34359337092 kB
 
+
+Patch Author Guide
+------------------
+
+Unfortunately, live patching isn't always as easy as the previous example, and
+can have some major pitfalls if you're not careful.  To learn more about how to
+properly create live patches, see the [Patch Author
+Guide](doc/patch-author-guide.md).
+
 How it works
 ------------
 
