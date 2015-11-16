@@ -535,10 +535,10 @@ and restore the function to its original state.
 **Q. Can you apply multiple patches?**
 
 Yes, but to prevent any unexpected interactions between multiple patch modules,
-it's recommended that you only have a single patch loaded at any given time.
-This can be achieved by combining the new patch with the previous patch using
-`combinediff` before running `kpatch-build`.  You can then the `kpatch replace`
-command to atomically replace the old patch module with the new cumulative one.
+it's recommended that patch upgrades are cumulative, so that each patch is a
+superset of the previous patch.  This can be achieved by combining the new
+patch with the previous patch using `combinediff` before running
+`kpatch-build`.
 
 **Q. Why did kpatch-build detect a changed function that wasn't touched by the
 source patch?**
