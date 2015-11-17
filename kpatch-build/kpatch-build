@@ -508,7 +508,7 @@ echo "Extracting new and modified ELF sections"
 FILES="$(cat "$TEMPDIR/changed_objs")"
 cd "$TEMPDIR"
 mkdir output
-declare -A objnames
+declare -a objnames
 CHANGED=0
 ERROR=0
 for i in $FILES; do
@@ -539,11 +539,11 @@ for i in $FILES; do
 		if [[ $rc -eq 0 ]]; then
 			[[ -n $ERROR_IF_DIFF ]] && die $ERROR_IF_DIFF
 			CHANGED=1
-			objnames[$KOBJFILE]=1
+			objnames[${#objnames[@]}]=$KOBJFILE
 		fi
 	else
 		cp -f "patched/$i" "output/$i"
-		objnames[$KOBJFILE]=1
+		objnames[${#objnames[@]}]=$KOBJFILE
 	fi
 done
 
@@ -556,7 +556,10 @@ if [[ $CHANGED -eq 0 ]]; then
 fi
 
 echo -n "Patched objects:"
-for i in "${!objnames[@]}"; do echo -n " $(basename $i)"; done
+for i in $(echo "${objnames[@]}" | tr ' ' '\n' | sort -u | tr '\n' ' ')
+do
+	echo -n " $(basename $i)"
+done
 echo
 
 export KCFLAGS="-I$DATADIR/patch"
