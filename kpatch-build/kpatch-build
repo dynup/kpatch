@@ -283,12 +283,6 @@ rm -f "$LOGFILE"
 
 trap cleanup EXIT INT TERM HUP
 
-KVER=${ARCHVERSION%%-*}
-if [[ $ARCHVERSION =~ - ]]; then
-	KREL=${ARCHVERSION##*-}
-	KREL=${KREL%.*}
-fi
-
 if [[ -n $USERSRCDIR ]]; then
 	# save .config and vmlinux since they'll get removed with mrproper so
 	# we can restore them later and be able to run kpatch-build multiple
@@ -300,6 +294,15 @@ if [[ -n $USERSRCDIR ]]; then
 	[[ -z $VMLINUX ]] && VMLINUX="$USERSRCDIR"/vmlinux
 	[[ ! -e "$VMLINUX" ]] && die "can't find vmlinux"
 	[[ "$VMLINUX" = "$USERSRCDIR"/vmlinux ]] && cp -f "$VMLINUX" $TEMPDIR/vmlinux && VMLINUX=$TEMPDIR/vmlinux
+
+	# Extract the target kernel version from vmlinux in this case.
+	ARCHVERSION=$(strings "$VMLINUX" | grep -e "^Linux version" | awk '{ print($3); }')
+fi
+
+KVER=${ARCHVERSION%%-*}
+if [[ $ARCHVERSION =~ - ]]; then
+	KREL=${ARCHVERSION##*-}
+	KREL=${KREL%.*}
 fi
 
 [[ -z $TARGETS ]] && TARGETS="vmlinux modules"
