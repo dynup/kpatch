@@ -119,9 +119,9 @@ find_dirs() {
 
 gcc_version_check() {
 	# ensure gcc version matches that used to build the kernel
-	local gccver=$(gcc --version |head -n1 |cut -d' ' -f2-)
-	local kgccver=$(readelf -p .comment $VMLINUX |grep GCC: | tr -s ' ' | cut -d ' ' -f5-)
-	if [[ "$gccver" != "$kgccver" ]]; then
+	local gccver=$(gcc --version |head -n1 |cut -d' ' -f3-)
+	local kgccver=$(readelf -p .comment $VMLINUX |grep GCC: | tr -s ' ' | cut -d ' ' -f6-)
+	if [[ $gccver != $kgccver ]]; then
 		warn "gcc/kernel version mismatch"
 		echo "gcc version:    $gccver"
 		echo "kernel version: $kgccver"
