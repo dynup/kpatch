@@ -1151,6 +1151,14 @@ void kpatch_correlate_static_local_variables(struct kpatch_elf *base,
 		if (bundled && sym->sec->twin) {
 			sym->sec->twin->twin = NULL;
 			sym->sec->twin = NULL;
+
+			sym->sec->secsym->twin->twin = NULL;
+			sym->sec->secsym->twin = NULL;
+
+			if (sym->sec->rela) {
+				sym->sec->rela->twin->twin = NULL;
+				sym->sec->rela->twin = NULL;
+			}
 		}
 	}
 
@@ -1210,6 +1218,9 @@ void kpatch_correlate_static_local_variables(struct kpatch_elf *base,
 			if (bundled) {
 				sym->sec->twin = patched_sym->sec;
 				patched_sym->sec->twin = sym->sec;
+
+				sym->sec->secsym->twin = patched_sym->sec->secsym;
+				patched_sym->sec->secsym->twin = sym->sec->secsym;
 
 				if (sym->sec->rela && patched_sym->sec->rela) {
 					sym->sec->rela->twin = patched_sym->sec->rela;
