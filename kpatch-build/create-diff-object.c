@@ -649,6 +649,31 @@ void kpatch_compare_correlated_nonrela_section(struct section *sec)
 		sec->status = SAME;
 }
 
+char *get_real_name(char *sec, char *start)
+{
+	if (start)
+		return sec + strlen(".text.unlikely.");
+	else
+		return sec + strlen(".text.");
+}
+
+int is_unlikely_change_section(char *sec1, char *sec2)
+{
+	char *start1 = strstr(sec1, ".text.unlikely.");
+	char *start2 = strstr(sec2, ".text.unlikely.");
+
+	if (!start1 && !start2)
+		return 0;
+
+	start1 = get_real_name(sec1, start1);
+	start2 = get_real_name(sec2, start2);
+
+	if (!strcmp(start1, start2))
+		return 1;
+	else
+		return 0;
+}
+
 void kpatch_compare_correlated_section(struct section *sec)
 {
 	struct section *sec1 = sec, *sec2 = sec->twin;
@@ -659,7 +684,8 @@ void kpatch_compare_correlated_section(struct section *sec)
 	    sec1->sh.sh_addr != sec2->sh.sh_addr ||
 	    sec1->sh.sh_addralign != sec2->sh.sh_addralign ||
 	    sec1->sh.sh_entsize != sec2->sh.sh_entsize)
-		DIFF_FATAL("%s section header details differ", sec1->name);
+		if (!is_unlikely_change_section(sec1->name, sec2->name))
+			DIFF_FATAL("%s section header details differ", sec1->name);
 
 	/* Short circuit for mcount sections, we rebuild regardless */
 	if (!strcmp(sec->name, ".rela__mcount_loc") ||
@@ -914,10 +940,55 @@ void kpatch_correlate_symbols(struct list_head *symlist1, struct list_head *syml
 			    sym1->sec->twin != sym2->sec)
 				continue;
 
+			if (sym1->twin || sym2->twin)
+				break;
+
 			sym1->twin = sym2;
 			sym2->twin = sym1;
 			/* set initial status, might change */
 			sym1->status = sym2->status = SAME;
+
+			if (sym1->type == STT_FUNC && sym1->sec && sym2->sec &&
+				sym1->sec->twin != sym2->sec &&
+				sym1->sec->sym && sym2->sec->sym &&
+				is_unlikely_change_section(sym1->sec->name, sym2->sec->name)) {
+
+				if (sym1->sec->twin) {
+					sym1->sec->twin->twin = NULL;
+					sym1->sec->twin = NULL;
+				}
+				if (sym2->sec->twin) {
+					sym2->sec->twin->twin = NULL;
+					sym2->sec->twin = NULL;
+				}
+				sym1->sec->twin = sym2->sec;
+				sym2->sec->twin = sym1->sec;
+
+				if (sym1->sec->secsym->twin) {
+					sym1->sec->secsym->twin->twin = NULL;
+					sym1->sec->secsym->twin = NULL;
+				}
+				if (sym2->sec->secsym->twin) {
+					sym2->sec->secsym->twin->twin = NULL;
+					sym2->sec->secsym->twin = NULL;
+				}
+				sym1->sec->secsym->twin = sym2->sec->secsym;
+				sym2->sec->secsym->twin = sym1->sec->secsym;
+
+				if (sym1->sec->rela && sym2->sec->rela) {
+					if (sym1->sec->rela->twin) {
+						sym1->sec->rela->twin->twin = NULL;
+						sym1->sec->rela->twin = NULL;
+					}
+					if (sym2->sec->rela->twin) {
+						sym2->sec->rela->twin->twin = NULL;
+						sym2->sec->rela->twin = NULL;
+					}
+					sym1->sec->rela->twin = sym2->sec->rela;
+					sym2->sec->rela->twin = sym1->sec->rela;
+				}
+			}
+
 			break;
 		}
 	}
