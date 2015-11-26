@@ -25,6 +25,29 @@ Installation
 
 ###Prerequisites
 
+####Fedora 23
+
+*NOTE: You'll need about 15GB of free disk space for the kpatch-build cache in
+`~/.kpatch` and for ccache.*
+
+Install the dependencies for compiling kpatch:
+
+```bash
+sudo dnf install gcc kernel-devel elfutils elfutils-devel
+```
+
+Install the dependencies for the "kpatch-build" command:
+
+```bash
+sudo dnf install rpmdevtools pesign yum-utils openssl wget numactl-devel
+sudo dnf builddep kernel
+sudo dnf debuginfo-install kernel
+
+# optional, but highly recommended
+sudo dnf install ccache
+ccache --max-size=5G
+```
+
 ####Fedora 21
 
 *NOTE: You'll need about 15GB of free disk space for the kpatch-build cache in
@@ -265,7 +288,7 @@ Quick start
 
 > NOTE: While kpatch is designed to work with any recent Linux
 kernel on any distribution, the `kpatch-build` command has **ONLY** been tested
-and confirmed to work on Fedora 20, RHEL 7, Oracle Linux 7, CentOS 7 and Ubuntu 14.04.
+and confirmed to work on Fedora {20,21,23}, RHEL 7, Oracle Linux 7, CentOS 7 and Ubuntu 14.04.
 
 First, make a source code patch against the kernel tree using diff, git, or
 quilt.
