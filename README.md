@@ -48,29 +48,6 @@ sudo dnf install ccache
 ccache --max-size=5G
 ```
 
-####Fedora 21
-
-*NOTE: You'll need about 15GB of free disk space for the kpatch-build cache in
-`~/.kpatch` and for ccache.*
-
-Install the dependencies for compiling kpatch:
-
-```bash
-sudo yum install gcc kernel-devel elfutils elfutils-devel
-```
-
-Install the dependencies for the "kpatch-build" command:
-
-```bash
-sudo yum install rpmdevtools pesign yum-utils openssl wget numactl-devel
-sudo yum-builddep kernel
-sudo debuginfo-install kernel
-
-# optional, but highly recommended
-sudo yum install ccache
-ccache --max-size=5G
-```
-
 ####RHEL 7
 
 *NOTE: You'll need about 15GB of free disk space for the kpatch-build cache in
