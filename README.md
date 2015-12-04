@@ -265,7 +265,7 @@ Quick start
 
 > NOTE: While kpatch is designed to work with any recent Linux
 kernel on any distribution, the `kpatch-build` command has **ONLY** been tested
-and confirmed to work on Fedora {20,21,23}, RHEL 7, Oracle Linux 7, CentOS 7 and Ubuntu 14.04.
+and confirmed to work on Fedora 20 and later, RHEL 7, Oracle Linux 7, CentOS 7 and Ubuntu 14.04.
 
 First, make a source code patch against the kernel tree using diff, git, or
 quilt.
