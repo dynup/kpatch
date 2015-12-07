@@ -527,7 +527,10 @@ for i in $FILES; do
 	debugopt=
 	[[ $DEBUG -eq 1 ]] && debugopt=-d
 	if [[ -e "orig/$i" ]]; then
-		"$TOOLSDIR"/create-diff-object $debugopt "orig/$i" "patched/$i" "$KOBJFILE" "output/$i" 2>&1 |tee -a "$LOGFILE"
+		# create-diff-object orig.o patched.o kernel-object Module.symvers patch-mod-name
+		"$TOOLSDIR"/create-diff-object $debugopt "orig/$i" \
+			"patched/$i" "$KOBJFILE" "output/$i" \
+			$OBJDIR/Module.symvers "kpatch_${PATCHNAME//-/_}" 1>&1 |tee -a "$LOGFILE"
 		rc="${PIPESTATUS[0]}"
 		if [[ $rc = 139 ]]; then
 			warn "create-diff-object SIGSEGV"

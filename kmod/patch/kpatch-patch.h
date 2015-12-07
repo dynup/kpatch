@@ -37,7 +37,7 @@ struct kpatch_patch_dynrela {
 	unsigned long type;
 	char *name;
 	char *objname;
-	int external;
+	char *sym_objname;
 	int addend;
 };
 

@@ -69,6 +69,8 @@
 		printf(format, ##__VA_ARGS__); \
 })
 
+extern char *find_exported_symbol_objname(const char *fname, char *symname);
+
 char *childobj;
 
 enum loglevel {
@@ -2592,7 +2594,8 @@ static int kpatch_is_core_module_symbol(char *name)
 
 void kpatch_create_dynamic_rela_sections(struct kpatch_elf *kelf,
                                          struct lookup_table *table, char *hint,
-                                         char *objname)
+                                         char *objname, char *mod_symvers,
+                                         char *pmod)
 {
 	int nr, index, objname_offset;
 	struct section *sec, *dynsec, *relasec;
@@ -2600,7 +2603,8 @@ void kpatch_create_dynamic_rela_sections(struct kpatch_elf *kelf,
 	struct symbol *strsym;
 	struct lookup_result result;
 	struct kpatch_patch_dynrela *dynrelas;
-	int vmlinux, external;
+	int vmlinux;
+	char *sym_objname, *tmp_objname;
 
 	vmlinux = !strcmp(objname, "vmlinux");
 
@@ -2648,7 +2652,12 @@ void kpatch_create_dynamic_rela_sections(struct kpatch_elf *kelf,
 			if (kpatch_is_core_module_symbol(rela->sym->name))
 				continue;
 
-			external = 0;
+			/*
+			 * Default: sym_objname is the component being patched
+			 * (vmlinux or module). If it's an "external" symbol
+			 * sym_objname will get reassigned appropriately
+			 */
+			sym_objname = objname;
 
 			if (rela->sym->bind == STB_LOCAL) {
 				/* An unchanged local symbol */
@@ -2695,13 +2704,22 @@ void kpatch_create_dynamic_rela_sections(struct kpatch_elf *kelf,
 				 * patched.
 				 */
 				if (lookup_global_symbol(table, rela->sym->name,
-							 &result))
+							 &result)) {
 					/*
-					 * Not there, assume it's either an
-					 * exported symbol or provided by
-					 * another .o in the patch module.
+					 * Not there, see if the symbol is
+					 * exported, and set sym_objname to the
+					 * object the exported symbol belongs to
 					 */
-					external = 1;
+					tmp_objname = find_exported_symbol_objname(mod_symvers,
+										   rela->sym->name);
+					if (tmp_objname) {
+						 /* Strip the path, only want the module name */
+						sym_objname = basename(tmp_objname);
+					} else {
+						/* Not exported, must be in another .o in patch module */
+						sym_objname = pmod;
+					}
+				}
 			}
 			log_debug("lookup for %s @ 0x%016lx len %lu\n",
 			          rela->sym->name, result.value, result.size);
@@ -2714,7 +2732,6 @@ void kpatch_create_dynamic_rela_sections(struct kpatch_elf *kelf,
 				dynrelas[index].src = 0;
 			dynrelas[index].addend = rela->addend;
 			dynrelas[index].type = rela->type;
-			dynrelas[index].external = external;
 
 			/* add rela to fill in dest field */
 			ALLOC_LINK(dynrela, &relasec->relas);
@@ -2740,6 +2757,15 @@ void kpatch_create_dynamic_rela_sections(struct kpatch_elf *kelf,
 			dynrela->addend = objname_offset;
 			dynrela->offset = index * sizeof(*dynrelas) +
 				offsetof(struct kpatch_patch_dynrela, objname);
+
+			/* add rela to fill in sym_objname field */
+			ALLOC_LINK(dynrela, &relasec->relas);
+			dynrela->sym = strsym;
+			dynrela->type = R_X86_64_64;
+			dynrela->addend = offset_of_string(&kelf->strings,
+							   sym_objname);
+			dynrela->offset = index * sizeof(*dynrelas) +
+				offsetof(struct kpatch_patch_dynrela, sym_objname);
 
 			rela->sym->strip = 1;
 			list_del(&rela->list);
@@ -3041,11 +3067,11 @@ void kpatch_write_output_elf(struct kpatch_elf *kelf, Elf *elf, char *outfile)
 }
 
 struct arguments {
-	char *args[4];
+	char *args[5];
 	int debug;
 };
 
-static char args_doc[] = "original.o patched.o kernel-object output.o";
+static char args_doc[] = "original.o patched.o kernel-object output.o Module.symvers patch-module-name";
 
 static struct argp_option options[] = {
 	{"debug", 'd', 0, 0, "Show debug output" },
@@ -3064,13 +3090,13 @@ static error_t parse_opt (int key, char *arg, struct argp_state *state)
 			arguments->debug = 1;
 			break;
 		case ARGP_KEY_ARG:
-			if (state->arg_num >= 4)
+			if (state->arg_num >= 6)
 				/* Too many arguments. */
 				argp_usage (state);
 			arguments->args[state->arg_num] = arg;
 			break;
 		case ARGP_KEY_END:
-			if (state->arg_num < 4)
+			if (state->arg_num < 6)
 				/* Not enough arguments. */
 				argp_usage (state);
 			break;
@@ -3132,6 +3158,7 @@ int main(int argc, char *argv[])
 	struct section *sec, *symtab;
 	struct symbol *sym;
 	char *hint = NULL, *name, *pos;
+	char *mod_symvers_path, *pmod_name;
 
 	arguments.debug = 0;
 	argp_parse (&argp, argc, argv, 0, 0, &arguments);
@@ -3141,6 +3168,9 @@ int main(int argc, char *argv[])
 	elf_version(EV_CURRENT);
 
 	childobj = basename(arguments.args[0]);
+
+	mod_symvers_path = arguments.args[4];
+	pmod_name = arguments.args[5];
 
 	kelf_base = kpatch_elf_open(arguments.args[0]);
 	kelf_patched = kpatch_elf_open(arguments.args[1]);
@@ -3234,7 +3264,8 @@ int main(int argc, char *argv[])
 	/* create strings, patches, and dynrelas sections */
 	kpatch_create_strings_elements(kelf_out);
 	kpatch_create_patches_sections(kelf_out, lookup, hint, name);
-	kpatch_create_dynamic_rela_sections(kelf_out, lookup, hint, name);
+	kpatch_create_dynamic_rela_sections(kelf_out, lookup, hint, name,
+					    mod_symvers_path, pmod_name);
 	kpatch_create_hooks_objname_rela(kelf_out, name);
 	kpatch_build_strings_section_data(kelf_out);
 
