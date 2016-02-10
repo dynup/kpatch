@@ -1,7 +1,7 @@
 include ../Makefile.inc
 
 CFLAGS  += -I../kmod/patch -Iinsn -Wall -g -Werror
-LDFLAGS = -lelf
+LDFLAGS += -lelf
 
 TARGETS = create-diff-object
 OBJS = create-diff-object.o lookup.o insn/insn.o insn/inat.o
