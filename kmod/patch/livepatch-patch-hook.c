@@ -254,7 +254,12 @@ static int __init patch_init(void)
 			lreloc->type = reloc->kdynrela->type;
 			lreloc->name = reloc->kdynrela->name;
 			lreloc->addend = reloc->kdynrela->addend;
-			lreloc->external = reloc->kdynrela->external;
+
+			/* For the klp_find_object_symbol() call to work */
+			if (!strcmp(reloc->kdynrela->sym_objname, "vmlinux"))
+				lreloc->sym_objname = NULL;
+			else
+				lreloc->sym_objname = reloc->kdynrela->sym_objname;
 			j++;
 		}
 
