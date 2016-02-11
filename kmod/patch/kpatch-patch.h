@@ -27,6 +27,7 @@ struct kpatch_patch_func {
 	unsigned long new_size;
 	unsigned long old_addr;
 	unsigned long old_size;
+	unsigned long sympos;
 	char *name;
 	char *objname;
 };
@@ -35,6 +36,7 @@ struct kpatch_patch_dynrela {
 	unsigned long dest;
 	unsigned long src;
 	unsigned long type;
+	unsigned long sympos;
 	char *name;
 	char *objname;
 	int external;

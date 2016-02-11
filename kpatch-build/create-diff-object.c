@@ -2539,6 +2539,7 @@ void kpatch_create_patches_sections(struct kpatch_elf *kelf,
 			funcs[index].old_addr = result.value;
 			funcs[index].old_size = result.size;
 			funcs[index].new_size = sym->sym.st_size;
+			funcs[index].sympos = result.pos;
 
 			/*
 			 * Add a relocation that will populate
@@ -2715,6 +2716,7 @@ void kpatch_create_dynamic_rela_sections(struct kpatch_elf *kelf,
 			dynrelas[index].addend = rela->addend;
 			dynrelas[index].type = rela->type;
 			dynrelas[index].external = external;
+			dynrelas[index].sympos = result.pos;
 
 			/* add rela to fill in dest field */
 			ALLOC_LINK(dynrela, &relasec->relas);
