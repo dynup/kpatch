@@ -42,6 +42,7 @@
 #include <linux/hardirq.h>
 #include <linux/uaccess.h>
 #include <linux/kallsyms.h>
+#include <linux/version.h>
 #include <asm/stacktrace.h>
 #include <asm/cacheflush.h>
 #include "kpatch.h"
@@ -583,8 +584,13 @@ static int kpatch_write_relocations(struct kpatch_module *kpmod,
 	int ret, size, readonly = 0, numpages;
 	struct kpatch_dynrela *dynrela;
 	u64 loc, val;
-	unsigned long core = (unsigned long)kpmod->mod->module_core;
-	unsigned long core_size = kpmod->mod->core_size;
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(4, 5, 0)
+       unsigned long core = (unsigned long)kpmod->mod->core_layout.base;
+       unsigned long core_size = kpmod->mod->core_layout.size;
+#else
+       unsigned long core = (unsigned long)kpmod->mod->module_core;
+       unsigned long core_size = kpmod->mod->core_size;
+#endif
 	unsigned long src;
 
 	list_for_each_entry(dynrela, &object->dynrelas, list) {
@@ -645,7 +651,11 @@ static int kpatch_write_relocations(struct kpatch_module *kpmod,
 		}
 
 #ifdef CONFIG_DEBUG_SET_MODULE_RONX
-		if (loc < core + kpmod->mod->core_ro_size)
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(4, 5, 0)
+               if (loc < core + kpmod->mod->core_layout.ro_size)
+#else
+               if (loc < core + kpmod->mod->core_ro_size)
+#endif
 			readonly = 1;
 #endif
 
