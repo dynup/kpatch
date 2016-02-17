@@ -148,6 +148,7 @@ int lookup_local_symbol(struct lookup_table *table, char *name, char *hint,
 {
 	struct symbol *sym, *match = NULL;
 	int i;
+	unsigned long pos = 0;
 	char *curfile = NULL;
 
 	memset(result, 0, sizeof(*result));
@@ -159,19 +160,30 @@ int lookup_local_symbol(struct lookup_table *table, char *name, char *hint,
 			} else if (curfile)
 				curfile = NULL; /* end hint file symbols */
 		}
-		if (!curfile)
-			continue;
-		if (sym->bind == STB_LOCAL && !strcmp(sym->name, name)) {
-			if (match)
-				/* dup file+symbol, unresolvable ambiguity */
-				return 1;
-			match = sym;
+		if (sym->bind == STB_LOCAL) {
+			if (sym->name && !strcmp(sym->name, name)) {
+				/*
+				 * need to count any occurrence of the symbol
+				 * name, unless we've already found a match
+				 */
+				if (!match)
+					pos++;
+
+				if (!curfile)
+					continue;
+
+				if (match)
+					/* dup file+symbol, unresolvable ambiguity */
+					return 1;
+				match = sym;
+			}
 		}
 	}
 
 	if (!match)
 		return 1;
 
+	result->pos = pos;
 	result->value = match->value;
 	result->size = match->size;
 	return 0;
@@ -189,6 +201,7 @@ int lookup_global_symbol(struct lookup_table *table, char *name,
 		    !strcmp(sym->name, name)) {
 			result->value = sym->value;
 			result->size = sym->size;
+			result->pos = 0; /* always 0 for global symbols */
 			return 0;
 		}
 
@@ -220,9 +233,9 @@ static void find_this(struct lookup_table *table, char *sym, char *hint)
 	else
 		lookup_global_symbol(table, sym, &result);
 
-	printf("%s %s w/ %s hint at 0x%016lx len %lu\n",
+	printf("%s %s w/ %s hint at 0x%016lx len %lu pos %lu\n",
 	       hint ? "local" : "global", sym, hint ? hint : "no",
-	       result.value, result.size);
+	       result.value, result.size, result.pos);
 }
 
 int main(int argc, char **argv)

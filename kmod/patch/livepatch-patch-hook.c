@@ -24,6 +24,7 @@
 #include <linux/module.h>
 #include <linux/list.h>
 #include <linux/slab.h>
+#include <linux/version.h>
 
 #include <linux/livepatch.h>
 
@@ -237,7 +238,11 @@ static int __init patch_init(void)
 			lfunc = &lfuncs[j];
 			lfunc->old_name = func->kfunc->name;
 			lfunc->new_func = (void *)func->kfunc->new_addr;
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(4, 5, 0)
+			lfunc->old_sympos = func->kfunc->sympos;
+#else
 			lfunc->old_addr = func->kfunc->old_addr;
+#endif
 			j++;
 		}
 
@@ -250,7 +255,11 @@ static int __init patch_init(void)
 		list_for_each_entry(reloc, &object->relocs, list) {
 			lreloc = &lrelocs[j];
 			lreloc->loc = reloc->kdynrela->dest;
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(4, 5, 0)
+			lreloc->sympos = reloc->kdynrela->sympos;
+#else
 			lreloc->val = reloc->kdynrela->src;
+#endif
 			lreloc->type = reloc->kdynrela->type;
 			lreloc->name = reloc->kdynrela->name;
 			lreloc->addend = reloc->kdynrela->addend;

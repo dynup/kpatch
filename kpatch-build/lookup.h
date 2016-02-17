@@ -6,6 +6,7 @@ struct lookup_table;
 struct lookup_result {
 	unsigned long value;
 	unsigned long size;
+	unsigned long pos;
 };
 
 struct lookup_table *lookup_open(char *path);
