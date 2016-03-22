@@ -97,24 +97,30 @@ find_dirs() {
 		# git repo
 		TOOLSDIR="$SCRIPTDIR"
 		DATADIR="$(readlink -f $SCRIPTDIR/../kmod)"
-		SYMVERSFILE="$DATADIR/core/Module.symvers"
-		return
 	elif [[ -e "$SCRIPTDIR/../libexec/kpatch/create-diff-object" ]]; then
 		# installation path
 		TOOLSDIR="$(readlink -f $SCRIPTDIR/../libexec/kpatch)"
 		DATADIR="$(readlink -f $SCRIPTDIR/../share/kpatch)"
+	else
+		return 1
+	fi
+}
+
+find_core_symvers() {
+	SYMVERSFILE=""
+	if [[ -e "$SCRIPTDIR/create-diff-object" ]]; then
+		# git repo
+		SYMVERSFILE="$DATADIR/core/Module.symvers"
+	elif [[ -e "$SCRIPTDIR/../libexec/kpatch/create-diff-object" ]]; then
+		# installation path
 		if [[ -e $SCRIPTDIR/../lib/kpatch/$ARCHVERSION/Module.symvers ]]; then
 			SYMVERSFILE="$(readlink -f $SCRIPTDIR/../lib/kpatch/$ARCHVERSION/Module.symvers)"
 		elif [[ -e /lib/modules/$ARCHVERSION/extra/kpatch/Module.symvers ]]; then
 			SYMVERSFILE="$(readlink -f /lib/modules/$ARCHVERSION/extra/kpatch/Module.symvers)"
-		else
-			warn "unable to find Module.symvers for kpatch core module"
-			return 1
 		fi
-		return
 	fi
 
-	return 1
+	[[ -e "$SYMVERSFILE" ]]
 }
 
 gcc_version_check() {
@@ -340,9 +346,6 @@ fi
 
 find_dirs || die "can't find supporting tools"
 
-[[ -e "$SYMVERSFILE" ]] || die "can't find core module Module.symvers"
-
-
 if [[ $SKIPGCCCHECK -eq 0 ]]; then
 	gcc_version_check || die
 fi
@@ -443,6 +446,15 @@ else
 	else
 		die "Unsupported distribution"
 	fi
+fi
+
+if grep "CONFIG_LIVEPATCH=y" "$OBJDIR/.config" > /dev/null; then
+	# The kernel supports livepatch.
+	KBUILD_EXTRA_SYMBOLS=""
+else
+	# No support for livepatch in the kernel. Kpatch core module is needed.
+	find_core_symvers || die "unable to find Module.symvers for kpatch core module"
+	KBUILD_EXTRA_SYMBOLS="$SYMVERSFILE"
 fi
 
 echo "Testing patch file"
@@ -577,7 +589,8 @@ md5sum ../patch/output.o | awk '{printf "%s\0", $1}' > checksum.tmp || die
 objcopy --add-section .kpatch.checksum=checksum.tmp --set-section-flags .kpatch.checksum=alloc,load,contents,readonly  ../patch/output.o || die
 rm -f checksum.tmp
 cd "$TEMPDIR/patch"
-KPATCH_BUILD="$SRCDIR" KPATCH_NAME="$PATCHNAME" KBUILD_EXTRA_SYMBOLS="$SYMVERSFILE" make "O=$OBJDIR" >> "$LOGFILE" 2>&1 || die
+KPATCH_BUILD="$SRCDIR" KPATCH_NAME="$PATCHNAME" KBUILD_EXTRA_SYMBOLS="$KBUILD_EXTRA_SYMBOLS" \
+	make "O=$OBJDIR" >> "$LOGFILE" 2>&1 || die
 
 cp -f "$TEMPDIR/patch/kpatch-$PATCHNAME.ko" "$BASE" || die
 
