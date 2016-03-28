@@ -43,6 +43,7 @@
 #include <linux/uaccess.h>
 #include <linux/kallsyms.h>
 #include <linux/version.h>
+#include <linux/string.h>
 #include <asm/stacktrace.h>
 #include <asm/cacheflush.h>
 #include "kpatch.h"
@@ -648,6 +649,19 @@ static int kpatch_write_relocations(struct kpatch_module *kpmod,
 			pr_err("bad dynrela location 0x%llx for symbol %s\n",
 			       loc, dynrela->name);
 			return -EINVAL;
+		}
+
+		/*
+		 * Skip it if the instruction to be relocated has been
+		 * changed already (paravirt or alternatives may do this).
+		 */
+		if (memchr_inv((void *)loc, 0, size)) {
+			pr_notice("Skipped dynrela for %s (0x%lx <- 0x%lx): the instruction has been changed already.\n",
+				  dynrela->name, dynrela->dest, dynrela->src);
+			pr_notice_once(
+"This is not necessarily a bug but it may indicate in some cases "
+"that the binary patch does not handle paravirt operations, alternatives or the like properly.\n");
+			continue;
 		}
 
 #ifdef CONFIG_DEBUG_SET_MODULE_RONX
