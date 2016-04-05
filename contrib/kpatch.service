@@ -1,5 +1,6 @@
 [Unit]
 Description="Apply kpatch kernel patches"
+ConditionKernelCommandLine=!kpatch.enable=0
 
 [Service]
 Type=oneshot
