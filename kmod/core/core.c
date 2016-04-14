@@ -971,9 +971,13 @@ int kpatch_register(struct kpatch_module *kpmod, bool replace)
 		func->op = KPATCH_OP_NONE;
 	} while_for_each_linked_func();
 
-	/* TODO: need TAINT_KPATCH */
+#ifdef TAINT_LIVEPATCH
+	pr_notice_once("tainting kernel with TAINT_LIVEPATCH\n");
+	add_taint(TAINT_LIVEPATCH, LOCKDEP_STILL_OK);
+#else
 	pr_notice_once("tainting kernel with TAINT_USER\n");
 	add_taint(TAINT_USER, LOCKDEP_STILL_OK);
+#endif
 
 	pr_notice("loaded patch module '%s'\n", kpmod->mod->name);
 
