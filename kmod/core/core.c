@@ -195,6 +195,7 @@ static inline int kpatch_compare_addresses(unsigned long stack_addr,
 	return 0;
 }
 
+#if LINUX_VERSION_CODE < KERNEL_VERSION(4, 6, 0)
 static void kpatch_backtrace_address_verify(void *data, unsigned long address,
 					    int reliable)
 {
@@ -246,6 +247,59 @@ static void kpatch_backtrace_address_verify(void *data, unsigned long address,
 		}
 	}
 }
+#else
+static int kpatch_backtrace_address_verify(void *data, unsigned long address,
+					    int reliable)
+{
+	struct kpatch_backtrace_args *args = data;
+	struct kpatch_module *kpmod = args->kpmod;
+	struct kpatch_func *func;
+	int i, ret;
+
+	/* check kpmod funcs */
+	do_for_each_linked_func(kpmod, func) {
+		unsigned long func_addr, func_size;
+		const char *func_name;
+		struct kpatch_func *active_func;
+
+		if (func->force)
+			continue;
+
+		active_func = kpatch_get_func(func->old_addr);
+		if (!active_func) {
+			/* patching an unpatched func */
+			func_addr = func->old_addr;
+			func_size = func->old_size;
+			func_name = func->name;
+		} else {
+			/* repatching or unpatching */
+			func_addr = active_func->new_addr;
+			func_size = active_func->new_size;
+			func_name = active_func->name;
+		}
+
+		ret = kpatch_compare_addresses(address, func_addr,
+					       func_size, func_name);
+		if (ret)
+			return ret;
+
+	} while_for_each_linked_func();
+
+	/* in the replace case, need to check the func hash as well */
+	hash_for_each_rcu(kpatch_func_hash, i, func, node) {
+		if (func->op == KPATCH_OP_UNPATCH && !func->force) {
+			ret = kpatch_compare_addresses(address,
+						       func->new_addr,
+						       func->new_size,
+						       func->name);
+			if (ret)
+				return ret;
+		}
+	}
+
+	return 0;
+}
+#endif
 
 static int kpatch_backtrace_stack(void *data, char *name)
 {
@@ -264,12 +318,23 @@ static int kpatch_print_trace_stack(void *data, char *name)
 	return 0;
 }
 
+#if LINUX_VERSION_CODE < KERNEL_VERSION(4, 6, 0)
 static void kpatch_print_trace_address(void *data, unsigned long addr,
 				       int reliable)
 {
 	if (reliable)
 		pr_info("[<%p>] %pB\n", (void *)addr, (void *)addr);
 }
+#else
+static int kpatch_print_trace_address(void *data, unsigned long addr,
+				       int reliable)
+{
+	if (reliable)
+		pr_info("[<%p>] %pB\n", (void *)addr, (void *)addr);
+
+	return 0;
+}
+#endif
 
 static const struct stacktrace_ops kpatch_print_trace_ops = {
 	.stack		= kpatch_print_trace_stack,
