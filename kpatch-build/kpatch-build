@@ -448,6 +448,8 @@ else
 	fi
 fi
 
+# kernel option checking: CONFIG_DEBUG_KERNEL and CONFIG_LIVEPATCH
+grep -q "CONFIG_DEBUG_KERNEL=y" "$OBJDIR/.config" || die "kernel doesn't have 'CONFIG_DEBUG_KERNEL' enabled"
 if grep "CONFIG_LIVEPATCH=y" "$OBJDIR/.config" > /dev/null; then
 	# The kernel supports livepatch.
 	KBUILD_EXTRA_SYMBOLS=""
