@@ -1,4 +1,6 @@
 include ../Makefile.inc
+KPATCH_BUILD ?= /lib/modules/$(shell uname -r)/build
+KERNELRELEASE := $(lastword $(subst /, , $(dir $(KPATCH_BUILD))))
 
 all: clean
 ifeq ($(BUILDMOD),yes)
@@ -7,9 +9,9 @@ endif
 
 install:
 ifeq ($(BUILDMOD),yes)
-	$(INSTALL) -d $(MODULESDIR)/$(shell uname -r)
-	$(INSTALL) -m 644 core/kpatch.ko $(MODULESDIR)/$(shell uname -r)
-	$(INSTALL) -m 644 core/Module.symvers $(MODULESDIR)/$(shell uname -r)
+	$(INSTALL) -d $(MODULESDIR)/$(KERNELRELEASE)
+	$(INSTALL) -m 644 core/kpatch.ko $(MODULESDIR)/$(KERNELRELEASE)
+	$(INSTALL) -m 644 core/Module.symvers $(MODULESDIR)/$(KERNELRELEASE)
 endif
 	$(INSTALL) -d $(DATADIR)/patch
 	$(INSTALL) -m 644 patch/* $(DATADIR)/patch
