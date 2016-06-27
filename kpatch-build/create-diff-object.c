@@ -2218,6 +2218,7 @@ void kpatch_process_special_sections(struct kpatch_elf *kelf)
 	struct section *sec;
 	struct symbol *sym;
 	struct rela *rela;
+	int altinstr = 0;
 
 	for (special = special_sections; special->name; special++) {
 		sec = find_section_by_name(&kelf->sections, special->name);
@@ -2229,6 +2230,9 @@ void kpatch_process_special_sections(struct kpatch_elf *kelf)
 			continue;
 
 		kpatch_regenerate_special_section(kelf, special, sec);
+
+		if (!strcmp(special->name, ".altinstructions") && sec->base->include)
+			altinstr = 1;
 	}
 
 	/*
@@ -2238,6 +2242,12 @@ void kpatch_process_special_sections(struct kpatch_elf *kelf)
 	list_for_each_entry(sec, &kelf->sections, list) {
 		if (strcmp(sec->name, ".altinstr_replacement"))
 			continue;
+		/*
+		 * Only include .altinstr_replacement if .altinstructions
+		 * is also included.
+		 */
+		if (!altinstr)
+			break;
 
 		/* include base section */
 		sec->include = 1;
