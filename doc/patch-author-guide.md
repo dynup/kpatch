@@ -143,3 +143,18 @@ applied.  The patch may require a load hook function which detects whether such
 init code has run, and which rewrites or changes the original initialization to
 force it into the desired state.  Some changes involving hardware init are
 inherently incompatible with live patching.
+
+Removing Static Local References
+--------------------------------
+
+Removing references to static locals will fail to patch unless extra steps are taken.
+Static locals are basically global variables because they outlive the function's
+scope. They need to be correlated so that the new function will use the old static
+local via a dynrela. That way patching the function  doesn't inadvertently reset the
+variable to zero; instead the variable keeps its old value.
+
+To work around this limitation one needs to retain the reference to the static local.
+This might be as simple as adding the variable back in the patched function in a 
+non-functional way and ensuring the compiler doesn't optimize it away.
+
+
