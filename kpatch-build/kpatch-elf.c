@@ -245,7 +245,7 @@ void kpatch_create_section_list(struct kpatch_elf *kelf)
 		ERROR("expected NULL");
 }
 
-int is_bundleable(struct symbol *sym)
+static int is_bundleable(struct symbol *sym)
 {
 	if (sym->type == STT_FUNC &&
 	    !strncmp(sym->sec->name, ".text.",6) &&
