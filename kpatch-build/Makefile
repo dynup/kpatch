@@ -4,8 +4,10 @@ CFLAGS  += -I../kmod/patch -Iinsn -Wall -g -Werror
 LDFLAGS += -lelf
 
 TARGETS = create-diff-object
-OBJS = create-diff-object.o lookup.o insn/insn.o insn/inat.o
-SOURCES = create-diff-object.c lookup.c insn/insn.c insn/inat.c
+OBJS = create-diff-object.o kpatch-elf.o \
+	   lookup.o insn/insn.o insn/inat.o
+SOURCES = create-diff-object.c kpatch-elf.c \
+		  lookup.c insn/insn.c insn/inat.c
 
 all: $(TARGETS)
 
