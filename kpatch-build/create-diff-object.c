@@ -231,22 +231,21 @@ out:
  * Warning: Hackery lies herein.  It's hopefully justified by the fact that
  * this issue is very common.
  *
- * base object:
+ * Example:
  *
- * be 5e 04 00 00          mov    $0x45e,%esi
- * 48 c7 c7 ff 5a a1 81    mov    $0xffffffff81a15aff,%rdi
- * e8 26 13 08 00          callq  ffffffff8108d0d0 <warn_slowpath_fmt>
+ *  938:   be 70 00 00 00          mov    $0x70,%esi
+ *  93d:   48 c7 c7 00 00 00 00    mov    $0x0,%rdi
+ *                         940: R_X86_64_32S       .rodata.tcp_conn_request.str1.8+0x88
+ *  944:   c6 05 00 00 00 00 01    movb   $0x1,0x0(%rip)        # 94b <tcp_conn_request+0x94b>
+ *                         946: R_X86_64_PC32      .data.unlikely-0x1
+ *  94b:   e8 00 00 00 00          callq  950 <tcp_conn_request+0x950>
+ *                         94c: R_X86_64_PC32      warn_slowpath_null-0x4
  *
- * patched object:
- *
- * be 5e 04 00 00          mov    $0x45f,%esi
- * 48 c7 c7 ff 5a a1 81    mov    $0xffffffff81a15aff,%rdi
- * e8 26 13 08 00          callq  ffffffff8108d0d0 <warn_slowpath_fmt>
- *
- * The above is the most common case.  The pattern which applies to all cases
- * is an immediate move of the line number to %esi followed by zero or more
- * relas to a string section followed by a rela to warn_slowpath_*.
- *
+ * The pattern which applies to all cases:
+ * 1) immediate move of the line number to %esi
+ * 2) (optional) string section rela
+ * 3) (optional) __warned.xxxxx static local rela
+ * 4) warn_slowpath_* rela
  */
 static int kpatch_warn_only_change(struct section *sec)
 {
@@ -299,6 +298,8 @@ static int kpatch_warn_only_change(struct section *sec)
 			if (rela->offset < offset + length)
 				continue;
 			if (rela->string)
+				continue;
+			if (!strncmp(rela->sym->name, "__warned.", 9))
 				continue;
 			if (!strncmp(rela->sym->name, "warn_slowpath_", 14)) {
 				found = 1;
