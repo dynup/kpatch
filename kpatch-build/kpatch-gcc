@@ -5,7 +5,7 @@ set -x
 TOOLCHAINCMD="$1"
 shift
 
-if [[ -z "$TEMPDIR" ]]; then
+if [[ -z "$KPATCH_GCC_TEMPDIR" ]]; then
     exec "$TOOLCHAINCMD" "$@"
 fi
 
@@ -36,9 +36,9 @@ if [[ "$TOOLCHAINCMD" = "gcc" ]] ; then
 					break
 					;;
 				*.o)
-					mkdir -p "$TEMPDIR/orig/$(dirname $obj)"
-					[[ -e $obj ]] && cp -f "$obj" "$TEMPDIR/orig/$obj"
-					echo "$obj" >> "$TEMPDIR/changed_objs"
+					mkdir -p "$KPATCH_GCC_TEMPDIR/orig/$(dirname $obj)"
+					[[ -e $obj ]] && cp -f "$obj" "$KPATCH_GCC_TEMPDIR/orig/$obj"
+					echo "$obj" >> "$KPATCH_GCC_TEMPDIR/changed_objs"
 					break
 					;;
 				*)
@@ -54,8 +54,8 @@ elif [[ "$TOOLCHAINCMD" = "ld" ]] ; then
 			obj=$2
 			case "$obj" in
 				*.ko)
-					mkdir -p "$TEMPDIR/module/$(dirname $obj)"
-					cp -f "$obj" "$TEMPDIR/module/$obj"
+					mkdir -p "$KPATCH_GCC_TEMPDIR/module/$(dirname $obj)"
+					cp -f "$obj" "$KPATCH_GCC_TEMPDIR/module/$obj"
 					break
 					;;
 				*)

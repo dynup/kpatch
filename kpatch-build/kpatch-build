@@ -495,12 +495,14 @@ done
 echo "Building original kernel"
 ./scripts/setlocalversion --save-scmversion || die
 make mrproper >> "$LOGFILE" 2>&1 || die
+unset KPATCH_GCC_TEMPDIR
 CROSS_COMPILE="$TOOLSDIR/kpatch-gcc " make "-j$CPUS" $TARGETS "O=$OBJDIR" >> "$LOGFILE" 2>&1 || die
 
 echo "Building patched kernel"
 patch -N -p1 < "$APPLIEDPATCHFILE" >> "$LOGFILE" 2>&1 || die
 mkdir -p "$TEMPDIR/orig" "$TEMPDIR/patched"
-export TEMPDIR
+KPATCH_GCC_TEMPDIR=$TEMPDIR
+export KPATCH_GCC_TEMPDIR
 # TODO: remove custom LDFLAGS and ugly "undefined reference" grep when core
 # module gets moved to the kernel tree
 CROSS_COMPILE="$TOOLSDIR/kpatch-gcc " \
