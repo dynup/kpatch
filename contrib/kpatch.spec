@@ -1,6 +1,6 @@
 Name: kpatch
 Summary: Dynamic kernel patching
-Version: 0.3.2
+Version: 0.3.3
 License: GPLv2 
 Group: System Environment/Kernel
 URL: http://github.com/dynup/kpatch
