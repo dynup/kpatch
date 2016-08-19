@@ -515,9 +515,13 @@ done:
 	preempt_enable_notrace();
 }
 
+#if LINUX_VERSION_CODE < KERNEL_VERSION(3, 19, 0)
+#define FTRACE_OPS_FL_IPMODIFY 0
+#endif
+
 static struct ftrace_ops kpatch_ftrace_ops __read_mostly = {
 	.func = kpatch_ftrace_handler,
-	.flags = FTRACE_OPS_FL_SAVE_REGS,
+	.flags = FTRACE_OPS_FL_SAVE_REGS | FTRACE_OPS_FL_IPMODIFY,
 };
 
 static int kpatch_ftrace_add_func(unsigned long ip)
