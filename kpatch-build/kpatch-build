@@ -47,6 +47,7 @@ TEMPDIR="$CACHEDIR/tmp"
 LOGFILE="$CACHEDIR/build.log"
 APPLIEDPATCHFILE="kpatch.patch"
 DEBUG=0
+SKIPCLEANUP=0
 SKIPGCCCHECK=0
 
 warn() {
@@ -218,11 +219,12 @@ usage() {
 	echo "		-v, --vmlinux	   Specify original vmlinux" >&2
 	echo "		-t, --target	   Specify custom kernel build targets" >&2
 	echo "		-d, --debug	   Keep scratch files in /tmp" >&2
+	echo "		--skip-cleanup     Skip post-build cleanup" >&2
 	echo "		--skip-gcc-check   Skip gcc version matching check" >&2
 	echo "		                   (not recommended)" >&2
 }
 
-options=$(getopt -o hr:s:c:v:t:d -l "help,sourcerpm:,sourcedir:,config:,vmlinux:,target:,debug,skip-gcc-check" -- "$@") || die "getopt failed"
+options=$(getopt -o hr:s:c:v:t:d -l "help,sourcerpm:,sourcedir:,config:,vmlinux:,target:,debug,skip-gcc-check,skip-cleanup" -- "$@") || die "getopt failed"
 
 eval set -- "$options"
 
@@ -264,6 +266,10 @@ while [[ $# -gt 0 ]]; do
 		DEBUG=1
 		set -o xtrace
 		;;
+	--skip-cleanup)
+		echo "Skipping cleanup"
+		SKIPCLEANUP=1
+		;;
 	--skip-gcc-check)
 		echo "WARNING: Skipping gcc version matching check (not recommended)"
 		SKIPGCCCHECK=1
@@ -287,7 +293,7 @@ mkdir -p "$TEMPDIR" || die "Couldn't create $TEMPDIR"
 rm -rf "$TEMPDIR"/*
 rm -f "$LOGFILE"
 
-trap cleanup EXIT INT TERM HUP
+[[ $SKIPCLEANUP -eq 0 ]] && trap cleanup EXIT INT TERM HUP
 
 if [[ -n $USERSRCDIR ]]; then
 	# save .config and vmlinux since they'll get removed with mrproper so
