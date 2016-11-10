@@ -394,6 +394,7 @@ else
 
 		mv "$RPMTOPDIR"/BUILD/kernel-*/linux-"${ARCHVERSION%.*}"*"${ARCHVERSION##*.}" "$SRCDIR" >> "$LOGFILE" 2>&1 || die
 		rm -rf "$RPMTOPDIR"
+		rm -rf "$SRCDIR/.git"
 
 		cp "$SRCDIR/.config" "$OBJDIR" || die
 		if [[ "$ARCHVERSION" == *-* ]]; then
