@@ -38,6 +38,7 @@ struct kpatch_func {
 	unsigned long new_size;
 	unsigned long old_addr;
 	unsigned long old_size;
+	unsigned long sympos;
 	const char *name;
 	struct list_head list;
 	int force;
@@ -51,6 +52,7 @@ struct kpatch_dynrela {
 	unsigned long dest;
 	unsigned long src;
 	unsigned long type;
+	unsigned long sympos;
 	const char *name;
 	int addend;
 	int external;
