@@ -75,6 +75,9 @@ cleanup() {
 	if [[ -e "$SRCDIR/$APPLIEDPATCHFILE" ]]; then
 		patch -p1 -R -d "$SRCDIR" < "$SRCDIR/$APPLIEDPATCHFILE" &> /dev/null
 		rm -f "$SRCDIR/$APPLIEDPATCHFILE"
+		# If $SRCDIR was a git repo, make sure git actually sees that
+		# we've reverted our patch above.
+		[[ -d $SRCDIR/.git ]] && (cd $SRCDIR && git update-index -q --refresh)
 	fi
 	if [[ -n $USERSRCDIR ]]; then
 		# restore original .config and vmlinux since they were removed
