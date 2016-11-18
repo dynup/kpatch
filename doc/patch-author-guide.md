@@ -144,17 +144,52 @@ init code has run, and which rewrites or changes the original initialization to
 force it into the desired state.  Some changes involving hardware init are
 inherently incompatible with live patching.
 
-Removing Static Local References
---------------------------------
+Header file changes
+-------------------
+
+When changing header files, be extra careful.  If data is being changed, you
+probably need to modify the patch.  See "Data struct changes" above.
+
+If a function prototype is being changed, make sure it's not an exported
+function.  Otherwise it could break out-of-tree modules.
+
+Many header file changes result in a complete rebuild of the kernel tree, which
+makes kpatch-build have to compare every .o file in the kernel.  It slows the
+build down a lot, and can even fail to build if kpatch-build has any bugs
+lurking.  If it's a trivial header file change, like adding a macro, it's
+advisable to just move that macro into the .c file where it's needed to avoid
+changing the header file at all.
+
+Dealing with unexpected changed functions
+-----------------------------------------
+
+In general, it's best to patch as minimally as possible.  If kpatch-build is
+reporting some unexpected function changes, it's always a good idea to try to
+figure out why it thinks they changed.  In many cases you can change the source
+patch so that they no longer change.
+
+Some examples:
+
+* If a changed function was inlined, then the callers which inlined the
+  function will also change.  In this case there's nothing you can do to
+  prevent the extra changes.
+
+* If your patch adds a call to a function where the original version of the
+  function's ELF symbol has a .constprop or .isra suffix, and the corresponding
+  patched function doesn't, that means the patch caused gcc to no longer
+  perform an interprocedural optimization, which affects the function and all
+  its callers.  If you want to prevent this from happening, copy/paste the
+  function with a new name and call the new function from your patch.
+
+Removing references to static local variables
+---------------------------------------------
 
 Removing references to static locals will fail to patch unless extra steps are taken.
 Static locals are basically global variables because they outlive the function's
 scope. They need to be correlated so that the new function will use the old static
-local via a dynrela. That way patching the function  doesn't inadvertently reset the
-variable to zero; instead the variable keeps its old value.
+local. That way patching the function doesn't inadvertently reset the variable
+to zero; instead the variable keeps its old value.
 
 To work around this limitation one needs to retain the reference to the static local.
 This might be as simple as adding the variable back in the patched function in a 
 non-functional way and ensuring the compiler doesn't optimize it away.
-
-
