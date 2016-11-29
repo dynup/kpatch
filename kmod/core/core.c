@@ -75,8 +75,11 @@ struct kpatch_backtrace_args {
 };
 
 struct kpatch_kallsyms_args {
+	const char *objname;
 	const char *name;
 	unsigned long addr;
+	unsigned long count;
+	unsigned long pos;
 };
 
 /* this is a double loop, use goto instead of break */
@@ -582,58 +585,75 @@ static int kpatch_kallsyms_callback(void *data, const char *name,
 					 unsigned long addr)
 {
 	struct kpatch_kallsyms_args *args = data;
+	bool vmlinux = !strcmp(args->objname, "vmlinux");
 
-	if (args->addr == addr && !strcmp(args->name, name))
+	if ((mod && vmlinux) || (!mod && !vmlinux))
+		return 0;
+
+	if (strcmp(args->name, name))
+		return 0;
+
+	if (!vmlinux && strcmp(args->objname, mod->name))
+		return 0;
+
+	args->addr = addr;
+	args->count++;
+
+	/*
+	 * Finish the search when the symbol is found for the desired position
+	 * or the position is not defined for a non-unique symbol.
+	 */
+	if ((args->pos && (args->count == args->pos)) ||
+	    (!args->pos && (args->count > 1))) {
 		return 1;
-
-	return 0;
-}
-
-static int kpatch_verify_symbol_match(const char *name, unsigned long addr)
-{
-	int ret;
-
-	struct kpatch_kallsyms_args args = {
-		.name = name,
-		.addr = addr,
-	};
-
-	ret = kallsyms_on_each_symbol(kpatch_kallsyms_callback, &args);
-	if (!ret) {
-		pr_err("base kernel mismatch for symbol '%s'\n", name);
-		pr_err("expected address was 0x%016lx\n", addr);
-		return -EINVAL;
 	}
 
 	return 0;
 }
 
-static unsigned long kpatch_find_module_symbol(struct module *mod,
-					       const char *name)
+static int kpatch_find_object_symbol(const char *objname, const char *name,
+				     unsigned long sympos, unsigned long *addr)
 {
-	char buf[KSYM_SYMBOL_LEN];
+	struct kpatch_kallsyms_args args = {
+		.objname = objname,
+		.name = name,
+		.addr = 0,
+		.count = 0,
+		.pos = sympos,
+	};
 
-	/* check total string length for overrun */
-	if (strlen(mod->name) + strlen(name) + 1 >= KSYM_SYMBOL_LEN) {
-		pr_err("buffer overrun finding symbol '%s' in module '%s'\n",
-		       name, mod->name);
+	mutex_lock(&module_mutex);
+	kallsyms_on_each_symbol(kpatch_kallsyms_callback, &args);
+	mutex_unlock(&module_mutex);
+
+	/*
+	 * Ensure an address was found. If sympos is 0, ensure symbol is unique;
+	 * otherwise ensure the symbol position count matches sympos.
+	 */
+	if (args.addr == 0)
+		pr_err("symbol '%s' not found in symbol table\n", name);
+	else if (args.count > 1 && sympos == 0) {
+		pr_err("unresolvable ambiguity for symbol '%s' in object '%s'\n",
+		       name, objname);
+	} else if (sympos != args.count && sympos > 0) {
+		pr_err("symbol position %lu for symbol '%s' in object '%s' not found\n",
+		       sympos, name, objname);
+	} else {
+		*addr = args.addr;
 		return 0;
 	}
 
-	/* encode symbol name as "mod->name:name" */
-	strcpy(buf, mod->name);
-	strcat(buf, ":");
-	strcat(buf, name);
-
-	return kallsyms_lookup_name(buf);
+	*addr = 0;
+	return -EINVAL;
 }
 
 /*
  * External symbols are located outside the parent object (where the parent
  * object is either vmlinux or the kmod being patched).
  */
-static unsigned long kpatch_find_external_symbol(struct kpatch_module *kpmod,
-						 const char *name)
+static int kpatch_find_external_symbol(const char *objname, const char *name,
+				       unsigned long sympos, unsigned long *addr)
+
 {
 	const struct kernel_symbol *sym;
 
@@ -641,11 +661,13 @@ static unsigned long kpatch_find_external_symbol(struct kpatch_module *kpmod,
 	preempt_disable();
 	sym = find_symbol(name, NULL, NULL, true, true);
 	preempt_enable();
-	if (sym)
-		return sym->value;
+	if (sym) {
+		*addr = sym->value;
+		return 0;
+	}
 
 	/* otherwise check if it's in another .o within the patch module */
-	return kpatch_find_module_symbol(kpmod->mod, name);
+	return kpatch_find_object_symbol(objname, name, sympos, addr);
 }
 
 static int kpatch_write_relocations(struct kpatch_module *kpmod,
@@ -661,31 +683,21 @@ static int kpatch_write_relocations(struct kpatch_module *kpmod,
        unsigned long core = (unsigned long)kpmod->mod->module_core;
        unsigned long core_size = kpmod->mod->core_size;
 #endif
-	unsigned long src;
 
 	list_for_each_entry(dynrela, &object->dynrelas, list) {
-		if (!strcmp(object->name, "vmlinux")) {
-			ret = kpatch_verify_symbol_match(dynrela->name,
-							 dynrela->src);
-			if (ret)
-				return ret;
-		} else {
-			/* module, dynrela->src needs to be discovered */
-
-			if (dynrela->external)
-				src = kpatch_find_external_symbol(kpmod,
-								  dynrela->name);
-			else
-				src = kpatch_find_module_symbol(object->mod,
-								dynrela->name);
-
-			if (!src) {
-				pr_err("unable to find symbol '%s'\n",
-				       dynrela->name);
-				return -EINVAL;
-			}
-
-			dynrela->src = src;
+		if (dynrela->external)
+			ret = kpatch_find_external_symbol(kpmod->mod->name,
+							  dynrela->name,
+							  dynrela->sympos,
+							  &dynrela->src);
+		else
+			ret = kpatch_find_object_symbol(object->name,
+							dynrela->name,
+							dynrela->sympos,
+							&dynrela->src);
+		if (ret) {
+			pr_err("unable to find symbol '%s'\n", dynrela->name);
+			return ret;
 		}
 
 		switch (dynrela->type) {
@@ -824,25 +836,14 @@ static int kpatch_link_object(struct kpatch_module *kpmod,
 
 	list_for_each_entry(func, &object->funcs, list) {
 
-		/* calculate actual old location */
-		if (vmlinux) {
-			ret = kpatch_verify_symbol_match(func->name,
-							 func->old_addr);
-			if (ret) {
-				func_err = func;
-				goto err_ftrace;
-			}
-		} else {
-			unsigned long old_addr;
-			old_addr = kpatch_find_module_symbol(mod, func->name);
-			if (!old_addr) {
-				pr_err("unable to find symbol '%s' in module '%s\n",
-				       func->name, mod->name);
-				func_err = func;
-				ret = -EINVAL;
-				goto err_ftrace;
-			}
-			func->old_addr = old_addr;
+		/* lookup the old location */
+		ret = kpatch_find_object_symbol(object->name,
+						func->name,
+						func->sympos,
+						&func->old_addr);
+		if (ret) {
+			func_err = func;
+			goto err_ftrace;
 		}
 
 		/* add to ftrace filter and register handler if needed */

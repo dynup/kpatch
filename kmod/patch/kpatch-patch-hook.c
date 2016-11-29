@@ -271,13 +271,8 @@ static int patch_make_funcs_list(struct list_head *objects)
 
 		func->new_addr = p_func->new_addr;
 		func->new_size = p_func->new_size;
-
-		if (!strcmp("vmlinux", object->name))
-			func->old_addr = p_func->old_addr;
-		else
-			func->old_addr = 0x0;
-
 		func->old_size = p_func->old_size;
+		func->sympos = p_func->sympos;
 		func->name = p_func->name;
 		func->force = patch_is_func_forced(func->new_addr);
 		list_add_tail(&func->list, &object->funcs);
@@ -315,8 +310,8 @@ static int patch_make_dynrelas_list(struct list_head *objects)
 			return -ENOMEM;
 
 		dynrela->dest = p_dynrela->dest;
-		dynrela->src = p_dynrela->src;
 		dynrela->type = p_dynrela->type;
+		dynrela->sympos = p_dynrela->sympos;
 		dynrela->name = p_dynrela->name;
 		dynrela->external = p_dynrela->external;
 		dynrela->addend = p_dynrela->addend;
