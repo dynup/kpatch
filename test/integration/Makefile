@@ -1,3 +1,7 @@
+include /etc/os-release
+
+PATCH_DIR?=${ID}-${VERSION_ID}
+
 all:
 	$(error please specify local or remote)
 
@@ -6,13 +10,13 @@ local: slow
 remote: remote_slow
 
 slow: clean
-	../kpatch-test
+	./kpatch-test -d $(PATCH_DIR)
 
 quick: clean
-	../kpatch-test --quick
+	./kpatch-test -d $(PATCH_DIR) --quick
 
 cached:
-	../kpatch-test --cached
+	./kpatch-test -d $(PATCH_DIR) --cached
 
 clean:
 	rm -f *.ko *.log COMBINED.patch
@@ -36,4 +40,4 @@ remote_sync: remote_setup
 	ssh $(SSH_USER)@$(SSH_HOST) "cd kpatch-test/kpatch && make"
 
 remote_slow: remote_sync
-	ssh $(SSH_USER)@$(SSH_HOST) "cd kpatch-test/kpatch/test/integration/f22 && make slow"
+	ssh $(SSH_USER)@$(SSH_HOST) "cd kpatch-test/kpatch/test/integration && make slow"

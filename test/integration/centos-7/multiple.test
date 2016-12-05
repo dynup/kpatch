@@ -21,7 +21,7 @@ declare -a modules=(kpatch-cmdline-string.ko kpatch-meminfo-string.ko)
 
 for mod in "${modules[@]}"; do
 	testprog=$(ko_to_test $mod)
-	./$testprog && die "./$testprog succeeded before loading any modules"
+	$SCRIPTDIR/$testprog && die "$SCRIPTDIR/$testprog succeeded before loading any modules"
 done
 
 for mod in "${modules[@]}"; do
@@ -30,7 +30,7 @@ done
 
 for mod in "${modules[@]}"; do
 	testprog=$(ko_to_test $mod)
-	./$testprog || die "./$testprog failed after loading modules"
+	$SCRIPTDIR/$testprog || die "$SCRIPTDIR/$testprog failed after loading modules"
 done
 
 for mod in "${modules[@]}"; do
@@ -39,7 +39,7 @@ done
 
 for mod in "${modules[@]}"; do
 	testprog=$(ko_to_test $mod)
-	./$testprog && die "./$testprog succeeded after unloading modules"
+	$SCRIPTDIR/$testprog && die "$SCRIPTDIR/$testprog succeeded after unloading modules"
 done
 
 exit 0
