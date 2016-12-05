@@ -1,8 +1,7 @@
-Index: src/fs/proc/generic.c
-===================================================================
---- src.orig/fs/proc/generic.c
-+++ src/fs/proc/generic.c
-@@ -132,6 +132,7 @@ int proc_alloc_inum(unsigned int *inum)
+diff -Nupr src.orig/fs/proc/generic.c src/fs/proc/generic.c
+--- src.orig/fs/proc/generic.c	2016-11-30 19:39:49.317737234 +0000
++++ src/fs/proc/generic.c	2016-11-30 19:41:05.659737234 +0000
+@@ -192,6 +192,7 @@ int proc_alloc_inum(unsigned int *inum)
  	unsigned int i;
  	int error;
  

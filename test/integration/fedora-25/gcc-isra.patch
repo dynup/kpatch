@@ -1,8 +1,7 @@
-Index: src/fs/proc/proc_sysctl.c
-===================================================================
---- src.orig/fs/proc/proc_sysctl.c
-+++ src/fs/proc/proc_sysctl.c
-@@ -24,6 +24,7 @@ void proc_sys_poll_notify(struct ctl_tab
+diff -Nupr src.orig/fs/proc/proc_sysctl.c src/fs/proc/proc_sysctl.c
+--- src.orig/fs/proc/proc_sysctl.c	2016-11-30 19:39:49.316737234 +0000
++++ src/fs/proc/proc_sysctl.c	2016-11-30 19:40:10.918737234 +0000
+@@ -46,6 +46,7 @@ void proc_sys_poll_notify(struct ctl_tab
  	if (!poll)
  		return;
  

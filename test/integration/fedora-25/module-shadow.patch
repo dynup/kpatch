@@ -1,8 +1,7 @@
-Index: src/arch/x86/kvm/vmx.c
-===================================================================
---- src.orig/arch/x86/kvm/vmx.c
-+++ src/arch/x86/kvm/vmx.c
-@@ -8758,10 +8758,20 @@ static void vmx_leave_nested(struct kvm_
+diff -Nupr src.orig/arch/x86/kvm/vmx.c src/arch/x86/kvm/vmx.c
+--- src.orig/arch/x86/kvm/vmx.c	2016-11-30 19:39:46.591737234 +0000
++++ src/arch/x86/kvm/vmx.c	2016-11-30 19:40:56.291737234 +0000
+@@ -10829,10 +10829,20 @@ static void vmx_leave_nested(struct kvm_
   * It should only be called before L2 actually succeeded to run, and when
   * vmcs01 is current (it doesn't leave_guest_mode() or switch vmcss).
   */

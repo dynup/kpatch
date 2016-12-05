@@ -1,10 +1,10 @@
 ensure that __cmpxchg_double_slab.isra.45 and
 __cmpxchg_double_slab.isra.45.part.46 aren't correlated.
-Index: src/mm/slub.c
-===================================================================
---- src.orig/mm/slub.c
-+++ src/mm/slub.c
-@@ -5320,6 +5320,9 @@ void get_slabinfo(struct kmem_cache *s,
+
+diff -Nupr src.orig/mm/slub.c src/mm/slub.c
+--- src.orig/mm/slub.c	2016-11-30 19:39:45.200737234 +0000
++++ src/mm/slub.c	2016-11-30 19:40:13.997737234 +0000
+@@ -5758,6 +5758,9 @@ void get_slabinfo(struct kmem_cache *s,
  	int node;
  	struct kmem_cache_node *n;
  

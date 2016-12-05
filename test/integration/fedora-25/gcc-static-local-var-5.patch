@@ -1,7 +1,6 @@
-Index: src/kernel/audit.c
-===================================================================
---- src.orig/kernel/audit.c
-+++ src/kernel/audit.c
+diff -Nupr src.orig/kernel/audit.c src/kernel/audit.c
+--- src.orig/kernel/audit.c	2016-11-30 19:39:45.165737234 +0000
++++ src/kernel/audit.c	2016-11-30 19:40:25.802737234 +0000
 @@ -211,6 +211,12 @@ void audit_panic(const char *message)
  	}
  }

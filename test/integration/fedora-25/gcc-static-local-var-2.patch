@@ -1,8 +1,7 @@
-Index: src/mm/mmap.c
-===================================================================
---- src.orig/mm/mmap.c
-+++ src/mm/mmap.c
-@@ -1493,6 +1493,7 @@ static inline int accountable_mapping(st
+diff -Nupr src.orig/mm/mmap.c src/mm/mmap.c
+--- src.orig/mm/mmap.c	2016-11-30 19:39:45.200737234 +0000
++++ src/mm/mmap.c	2016-11-30 19:40:17.029737234 +0000
+@@ -1429,6 +1429,7 @@ static inline int accountable_mapping(st
  	return (vm_flags & (VM_NORESERVE | VM_SHARED | VM_WRITE)) == VM_WRITE;
  }
  
@@ -10,7 +9,7 @@ Index: src/mm/mmap.c
  unsigned long mmap_region(struct file *file, unsigned long addr,
  		unsigned long len, vm_flags_t vm_flags, unsigned long pgoff)
  {
-@@ -1502,6 +1503,9 @@ unsigned long mmap_region(struct file *f
+@@ -1438,6 +1439,9 @@ unsigned long mmap_region(struct file *f
  	struct rb_node **rb_link, *rb_parent;
  	unsigned long charged = 0;
  
@@ -18,5 +17,5 @@ Index: src/mm/mmap.c
 +		printk("kpatch mmap foo\n");
 +
  	/* Check against address space limit. */
- 	if (!may_expand_vm(mm, len >> PAGE_SHIFT)) {
+ 	if (!may_expand_vm(mm, vm_flags, len >> PAGE_SHIFT)) {
  		unsigned long nr_pages;

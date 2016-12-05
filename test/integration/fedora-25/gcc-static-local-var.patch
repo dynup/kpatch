@@ -1,9 +1,8 @@
-Index: src/arch/x86/kernel/ldt.c
-===================================================================
---- src.orig/arch/x86/kernel/ldt.c
-+++ src/arch/x86/kernel/ldt.c
-@@ -100,6 +100,12 @@ static inline int copy_ldt(mm_context_t
- 	return 0;
+diff -Nupr src.orig/arch/x86/kernel/ldt.c src/arch/x86/kernel/ldt.c
+--- src.orig/arch/x86/kernel/ldt.c	2016-11-30 19:39:46.579737234 +0000
++++ src/arch/x86/kernel/ldt.c	2016-11-30 19:40:28.658737234 +0000
+@@ -99,6 +99,12 @@ static void free_ldt_struct(struct ldt_s
+ 	kfree(ldt);
  }
  
 +void hi_there(void)
@@ -15,12 +14,12 @@ Index: src/arch/x86/kernel/ldt.c
  /*
   * we do not have to muck with descriptors here, that is
   * done in switch_mm() as needed.
-@@ -109,6 +115,8 @@ int init_new_context(struct task_struct
+@@ -109,6 +115,8 @@ int init_new_context_ldt(struct task_str
  	struct mm_struct *old_mm;
  	int retval = 0;
  
 +	hi_there();
 +
  	mutex_init(&mm->context.lock);
- 	mm->context.size = 0;
  	old_mm = current->mm;
+ 	if (!old_mm) {

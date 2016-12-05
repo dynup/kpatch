@@ -1,8 +1,7 @@
-Index: src/arch/x86/kvm/x86.c
-===================================================================
---- src.orig/arch/x86/kvm/x86.c
-+++ src/arch/x86/kvm/x86.c
-@@ -2011,12 +2011,20 @@ static void record_steal_time(struct kvm
+diff -Nupr src.orig/arch/x86/kvm/x86.c src/arch/x86/kvm/x86.c
+--- src.orig/arch/x86/kvm/x86.c	2016-11-30 19:39:46.590737234 +0000
++++ src/arch/x86/kvm/x86.c	2016-11-30 19:41:18.201737234 +0000
+@@ -2039,12 +2039,20 @@ static void record_steal_time(struct kvm
  		&vcpu->arch.st.steal, sizeof(struct kvm_steal_time));
  }
  

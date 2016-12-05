@@ -1,8 +1,7 @@
-Index: src/fs/proc/meminfo.c
-===================================================================
---- src.orig/fs/proc/meminfo.c
-+++ src/fs/proc/meminfo.c
-@@ -20,6 +20,8 @@ void __attribute__((weak)) arch_report_m
+diff -Nupr src.orig/fs/proc/meminfo.c src/fs/proc/meminfo.c
+--- src.orig/fs/proc/meminfo.c	2016-11-30 19:39:49.317737234 +0000
++++ src/fs/proc/meminfo.c	2016-11-30 19:39:58.934737234 +0000
+@@ -23,6 +23,8 @@ void __attribute__((weak)) arch_report_m
  {
  }
  
@@ -11,17 +10,17 @@ Index: src/fs/proc/meminfo.c
  static int meminfo_proc_show(struct seq_file *m, void *v)
  {
  	struct sysinfo i;
-@@ -138,6 +140,7 @@ static int meminfo_proc_show(struct seq_
- #ifdef CONFIG_TRANSPARENT_HUGEPAGE
- 		"AnonHugePages:  %8lu kB\n"
+@@ -112,6 +114,7 @@ static int meminfo_proc_show(struct seq_
+ 		"CmaTotal:       %8lu kB\n"
+ 		"CmaFree:        %8lu kB\n"
  #endif
 +		"kpatch: %d"
  		,
  		K(i.totalram),
  		K(i.freeram),
-@@ -193,6 +196,7 @@ static int meminfo_proc_show(struct seq_
- 		,K(global_page_state(NR_ANON_TRANSPARENT_HUGEPAGES) *
- 		   HPAGE_PMD_NR)
+@@ -172,6 +175,7 @@ static int meminfo_proc_show(struct seq_
+ 		, K(totalcma_pages)
+ 		, K(global_page_state(NR_FREE_CMA_PAGES))
  #endif
 +		,foo
  		);

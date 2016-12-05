@@ -1,8 +1,7 @@
-Index: src/fs/aio.c
-===================================================================
---- src.orig/fs/aio.c
-+++ src/fs/aio.c
-@@ -229,9 +229,16 @@ static int __init aio_setup(void)
+diff -Nupr src.orig/fs/aio.c src/fs/aio.c
+--- src.orig/fs/aio.c	2016-11-30 19:39:49.237737234 +0000
++++ src/fs/aio.c	2016-11-30 19:40:22.706737234 +0000
+@@ -271,9 +271,16 @@ static int __init aio_setup(void)
  }
  __initcall(aio_setup);
  

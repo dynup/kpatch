@@ -1,8 +1,7 @@
-Index: src/fs/readdir.c
-===================================================================
---- src.orig/fs/readdir.c
-+++ src/fs/readdir.c
-@@ -169,6 +169,8 @@ static int filldir(void * __buf, const c
+diff -Nupr src.orig/fs/readdir.c src/fs/readdir.c
+--- src.orig/fs/readdir.c	2016-11-30 19:39:49.237737234 +0000
++++ src/fs/readdir.c	2016-11-30 19:40:05.186737234 +0000
+@@ -188,6 +188,8 @@ static int filldir(struct dir_context *c
  			goto efault;
  	}
  	dirent = buf->current_dir;

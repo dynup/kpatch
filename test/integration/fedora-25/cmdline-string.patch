@@ -1,7 +1,6 @@
-Index: src/fs/proc/cmdline.c
-===================================================================
---- src.orig/fs/proc/cmdline.c
-+++ src/fs/proc/cmdline.c
+diff -Nupr src.orig/fs/proc/cmdline.c src/fs/proc/cmdline.c
+--- src.orig/fs/proc/cmdline.c	2016-11-30 19:39:49.317737234 +0000
++++ src/fs/proc/cmdline.c	2016-11-30 19:39:52.696737234 +0000
 @@ -5,7 +5,7 @@
  
  static int cmdline_proc_show(struct seq_file *m, void *v)

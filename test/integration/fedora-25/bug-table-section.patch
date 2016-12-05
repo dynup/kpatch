@@ -1,8 +1,7 @@
-Index: src/fs/proc/proc_sysctl.c
-===================================================================
---- src.orig/fs/proc/proc_sysctl.c
-+++ src/fs/proc/proc_sysctl.c
-@@ -266,6 +266,8 @@ void sysctl_head_put(struct ctl_table_he
+diff -Nupr src.orig/fs/proc/proc_sysctl.c src/fs/proc/proc_sysctl.c
+--- src.orig/fs/proc/proc_sysctl.c	2016-11-30 19:39:49.316737234 +0000
++++ src/fs/proc/proc_sysctl.c	2016-11-30 19:39:49.441737234 +0000
+@@ -301,6 +301,8 @@ void sysctl_head_put(struct ctl_table_he
  
  static struct ctl_table_header *sysctl_head_grab(struct ctl_table_header *head)
  {
