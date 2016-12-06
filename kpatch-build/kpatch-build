@@ -513,10 +513,7 @@ patch -N -p1 < "$APPLIEDPATCHFILE" >> "$LOGFILE" 2>&1 || die
 mkdir -p "$TEMPDIR/orig" "$TEMPDIR/patched"
 KPATCH_GCC_TEMPDIR=$TEMPDIR
 export KPATCH_GCC_TEMPDIR
-# TODO: remove custom LDFLAGS and ugly "undefined reference" grep when core
-# module gets moved to the kernel tree
 CROSS_COMPILE="$TOOLSDIR/kpatch-gcc " \
-	LDFLAGS_vmlinux="--warn-unresolved-symbols" \
 	KBUILD_MODPOST_WARN=1 \
 	make "-j$CPUS" $TARGETS "O=$OBJDIR"  >> "$LOGFILE" 2>&1 || die
 [[ "${PIPESTATUS[0]}" -eq 0 ]] || die
