@@ -10,13 +10,13 @@ local: slow
 remote: remote_slow
 
 slow: clean
-	./kpatch-test -d $(PATCH_DIR)
+	./kpatch-test -d $(PATCH_DIR) $(PATCHES)
 
 quick: clean
-	./kpatch-test -d $(PATCH_DIR) --quick
+	./kpatch-test -d $(PATCH_DIR) --quick $(PATCHES)
 
 cached:
-	./kpatch-test -d $(PATCH_DIR) --cached
+	./kpatch-test -d $(PATCH_DIR) --cached $(PATCHES)
 
 clean:
 	rm -f *.ko *.log COMBINED.patch

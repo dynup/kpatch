@@ -42,7 +42,6 @@
 
 SCRIPTDIR="$(readlink -f $(dirname $(type -p $0)))"
 ROOTDIR="$(readlink -f $SCRIPTDIR/../..)"
-PATCHDIR=$PWD
 # TODO: option to use system-installed binaries instead
 KPATCH="sudo $ROOTDIR/kpatch/kpatch"
 RMMOD="sudo rmmod"
@@ -52,8 +51,13 @@ ERROR=0
 LOG=test.log
 rm -f $LOG
 
+PATCHDIR="${PATCHDIR:-$PWD}"
+declare -a PATCH_LIST
+declare -a TEST_LIST
+
 usage() {
-	echo "usage: $0 [options]" >&2
+	echo "usage: $0 [options] [patch1 ... patchN]" >&2
+	echo "		patchN  	Pathnames of patches to test" >&2
 	echo "		-h, --help	Show this help message" >&2
 	echo "		-c, --cached	Don't rebuild patch modules" >&2
 	echo "		-d, --directory	Patch directory" >&2
@@ -80,10 +84,25 @@ while [[ $# -gt 0 ]]; do
 	-q|--quick)
 		QUICK=1
 		;;
+	*)
+		[[ "$1" = "--" ]] && shift && continue
+		PATCH_LIST+=("$1")
+		;;
 	esac
 	shift
 done
 
+if [[ ${#PATCH_LIST[@]} = 0 ]]; then
+	PATCH_LIST=($PATCHDIR/*.patch)
+	TEST_LIST=($PATCHDIR/*.test)
+else
+	for file in "${PATCH_LIST[@]}"; do
+		prefix=${file%%.patch}
+		[[ -e "$prefix-FAIL.test" ]]   && TEST_LIST+=("$prefix-FAIL.test")
+		[[ -e "$prefix-LOADED.test" ]] && TEST_LIST+=("$prefix-LOADED.test")
+		[[ -e "$prefix-SLOW.test" ]]   && TEST_LIST+=("$prefix-SLOW.test")
+	done
+fi
 
 error() {
 	echo "ERROR: $@" |tee -a $LOG >&2
@@ -206,13 +225,21 @@ build_combined_module() {
 		return
 	fi
 
+	declare -a COMBINED_LIST
+	for file in "${PATCH_LIST[@]}"; do
+		[[ $file =~ -FAIL ]] && log "combine: skipping $file" && continue
+		[[ $file =~ -SLOW ]] && log "combine: skipping $file" && continue
+		COMBINED_LIST+=($file)
+	done
+	if [[ ${#COMBINED_LIST[@]} -le 1 ]]; then
+		log "skipping build: combined (only ${#PATCH_LIST[@]} patch(es))"
+		return
+	fi
+
 	rm -f COMBINED.patch TMP.patch
 	first=1
-	for file in $PATCHDIR/*.patch; do
+	for file in "${COMBINED_LIST[@]}"; do
 		prefix=${file%%.patch}
-
-		[[ $prefix =~ -FAIL ]] && continue
-		[[ $prefix =~ -SLOW ]] && continue
 
 		log "combine: $prefix"
 
@@ -243,7 +270,7 @@ run_combined_test() {
 
 	unload_all
 
-	for testprog in $PATCHDIR/*.test; do
+	for testprog in "${TEST_LIST[@]}"; do
 		[[ $testprog != *-LOADED.test ]] && continue
 		if $testprog >> $LOG 2>&1; then
 			error "combined: $testprog succeeded before kpatch load"
@@ -256,7 +283,7 @@ run_combined_test() {
 		return
 	fi
 
-	for testprog in $PATCHDIR/*.test; do
+	for testprog in "${TEST_LIST[@]}"; do
 		[[ $testprog != *-LOADED.test ]] && continue
 		if ! $testprog >> $LOG 2>&1; then
 			error "combined: $testprog failed after kpatch load"
@@ -268,7 +295,7 @@ run_combined_test() {
 		return
 	fi
 
-	for testprog in $PATCHDIR/*.test; do
+	for testprog in "${TEST_LIST[@]}"; do
 		[[ $testprog != *-LOADED.test ]] && continue
 		if $testprog >> $LOG 2>&1; then
 			error "combined: $testprog succeeded after kpatch unload"
@@ -282,7 +309,7 @@ echo "clearing printk buffer"
 sudo dmesg -C
 
 if [[ $QUICK != 1 ]]; then
-	for file in $PATCHDIR/*.patch; do
+	for file in "${PATCH_LIST[@]}"; do
 		build_module $file
 	done
 fi
@@ -292,7 +319,7 @@ build_combined_module
 unload_all
 
 if [[ $QUICK != 1 ]]; then
-	for file in $PATCHDIR/*.patch; do
+	for file in "${PATCH_LIST[@]}"; do
 		run_load_test $file
 	done
 fi
@@ -300,9 +327,9 @@ fi
 run_combined_test
 
 if [[ $QUICK != 1 ]]; then
-	for file in $PATCHDIR/*.test; do
+	for testprog in "${TEST_LIST[@]}"; do
 		unload_all
-		run_custom_test $file
+		run_custom_test $testprog
 	done
 fi
 
