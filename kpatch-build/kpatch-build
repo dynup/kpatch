@@ -541,6 +541,12 @@ declare -a objnames
 CHANGED=0
 ERROR=0
 for i in $FILES; do
+	# In RHEL 7 based kernels, copy_user_64.o misuses the .fixup section,
+	# which confuses create-diff-object.  It's fine to skip it, it's an
+	# assembly file anyway.
+	[[ $DISTRO = rhel ]] || [[ $DISTRO = centos ]] || [[ $DISTRO = ol ]] && \
+		[[ $i = arch/x86/lib/copy_user_64.o ]] && continue
+
 	mkdir -p "output/$(dirname $i)"
 	cd "$OBJDIR"
 	find_kobj $i
