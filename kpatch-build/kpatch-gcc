@@ -58,6 +58,10 @@ elif [[ "$TOOLCHAINCMD" = "ld" ]] ; then
 					cp -f "$obj" "$KPATCH_GCC_TEMPDIR/module/$obj"
 					break
 					;;
+				.tmp_vmlinux*|vmlinux)
+					args+=(--warn-unresolved-symbols)
+					break
+					;;
 				*)
 					break
 					;;
