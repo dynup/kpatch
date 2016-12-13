@@ -66,7 +66,7 @@ static DEFINE_HASHTABLE(kpatch_func_hash, KPATCH_HASH_BITS);
 
 static DEFINE_SEMAPHORE(kpatch_mutex);
 
-LIST_HEAD(kpmod_list);
+static LIST_HEAD(kpmod_list);
 
 static int kpatch_num_patched;
 
@@ -641,11 +641,11 @@ static int kpatch_write_relocations(struct kpatch_module *kpmod,
      ( LINUX_VERSION_CODE >= KERNEL_VERSION(4, 4, 0) && \
       UTS_UBUNTU_RELEASE_ABI >= 7 ) \
     )
-       unsigned long core = (unsigned long)kpmod->mod->core_layout.base;
-       unsigned long core_size = kpmod->mod->core_layout.size;
+	unsigned long core = (unsigned long)kpmod->mod->core_layout.base;
+	unsigned long core_size = kpmod->mod->core_layout.size;
 #else
-       unsigned long core = (unsigned long)kpmod->mod->module_core;
-       unsigned long core_size = kpmod->mod->core_size;
+	unsigned long core = (unsigned long)kpmod->mod->module_core;
+	unsigned long core_size = kpmod->mod->core_size;
 #endif
 
 	list_for_each_entry(dynrela, &object->dynrelas, list) {
