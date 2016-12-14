@@ -174,7 +174,7 @@ int lookup_local_symbol(struct lookup_table *table, char *name, char *hint,
 
 				if (match)
 					/* dup file+symbol, unresolvable ambiguity */
-					return 1;
+					return 2;
 				match = sym;
 			}
 		}
