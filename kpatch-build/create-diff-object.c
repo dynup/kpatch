@@ -1915,7 +1915,7 @@ void kpatch_create_dynamic_rela_sections(struct kpatch_elf *kelf,
 	struct symbol *strsym;
 	struct lookup_result result;
 	struct kpatch_patch_dynrela *dynrelas;
-	int vmlinux, external;
+	int vmlinux, external, ret;
 
 	vmlinux = !strcmp(objname, "vmlinux");
 
@@ -1967,10 +1967,15 @@ void kpatch_create_dynamic_rela_sections(struct kpatch_elf *kelf,
 
 			if (rela->sym->bind == STB_LOCAL) {
 				/* An unchanged local symbol */
-				if (lookup_local_symbol(table, rela->sym->name,
-				                        hint, &result))
-					ERROR("lookup_local_symbol %s (%s) needed for %s",
-			               rela->sym->name, hint, sec->base->name);
+				ret = lookup_local_symbol(table,
+					rela->sym->name, hint, &result);
+				if (ret == 2)
+					ERROR("lookup_local_symbol: ambiguous %s:%s relocation, needed for %s",
+			               hint, rela->sym->name, sec->base->name);
+				else if (ret)
+					ERROR("lookup_local_symbol %s:%s needed for %s",
+			               hint, rela->sym->name, sec->base->name);
+
 			}
 			else if (vmlinux) {
 				/*
