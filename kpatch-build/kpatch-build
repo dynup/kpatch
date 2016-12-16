@@ -602,6 +602,14 @@ echo "Building patch module: kpatch-$PATCHNAME.ko"
 cp "$OBJDIR/.config" "$SRCDIR"
 cd "$SRCDIR"
 make prepare >> "$LOGFILE" 2>&1 || die
+
+if [[ $DISTRO == ubuntu ]]; then
+	# UBUNTU: add UTS_UBUNTU_RELEASE_ABI to utsrelease.h after regenerating it
+	UBUNTU_ABI=${ARCHVERSION#*-}
+	UBUNTU_ABI=${UBUNTU_ABI%-*}
+	echo "#define UTS_UBUNTU_RELEASE_ABI "$UBUNTU_ABI"" >> "$SRCDIR"/include/generated/utsrelease.h
+fi
+
 cd "$TEMPDIR/output"
 ld -r -o ../patch/output.o $(find . -name "*.o") >> "$LOGFILE" 2>&1 || die
 md5sum ../patch/output.o | awk '{printf "%s\0", $1}' > checksum.tmp || die
