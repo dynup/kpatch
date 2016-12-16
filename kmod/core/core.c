@@ -46,7 +46,12 @@
 #include <linux/string.h>
 #include <asm/stacktrace.h>
 #include <asm/cacheflush.h>
+#include <generated/utsrelease.h>
 #include "kpatch.h"
+
+#ifndef UTS_UBUNTU_RELEASE_ABI
+#define UTS_UBUNTU_RELEASE_ABI 0
+#endif
 
 #if !defined(CONFIG_FUNCTION_TRACER) || \
 	!defined(CONFIG_HAVE_FENTRY) || \
@@ -676,7 +681,10 @@ static int kpatch_write_relocations(struct kpatch_module *kpmod,
 	int ret, size, readonly = 0, numpages;
 	struct kpatch_dynrela *dynrela;
 	u64 loc, val;
-#if LINUX_VERSION_CODE >= KERNEL_VERSION(4, 5, 0)
+#if (( LINUX_VERSION_CODE >= KERNEL_VERSION(4, 5, 0) ) || \
+     ( LINUX_VERSION_CODE >= KERNEL_VERSION(4, 4, 0) && \
+      UTS_UBUNTU_RELEASE_ABI >= 7 ) \
+    )
        unsigned long core = (unsigned long)kpmod->mod->core_layout.base;
        unsigned long core_size = kpmod->mod->core_layout.size;
 #else
@@ -746,7 +754,10 @@ static int kpatch_write_relocations(struct kpatch_module *kpmod,
 		}
 
 #ifdef CONFIG_DEBUG_SET_MODULE_RONX
-#if LINUX_VERSION_CODE >= KERNEL_VERSION(4, 5, 0)
+#if (( LINUX_VERSION_CODE >= KERNEL_VERSION(4, 5, 0) ) || \
+     ( LINUX_VERSION_CODE >= KERNEL_VERSION(4, 4, 0) && \
+      UTS_UBUNTU_RELEASE_ABI >= 7 ) \
+    )
                if (loc < core + kpmod->mod->core_layout.ro_size)
 #else
                if (loc < core + kpmod->mod->core_ro_size)

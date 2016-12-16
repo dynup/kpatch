@@ -25,10 +25,15 @@
 #include <linux/list.h>
 #include <linux/slab.h>
 #include <linux/version.h>
+#include <generated/utsrelease.h>
 
 #include <linux/livepatch.h>
 
 #include "kpatch-patch.h"
+
+#ifndef UTS_UBUNTU_RELEASE_ABI
+#define UTS_UBUNTU_RELEASE_ABI 0
+#endif
 
 /*
  * There are quite a few similar structures at play in this file:
@@ -238,7 +243,10 @@ static int __init patch_init(void)
 			lfunc = &lfuncs[j];
 			lfunc->old_name = func->kfunc->name;
 			lfunc->new_func = (void *)func->kfunc->new_addr;
-#if LINUX_VERSION_CODE >= KERNEL_VERSION(4, 5, 0)
+#if (( LINUX_VERSION_CODE >= KERNEL_VERSION(4, 5, 0) ) || \
+     ( LINUX_VERSION_CODE >= KERNEL_VERSION(4, 4, 0) && \
+      UTS_UBUNTU_RELEASE_ABI >= 7 ) \
+    )
 			lfunc->old_sympos = func->kfunc->sympos;
 #else
 			lfunc->old_addr = func->kfunc->old_addr;
@@ -255,7 +263,10 @@ static int __init patch_init(void)
 		list_for_each_entry(reloc, &object->relocs, list) {
 			lreloc = &lrelocs[j];
 			lreloc->loc = reloc->kdynrela->dest;
-#if LINUX_VERSION_CODE >= KERNEL_VERSION(4, 5, 0)
+#if (( LINUX_VERSION_CODE >= KERNEL_VERSION(4, 5, 0) ) || \
+     ( LINUX_VERSION_CODE >= KERNEL_VERSION(4, 4, 0) && \
+      UTS_UBUNTU_RELEASE_ABI >= 7 ) \
+    )
 			lreloc->sympos = reloc->kdynrela->sympos;
 #else
 			lreloc->val = reloc->kdynrela->src;
