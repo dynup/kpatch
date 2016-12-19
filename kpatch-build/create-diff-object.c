@@ -2299,8 +2299,8 @@ struct arguments {
 static char args_doc[] = "original.o patched.o kernel-object output.o";
 
 static struct argp_option options[] = {
-	{"debug", 'd', 0, 0, "Show debug output" },
-	{ 0 }
+	{"debug", 'd', NULL, 0, "Show debug output" },
+	{ NULL }
 };
 
 static error_t parse_opt (int key, char *arg, struct argp_state *state)
@@ -2331,7 +2331,7 @@ static error_t parse_opt (int key, char *arg, struct argp_state *state)
 	return 0;
 }
 
-static struct argp argp = { options, parse_opt, args_doc, 0 };
+static struct argp argp = { options, parse_opt, args_doc, NULL };
 
 int main(int argc, char *argv[])
 {
@@ -2344,7 +2344,7 @@ int main(int argc, char *argv[])
 	char *hint = NULL, *name, *pos;
 
 	arguments.debug = 0;
-	argp_parse (&argp, argc, argv, 0, 0, &arguments);
+	argp_parse (&argp, argc, argv, 0, NULL, &arguments);
 	if (arguments.debug)
 		loglevel = DEBUG;
 
