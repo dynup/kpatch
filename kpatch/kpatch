@@ -27,6 +27,14 @@ INSTALLDIR=/var/lib/kpatch
 SCRIPTDIR="$(readlink -f $(dirname $(type -p $0)))"
 VERSION="0.3.4"
 
+# Livepatch is built into the kernel, if it's not present
+# we must use kpatch core module.
+if [[ -e /sys/kernel/livepatch ]] ; then
+	SYSFS="/sys/kernel/livepatch"
+else
+	SYSFS="/sys/kernel/kpatch/patches"
+fi
+
 usage_cmd() {
 	printf '   %-20s\n      %s\n' "$1" "$2" >&2
 }
@@ -116,8 +124,8 @@ find_core_module() {
 	return 1
 }
 
-core_module_loaded () {
-	grep -q "T kpatch_register" /proc/kallsyms
+core_loaded () {
+	grep -q -e "T klp_register_patch" -e "T kpatch_register" /proc/kallsyms
 }
 
 get_module_name () {
@@ -125,20 +133,24 @@ get_module_name () {
 }
 
 verify_module_checksum () {
-    modname=$(get_module_name $1)
-    [[ -z $modname ]] && return 1
+	modname=$(get_module_name $1)
+	[[ -z $modname ]] && return 1
 
-    checksum=$(readelf -p .kpatch.checksum $1 | grep '\[.*\]' | awk '{print $3}')
-    [[ -z $checksum ]] && return 1
+	checksum=$(readelf -p .kpatch.checksum $1 | grep '\[.*\]' | awk '{print $3}')
 
-    sysfs_checksum=$(cat /sys/kernel/kpatch/patches/${modname}/checksum)
-    [[ $checksum == $sysfs_checksum ]] || return 1
+	# Fail checksum match only if both exist and diverge
+	if [[ ! -z $checksum ]] && [[ -e "$SYSFS/${modname}/checksum" ]] ; then
+		sysfs_checksum=$(cat $SYSFS/${modname}/checksum)
+		[[ $checksum == $sysfs_checksum ]] || return 1
+	fi
+
+	return 0
 }
 
 load_module () {
 	local module="$1"
 
-	if ! core_module_loaded; then
+	if ! core_loaded; then
 		if modprobe -q kpatch; then
 			echo "loaded core module"
 		else
@@ -149,7 +161,7 @@ load_module () {
 	fi
 
 	local modname=$(get_module_name $module)
-	local moddir=/sys/kernel/kpatch/patches/$modname
+	local moddir="$SYSFS/$modname"
 	if [[ -d $moddir ]] ; then
 		if [[ $(cat "${moddir}/enabled") -eq 0 ]]; then
 			if verify_module_checksum $module; then # same checksum
@@ -191,7 +203,7 @@ load_module () {
 unload_module () {
 	PATCH="${1//-/_}"
 	PATCH="${PATCH%.ko}"
-	ENABLED=/sys/kernel/kpatch/patches/"$PATCH"/enabled
+	ENABLED="$SYSFS/$PATCH/enabled"
 	[[ -e "$ENABLED" ]] || die "patch module $1 is not loaded"
 	if [[ $(cat "$ENABLED") -eq 1 ]]; then
 		echo "disabling patch module: $PATCH"
@@ -233,7 +245,7 @@ case "$1" in
 	[[ "$#" -ne 2 ]] && usage
 	case "$2" in
 	"--all")
-		for module in /sys/kernel/kpatch/patches/*; do
+		for module in $SYSFS/*; do
 			[[ -e $module ]] || continue
 			unload_module $(basename $module) || die "failed to unload module $module"
 		done
@@ -320,7 +332,7 @@ case "$1" in
 "list")
 	[[ "$#" -ne 1 ]] && usage
 	echo "Loaded patch modules:"
-	for module in /sys/kernel/kpatch/patches/*; do
+	for module in $SYSFS/*; do
 		if [[ -e $module ]] && [[ $(cat $module/enabled) -eq 1 ]]; then
 			echo $(basename "$module")
 		fi
