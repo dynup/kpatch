@@ -2042,8 +2042,12 @@ void kpatch_create_dynamic_rela_sections(struct kpatch_elf *kelf,
 			ALLOC_LINK(dynrela, &relasec->relas);
 			if (sec->base->sym)
 				dynrela->sym = sec->base->sym;
-			else
+			else if (sec->base->secsym)
 				dynrela->sym = sec->base->secsym;
+			else
+				ERROR("can't create dynrela for section %s (symbol %s): no bundled section or section symbol",
+				      sec->name, rela->sym->name);
+
 			dynrela->type = R_X86_64_64;
 			dynrela->addend = rela->offset;
 			dynrela->offset = index * sizeof(*dynrelas);
