@@ -1096,7 +1096,8 @@ void kpatch_include_standard_elements(struct kpatch_elf *kelf)
 		    !strcmp(sec->name, ".strtab") ||
 		    !strcmp(sec->name, ".symtab") ||
 		    !strcmp(sec->name, ".rodata") ||
-		    !strncmp(sec->name, ".rodata.str1.", 13)) {
+		    (!strncmp(sec->name, ".rodata.", 8) &&
+		     strstr(sec->name, ".str1."))) {
 			sec->include = 1;
 			if (sec->secsym)
 				sec->secsym->include = 1;
