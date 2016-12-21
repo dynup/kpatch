@@ -1,0 +1,3 @@
+#!/bin/bash
+
+[[ $(cat /proc/sys/fs/aio-max-nr) = 262144 ]]

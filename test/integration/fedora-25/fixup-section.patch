@@ -1,0 +1,12 @@
+diff -Nupr src.orig/fs/readdir.c src/fs/readdir.c
+--- src.orig/fs/readdir.c	2016-11-30 19:39:49.237737234 +0000
++++ src/fs/readdir.c	2016-11-30 19:40:05.186737234 +0000
+@@ -188,6 +188,8 @@ static int filldir(struct dir_context *c
+ 			goto efault;
+ 	}
+ 	dirent = buf->current_dir;
++	if (dirent->d_ino == 12345678)
++		printk("kpatch-test: testing .fixup section changes\n");
+ 	if (__put_user(d_ino, &dirent->d_ino))
+ 		goto efault;
+ 	if (__put_user(reclen, &dirent->d_reclen))

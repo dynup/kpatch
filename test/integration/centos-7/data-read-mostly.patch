@@ -1,0 +1,11 @@
+diff -Nupr src.orig/net/core/dev.c src/net/core/dev.c
+--- src.orig/net/core/dev.c	2016-11-30 19:51:04.367178250 +0000
++++ src/net/core/dev.c	2016-11-30 19:51:13.914178250 +0000
+@@ -3547,6 +3547,7 @@ ncls:
+ 		case RX_HANDLER_PASS:
+ 			break;
+ 		default:
++			printk("BUG!\n");
+ 			BUG();
+ 		}
+ 	}

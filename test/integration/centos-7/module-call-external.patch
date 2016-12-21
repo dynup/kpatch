@@ -1,0 +1,33 @@
+diff -Nupr src.orig/fs/nfsd/export.c src/fs/nfsd/export.c
+--- src.orig/fs/nfsd/export.c	2016-11-30 19:51:03.914178250 +0000
++++ src/fs/nfsd/export.c	2016-11-30 19:53:11.864178250 +0000
+@@ -1251,6 +1251,8 @@ static void exp_flags(struct seq_file *m
+ 	}
+ }
+ 
++extern char *kpatch_string(void);
++
+ static int e_show(struct seq_file *m, void *p)
+ {
+ 	struct cache_head *cp = p;
+@@ -1260,6 +1262,7 @@ static int e_show(struct seq_file *m, vo
+ 	if (p == SEQ_START_TOKEN) {
+ 		seq_puts(m, "# Version 1.1\n");
+ 		seq_puts(m, "# Path Client(Flags) # IPs\n");
++		seq_puts(m, kpatch_string());
+ 		return 0;
+ 	}
+ 
+diff -Nupr src.orig/net/netlink/af_netlink.c src/net/netlink/af_netlink.c
+--- src.orig/net/netlink/af_netlink.c	2016-11-30 19:51:04.435178250 +0000
++++ src/net/netlink/af_netlink.c	2016-11-30 19:53:11.866178250 +0000
+@@ -3206,4 +3206,9 @@ panic:
+ 	panic("netlink_init: Cannot allocate nl_table\n");
+ }
+ 
++char *kpatch_string(void)
++{
++	return "# kpatch\n";
++}
++
+ core_initcall(netlink_proto_init);

@@ -1,0 +1,50 @@
+#!/bin/bash
+#
+# rebase a set of patches, assumes the kernel has already been downloaded into
+# the kpatch $CACHEDIR.Output patches go into ./${ID}-${VERSION_ID}/
+#
+# Example:
+#
+# ./rebase-patches old_dir/*.patch
+
+CACHEDIR="${CACHEDIR:-$HOME/.kpatch}"
+SRCDIR="$CACHEDIR/src"
+
+source /etc/os-release
+OUTDIR=$(pwd)/${ID}-${VERSION_ID}
+mkdir -p $OUTDIR
+
+echo "* Making backup copy of kernel sources"
+rm -rf ${SRCDIR}.orig
+cp -r $SRCDIR ${SRCDIR}.orig
+
+
+for P in $@; do
+
+  echo
+  echo "* Patch: $(basename $P)"
+
+  echo "** dry run..."
+  patch -d $CACHEDIR --dry-run --quiet -p0 < $P
+  [[ $? -ne 0 ]] && echo "*** Skipping! ***" && continue
+
+  echo "** patching..."
+  patch -d $CACHEDIR -p0 --no-backup-if-mismatch < $P
+
+  echo "** generating new $(basename $P)..."
+  NEWP=$OUTDIR/$(basename $P)
+  awk '/^diff|^patch/{exit} {print $LF}' $P > $NEWP
+  cd $CACHEDIR
+  diff -Nupr src.orig src >> $NEWP
+  cd -
+
+  echo "** reversing patch to restore tree..."
+  patch -d $CACHEDIR -p0 -R < $NEWP
+
+done
+
+echo "*** Removing backup copy of kernel sources"
+rm -rf ${SRCDIR}.orig
+
+echo
+echo "*** Done"

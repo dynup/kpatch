@@ -1,0 +1,24 @@
+diff -Nupr src.orig/arch/x86/kvm/x86.c src/arch/x86/kvm/x86.c
+--- src.orig/arch/x86/kvm/x86.c	2016-12-15 19:55:57.436000000 +0000
++++ src/arch/x86/kvm/x86.c	2016-12-15 19:58:09.352000000 +0000
+@@ -2026,12 +2026,20 @@ static void record_steal_time(struct kvm
+ 		&vcpu->arch.st.steal, sizeof(struct kvm_steal_time));
+ }
+ 
++void kpatch_kvm_x86_foo(void)
++{
++	if (!jiffies)
++		printk("kpatch kvm x86 foo\n");
++}
++
+ int kvm_set_msr_common(struct kvm_vcpu *vcpu, struct msr_data *msr_info)
+ {
+ 	bool pr = false;
+ 	u32 msr = msr_info->index;
+ 	u64 data = msr_info->data;
+ 
++	kpatch_kvm_x86_foo();
++
+ 	switch (msr) {
+ 	case MSR_AMD64_NB_CFG:
+ 	case MSR_IA32_UCODE_REV:

@@ -1,0 +1,15 @@
+ensure __jump_table is parsed and we can tell that it effectively didn't change
+
+diff -Nupr src.orig/kernel/time/timer.c src/kernel/time/timer.c
+--- src.orig/kernel/time/timer.c	2016-11-30 19:39:45.150737234 +0000
++++ src/kernel/time/timer.c	2016-11-30 20:02:08.254737234 +0000
+@@ -1637,6 +1637,9 @@ static void run_timer_softirq(struct sof
+ {
+ 	struct timer_base *base = this_cpu_ptr(&timer_bases[BASE_STD]);
+ 
++	if (!base)
++		printk("kpatch-test: testing __tracepoints section changes\n");
++
+ 	__run_timers(base);
+ 	if (IS_ENABLED(CONFIG_NO_HZ_COMMON) && base->nohz_active)
+ 		__run_timers(this_cpu_ptr(&timer_bases[BASE_DEF]));

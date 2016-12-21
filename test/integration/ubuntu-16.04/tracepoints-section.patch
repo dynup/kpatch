@@ -1,0 +1,13 @@
+diff -Nupr src.orig/kernel/time/timer.c src/kernel/time/timer.c
+--- src.orig/kernel/time/timer.c	2016-01-10 23:01:32.000000000 +0000
++++ src/kernel/time/timer.c	2016-12-15 20:27:00.368000000 +0000
+@@ -1433,6 +1433,9 @@ static void run_timer_softirq(struct sof
+ {
+ 	struct tvec_base *base = this_cpu_ptr(&tvec_bases);
+ 
++	if (!base)
++		printk("kpatch-test: testing __tracepoints section changes\n");
++
+ 	if (time_after_eq(jiffies, base->timer_jiffies))
+ 		__run_timers(base);
+ }

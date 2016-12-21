@@ -1,0 +1,24 @@
+diff -Nupr src.orig/arch/x86/kvm/vmx.c src/arch/x86/kvm/vmx.c
+--- src.orig/arch/x86/kvm/vmx.c	2016-11-30 19:39:46.591737234 +0000
++++ src/arch/x86/kvm/vmx.c	2016-11-30 19:40:56.291737234 +0000
+@@ -10829,10 +10829,20 @@ static void vmx_leave_nested(struct kvm_
+  * It should only be called before L2 actually succeeded to run, and when
+  * vmcs01 is current (it doesn't leave_guest_mode() or switch vmcss).
+  */
++#include "kpatch.h"
+ static void nested_vmx_entry_failure(struct kvm_vcpu *vcpu,
+ 			struct vmcs12 *vmcs12,
+ 			u32 reason, unsigned long qualification)
+ {
++	int *kpatch;
++
++	kpatch = kpatch_shadow_alloc(vcpu, "kpatch", sizeof(*kpatch),
++				     GFP_KERNEL);
++	if (kpatch) {
++		kpatch_shadow_get(vcpu, "kpatch");
++		kpatch_shadow_free(vcpu, "kpatch");
++	}
++
+ 	load_vmcs12_host_state(vcpu, vmcs12);
+ 	vmcs12->vm_exit_reason = reason | VMX_EXIT_REASONS_FAILED_VMENTRY;
+ 	vmcs12->exit_qualification = qualification;

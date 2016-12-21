@@ -1,0 +1,21 @@
+diff -Nupr src.orig/mm/mmap.c src/mm/mmap.c
+--- src.orig/mm/mmap.c	2016-11-30 19:51:04.337178250 +0000
++++ src/mm/mmap.c	2016-11-30 19:51:23.348178250 +0000
+@@ -1481,6 +1481,7 @@ static inline int accountable_mapping(st
+ 	return (vm_flags & (VM_NORESERVE | VM_SHARED | VM_WRITE)) == VM_WRITE;
+ }
+ 
++#include "kpatch-macros.h"
+ unsigned long mmap_region(struct file *file, unsigned long addr,
+ 		unsigned long len, vm_flags_t vm_flags, unsigned long pgoff)
+ {
+@@ -1492,6 +1493,9 @@ unsigned long mmap_region(struct file *f
+ 	unsigned long charged = 0;
+ 	struct inode *inode =  file ? file_inode(file) : NULL;
+ 
++	if (!jiffies)
++		printk("kpatch mmap foo\n");
++
+ 	/* Check against address space limit. */
+ 	if (!may_expand_vm(mm, len >> PAGE_SHIFT)) {
+ 		unsigned long nr_pages;

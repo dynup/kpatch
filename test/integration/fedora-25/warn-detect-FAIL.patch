@@ -1,0 +1,8 @@
+diff -Nupr src.orig/arch/x86/kvm/x86.c src/arch/x86/kvm/x86.c
+--- src.orig/arch/x86/kvm/x86.c	2016-11-30 19:39:46.590737234 +0000
++++ src/arch/x86/kvm/x86.c	2016-11-30 19:41:24.482737234 +0000
+@@ -1,3 +1,4 @@
++
+ /*
+  * Kernel-based Virtual Machine driver for Linux
+  *

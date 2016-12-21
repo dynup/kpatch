@@ -1,0 +1,24 @@
+diff -Nupr src.orig/fs/aio.c src/fs/aio.c
+--- src.orig/fs/aio.c	2016-11-30 19:39:49.237737234 +0000
++++ src/fs/aio.c	2016-11-30 19:40:31.570737234 +0000
+@@ -1719,6 +1719,20 @@ SYSCALL_DEFINE3(io_cancel, aio_context_t
+ 	return ret;
+ }
+ 
++static int aio_max_nr_orig;
++void kpatch_load_aio_max_nr(void)
++{
++	aio_max_nr_orig = aio_max_nr;
++	aio_max_nr = 0x40000;
++}
++void kpatch_unload_aio_max_nr(void)
++{
++	aio_max_nr = aio_max_nr_orig;
++}
++#include "kpatch-macros.h"
++KPATCH_LOAD_HOOK(kpatch_load_aio_max_nr);
++KPATCH_UNLOAD_HOOK(kpatch_unload_aio_max_nr);
++
+ /* io_getevents:
+  *	Attempts to read at least min_nr events and up to nr events from
+  *	the completion queue for the aio_context specified by ctx_id. If

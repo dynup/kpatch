@@ -1,0 +1,35 @@
+diff -Nupr src.orig/fs/proc/cmdline.c src/fs/proc/cmdline.c
+--- src.orig/fs/proc/cmdline.c	2016-11-30 19:39:49.317737234 +0000
++++ src/fs/proc/cmdline.c	2016-11-30 19:40:37.629737234 +0000
+@@ -5,7 +5,7 @@
+ 
+ static int cmdline_proc_show(struct seq_file *m, void *v)
+ {
+-	seq_printf(m, "%s\n", saved_command_line);
++	seq_printf(m, "%s kpatch=1\n", saved_command_line);
+ 	return 0;
+ }
+ 
+diff -Nupr src.orig/fs/proc/meminfo.c src/fs/proc/meminfo.c
+--- src.orig/fs/proc/meminfo.c	2016-11-30 19:39:49.317737234 +0000
++++ src/fs/proc/meminfo.c	2016-11-30 19:40:37.629737234 +0000
+@@ -99,7 +99,7 @@ static int meminfo_proc_show(struct seq_
+ 		"Committed_AS:   %8lu kB\n"
+ 		"VmallocTotal:   %8lu kB\n"
+ 		"VmallocUsed:    %8lu kB\n"
+-		"VmallocChunk:   %8lu kB\n"
++		"VMALLOCCHUNK:   %8lu kB\n"
+ #ifdef CONFIG_MEMORY_FAILURE
+ 		"HardwareCorrupted: %5lu kB\n"
+ #endif
+diff -Nupr src.orig/include/linux/kernel.h src/include/linux/kernel.h
+--- src.orig/include/linux/kernel.h	2016-11-30 19:39:45.003737234 +0000
++++ src/include/linux/kernel.h	2016-11-30 19:40:37.630737234 +0000
+@@ -2,6 +2,7 @@
+ #define _LINUX_KERNEL_H
+ 
+ 
++
+ #include <stdarg.h>
+ #include <linux/linkage.h>
+ #include <linux/stddef.h>
