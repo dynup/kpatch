@@ -120,12 +120,12 @@ log() {
 }
 
 unload_all() {
-	for i in `lsmod |egrep '^kpatch' |awk '{print $1}'`; do
+	for i in `/sbin/lsmod |egrep '^kpatch' |awk '{print $1}'`; do
 		if [[ $i != kpatch ]]; then
 			$KPATCH unload $i >> $LOG 2>&1 || error "\"kpatch unload $i\" failed"
 		fi
 	done
-	if lsmod |egrep -q '^kpatch'; then
+	if /sbin/lsmod |egrep -q '^kpatch'; then
 		$RMMOD kpatch >> $LOG 2>&1 || error "\"rmmod kpatch\" failed"
 	fi
 }
