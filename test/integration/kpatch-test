@@ -267,6 +267,10 @@ build_combined_module() {
 }
 
 run_combined_test() {
+	if [[ ! -e COMBINED.patch ]]; then
+		return
+	fi
+
 	if [[ ! -e kpatch-COMBINED.ko ]]; then
 		log "can't find kpatch-COMBINED.ko, skipping"
 		return
