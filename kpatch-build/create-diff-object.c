@@ -62,6 +62,8 @@ char *childobj;
 
 enum loglevel loglevel = NORMAL;
 
+static struct kpatch_elf *saved_kelf_base;
+
 /*******************
  * Data structures
  * ****************/
@@ -1803,6 +1805,60 @@ static void kpatch_process_special_sections(struct kpatch_elf *kelf)
 	}
 }
 
+static int kpatch_resolve_base_object(struct lookup_table *table, char *hint)
+{
+	struct kpatch_elf *kelf = saved_kelf_base;
+	struct symbol *sym;
+	int i = 0, sym_num = 0;
+	struct sym_compare_type *sym_array;
+	int ret = 0;
+
+	list_for_each_entry(sym, &kelf->symbols, list) {
+		if (sym->bind != STB_LOCAL)
+			continue;
+		if (sym->type != STT_FUNC && sym->type != STT_OBJECT)
+			continue;
+
+		sym_num++;
+	}
+
+	if (!sym_num)
+		return -1;
+
+	sym_array = malloc(sym_num * sizeof(struct sym_compare_type));
+	if (!sym_array)
+		ERROR("malloc");
+
+	list_for_each_entry(sym, &kelf->symbols, list) {
+		if (sym->bind != STB_LOCAL)
+			continue;
+		if (sym->type != STT_FUNC && sym->type != STT_OBJECT)
+			continue;
+
+		sym_array[i].type = sym->type;
+		sym_array[i++].name = sym->name;
+	}
+
+	if (resolve_dup_file_symbol(table, hint, sym_array, sym_num))
+		ret = -1;
+
+	free(sym_array);
+
+	return ret;
+}
+
+static int kpatch_resolve_ambiguous_symbol(struct lookup_table *table, char *hint,
+					   char *name, struct lookup_result *result)
+{
+	if (kpatch_resolve_base_object(table, hint))
+		return -1;
+
+	if (lookup_local_symbol(table, name, hint, result))
+		return -1;
+
+	return 0;
+}
+
 static void kpatch_create_patches_sections(struct kpatch_elf *kelf,
 					   struct lookup_table *table, char *hint,
 					   char *objname)
@@ -1813,6 +1869,7 @@ static void kpatch_create_patches_sections(struct kpatch_elf *kelf,
 	struct rela *rela;
 	struct lookup_result result;
 	struct kpatch_patch_func *funcs;
+	int ret;
 
 	/* count patched functions */
 	nr = 0;
@@ -1838,8 +1895,13 @@ static void kpatch_create_patches_sections(struct kpatch_elf *kelf,
 	list_for_each_entry(sym, &kelf->symbols, list) {
 		if (sym->type == STT_FUNC && sym->status == CHANGED) {
 			if (sym->bind == STB_LOCAL) {
-				if (lookup_local_symbol(table, sym->name,
-				                        hint, &result))
+				ret = lookup_local_symbol(table, sym->name,
+				                        hint, &result);
+				if (ret == 2 &&
+				    kpatch_resolve_ambiguous_symbol(table, hint, sym->name, &result))
+					ERROR("lookup_local_symbol: ambiguous %s (%s)",
+					      sym->name, hint);
+				else if (ret == 1)
 					ERROR("lookup_local_symbol %s (%s)",
 					      sym->name, hint);
 			} else {
@@ -1971,10 +2033,11 @@ static void kpatch_create_dynamic_rela_sections(struct kpatch_elf *kelf,
 				/* An unchanged local symbol */
 				ret = lookup_local_symbol(table,
 					rela->sym->name, hint, &result);
-				if (ret == 2)
+				if (ret == 2 &&
+				    kpatch_resolve_ambiguous_symbol(table, hint, rela->sym->name, &result))
 					ERROR("lookup_local_symbol: ambiguous %s:%s relocation, needed for %s",
 			               hint, rela->sym->name, sec->base->name);
-				else if (ret)
+				else if (ret == 1)
 					ERROR("lookup_local_symbol %s:%s needed for %s",
 			               hint, rela->sym->name, sec->base->name);
 
@@ -2381,8 +2444,7 @@ int main(int argc, char *argv[])
 	kpatch_mark_ignored_sections(kelf_patched);
 	kpatch_compare_correlated_elements(kelf_patched);
 	kpatch_check_fentry_calls(kelf_patched);
-	kpatch_elf_teardown(kelf_base);
-	kpatch_elf_free(kelf_base);
+	saved_kelf_base = kelf_base;
 
 	kpatch_mark_ignored_functions_same(kelf_patched);
 	kpatch_mark_ignored_sections_same(kelf_patched);
@@ -2486,6 +2548,8 @@ int main(int argc, char *argv[])
 	kpatch_dump_kelf(kelf_out);
 	kpatch_write_output_elf(kelf_out, kelf_patched->elf, arguments.args[3]);
 
+	kpatch_elf_teardown(kelf_base);
+	kpatch_elf_free(kelf_base);
 	kpatch_elf_free(kelf_patched);
 	kpatch_elf_teardown(kelf_out);
 	kpatch_elf_free(kelf_out);
