@@ -419,6 +419,7 @@ else
 			extension="bz2"
 			sublevel="SUBLEVEL = 0"
 			taroptions="xvjf"
+			UBUNTU_KERNEL=1
 
 		elif [[ $DISTRO = debian ]]; then
 
@@ -601,7 +602,7 @@ cp "$OBJDIR/.config" "$SRCDIR"
 cd "$SRCDIR"
 make prepare >> "$LOGFILE" 2>&1 || die
 
-if [[ $DISTRO == ubuntu ]]; then
+if [[ ! -z $UBUNTU_KERNEL ]]; then
 	# UBUNTU: add UTS_UBUNTU_RELEASE_ABI to utsrelease.h after regenerating it
 	UBUNTU_ABI=${ARCHVERSION#*-}
 	UBUNTU_ABI=${UBUNTU_ABI%-*}
