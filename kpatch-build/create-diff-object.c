@@ -143,7 +143,7 @@ static int kpatch_mangled_strcmp(char *s1, char *s2)
 	return 1;
 }
 
-int rela_equal(struct rela *rela1, struct rela *rela2)
+static int rela_equal(struct rela *rela1, struct rela *rela2)
 {
 	if (rela1->type != rela2->type ||
 	    rela1->offset != rela2->offset)
@@ -162,7 +162,7 @@ int rela_equal(struct rela *rela1, struct rela *rela2)
 	return !strcmp(rela1->sym->name, rela2->sym->name);
 }
 
-void kpatch_compare_correlated_rela_section(struct section *sec)
+static void kpatch_compare_correlated_rela_section(struct section *sec)
 {
 	struct rela *rela1, *rela2 = NULL;
 
@@ -179,7 +179,7 @@ void kpatch_compare_correlated_rela_section(struct section *sec)
 	sec->status = SAME;
 }
 
-void kpatch_compare_correlated_nonrela_section(struct section *sec)
+static void kpatch_compare_correlated_nonrela_section(struct section *sec)
 {
 	struct section *sec1 = sec, *sec2 = sec->twin;
 
@@ -190,7 +190,7 @@ void kpatch_compare_correlated_nonrela_section(struct section *sec)
 		sec->status = SAME;
 }
 
-void kpatch_compare_correlated_section(struct section *sec)
+static void kpatch_compare_correlated_section(struct section *sec)
 {
 	struct section *sec1 = sec, *sec2 = sec->twin;
 
@@ -320,7 +320,7 @@ static int kpatch_warn_only_change(struct section *sec)
 	return 1;
 }
 
-void kpatch_compare_sections(struct list_head *seclist)
+static void kpatch_compare_sections(struct list_head *seclist)
 {
 	struct section *sec;
 
@@ -353,7 +353,7 @@ void kpatch_compare_sections(struct list_head *seclist)
 	}
 }
 
-void kpatch_compare_correlated_symbol(struct symbol *sym)
+static void kpatch_compare_correlated_symbol(struct symbol *sym)
 {
 	struct symbol *sym1 = sym, *sym2 = sym->twin;
 
@@ -389,7 +389,7 @@ void kpatch_compare_correlated_symbol(struct symbol *sym)
 	 */
 }
 
-void kpatch_compare_symbols(struct list_head *symlist)
+static void kpatch_compare_symbols(struct list_head *symlist)
 {
 	struct symbol *sym;
 
@@ -403,7 +403,7 @@ void kpatch_compare_symbols(struct list_head *symlist)
 	}
 }
 
-void kpatch_correlate_sections(struct list_head *seclist1, struct list_head *seclist2)
+static void kpatch_correlate_sections(struct list_head *seclist1, struct list_head *seclist2)
 {
 	struct section *sec1, *sec2;
 
@@ -437,7 +437,7 @@ void kpatch_correlate_sections(struct list_head *seclist1, struct list_head *sec
 	}
 }
 
-void kpatch_correlate_symbols(struct list_head *symlist1, struct list_head *symlist2)
+static void kpatch_correlate_symbols(struct list_head *symlist1, struct list_head *symlist2)
 {
 	struct symbol *sym1, *sym2;
 
@@ -465,7 +465,7 @@ void kpatch_correlate_symbols(struct list_head *symlist1, struct list_head *syml
 	}
 }
 
-void kpatch_compare_elf_headers(Elf *elf1, Elf *elf2)
+static void kpatch_compare_elf_headers(Elf *elf1, Elf *elf2)
 {
 	GElf_Ehdr eh1, eh2;
 
@@ -488,7 +488,7 @@ void kpatch_compare_elf_headers(Elf *elf1, Elf *elf2)
 		DIFF_FATAL("ELF headers differ");
 }
 
-void kpatch_check_program_headers(Elf *elf)
+static void kpatch_check_program_headers(Elf *elf)
 {
 	size_t ph_nr;
 
@@ -499,7 +499,7 @@ void kpatch_check_program_headers(Elf *elf)
 		DIFF_FATAL("ELF contains program header");
 }
 
-void kpatch_mark_grouped_sections(struct kpatch_elf *kelf)
+static void kpatch_mark_grouped_sections(struct kpatch_elf *kelf)
 {
 	struct section *groupsec, *sec;
 	unsigned int *data, *end;
@@ -530,8 +530,8 @@ void kpatch_mark_grouped_sections(struct kpatch_elf *kelf)
  * with a different trailing number.  Rename any mangled patched functions to
  * match their base counterparts.
  */
-void kpatch_rename_mangled_functions(struct kpatch_elf *base,
-				     struct kpatch_elf *patched)
+static void kpatch_rename_mangled_functions(struct kpatch_elf *base,
+					    struct kpatch_elf *patched)
 {
 	struct symbol *sym, *basesym;
 	char name[256], *origname;
@@ -665,8 +665,8 @@ static int kpatch_is_normal_static_local(struct symbol *sym)
  *   they can occasionally be referenced by data sections as
  *   well.
  */
-void kpatch_correlate_static_local_variables(struct kpatch_elf *base,
-					     struct kpatch_elf *patched)
+static void kpatch_correlate_static_local_variables(struct kpatch_elf *base,
+						    struct kpatch_elf *patched)
 {
 	struct symbol *sym, *patched_sym;
 	struct section *sec;
@@ -841,20 +841,20 @@ void kpatch_correlate_static_local_variables(struct kpatch_elf *base,
 	}
 }
 
-void kpatch_correlate_elfs(struct kpatch_elf *kelf1, struct kpatch_elf *kelf2)
+static void kpatch_correlate_elfs(struct kpatch_elf *kelf1, struct kpatch_elf *kelf2)
 {
 	kpatch_correlate_sections(&kelf1->sections, &kelf2->sections);
 	kpatch_correlate_symbols(&kelf1->symbols, &kelf2->symbols);
 }
 
-void kpatch_compare_correlated_elements(struct kpatch_elf *kelf)
+static void kpatch_compare_correlated_elements(struct kpatch_elf *kelf)
 {
 	/* lists are already correlated at this point */
 	kpatch_compare_sections(&kelf->sections);
 	kpatch_compare_symbols(&kelf->symbols);
 }
 
-void rela_insn(struct section *sec, struct rela *rela, struct insn *insn)
+static void rela_insn(struct section *sec, struct rela *rela, struct insn *insn)
 {
 	unsigned long insn_addr, start, end, rela_addr;
 
@@ -880,7 +880,7 @@ void rela_insn(struct section *sec, struct rela *rela, struct insn *insn)
  * section symbol in this case so that the relas can be properly correlated and
  * so that the existing object/function in vmlinux can be linked to.
  */
-void kpatch_replace_sections_syms(struct kpatch_elf *kelf)
+static void kpatch_replace_sections_syms(struct kpatch_elf *kelf)
 {
 	struct section *sec;
 	struct rela *rela;
@@ -1008,7 +1008,7 @@ static void kpatch_check_fentry_calls(struct kpatch_elf *kelf)
 		DIFF_FATAL("%d function(s) can not be patched", errs);
 }
 
-void kpatch_verify_patchability(struct kpatch_elf *kelf)
+static void kpatch_verify_patchability(struct kpatch_elf *kelf)
 {
 	struct section *sec;
 	int errs = 0;
@@ -1052,7 +1052,7 @@ void kpatch_verify_patchability(struct kpatch_elf *kelf)
 #define inc_printf(fmt, ...) \
 	log_debug("%*s" fmt, recurselevel, "", ##__VA_ARGS__);
 
-void kpatch_include_symbol(struct symbol *sym, int recurselevel)
+static void kpatch_include_symbol(struct symbol *sym, int recurselevel)
 {
 	struct rela *rela;
 	struct section *sec;
@@ -1086,7 +1086,7 @@ out:
 	return;
 }
 
-void kpatch_include_standard_elements(struct kpatch_elf *kelf)
+static void kpatch_include_standard_elements(struct kpatch_elf *kelf)
 {
 	struct section *sec;
 
@@ -1108,7 +1108,7 @@ void kpatch_include_standard_elements(struct kpatch_elf *kelf)
 	list_entry(kelf->symbols.next, struct symbol, list)->include = 1;
 }
 
-int kpatch_include_hook_elements(struct kpatch_elf *kelf)
+static int kpatch_include_hook_elements(struct kpatch_elf *kelf)
 {
 	struct section *sec;
 	struct symbol *sym;
@@ -1153,7 +1153,7 @@ int kpatch_include_hook_elements(struct kpatch_elf *kelf)
 	return found;
 }
 
-void kpatch_include_force_elements(struct kpatch_elf *kelf)
+static void kpatch_include_force_elements(struct kpatch_elf *kelf)
 {
 	struct section *sec;
 	struct symbol *sym;
@@ -1183,7 +1183,7 @@ void kpatch_include_force_elements(struct kpatch_elf *kelf)
 			sym->include = 0;
 }
 
-int kpatch_include_new_globals(struct kpatch_elf *kelf)
+static int kpatch_include_new_globals(struct kpatch_elf *kelf)
 {
 	struct symbol *sym;
 	int nr = 0;
@@ -1199,7 +1199,7 @@ int kpatch_include_new_globals(struct kpatch_elf *kelf)
 	return nr;
 }
 
-int kpatch_include_changed_functions(struct kpatch_elf *kelf)
+static int kpatch_include_changed_functions(struct kpatch_elf *kelf)
 {
 	struct symbol *sym;
 	int changed_nr = 0;
@@ -1220,7 +1220,7 @@ int kpatch_include_changed_functions(struct kpatch_elf *kelf)
 	return changed_nr;
 }
 
-void kpatch_print_changes(struct kpatch_elf *kelf)
+static void kpatch_print_changes(struct kpatch_elf *kelf)
 {
 	struct symbol *sym;
 
@@ -1234,9 +1234,9 @@ void kpatch_print_changes(struct kpatch_elf *kelf)
 	}
 }
 
-void kpatch_migrate_symbols(struct list_head *src,
-                                    struct list_head *dst,
-                                    int (*select)(struct symbol *))
+static void kpatch_migrate_symbols(struct list_head *src,
+				   struct list_head *dst,
+				   int (*select)(struct symbol *))
 {
 	struct symbol *sym, *safe;
 
@@ -1249,7 +1249,7 @@ void kpatch_migrate_symbols(struct list_head *src,
 	}
 }
 
-void kpatch_migrate_included_elements(struct kpatch_elf *kelf, struct kpatch_elf **kelfout)
+static void kpatch_migrate_included_elements(struct kpatch_elf *kelf, struct kpatch_elf **kelfout)
 {
 	struct section *sec, *safesec;
 	struct symbol *sym, *safesym;
@@ -1293,7 +1293,7 @@ void kpatch_migrate_included_elements(struct kpatch_elf *kelf, struct kpatch_elf
 	*kelfout = out;
 }
 
-void kpatch_reorder_symbols(struct kpatch_elf *kelf)
+static void kpatch_reorder_symbols(struct kpatch_elf *kelf)
 {
 	LIST_HEAD(symbols);
 
@@ -1311,7 +1311,7 @@ void kpatch_reorder_symbols(struct kpatch_elf *kelf)
 	list_replace(&symbols, &kelf->symbols);
 }
 
-void kpatch_reindex_elements(struct kpatch_elf *kelf)
+static void kpatch_reindex_elements(struct kpatch_elf *kelf)
 {
 	struct section *sec;
 	struct symbol *sym;
@@ -1331,7 +1331,7 @@ void kpatch_reindex_elements(struct kpatch_elf *kelf)
 	}
 }
 
-int bug_table_group_size(struct kpatch_elf *kelf, int offset)
+static int bug_table_group_size(struct kpatch_elf *kelf, int offset)
 {
 	static int size = 0;
 	char *str;
@@ -1346,7 +1346,7 @@ int bug_table_group_size(struct kpatch_elf *kelf, int offset)
 	return size;
 }
 
-int parainstructions_group_size(struct kpatch_elf *kelf, int offset)
+static int parainstructions_group_size(struct kpatch_elf *kelf, int offset)
 {
 	static int size = 0;
 	char *str;
@@ -1361,7 +1361,7 @@ int parainstructions_group_size(struct kpatch_elf *kelf, int offset)
 	return size;
 }
 
-int ex_table_group_size(struct kpatch_elf *kelf, int offset)
+static int ex_table_group_size(struct kpatch_elf *kelf, int offset)
 {
 	static int size = 0;
 	char *str;
@@ -1376,7 +1376,7 @@ int ex_table_group_size(struct kpatch_elf *kelf, int offset)
 	return size;
 }
 
-int altinstructions_group_size(struct kpatch_elf *kelf, int offset)
+static int altinstructions_group_size(struct kpatch_elf *kelf, int offset)
 {
 	static int size = 0;
 	char *str;
@@ -1391,7 +1391,7 @@ int altinstructions_group_size(struct kpatch_elf *kelf, int offset)
 	return size;
 }
 
-int smp_locks_group_size(struct kpatch_elf *kelf, int offset)
+static int smp_locks_group_size(struct kpatch_elf *kelf, int offset)
 {
 	return 4;
 }
@@ -1401,7 +1401,7 @@ int smp_locks_group_size(struct kpatch_elf *kelf, int offset)
  * .fixup rela group is referenced by the __ex_table section. To find the size
  * of a .fixup rela group, we have to traverse the __ex_table relas.
  */
-int fixup_group_size(struct kpatch_elf *kelf, int offset)
+static int fixup_group_size(struct kpatch_elf *kelf, int offset)
 {
 	struct section *sec;
 	struct rela *rela;
@@ -1444,7 +1444,7 @@ int fixup_group_size(struct kpatch_elf *kelf, int offset)
 	return rela->addend - offset;
 }
 
-struct special_section special_sections[] = {
+static struct special_section special_sections[] = {
 	{
 		.name		= "__bug_table",
 		.group_size	= bug_table_group_size,
@@ -1472,7 +1472,7 @@ struct special_section special_sections[] = {
 	{},
 };
 
-int should_keep_rela_group(struct section *sec, int start, int size)
+static int should_keep_rela_group(struct section *sec, int start, int size)
 {
 	struct rela *rela;
 	int found = 0;
@@ -1497,10 +1497,10 @@ int should_keep_rela_group(struct section *sec, int start, int size)
  * updated too. Stash the result in rela.r_addend so that the calculation in
  * fixup_group_size() is not affected.
  */
-void kpatch_update_ex_table_addend(struct kpatch_elf *kelf,
-				   struct special_section *special,
-				   int src_offset, int dest_offset,
-				   int group_size)
+static void kpatch_update_ex_table_addend(struct kpatch_elf *kelf,
+					  struct special_section *special,
+					  int src_offset, int dest_offset,
+					  int group_size)
 {
 	struct rela *rela;
 	struct section *sec;
@@ -1517,9 +1517,9 @@ void kpatch_update_ex_table_addend(struct kpatch_elf *kelf,
 	}
 }
 
-void kpatch_regenerate_special_section(struct kpatch_elf *kelf,
-				       struct special_section *special,
-				       struct section *sec)
+static void kpatch_regenerate_special_section(struct kpatch_elf *kelf,
+					      struct special_section *special,
+					      struct section *sec)
 {
 	struct rela *rela, *safe;
 	char *src, *dest;
@@ -1614,7 +1614,7 @@ void kpatch_regenerate_special_section(struct kpatch_elf *kelf,
 	sec->base->data->d_size = dest_offset;
 }
 
-void kpatch_include_debug_sections(struct kpatch_elf *kelf)
+static void kpatch_include_debug_sections(struct kpatch_elf *kelf)
 {
 	struct section *sec;
 	struct rela *rela, *saferela;
@@ -1641,7 +1641,7 @@ void kpatch_include_debug_sections(struct kpatch_elf *kelf)
 	}
 }
 
-void kpatch_mark_ignored_sections(struct kpatch_elf *kelf)
+static void kpatch_mark_ignored_sections(struct kpatch_elf *kelf)
 {
 	struct section *sec, *strsec, *ignoresec;
 	struct rela *rela;
@@ -1679,7 +1679,7 @@ void kpatch_mark_ignored_sections(struct kpatch_elf *kelf)
 	}
 }
 
-void kpatch_mark_ignored_sections_same(struct kpatch_elf *kelf)
+static void kpatch_mark_ignored_sections_same(struct kpatch_elf *kelf)
 {
 	struct section *sec;
 	struct symbol *sym;
@@ -1700,7 +1700,7 @@ void kpatch_mark_ignored_sections_same(struct kpatch_elf *kelf)
 	}
 }
 
-void kpatch_mark_ignored_functions_same(struct kpatch_elf *kelf)
+static void kpatch_mark_ignored_functions_same(struct kpatch_elf *kelf)
 {
 	struct section *sec;
 	struct rela *rela;
@@ -1726,7 +1726,7 @@ void kpatch_mark_ignored_functions_same(struct kpatch_elf *kelf)
 	}
 }
 
-void kpatch_process_special_sections(struct kpatch_elf *kelf)
+static void kpatch_process_special_sections(struct kpatch_elf *kelf)
 {
 	struct special_section *special;
 	struct section *sec;
@@ -1803,9 +1803,9 @@ void kpatch_process_special_sections(struct kpatch_elf *kelf)
 	}
 }
 
-void kpatch_create_patches_sections(struct kpatch_elf *kelf,
-                                    struct lookup_table *table, char *hint,
-                                    char *objname)
+static void kpatch_create_patches_sections(struct kpatch_elf *kelf,
+					   struct lookup_table *table, char *hint,
+					   char *objname)
 {
 	int nr, index, objname_offset;
 	struct section *sec, *relasec;
@@ -1907,9 +1907,9 @@ static int kpatch_is_core_module_symbol(char *name)
 		!strcmp(name, "kpatch_shadow_get"));
 }
 
-void kpatch_create_dynamic_rela_sections(struct kpatch_elf *kelf,
-                                         struct lookup_table *table, char *hint,
-                                         char *objname)
+static void kpatch_create_dynamic_rela_sections(struct kpatch_elf *kelf,
+						struct lookup_table *table, char *hint,
+						char *objname)
 {
 	int nr, index, objname_offset;
 	struct section *sec, *dynsec, *relasec;
@@ -2081,7 +2081,7 @@ void kpatch_create_dynamic_rela_sections(struct kpatch_elf *kelf,
 	dynsec->sh.sh_size = dynsec->data->d_size;
 }
 
-void kpatch_create_hooks_objname_rela(struct kpatch_elf *kelf, char *objname)
+static void kpatch_create_hooks_objname_rela(struct kpatch_elf *kelf, char *objname)
 {
 	struct section *sec;
 	struct rela *rela;
@@ -2116,7 +2116,7 @@ void kpatch_create_hooks_objname_rela(struct kpatch_elf *kelf, char *objname)
  * TODO: Eventually we can modify recordmount so that it recognizes our bundled
  * sections as valid and does this work for us.
  */
-void kpatch_create_mcount_sections(struct kpatch_elf *kelf)
+static void kpatch_create_mcount_sections(struct kpatch_elf *kelf)
 {
 	int nr, index;
 	struct section *sec, *relasec;
@@ -2189,8 +2189,8 @@ void kpatch_create_mcount_sections(struct kpatch_elf *kelf)
  * sections, but the rela entries that referenced them were converted to
  * dynrelas and are no longer needed.
  */
-void kpatch_strip_unneeded_syms(struct kpatch_elf *kelf,
-                                struct lookup_table *table)
+static void kpatch_strip_unneeded_syms(struct kpatch_elf *kelf,
+				       struct lookup_table *table)
 {
 	struct symbol *sym, *safe;
 
@@ -2202,7 +2202,7 @@ void kpatch_strip_unneeded_syms(struct kpatch_elf *kelf,
 	}
 }
 
-void kpatch_create_strings_elements(struct kpatch_elf *kelf)
+static void kpatch_create_strings_elements(struct kpatch_elf *kelf)
 {
 	struct section *sec;
 	struct symbol *sym;
@@ -2235,7 +2235,7 @@ void kpatch_create_strings_elements(struct kpatch_elf *kelf)
 	sym->name = ".kpatch.strings";
 }
 
-void kpatch_build_strings_section_data(struct kpatch_elf *kelf)
+static void kpatch_build_strings_section_data(struct kpatch_elf *kelf)
 {
 	struct string *string;
 	struct section *sec;
@@ -2265,7 +2265,7 @@ void kpatch_build_strings_section_data(struct kpatch_elf *kelf)
 	}
 }
 
-void kpatch_rebuild_rela_section_data(struct section *sec)
+static void kpatch_rebuild_rela_section_data(struct section *sec)
 {
 	struct rela *rela;
 	int nr = 0, index = 0, size;
@@ -2305,8 +2305,8 @@ struct arguments {
 static char args_doc[] = "original.o patched.o kernel-object output.o";
 
 static struct argp_option options[] = {
-	{"debug", 'd', 0, 0, "Show debug output" },
-	{ 0 }
+	{"debug", 'd', NULL, 0, "Show debug output" },
+	{ NULL }
 };
 
 static error_t parse_opt (int key, char *arg, struct argp_state *state)
@@ -2337,7 +2337,7 @@ static error_t parse_opt (int key, char *arg, struct argp_state *state)
 	return 0;
 }
 
-static struct argp argp = { options, parse_opt, args_doc, 0 };
+static struct argp argp = { options, parse_opt, args_doc, NULL };
 
 int main(int argc, char *argv[])
 {
@@ -2350,7 +2350,7 @@ int main(int argc, char *argv[])
 	char *hint = NULL, *name, *pos;
 
 	arguments.debug = 0;
-	argp_parse (&argp, argc, argv, 0, 0, &arguments);
+	argp_parse (&argp, argc, argv, 0, NULL, &arguments);
 	if (arguments.debug)
 		loglevel = DEBUG;
 
