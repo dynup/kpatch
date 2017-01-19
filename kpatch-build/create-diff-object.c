@@ -1918,6 +1918,7 @@ static void kpatch_create_dynamic_rela_sections(struct kpatch_elf *kelf,
 	struct lookup_result result;
 	struct kpatch_patch_dynrela *dynrelas;
 	int vmlinux, external, ret;
+	int not_strip;
 
 	vmlinux = !strcmp(objname, "vmlinux");
 
@@ -1954,8 +1955,23 @@ static void kpatch_create_dynamic_rela_sections(struct kpatch_elf *kelf,
 		    !strcmp(sec->name, ".rela.kpatch.dynrelas"))
 			continue;
 		list_for_each_entry_safe(rela, safe, &sec->relas, list) {
-			if (rela->sym->sec)
-				continue;
+			not_strip = 0;
+			if (rela->sym->sec) {
+				/*
+				 * We need to create dynrela for changed functions in this object,
+				 * instead of calling the new function directly.
+				 * But if this rela isn't from a function or is from this function
+				 * itself, don't create dynrela for these two cases.
+				 */
+				if (rela->sym->type != STT_FUNC || rela->sym->status != CHANGED)
+					continue;
+				if (!sec->base->sym || sec->base->sym->type != STT_FUNC)
+					continue;
+				if (rela->sym->sec == sec->base)
+					continue;
+
+				not_strip = 1;
+			}
 			/*
 			 * Allow references to core module symbols to remain as
 			 * normal relas, since the core module may not be
@@ -2068,7 +2084,8 @@ static void kpatch_create_dynamic_rela_sections(struct kpatch_elf *kelf,
 			dynrela->offset = index * sizeof(*dynrelas) +
 				offsetof(struct kpatch_patch_dynrela, objname);
 
-			rela->sym->strip = 1;
+			if (!not_strip)
+				rela->sym->strip = 1;
 			list_del(&rela->list);
 			free(rela);
 
