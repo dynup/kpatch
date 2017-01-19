@@ -40,6 +40,8 @@
 # built from the *.patch files.  They can be used for more custom tests above
 # and beyond the simple loading and unloading tests.
 
+shopt -s nullglob
+
 SCRIPTDIR="$(readlink -f $(dirname $(type -p $0)))"
 ROOTDIR="$(readlink -f $SCRIPTDIR/../..)"
 # TODO: option to use system-installed binaries instead
@@ -95,6 +97,10 @@ done
 if [[ ${#PATCH_LIST[@]} = 0 ]]; then
 	PATCH_LIST=($PATCHDIR/*.patch)
 	TEST_LIST=($PATCHDIR/*.test)
+	if [[ ${#PATCH_LIST[@]} = 0 ]]; then
+		echo "No patches found!"
+		exit 1
+	fi
 else
 	for file in "${PATCH_LIST[@]}"; do
 		prefix=${file%%.patch}
@@ -114,12 +120,12 @@ log() {
 }
 
 unload_all() {
-	for i in `lsmod |egrep '^kpatch' |awk '{print $1}'`; do
+	for i in `/sbin/lsmod |egrep '^kpatch' |awk '{print $1}'`; do
 		if [[ $i != kpatch ]]; then
 			$KPATCH unload $i >> $LOG 2>&1 || error "\"kpatch unload $i\" failed"
 		fi
 	done
-	if lsmod |egrep -q '^kpatch'; then
+	if /sbin/lsmod |egrep -q '^kpatch'; then
 		$RMMOD kpatch >> $LOG 2>&1 || error "\"rmmod kpatch\" failed"
 	fi
 }
@@ -261,6 +267,10 @@ build_combined_module() {
 }
 
 run_combined_test() {
+	if [[ ! -e COMBINED.patch ]]; then
+		return
+	fi
+
 	if [[ ! -e kpatch-COMBINED.ko ]]; then
 		log "can't find kpatch-COMBINED.ko, skipping"
 		return
