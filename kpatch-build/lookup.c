@@ -48,6 +48,7 @@ struct lookup_table {
 	int fd, nr;
 	Elf *elf;
 	struct symbol *syms;
+	struct symbol *local_syms;
 };
 
 #define for_each_symbol(ndx, iter, table) \
@@ -112,6 +113,7 @@ struct lookup_table *lookup_open(char *path)
 	table->nr = len;
 	table->fd = fd;
 	table->elf = elf;
+	table->local_syms = NULL;
 
 	for_each_symbol(i, mysym, table) {
 		if (!gelf_getsym(data, i, &sym))
@@ -143,6 +145,83 @@ void lookup_close(struct lookup_table *table)
 	free(table);
 }
 
+int resolve_dup_file_symbol(struct lookup_table *table, char *hint,
+			    struct sym_compare_type *name, int num)
+{
+	struct symbol *sym, *prev;
+	int i, in_file = 0, file_num = 0, match = 0, index = 0;
+
+	for_each_symbol(i, sym, table) {
+		if (sym->type == STT_FILE) {
+			if (index) {
+				index = 0;
+
+				if (match)
+					return -1;
+				match = 1;
+				table->local_syms = prev;
+			}
+
+			if (!strcmp(hint, sym->name)) {
+				in_file = 1;
+				file_num++;
+				prev = sym;
+			}
+			else
+				in_file = 0;
+		}
+
+		if (!in_file)
+			continue;
+		if (sym->bind != STB_LOCAL || (sym->type != STT_FUNC && sym->type != STT_OBJECT))
+			continue;
+
+		for ( ; index < num; index++)
+			if (name[index].type == sym->type &&
+			    !strcmp(name[index].name, sym->name))
+				break;
+
+		if (index == num) {
+			printf("file_num %d 's sym: %s can't found, skip.\n", file_num, sym->name);
+			index = 0;
+			/* skip this file */
+			in_file = 0;
+		}
+	}
+	return !match;
+}
+
+static struct symbol *__lookup_local_symbol(struct lookup_table *table, char *name)
+{
+	struct symbol *sym;
+	int i, match = 0, in_file = 0;
+
+	for_each_symbol(i, sym, table) {
+		/* file begin */
+		if (table->local_syms == sym) {
+			in_file = 1;
+			continue;
+		}
+
+		if (!in_file)
+			continue;
+
+		/* file end */
+		if (sym->type == STT_FILE)
+			break;
+
+		if (!strcmp(sym->name, name) && sym->bind == STB_LOCAL) {
+			match = 1;
+			break;
+		}
+	}
+
+	if (!match)
+		return NULL;
+
+	return sym;
+}
+
 int lookup_local_symbol(struct lookup_table *table, char *name, char *hint,
                         struct lookup_result *result)
 {
@@ -150,6 +229,16 @@ int lookup_local_symbol(struct lookup_table *table, char *name, char *hint,
 	int i;
 	unsigned long pos = 0;
 	char *curfile = NULL;
+
+	if (table->local_syms) {
+		match = __lookup_local_symbol(table, name);
+		if (match) {
+			result->value = match->value;
+			result->size = match->size;
+			return 0;
+		}
+		return 1;
+	}
 
 	memset(result, 0, sizeof(*result));
 	for_each_symbol(i, sym, table) {
