@@ -1813,6 +1813,9 @@ static void kpatch_create_patches_sections(struct kpatch_elf *kelf,
 	struct rela *rela;
 	struct lookup_result result;
 	struct kpatch_patch_func *funcs;
+	int vmlinux, export = 0;
+
+	vmlinux = !strcmp(objname, "vmlinux");
 
 	/* count patched functions */
 	nr = 0;
@@ -1850,6 +1853,9 @@ static void kpatch_create_patches_sections(struct kpatch_elf *kelf,
 			}
 			log_debug("lookup for %s @ 0x%016lx len %lu\n",
 			          sym->name, result.value, result.size);
+
+			if (vmlinux && lookup_is_exported_symbol(table, sym->name))
+				export = 1;
 
 			/* add entry in text section */
 			funcs[index].old_addr = result.value;
@@ -1891,6 +1897,18 @@ static void kpatch_create_patches_sections(struct kpatch_elf *kelf,
 			               offsetof(struct kpatch_patch_func,objname);
 
 			index++;
+
+			if (export) {
+				int len = strlen(sym->name) + strlen(".export") + 1;
+				char *sym_export = malloc(len);
+				if (!sym_export)
+					ERROR("malloc error");
+				snprintf(sym_export, len, "%s%s", sym->name, ".export");
+				log_debug("rename changed vmlinux export function: %s to %s\n",
+						sym->name, sym_export);
+				sym->name = sym_export;
+				export = 0;
+			}
 		}
 	}
 
