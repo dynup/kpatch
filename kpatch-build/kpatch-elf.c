@@ -144,7 +144,7 @@ void kpatch_create_rela_list(struct kpatch_elf *kelf, struct section *sec)
 	unsigned int symndx;
 
 	/* find matching base (text/data) section */
-	sec->base = find_section_by_name(&kelf->sections, sec->name + 5);
+	sec->base = find_section_by_index(&kelf->sections, sec->sh.sh_info);
 	if (!sec->base)
 		ERROR("can't find base section for rela section %s", sec->name);
 
