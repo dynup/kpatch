@@ -2295,7 +2295,7 @@ int main(int argc, char *argv[])
 	struct lookup_table *lookup;
 	struct section *sec, *symtab;
 	struct symbol *sym;
-	char *hint = NULL, *name, *pos;
+	char *hint = NULL, *objname, *pos;
 
 	arguments.debug = 0;
 	argp_parse (&argp, argc, argv, 0, NULL, &arguments);
@@ -2381,15 +2381,15 @@ int main(int argc, char *argv[])
 	lookup = lookup_open(arguments.args[2]);
 
 	/* extract module name (destructive to arguments.modulefile) */
-	name = basename(arguments.args[2]);
-	if (!strncmp(name, "vmlinux-", 8))
-		name = "vmlinux";
+	objname = basename(arguments.args[2]);
+	if (!strncmp(objname, "vmlinux-", 8))
+		objname = "vmlinux";
 	else {
-		pos = strchr(name,'.');
+		pos = strchr(objname,'.');
 		if (pos) {
 			/* kernel module */
 			*pos = '\0';
-			pos = name;
+			pos = objname;
 			while ((pos = strchr(pos, '-')))
 				*pos++ = '_';
 		}
@@ -2397,9 +2397,9 @@ int main(int argc, char *argv[])
 
 	/* create strings, patches, and dynrelas sections */
 	kpatch_create_strings_elements(kelf_out);
-	kpatch_create_patches_sections(kelf_out, lookup, hint, name);
-	kpatch_create_dynamic_rela_sections(kelf_out, lookup, hint, name);
-	kpatch_create_hooks_objname_rela(kelf_out, name);
+	kpatch_create_patches_sections(kelf_out, lookup, hint, objname);
+	kpatch_create_dynamic_rela_sections(kelf_out, lookup, hint, objname);
+	kpatch_create_hooks_objname_rela(kelf_out, objname);
 	kpatch_build_strings_section_data(kelf_out);
 
 	kpatch_create_mcount_sections(kelf_out);
