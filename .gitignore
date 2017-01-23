@@ -11,5 +11,6 @@ Module.symvers
 kpatch-build/lookup
 kpatch-build/create-diff-object
 kpatch-build/create-klp-module
+kpatch-build/create-kpatch-module
 man/kpatch.1.gz
 man/kpatch-build.1.gz
