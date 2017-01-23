@@ -24,6 +24,12 @@
 #include "list.h"
 #include "log.h"
 
+#define KLP_SYM_PREFIX		".klp.sym."
+#define KLP_RELASEC_PREFIX	".klp.rela."
+#define KLP_ARCH_PREFIX 	".klp.arch."
+#define SHF_RELA_LIVEPATCH	0x00100000
+#define SHN_LIVEPATCH		0xff20
+
 /*******************
  * Data structures
  * ****************/
