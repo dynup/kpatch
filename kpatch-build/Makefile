@@ -3,10 +3,9 @@ include ../Makefile.inc
 CFLAGS  += -I../kmod/patch -Iinsn -Wall -g -Werror
 LDFLAGS += -lelf
 
-TARGETS = create-diff-object
-OBJS = create-diff-object.o kpatch-elf.o \
-	   lookup.o insn/insn.o insn/inat.o
+TARGETS = create-diff-object create-klp-module
 SOURCES = create-diff-object.c kpatch-elf.c \
+		  create-klp-module.c \
 		  lookup.c insn/insn.c insn/inat.c
 
 all: $(TARGETS)
@@ -16,7 +15,11 @@ all: $(TARGETS)
 %.o : %.c
 	$(CC) -MMD -MP $(CFLAGS) -c -o $@ $<
 
-create-diff-object: $(OBJS)
+create-diff-object: create-diff-object.o kpatch-elf.o \
+					lookup.o insn/insn.o insn/inat.o
+create-klp-module: create-klp-module.o kpatch-elf.o
+
+$(TARGETS):
 	$(CC) $(CFLAGS) $^ -o $@ $(LDFLAGS)
 
 install: all
@@ -30,4 +33,4 @@ uninstall:
 	$(RM) $(BINDIR)/kpatch-build
 
 clean:
-	$(RM) $(TARGETS) $(OBJS) *.d insn/*.d
+	$(RM) $(TARGETS) *.o *.d insn/*.d
