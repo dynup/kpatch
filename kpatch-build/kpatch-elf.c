@@ -341,7 +341,7 @@ static void kpatch_find_fentry_calls(struct kpatch_elf *kelf)
 	struct symbol *sym;
 	struct rela *rela;
 	list_for_each_entry(sym, &kelf->symbols, list) {
-		if (sym->type != STT_FUNC || !sym->sec->rela)
+		if (sym->type != STT_FUNC || !sym->sec || !sym->sec->rela)
 			continue;
 
 		rela = list_first_entry(&sym->sec->rela->relas, struct rela,
