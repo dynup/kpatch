@@ -671,6 +671,40 @@ struct section *create_section_pair(struct kpatch_elf *kelf, char *name,
 	return sec;
 }
 
+void kpatch_remove_and_free_section(struct kpatch_elf *kelf, char *secname)
+{
+	struct section *sec, *safesec;
+	struct rela *rela, *saferela;
+
+	list_for_each_entry_safe(sec, safesec, &kelf->sections, list) {
+		if (strcmp(secname, sec->name))
+			continue;
+
+		if (is_rela_section(sec)) {
+			list_for_each_entry_safe(rela, saferela, &sec->relas, list) {
+				list_del(&rela->list);
+				memset(rela, 0, sizeof(*rela));
+				free(rela);
+			}
+		}
+
+		/*
+		 * Remove the STT_SECTION symbol from the symtab,
+		 * otherwise when we remove the section we'll end up
+		 * with UNDEF section symbols in the symtab.
+		 */
+		if (!is_rela_section(sec) && sec->secsym) {
+			list_del(&sec->secsym->list);
+			memset(sec->secsym, 0, sizeof(*sec->secsym));
+			free(sec->secsym);
+		}
+
+		list_del(&sec->list);
+		memset(sec, 0, sizeof(*sec));
+		free(sec);
+	}
+}
+
 void kpatch_reindex_elements(struct kpatch_elf *kelf)
 {
 	struct section *sec;

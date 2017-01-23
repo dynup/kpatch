@@ -150,6 +150,7 @@ void kpatch_create_strtab(struct kpatch_elf *kelf);
 void kpatch_create_symtab(struct kpatch_elf *kelf);
 struct section *create_section_pair(struct kpatch_elf *kelf, char *name,
                                     int entsize, int nr);
+void kpatch_remove_and_free_section(struct kpatch_elf *kelf, char *secname);
 void kpatch_reindex_elements(struct kpatch_elf *kelf);
 void kpatch_rebuild_rela_section_data(struct section *sec);
 void kpatch_write_output_elf(struct kpatch_elf *kelf, Elf *elf, char *outfile);
