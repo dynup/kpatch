@@ -671,6 +671,58 @@ struct section *create_section_pair(struct kpatch_elf *kelf, char *name,
 	return sec;
 }
 
+void kpatch_reindex_elements(struct kpatch_elf *kelf)
+{
+	struct section *sec;
+	struct symbol *sym;
+	int index;
+
+	index = 1; /* elf write function handles NULL section 0 */
+	list_for_each_entry(sec, &kelf->sections, list)
+		sec->index = index++;
+
+	index = 0;
+	list_for_each_entry(sym, &kelf->symbols, list) {
+		sym->index = index++;
+		if (sym->sec)
+			sym->sym.st_shndx = sym->sec->index;
+		else if (sym->sym.st_shndx != SHN_ABS)
+			sym->sym.st_shndx = SHN_UNDEF;
+	}
+}
+
+void kpatch_rebuild_rela_section_data(struct section *sec)
+{
+	struct rela *rela;
+	int nr = 0, index = 0, size;
+	GElf_Rela *relas;
+
+	list_for_each_entry(rela, &sec->relas, list)
+		nr++;
+
+	size = nr * sizeof(*relas);
+	relas = malloc(size);
+	if (!relas)
+		ERROR("malloc");
+
+	sec->data->d_buf = relas;
+	sec->data->d_size = size;
+	/* d_type remains ELF_T_RELA */
+
+	sec->sh.sh_size = size;
+
+	list_for_each_entry(rela, &sec->relas, list) {
+		relas[index].r_offset = rela->offset;
+		relas[index].r_addend = rela->addend;
+		relas[index].r_info = GELF_R_INFO(rela->sym->index, rela->type);
+		index++;
+	}
+
+	/* sanity check, index should equal nr */
+	if (index != nr)
+		ERROR("size mismatch in rebuilt rela section");
+}
+
 void kpatch_write_output_elf(struct kpatch_elf *kelf, Elf *elf, char *outfile)
 {
 	int fd;
