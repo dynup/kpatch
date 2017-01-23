@@ -1,6 +1,8 @@
 #ifndef _LOG_H_
 #define _LOG_H_
 
+#include <error.h>
+
 /* Files that include log.h must define loglevel and childobj */
 extern enum loglevel loglevel;
 extern char *childobj;
