@@ -686,7 +686,8 @@ void kpatch_reindex_elements(struct kpatch_elf *kelf)
 		sym->index = index++;
 		if (sym->sec)
 			sym->sym.st_shndx = sym->sec->index;
-		else if (sym->sym.st_shndx != SHN_ABS)
+		else if (sym->sym.st_shndx != SHN_ABS &&
+			 sym->sym.st_shndx != SHN_LIVEPATCH)
 			sym->sym.st_shndx = SHN_UNDEF;
 	}
 }
