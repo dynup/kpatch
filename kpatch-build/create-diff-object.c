@@ -1584,6 +1584,8 @@ static void kpatch_regenerate_special_section(struct kpatch_elf *kelf,
 	/* include both rela and base sections */
 	sec->include = 1;
 	sec->base->include = 1;
+	/* include secsym so .kpatch.arch relas can point to section symbols */
+	sec->base->secsym->include = 1;
 
 	/*
 	 * Update text section data buf and size.
@@ -1705,6 +1707,56 @@ static void kpatch_mark_ignored_functions_same(struct kpatch_elf *kelf)
 		if (rela->sym->sec->rela)
 			rela->sym->sec->rela->status = SAME;
 	}
+}
+
+static void kpatch_create_kpatch_arch_section(struct kpatch_elf *kelf, char *objname)
+{
+	struct special_section *special;
+	struct kpatch_arch *entries;
+	struct symbol *strsym;
+	struct section *sec, *karch_sec;
+	struct rela *rela;
+	int nr, index = 0;
+
+	nr = sizeof(special_sections) / sizeof(special_sections[0]);
+	karch_sec = create_section_pair(kelf, ".kpatch.arch", sizeof(*entries), nr);
+	entries = karch_sec->data->d_buf;
+
+	/* lookup strings symbol */
+	strsym = find_symbol_by_name(&kelf->symbols, ".kpatch.strings");
+	if (!strsym)
+		ERROR("can't find .kpatch.strings symbol");
+
+	for (special = special_sections; special->name; special++) {
+		if (strcmp(special->name, ".parainstructions") &&
+		    strcmp(special->name, ".altinstructions"))
+			continue;
+
+		sec = find_section_by_name(&kelf->sections, special->name);
+		if (!sec)
+			continue;
+
+		/* entries[index].sec */
+		ALLOC_LINK(rela, &karch_sec->rela->relas);
+		rela->sym = sec->secsym;
+		rela->type = R_X86_64_64;
+		rela->addend = 0;
+		rela->offset = index * sizeof(*entries) + \
+			       offsetof(struct kpatch_arch, sec);
+
+		/* entries[index].objname */
+		ALLOC_LINK(rela, &karch_sec->rela->relas);
+		rela->sym = strsym;
+		rela->type = R_X86_64_64;
+		rela->addend = offset_of_string(&kelf->strings, objname);
+		rela->offset = index * sizeof(*entries) + \
+			       offsetof(struct kpatch_arch, objname);
+
+		index++;
+	}
+
+	karch_sec->data->d_size = index * sizeof(struct kpatch_arch);
+	karch_sec->sh.sh_size = karch_sec->data->d_size;
 }
 
 static void kpatch_process_special_sections(struct kpatch_elf *kelf)
@@ -2462,6 +2514,7 @@ int main(int argc, char *argv[])
 	kpatch_create_strings_elements(kelf_out);
 	kpatch_create_patches_sections(kelf_out, lookup, hint, objname);
 	kpatch_create_intermediate_sections(kelf_out, lookup, hint, objname, pmod_name);
+	kpatch_create_kpatch_arch_section(kelf_out, objname);
 	kpatch_create_hooks_objname_rela(kelf_out, objname);
 	kpatch_build_strings_section_data(kelf_out);
 

@@ -40,4 +40,9 @@ struct kpatch_relocation {
 	char *objname; /* object to which this rela applies to */
 	struct kpatch_symbol *ksym;
 };
+
+struct kpatch_arch {
+        unsigned long sec;
+        char *objname;
+};
 #endif /* _KPATCH_ELF_H_ */
