@@ -557,7 +557,9 @@ for i in $FILES; do
 	fi
 	cd $TEMPDIR
 	if [[ -e "orig/$i" ]]; then
-		"$TOOLSDIR"/create-diff-object "orig/$i" "patched/$i" "$KOBJFILE" "output/$i" "$OBJDIR/Module.symvers" 2>&1 |tee -a "$LOGFILE"
+		# create-diff-object orig.o patched.o kernel-object output.o Module.symvers patch-mod-name
+		"$TOOLSDIR"/create-diff-object "orig/$i" "patched/$i" "$KOBJFILE" \
+			"output/$i" "$OBJDIR/Module.symvers" "kpatch_${PATCHNAME//-/_}" 2>&1 |tee -a "$LOGFILE"
 		rc="${PIPESTATUS[0]}"
 		if [[ $rc = 139 ]]; then
 			warn "create-diff-object SIGSEGV"
