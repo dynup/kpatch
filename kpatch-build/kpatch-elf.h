@@ -117,6 +117,7 @@ struct section *find_section_by_index(struct list_head *list, unsigned int index
 struct section *find_section_by_name(struct list_head *list, const char *name);
 struct symbol *find_symbol_by_index(struct list_head *list, size_t index);
 struct symbol *find_symbol_by_name(struct list_head *list, const char *name);
+struct rela *find_rela_by_offset(struct section *relasec, unsigned int offset);
 
 #define ALLOC_LINK(_new, _list) \
 { \

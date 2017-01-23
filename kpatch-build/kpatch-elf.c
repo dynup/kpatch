@@ -118,6 +118,18 @@ struct symbol *find_symbol_by_name(struct list_head *list, const char *name)
 	return NULL;
 }
 
+struct rela *find_rela_by_offset(struct section *relasec, unsigned int offset)
+{
+	struct rela *rela;
+
+	list_for_each_entry(rela, &relasec->relas, list) {
+		if (rela->offset == offset)
+			return rela;
+	}
+
+	return NULL;
+}
+
 /* returns the offset of the string in the string table */
 int offset_of_string(struct list_head *list, char *name)
 {
