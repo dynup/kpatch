@@ -2246,11 +2246,11 @@ static void kpatch_build_strings_section_data(struct kpatch_elf *kelf)
 }
 
 struct arguments {
-	char *args[4];
+	char *args[5];
 	int debug;
 };
 
-static char args_doc[] = "original.o patched.o kernel-object output.o";
+static char args_doc[] = "original.o patched.o kernel-object output.o Module.symvers";
 
 static struct argp_option options[] = {
 	{"debug", 'd', NULL, 0, "Show debug output" },
@@ -2269,13 +2269,13 @@ static error_t parse_opt (int key, char *arg, struct argp_state *state)
 			arguments->debug = 1;
 			break;
 		case ARGP_KEY_ARG:
-			if (state->arg_num >= 4)
+			if (state->arg_num >= 5)
 				/* Too many arguments. */
 				argp_usage (state);
 			arguments->args[state->arg_num] = arg;
 			break;
 		case ARGP_KEY_END:
-			if (state->arg_num < 4)
+			if (state->arg_num < 5)
 				/* Not enough arguments. */
 				argp_usage (state);
 			break;
@@ -2296,6 +2296,7 @@ int main(int argc, char *argv[])
 	struct section *sec, *symtab;
 	struct symbol *sym;
 	char *hint = NULL, *objname, *pos;
+	char *mod_symvers_path;
 
 	arguments.debug = 0;
 	argp_parse (&argp, argc, argv, 0, NULL, &arguments);
@@ -2305,6 +2306,8 @@ int main(int argc, char *argv[])
 	elf_version(EV_CURRENT);
 
 	childobj = basename(arguments.args[0]);
+
+	mod_symvers_path = arguments.args[4];
 
 	kelf_base = kpatch_elf_open(arguments.args[0]);
 	kelf_patched = kpatch_elf_open(arguments.args[1]);
@@ -2378,7 +2381,7 @@ int main(int argc, char *argv[])
 		ERROR("FILE symbol not found in output. Stripped?\n");
 
 	/* create symbol lookup table */
-	lookup = lookup_open(arguments.args[2]);
+	lookup = lookup_open(arguments.args[2], mod_symvers_path);
 
 	/* extract module name (destructive to arguments.modulefile) */
 	objname = basename(arguments.args[2]);
