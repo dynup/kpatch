@@ -22,6 +22,8 @@
 #ifndef _KPATCH_INTERMEDIATE_H_
 #define _KPATCH_INTERMEDIATE_H_
 
+/* For .kpatch.{symbols,relocations,arch} sections */
+
 struct kpatch_symbol {
 	unsigned long src;
 	unsigned long pos;
@@ -30,7 +32,6 @@ struct kpatch_symbol {
 	char *objname; /* object to which this sym belongs */
 };
 
-/* For .kpatch.{symbols,relocations,arch} sections */
 struct kpatch_relocation {
 	unsigned long dest;
 	unsigned int type;
@@ -45,4 +46,4 @@ struct kpatch_arch {
         unsigned long sec;
         char *objname;
 };
-#endif /* _KPATCH_ELF_H_ */
+#endif /* _KPATCH_INTERMEDIATE_H_ */
