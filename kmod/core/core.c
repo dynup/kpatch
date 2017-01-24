@@ -1011,18 +1011,19 @@ int kpatch_register(struct kpatch_module *kpmod, bool replace)
 /* HAS_MODULE_TAINT - upstream 2992ef29ae01 "livepatch/module: make TAINT_LIVEPATCH module-specific" */
 #ifdef RHEL_RELEASE_CODE
 # if RHEL_RELEASE_CODE >= RHEL_RELEASE_VERSION(7, 4)
-#  define HAS_MODULE_TAINT
+#  define HAS_RHEL7_MODULE_TAINT
 # endif
 #elif LINUX_VERSION_CODE >= KERNEL_VERSION(4, 9, 0)
 # define HAS_MODULE_TAINT
 #endif
 
 #ifdef TAINT_LIVEPATCH
-# ifdef HAS_MODULE_TAINT
-	/* kernel will add TAINT_LIVEPATCH on module load. */
-# else
 	pr_notice_once("tainting kernel with TAINT_LIVEPATCH\n");
 	add_taint(TAINT_LIVEPATCH, LOCKDEP_STILL_OK);
+# ifdef HAS_MODULE_TAINT
+	set_bit(TAINT_LIVEPATCH, &kpmod->mod->taints);
+# elif defined(HAS_RHEL7_MODULE_TAINT)
+	kpmod->mod->taints |= (1 << TAINT_LIVEPATCH);
 # endif
 #else
 	pr_notice_once("tainting kernel with TAINT_USER\n");

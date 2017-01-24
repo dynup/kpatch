@@ -420,4 +420,3 @@ static void __exit patch_exit(void)
 module_init(patch_init);
 module_exit(patch_exit);
 MODULE_LICENSE("GPL");
-MODULE_INFO(livepatch, "Y");
