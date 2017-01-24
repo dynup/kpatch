@@ -665,8 +665,8 @@ if ! $KPATCH_MODULE; then
 	if [[ -z "$KPATCH_LDFLAGS" ]]; then
 		extra_flags="--no-klp-arch-sections"
 	fi
-	cp $TEMPDIR/patch/kpatch-$PATCHNAME.ko $TEMPDIR/patch/kpatch-tmp.ko || die
-	"$TOOLSDIR"/create-klp-module $extra_flags $TEMPDIR/patch/kpatch-tmp.ko $TEMPDIR/patch/kpatch-$PATCHNAME.ko 2>&1 |tee -a "$LOGFILE"
+	cp $TEMPDIR/patch/kpatch-$PATCHNAME.ko $TEMPDIR/patch/tmp.ko || die
+	"$TOOLSDIR"/create-klp-module $extra_flags $TEMPDIR/patch/tmp.ko $TEMPDIR/patch/kpatch-$PATCHNAME.ko 2>&1 |tee -a "$LOGFILE"
 	check_pipe_status create-klp-module
 fi
 
