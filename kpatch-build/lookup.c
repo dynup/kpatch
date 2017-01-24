@@ -5,6 +5,7 @@
  * the symbol table of an ELF object.
  *
  * Copyright (C) 2014 Seth Jennings <sjenning@redhat.com>
+ * Copyright (C) 2014 Josh Poimboeuf <jpoimboe@redhat.com>
  *
  * This program is free software; you can redistribute it and/or
  * modify it under the terms of the GNU General Public License
@@ -24,6 +25,8 @@
 
 #include <sys/types.h>
 #include <sys/stat.h>
+#include <sys/mman.h>
+#include <ctype.h>
 #include <fcntl.h>
 #include <stdlib.h>
 #include <stdio.h>
@@ -31,29 +34,38 @@
 #include <error.h>
 #include <gelf.h>
 #include <unistd.h>
+#include <libgen.h>
 
 #include "lookup.h"
 
 #define ERROR(format, ...) \
 	error(1, 0, "%s: %d: " format, __FUNCTION__, __LINE__, ##__VA_ARGS__)
 
-struct symbol {
+struct object_symbol {
 	unsigned long value;
 	unsigned long size;
 	char *name;
 	int type, bind, skip;
 };
 
-struct lookup_table {
-	int fd, nr;
-	Elf *elf;
-	struct symbol *syms;
+struct export_symbol {
+	char *name;
+	char *objname;
 };
 
-#define for_each_symbol(ndx, iter, table) \
-	for (ndx = 0, iter = table->syms; ndx < table->nr; ndx++, iter++)
+struct lookup_table {
+	int obj_nr, exp_nr;
+	struct object_symbol *obj_syms;
+	struct export_symbol *exp_syms;
+};
 
-struct lookup_table *lookup_open(char *path)
+#define for_each_obj_symbol(ndx, iter, table) \
+	for (ndx = 0, iter = table->obj_syms; ndx < table->obj_nr; ndx++, iter++)
+
+#define for_each_exp_symbol(ndx, iter, table) \
+	for (ndx = 0, iter = table->exp_syms; ndx < table->exp_nr; ndx++, iter++)
+
+static void obj_read(struct lookup_table *table, char *path)
 {
 	Elf *elf;
 	int fd, i, len;
@@ -62,8 +74,7 @@ struct lookup_table *lookup_open(char *path)
 	GElf_Sym sym;
 	Elf_Data *data;
 	char *name;
-	struct lookup_table *table;
-	struct symbol *mysym;
+	struct object_symbol *mysym;
 	size_t shstrndx;
 
 	if ((fd = open(path, O_RDONLY, 0)) < 0)
@@ -102,18 +113,13 @@ struct lookup_table *lookup_open(char *path)
 
 	len = sh.sh_size / sh.sh_entsize;
 
-	table = malloc(sizeof(*table));
-	if (!table)
-		ERROR("malloc table");
-	table->syms = malloc(len * sizeof(struct symbol));
-	if (!table->syms)
-		ERROR("malloc table.syms");
-	memset(table->syms, 0, len * sizeof(struct symbol));
-	table->nr = len;
-	table->fd = fd;
-	table->elf = elf;
+	table->obj_syms = malloc(len * sizeof(*table->obj_syms));
+	if (!table->obj_syms)
+		ERROR("malloc table.obj_syms");
+	memset(table->obj_syms, 0, len * sizeof(*table->obj_syms));
+	table->obj_nr = len;
 
-	for_each_symbol(i, mysym, table) {
+	for_each_obj_symbol(i, mysym, table) {
 		if (!gelf_getsym(data, i, &sym))
 			ERROR("gelf_getsym");
 
@@ -130,29 +136,107 @@ struct lookup_table *lookup_open(char *path)
 		mysym->size = sym.st_size;
 		mysym->type = GELF_ST_TYPE(sym.st_info);
 		mysym->bind = GELF_ST_BIND(sym.st_info);
-		mysym->name = name;
+		mysym->name = strdup(name);
+		if (!mysym->name)
+			ERROR("strdup");
 	}
+
+	close(fd);
+	elf_end(elf);
+}
+
+/* Strip the path and replace '-' with '_' */
+static char *make_modname(char *modname)
+{
+	char *cur;
+
+	if (!modname)
+		return NULL;
+
+	cur = modname;
+	while (*cur != '\0') {
+		if (*cur == '-')
+			*cur = '_';
+		cur++;
+	}
+
+	return basename(modname);
+}
+
+static void symvers_read(struct lookup_table *table, char *path)
+{
+	FILE *file;
+	unsigned int crc, i = 0;
+	char name[256], mod[256], export[256];
+	char *objname, *symname;
+
+	if ((file = fopen(path, "r")) < 0)
+		ERROR("fopen");
+
+	while (fscanf(file, "%x %s %s %s\n",
+		      &crc, name, mod, export) != EOF)
+		table->exp_nr++;
+
+	table->exp_syms = malloc(table->exp_nr * sizeof(*table->exp_syms));
+	if (!table->exp_syms)
+		ERROR("malloc table.exp_syms");
+	memset(table->exp_syms, 0,
+	       table->exp_nr * sizeof(*table->exp_syms));
+
+	rewind(file);
+
+	while (fscanf(file, "%x %s %s %s\n",
+		      &crc, name, mod, export) != EOF) {
+		symname = strdup(name);
+		if (!symname)
+			perror("strdup");
+
+		objname = strdup(mod);
+		if (!objname)
+			perror("strdup");
+		/* Modifies objname in-place */
+		objname = make_modname(objname);
+
+		table->exp_syms[i].name = symname;
+		table->exp_syms[i].objname = objname;
+		i++;
+	}
+
+	fclose(file);
+}
+
+struct lookup_table *lookup_open(char *obj_path, char *symvers_path)
+{
+	struct lookup_table *table;
+
+	table = malloc(sizeof(*table));
+	if (!table)
+		ERROR("malloc table");
+	memset(table, 0, sizeof(*table));
+
+	obj_read(table, obj_path);
+	symvers_read(table, symvers_path);
 
 	return table;
 }
 
 void lookup_close(struct lookup_table *table)
 {
-	elf_end(table->elf);
-	close(table->fd);
+	free(table->obj_syms);
+	free(table->exp_syms);
 	free(table);
 }
 
 int lookup_local_symbol(struct lookup_table *table, char *name, char *hint,
                         struct lookup_result *result)
 {
-	struct symbol *sym, *match = NULL;
+	struct object_symbol *sym, *match = NULL;
 	int i;
 	unsigned long pos = 0;
 	char *curfile = NULL;
 
 	memset(result, 0, sizeof(*result));
-	for_each_symbol(i, sym, table) {
+	for_each_obj_symbol(i, sym, table) {
 		if (sym->type == STT_FILE) {
 			if (!strcmp(sym->name, hint)) {
 				curfile = sym->name;
@@ -192,11 +276,11 @@ int lookup_local_symbol(struct lookup_table *table, char *name, char *hint,
 int lookup_global_symbol(struct lookup_table *table, char *name,
                          struct lookup_result *result)
 {
-	struct symbol *sym;
+	struct object_symbol *sym;
 	int i;
 
 	memset(result, 0, sizeof(*result));
-	for_each_symbol(i, sym, table)
+	for_each_obj_symbol(i, sym, table) {
 		if (!sym->skip && (sym->bind == STB_GLOBAL || sym->bind == STB_WEAK) &&
 		    !strcmp(sym->name, name)) {
 			result->value = sym->value;
@@ -204,24 +288,49 @@ int lookup_global_symbol(struct lookup_table *table, char *name,
 			result->pos = 0; /* always 0 for global symbols */
 			return 0;
 		}
+	}
 
 	return 1;
 }
 
 int lookup_is_exported_symbol(struct lookup_table *table, char *name)
 {
-	struct symbol *sym;
+	struct export_symbol *sym, *match = NULL;
 	int i;
-	char export[255] = "__ksymtab_";
 
-	strncat(export, name, 254);
+	for_each_exp_symbol(i, sym, table) {
+		if (!strcmp(sym->name, name)) {
+			if (match)
+				ERROR("duplicate exported symbol found for %s", name);
+			match = sym;
+		}
+	}
 
-	for_each_symbol(i, sym, table)
-		if (!sym->skip && !strcmp(sym->name, export))
-			return 1;
-
-	return 0;
+	return !!match;
 }
+
+/*
+ * lookup_exported_symbol_objname - find the object/module an exported
+ * symbol belongs to.
+ */
+char *lookup_exported_symbol_objname(struct lookup_table *table, char *name)
+{
+	struct export_symbol *sym, *match = NULL;
+	int i;
+
+	for_each_exp_symbol(i, sym, table) {
+		if (!strcmp(sym->name, name)) {
+			if (match)
+				ERROR("duplicate exported symbol found for %s", name);
+			match = sym;
+		}
+	}
+
+	if (match)
+		return match->objname;
+
+	return NULL;
+ }
 
 #if 0 /* for local testing */
 static void find_this(struct lookup_table *table, char *sym, char *hint)

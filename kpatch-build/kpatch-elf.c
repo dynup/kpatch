@@ -118,6 +118,18 @@ struct symbol *find_symbol_by_name(struct list_head *list, const char *name)
 	return NULL;
 }
 
+struct rela *find_rela_by_offset(struct section *relasec, unsigned int offset)
+{
+	struct rela *rela;
+
+	list_for_each_entry(rela, &relasec->relas, list) {
+		if (rela->offset == offset)
+			return rela;
+	}
+
+	return NULL;
+}
+
 /* returns the offset of the string in the string table */
 int offset_of_string(struct list_head *list, char *name)
 {
@@ -144,7 +156,7 @@ void kpatch_create_rela_list(struct kpatch_elf *kelf, struct section *sec)
 	unsigned int symndx;
 
 	/* find matching base (text/data) section */
-	sec->base = find_section_by_name(&kelf->sections, sec->name + 5);
+	sec->base = find_section_by_index(&kelf->sections, sec->sh.sh_info);
 	if (!sec->base)
 		ERROR("can't find base section for rela section %s", sec->name);
 
@@ -341,7 +353,7 @@ static void kpatch_find_fentry_calls(struct kpatch_elf *kelf)
 	struct symbol *sym;
 	struct rela *rela;
 	list_for_each_entry(sym, &kelf->symbols, list) {
-		if (sym->type != STT_FUNC || !sym->sec->rela)
+		if (sym->type != STT_FUNC || !sym->sec || !sym->sec->rela)
 			continue;
 
 		rela = list_first_entry(&sym->sec->rela->relas, struct rela,
@@ -669,6 +681,93 @@ struct section *create_section_pair(struct kpatch_elf *kelf, char *name,
 	sec->rela = relasec;
 
 	return sec;
+}
+
+void kpatch_remove_and_free_section(struct kpatch_elf *kelf, char *secname)
+{
+	struct section *sec, *safesec;
+	struct rela *rela, *saferela;
+
+	list_for_each_entry_safe(sec, safesec, &kelf->sections, list) {
+		if (strcmp(secname, sec->name))
+			continue;
+
+		if (is_rela_section(sec)) {
+			list_for_each_entry_safe(rela, saferela, &sec->relas, list) {
+				list_del(&rela->list);
+				memset(rela, 0, sizeof(*rela));
+				free(rela);
+			}
+		}
+
+		/*
+		 * Remove the STT_SECTION symbol from the symtab,
+		 * otherwise when we remove the section we'll end up
+		 * with UNDEF section symbols in the symtab.
+		 */
+		if (!is_rela_section(sec) && sec->secsym) {
+			list_del(&sec->secsym->list);
+			memset(sec->secsym, 0, sizeof(*sec->secsym));
+			free(sec->secsym);
+		}
+
+		list_del(&sec->list);
+		memset(sec, 0, sizeof(*sec));
+		free(sec);
+	}
+}
+
+void kpatch_reindex_elements(struct kpatch_elf *kelf)
+{
+	struct section *sec;
+	struct symbol *sym;
+	int index;
+
+	index = 1; /* elf write function handles NULL section 0 */
+	list_for_each_entry(sec, &kelf->sections, list)
+		sec->index = index++;
+
+	index = 0;
+	list_for_each_entry(sym, &kelf->symbols, list) {
+		sym->index = index++;
+		if (sym->sec)
+			sym->sym.st_shndx = sym->sec->index;
+		else if (sym->sym.st_shndx != SHN_ABS &&
+			 sym->sym.st_shndx != SHN_LIVEPATCH)
+			sym->sym.st_shndx = SHN_UNDEF;
+	}
+}
+
+void kpatch_rebuild_rela_section_data(struct section *sec)
+{
+	struct rela *rela;
+	int nr = 0, index = 0, size;
+	GElf_Rela *relas;
+
+	list_for_each_entry(rela, &sec->relas, list)
+		nr++;
+
+	size = nr * sizeof(*relas);
+	relas = malloc(size);
+	if (!relas)
+		ERROR("malloc");
+
+	sec->data->d_buf = relas;
+	sec->data->d_size = size;
+	/* d_type remains ELF_T_RELA */
+
+	sec->sh.sh_size = size;
+
+	list_for_each_entry(rela, &sec->relas, list) {
+		relas[index].r_offset = rela->offset;
+		relas[index].r_addend = rela->addend;
+		relas[index].r_info = GELF_R_INFO(rela->sym->index, rela->type);
+		index++;
+	}
+
+	/* sanity check, index should equal nr */
+	if (index != nr)
+		ERROR("size mismatch in rebuilt rela section");
 }
 
 void kpatch_write_output_elf(struct kpatch_elf *kelf, Elf *elf, char *outfile)

@@ -24,6 +24,12 @@
 #include "list.h"
 #include "log.h"
 
+#define KLP_SYM_PREFIX		".klp.sym."
+#define KLP_RELASEC_PREFIX	".klp.rela."
+#define KLP_ARCH_PREFIX 	".klp.arch."
+#define SHF_RELA_LIVEPATCH	0x00100000
+#define SHN_LIVEPATCH		0xff20
+
 /*******************
  * Data structures
  * ****************/
@@ -111,6 +117,7 @@ struct section *find_section_by_index(struct list_head *list, unsigned int index
 struct section *find_section_by_name(struct list_head *list, const char *name);
 struct symbol *find_symbol_by_index(struct list_head *list, size_t index);
 struct symbol *find_symbol_by_name(struct list_head *list, const char *name);
+struct rela *find_rela_by_offset(struct section *relasec, unsigned int offset);
 
 #define ALLOC_LINK(_new, _list) \
 { \
@@ -144,6 +151,9 @@ void kpatch_create_strtab(struct kpatch_elf *kelf);
 void kpatch_create_symtab(struct kpatch_elf *kelf);
 struct section *create_section_pair(struct kpatch_elf *kelf, char *name,
                                     int entsize, int nr);
+void kpatch_remove_and_free_section(struct kpatch_elf *kelf, char *secname);
+void kpatch_reindex_elements(struct kpatch_elf *kelf);
+void kpatch_rebuild_rela_section_data(struct section *sec);
 void kpatch_write_output_elf(struct kpatch_elf *kelf, Elf *elf, char *outfile);
 void kpatch_elf_teardown(struct kpatch_elf *kelf);
 void kpatch_elf_free(struct kpatch_elf *kelf);

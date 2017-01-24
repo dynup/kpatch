@@ -88,12 +88,33 @@ cleanup() {
 	[[ "$DEBUG" -eq 0 ]] && rm -rf "$TEMPDIR"
 	rm -rf "$RPMTOPDIR"
 	unset KCFLAGS
+	unset KCPPFLAGS
 }
 
 clean_cache() {
 	[[ -z $USERSRCDIR ]] && rm -rf "$SRCDIR"
 	rm -rf "$OBJDIR" "$VERSIONFILE"
 	mkdir -p "$OBJDIR"
+}
+
+check_pipe_status() {
+	rc="${PIPESTATUS[0]}"
+	if [[ $rc = 139 ]]; then
+		# There doesn't seem to be a consistent/portable way of
+		# accessing the last executed command in bash, so just
+		# pass in the script name for now..
+		warn "$1 SIGSEGV"
+		if ls core* &> /dev/null; then
+			cp core* /tmp
+			die "core file at /tmp/$(ls core*)"
+		fi
+		die "no core file found, run 'ulimit -c unlimited' and try to recreate"
+	fi
+}
+
+# $1 >= $2
+function version_gte {
+	[  "$1" = "`echo -e "$1\n$2" | sort -rV | head -n1`" ]
 }
 
 find_dirs() {
@@ -461,11 +482,23 @@ else
 	fi
 fi
 
+# Build variables - Set some defaults, then adjust features
+# according to .config and kernel version
+KBUILD_EXTRA_SYMBOLS=""
+KPATCH_LDFLAGS=""
+KPATCH_MODULE=true
+
 # kernel option checking: CONFIG_DEBUG_KERNEL and CONFIG_LIVEPATCH
 grep -q "CONFIG_DEBUG_KERNEL=y" "$OBJDIR/.config" || die "kernel doesn't have 'CONFIG_DEBUG_KERNEL' enabled"
 if grep "CONFIG_LIVEPATCH=y" "$OBJDIR/.config" > /dev/null; then
 	# The kernel supports livepatch.
-	KBUILD_EXTRA_SYMBOLS=""
+	if version_gte ${ARCHVERSION//-*/} 4.7.0; then
+		# Use new .klp.rela. sections
+		KPATCH_MODULE=false
+		if version_gte ${ARCHVERSION//-*/} 4.9.0; then
+			KPATCH_LDFLAGS="--unique=.parainstructions --unique=.altinstructions"
+		fi
+	fi
 else
 	# No support for livepatch in the kernel. Kpatch core module is needed.
 	find_core_symvers || die "unable to find Module.symvers for kpatch core module"
@@ -557,16 +590,10 @@ for i in $FILES; do
 	fi
 	cd $TEMPDIR
 	if [[ -e "orig/$i" ]]; then
-		"$TOOLSDIR"/create-diff-object "orig/$i" "patched/$i" "$KOBJFILE" "output/$i" 2>&1 |tee -a "$LOGFILE"
-		rc="${PIPESTATUS[0]}"
-		if [[ $rc = 139 ]]; then
-			warn "create-diff-object SIGSEGV"
-			if ls core* &> /dev/null; then
-				cp core* /tmp
-				die "core file at /tmp/$(ls core*)"
-			fi
-			die "no core file found, run 'ulimit -c unlimited' and try to recreate"
-		fi
+		# create-diff-object orig.o patched.o kernel-object output.o Module.symvers patch-mod-name
+		"$TOOLSDIR"/create-diff-object "orig/$i" "patched/$i" "$KOBJFILE" \
+			"output/$i" "$OBJDIR/Module.symvers" "kpatch_${PATCHNAME//-/_}" 2>&1 |tee -a "$LOGFILE"
+		check_pipe_status create-diff-object
 		# create-diff-object returns 3 if no functional change is found
 		[[ $rc -eq 0 ]] || [[ $rc -eq 3 ]] || ERROR=$(expr $ERROR "+" 1)
 		if [[ $rc -eq 0 ]]; then
@@ -596,6 +623,9 @@ done
 echo
 
 export KCFLAGS="-I$DATADIR/patch"
+if $KPATCH_MODULE; then
+	export KCPPFLAGS="-D__KPATCH_MODULE__"
+fi
 
 echo "Building patch module: kpatch-$PATCHNAME.ko"
 cp "$OBJDIR/.config" "$SRCDIR"
@@ -610,13 +640,35 @@ if [[ ! -z $UBUNTU_KERNEL ]]; then
 fi
 
 cd "$TEMPDIR/output"
-ld -r -o ../patch/output.o $(find . -name "*.o") >> "$LOGFILE" 2>&1 || die
-md5sum ../patch/output.o | awk '{printf "%s\0", $1}' > checksum.tmp || die
-objcopy --add-section .kpatch.checksum=checksum.tmp --set-section-flags .kpatch.checksum=alloc,load,contents,readonly  ../patch/output.o || die
-rm -f checksum.tmp
+ld -r $KPATCH_LDFLAGS -o ../patch/tmp_output.o $(find . -name "*.o") >> "$LOGFILE" 2>&1 || die
+
+if $KPATCH_MODULE; then
+	# Add .kpatch.checksum for kpatch script
+	md5sum ../patch/tmp_output.o | awk '{printf "%s\0", $1}' > checksum.tmp || die
+	objcopy --add-section .kpatch.checksum=checksum.tmp --set-section-flags .kpatch.checksum=alloc,load,contents,readonly  ../patch/tmp_output.o || die
+	rm -f checksum.tmp
+	"$TOOLSDIR"/create-kpatch-module $TEMPDIR/patch/tmp_output.o $TEMPDIR/patch/output.o 2>&1 |tee -a "$LOGFILE"
+	check_pipe_status create-kpatch-module
+else
+	cp $TEMPDIR/patch/tmp_output.o $TEMPDIR/patch/output.o || die
+
+ fi
+
 cd "$TEMPDIR/patch"
-KPATCH_BUILD="$SRCDIR" KPATCH_NAME="$PATCHNAME" KBUILD_EXTRA_SYMBOLS="$KBUILD_EXTRA_SYMBOLS" \
+
+KPATCH_BUILD="$SRCDIR" KPATCH_NAME="$PATCHNAME" \
+KBUILD_EXTRA_SYMBOLS="$KBUILD_EXTRA_SYMBOLS" \
+KPATCH_LDFLAGS="$KPATCH_LDFLAGS" \
 	make "O=$OBJDIR" >> "$LOGFILE" 2>&1 || die
+
+if ! $KPATCH_MODULE; then
+	if [[ -z "$KPATCH_LDFLAGS" ]]; then
+		extra_flags="--no-klp-arch-sections"
+	fi
+	cp $TEMPDIR/patch/kpatch-$PATCHNAME.ko $TEMPDIR/patch/tmp.ko || die
+	"$TOOLSDIR"/create-klp-module $extra_flags $TEMPDIR/patch/tmp.ko $TEMPDIR/patch/kpatch-$PATCHNAME.ko 2>&1 |tee -a "$LOGFILE"
+	check_pipe_status create-klp-module
+fi
 
 cp -f "$TEMPDIR/patch/kpatch-$PATCHNAME.ko" "$BASE" || die
 
