@@ -1851,6 +1851,15 @@ static void kpatch_create_patches_sections(struct kpatch_elf *kelf,
 			log_debug("lookup for %s @ 0x%016lx len %lu\n",
 			          sym->name, result.value, result.size);
 
+			/*
+			 * Convert global symbols to local so other objects in
+			 * the patch module (like the patch hook object's init
+			 * code) won't link to this function and call it before
+			 * its relocations have been applied.
+			 */
+			sym->bind = STB_LOCAL;
+			sym->sym.st_info = GELF_ST_INFO(sym->bind, sym->type);
+
 			/* add entry in text section */
 			funcs[index].old_addr = result.value;
 			funcs[index].old_size = result.size;
