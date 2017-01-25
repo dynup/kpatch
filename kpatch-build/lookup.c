@@ -37,9 +37,7 @@
 #include <libgen.h>
 
 #include "lookup.h"
-
-#define ERROR(format, ...) \
-	error(1, 0, "%s: %d: " format, __FUNCTION__, __LINE__, ##__VA_ARGS__)
+#include "log.h"
 
 struct object_symbol {
 	unsigned long value;
