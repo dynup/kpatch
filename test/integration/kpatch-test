@@ -207,7 +207,7 @@ run_load_test() {
 
 run_custom_test() {
 	testprog=$1
-	prefix=$(basename ${file%%.test}})
+	prefix=$(basename ${file%%.test})
 
 	[[ $testprog = *-LOADED.test ]] && return
 
