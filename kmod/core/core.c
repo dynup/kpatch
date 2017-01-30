@@ -44,6 +44,7 @@
 #include <linux/kallsyms.h>
 #include <linux/version.h>
 #include <linux/string.h>
+#include <linux/stacktrace.h>
 #include <asm/stacktrace.h>
 #include <asm/cacheflush.h>
 #include <generated/utsrelease.h>
@@ -73,11 +74,6 @@ static int kpatch_num_patched;
 static struct kobject *kpatch_root_kobj;
 struct kobject *kpatch_patches_kobj;
 EXPORT_SYMBOL_GPL(kpatch_patches_kobj);
-
-struct kpatch_backtrace_args {
-	struct kpatch_module *kpmod;
-	int ret;
-};
 
 struct kpatch_kallsyms_args {
 	const char *objname;
@@ -142,6 +138,13 @@ static atomic_t kpatch_state;
 static int (*kpatch_set_memory_rw)(unsigned long addr, int numpages);
 static int (*kpatch_set_memory_ro)(unsigned long addr, int numpages);
 
+#define MAX_STACK_TRACE_DEPTH   64
+static unsigned long stack_entries[MAX_STACK_TRACE_DEPTH];
+struct stack_trace trace = {
+	.max_entries	= ARRAY_SIZE(stack_entries),
+	.entries	= &stack_entries[0],
+};
+
 static inline void kpatch_state_idle(void)
 {
 	int state = atomic_read(&kpatch_state);
@@ -203,24 +206,12 @@ static inline int kpatch_compare_addresses(unsigned long stack_addr,
 	return 0;
 }
 
-#if LINUX_VERSION_CODE < KERNEL_VERSION(4, 6, 0)
-#define BACKTRACE_ADDRESS_VERIFY_RETURN_TYPE void
-#define BACKTRACE_ADDRESS_VERIFY_RETURN_ARG
-#else
-#define BACKTRACE_ADDRESS_VERIFY_RETURN_TYPE int
-#define BACKTRACE_ADDRESS_VERIFY_RETURN_ARG args->ret
-#endif
-
-static BACKTRACE_ADDRESS_VERIFY_RETURN_TYPE
-kpatch_backtrace_address_verify(void *data, unsigned long address, int reliable)
+static int kpatch_backtrace_address_verify(struct kpatch_module *kpmod,
+					   unsigned long address)
 {
-	struct kpatch_backtrace_args *args = data;
-	struct kpatch_module *kpmod = args->kpmod;
 	struct kpatch_func *func;
 	int i;
-
-	if (args->ret)
-		return BACKTRACE_ADDRESS_VERIFY_RETURN_ARG;
+	int ret;
 
 	/* check kpmod funcs */
 	do_for_each_linked_func(kpmod, func) {
@@ -244,67 +235,26 @@ kpatch_backtrace_address_verify(void *data, unsigned long address, int reliable)
 			func_name = active_func->name;
 		}
 
-		args->ret = kpatch_compare_addresses(address, func_addr,
-						     func_size, func_name);
-		if (args->ret)
-			return BACKTRACE_ADDRESS_VERIFY_RETURN_ARG;
+		ret = kpatch_compare_addresses(address, func_addr,
+					       func_size, func_name);
+		if (ret)
+			return ret;
 	} while_for_each_linked_func();
 
 	/* in the replace case, need to check the func hash as well */
 	hash_for_each_rcu(kpatch_func_hash, i, func, node) {
 		if (func->op == KPATCH_OP_UNPATCH && !func->force) {
-			args->ret = kpatch_compare_addresses(address,
-							     func->new_addr,
-							     func->new_size,
-							     func->name);
-			if (args->ret)
-				return BACKTRACE_ADDRESS_VERIFY_RETURN_ARG;
+			ret = kpatch_compare_addresses(address,
+						       func->new_addr,
+						       func->new_size,
+						       func->name);
+			if (ret)
+				return ret;
 		}
 	}
 
-	return BACKTRACE_ADDRESS_VERIFY_RETURN_ARG;
+	return ret;
 }
-
-static int kpatch_backtrace_stack(void *data, char *name)
-{
-	return 0;
-}
-
-static const struct stacktrace_ops kpatch_backtrace_ops = {
-	.address	= kpatch_backtrace_address_verify,
-	.stack		= kpatch_backtrace_stack,
-	.walk_stack	= print_context_stack_bp,
-};
-
-static int kpatch_print_trace_stack(void *data, char *name)
-{
-	pr_cont(" <%s> ", name);
-	return 0;
-}
-
-#if LINUX_VERSION_CODE < KERNEL_VERSION(4, 6, 0)
-static void kpatch_print_trace_address(void *data, unsigned long addr,
-				       int reliable)
-{
-	if (reliable)
-		pr_info("[<%p>] %pB\n", (void *)addr, (void *)addr);
-}
-#else
-static int kpatch_print_trace_address(void *data, unsigned long addr,
-				       int reliable)
-{
-	if (reliable)
-		pr_info("[<%p>] %pB\n", (void *)addr, (void *)addr);
-
-	return 0;
-}
-#endif
-
-static const struct stacktrace_ops kpatch_print_trace_ops = {
-	.stack		= kpatch_print_trace_stack,
-	.address	= kpatch_print_trace_address,
-	.walk_stack	= print_context_stack,
-};
 
 /*
  * Verify activeness safety, i.e. that none of the to-be-patched functions are
@@ -315,26 +265,44 @@ static const struct stacktrace_ops kpatch_print_trace_ops = {
 static int kpatch_verify_activeness_safety(struct kpatch_module *kpmod)
 {
 	struct task_struct *g, *t;
+	int i;
 	int ret = 0;
-
-	struct kpatch_backtrace_args args = {
-		.kpmod = kpmod,
-		.ret = 0
-	};
 
 	/* Check the stacks of all tasks. */
 	do_each_thread(g, t) {
-		dump_trace(t, NULL, NULL, 0, &kpatch_backtrace_ops, &args);
-		if (args.ret) {
-			ret = args.ret;
-			pr_info("PID: %d Comm: %.20s\n", t->pid, t->comm);
-			dump_trace(t, NULL, (unsigned long *)t->thread.sp,
-				   0, &kpatch_print_trace_ops, NULL);
+
+		trace.nr_entries = 0;
+		save_stack_trace_tsk(t, &trace);
+		if (trace.nr_entries >= trace.max_entries) {
+			ret = -EBUSY;
+			pr_err("more than %u trace entries!\n",
+			       trace.max_entries);
 			goto out;
 		}
+
+                for (i = 0; i < trace.nr_entries; i++) {
+			if (trace.entries[i] == ULONG_MAX)
+				break;
+			ret = kpatch_backtrace_address_verify(kpmod,
+							      trace.entries[i]);
+			if (ret)
+				goto out;
+		}
+
 	} while_each_thread(g, t);
 
 out:
+	if (ret) {
+		pr_err("PID: %d Comm: %.20s\n", t->pid, t->comm);
+		for (i = 0; i < trace.nr_entries; i++) {
+			if (trace.entries[i] == ULONG_MAX)
+				break;
+			pr_err("  [<%pK>] %pB\n",
+			       (void *)trace.entries[i],
+			       (void *)trace.entries[i]);
+		}
+	}
+
 	return ret;
 }
 
