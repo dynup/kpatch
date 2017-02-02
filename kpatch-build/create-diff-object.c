@@ -226,13 +226,13 @@ out:
 }
 
 /*
- * Determine if a section has changed only due to a WARN* macro call's
- * embedding of the line number into an instruction operand.
+ * Determine if a section has changed only due to a WARN* or might_sleep
+ * macro call's embedding of the line number into an instruction operand.
  *
  * Warning: Hackery lies herein.  It's hopefully justified by the fact that
  * this issue is very common.
  *
- * Example:
+ * Example WARN*:
  *
  *  938:   be 70 00 00 00          mov    $0x70,%esi
  *  93d:   48 c7 c7 00 00 00 00    mov    $0x0,%rdi
@@ -242,18 +242,26 @@ out:
  *  94b:   e8 00 00 00 00          callq  950 <tcp_conn_request+0x950>
  *                         94c: R_X86_64_PC32      warn_slowpath_null-0x4
  *
+ * Example might_sleep:
+ *
+ *  50f:   be f7 01 00 00          mov    $0x1f7,%esi
+ *  514:   48 c7 c7 00 00 00 00    mov    $0x0,%rdi
+ *                         517: R_X86_64_32S       .rodata.do_select.str1.8+0x98
+ *  51b:   e8 00 00 00 00          callq  520 <do_select+0x520>
+ *                         51c: R_X86_64_PC32      ___might_sleep-0x4
+ *
  * The pattern which applies to all cases:
  * 1) immediate move of the line number to %esi
  * 2) (optional) string section rela
  * 3) (optional) __warned.xxxxx static local rela
- * 4) warn_slowpath_* rela
+ * 4) warn_slowpath_* or __might_sleep or ___might_sleep rela
  */
-static int kpatch_warn_only_change(struct section *sec)
+static int kpatch_line_macro_change_only(struct section *sec)
 {
 	struct insn insn1, insn2;
 	unsigned long start1, start2, size, offset, length;
 	struct rela *rela;
-	int warnonly = 0, found;
+	int lineonly = 0, found;
 
 	if (sec->status != CHANGED ||
 	    is_rela_section(sec) ||
@@ -292,7 +300,7 @@ static int kpatch_warn_only_change(struct section *sec)
 
 		/*
 		 * Verify zero or more string relas followed by a
-		 * warn_slowpath_* rela.
+		 * warn_slowpath_* or __might_sleep or ___might_sleep rela.
 		 */
 		found = 0;
 		list_for_each_entry(rela, &sec->rela->relas, list) {
@@ -302,7 +310,9 @@ static int kpatch_warn_only_change(struct section *sec)
 				continue;
 			if (!strncmp(rela->sym->name, "__warned.", 9))
 				continue;
-			if (!strncmp(rela->sym->name, "warn_slowpath_", 14)) {
+			if (!strncmp(rela->sym->name, "warn_slowpath_", 14) ||
+			   (!strcmp(rela->sym->name, "__might_sleep")) ||
+			   (!strcmp(rela->sym->name, "___might_sleep"))) {
 				found = 1;
 				break;
 			}
@@ -311,10 +321,10 @@ static int kpatch_warn_only_change(struct section *sec)
 		if (!found)
 			return 0;
 
-		warnonly = 1;
+		lineonly = 1;
 	}
 
-	if (!warnonly)
+	if (!lineonly)
 		ERROR("no instruction changes detected for changed section %s",
 		      sec->name);
 
@@ -333,10 +343,10 @@ static void kpatch_compare_sections(struct list_head *seclist)
 			sec->status = NEW;
 	}
 
-	/* exclude WARN-only changes */
+	/* exclude WARN-only, might_sleep changes */
 	list_for_each_entry(sec, seclist, list) {
-		if (kpatch_warn_only_change(sec)) {
-			log_debug("reverting WARN-only section %s status to SAME\n",
+		if (kpatch_line_macro_change_only(sec)) {
+			log_debug("reverting macro / line number section %s status to SAME\n",
 				  sec->name);
 			sec->status = SAME;
 		}
