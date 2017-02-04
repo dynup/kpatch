@@ -1836,6 +1836,43 @@ static void kpatch_process_special_sections(struct kpatch_elf *kelf)
 	}
 }
 
+static struct sym_compare_type *kpatch_elf_locals(struct kpatch_elf *kelf)
+{
+	struct symbol *sym;
+	int i = 0, sym_num = 0;
+	struct sym_compare_type *sym_array;
+
+	list_for_each_entry(sym, &kelf->symbols, list) {
+		if (sym->bind != STB_LOCAL)
+			continue;
+		if (sym->type != STT_FUNC && sym->type != STT_OBJECT)
+			continue;
+
+		sym_num++;
+	}
+
+	if (!sym_num)
+		return NULL;
+
+	sym_array = malloc((sym_num + 1) * sizeof(struct sym_compare_type));
+	if (!sym_array)
+		ERROR("malloc");
+
+	list_for_each_entry(sym, &kelf->symbols, list) {
+		if (sym->bind != STB_LOCAL)
+			continue;
+		if (sym->type != STT_FUNC && sym->type != STT_OBJECT)
+			continue;
+
+		sym_array[i].type = sym->type;
+		sym_array[i++].name = sym->name;
+	}
+	sym_array[i].type = 0;
+	sym_array[i].name = NULL;
+
+	return sym_array;
+}
+
 static void kpatch_create_patches_sections(struct kpatch_elf *kelf,
 					   struct lookup_table *table, char *hint,
 					   char *objname)
@@ -1872,7 +1909,7 @@ static void kpatch_create_patches_sections(struct kpatch_elf *kelf,
 		if (sym->type == STT_FUNC && sym->status == CHANGED) {
 			if (sym->bind == STB_LOCAL) {
 				if (lookup_local_symbol(table, sym->name,
-				                        hint, &result))
+				                        &result))
 					ERROR("lookup_local_symbol %s (%s)",
 					      sym->name, hint);
 			} else {
@@ -2034,11 +2071,8 @@ static void kpatch_create_intermediate_sections(struct kpatch_elf *kelf,
 			if (rela->sym->bind == STB_LOCAL) {
 				/* An unchanged local symbol */
 				ret = lookup_local_symbol(table,
-					rela->sym->name, hint, &result);
-				if (ret == 2)
-					ERROR("lookup_local_symbol: ambiguous %s:%s relocation, needed for %s",
-			               hint, rela->sym->name, sec->base->name);
-				else if (ret)
+					rela->sym->name, &result);
+				if (ret)
 					ERROR("lookup_local_symbol %s:%s needed for %s",
 			               hint, rela->sym->name, sec->base->name);
 
@@ -2417,6 +2451,7 @@ int main(int argc, char *argv[])
 	struct symbol *sym;
 	char *hint = NULL, *objname, *pos;
 	char *mod_symvers_path, *pmod_name;
+	struct sym_compare_type *base_locals;
 
 	arguments.debug = 0;
 	argp_parse (&argp, argc, argv, 0, NULL, &arguments);
@@ -2436,6 +2471,20 @@ int main(int argc, char *argv[])
 	kpatch_compare_elf_headers(kelf_base->elf, kelf_patched->elf);
 	kpatch_check_program_headers(kelf_base->elf);
 	kpatch_check_program_headers(kelf_patched->elf);
+
+	list_for_each_entry(sym, &kelf_base->symbols, list) {
+		if (sym->type == STT_FILE) {
+			hint = sym->name;
+			break;
+		}
+	}
+	if (!hint)
+		ERROR("FILE symbol not found in base. Stripped?\n");
+
+	/* create symbol lookup table */
+	base_locals = kpatch_elf_locals(kelf_base);
+	lookup = lookup_open(arguments.args[2], mod_symvers_path, hint, base_locals);
+	free(base_locals);
 
 	kpatch_mark_grouped_sections(kelf_patched);
 	kpatch_replace_sections_syms(kelf_base);
@@ -2491,18 +2540,6 @@ int main(int argc, char *argv[])
 	 * kpatch_patched.
 	 */
 	kpatch_elf_teardown(kelf_patched);
-
-	list_for_each_entry(sym, &kelf_out->symbols, list) {
-		if (sym->type == STT_FILE) {
-			hint = sym->name;
-			break;
-		}
-	}
-	if (!hint)
-		ERROR("FILE symbol not found in output. Stripped?\n");
-
-	/* create symbol lookup table */
-	lookup = lookup_open(arguments.args[2], mod_symvers_path);
 
 	/* extract module name (destructive to arguments.modulefile) */
 	objname = basename(arguments.args[2]);

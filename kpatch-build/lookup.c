@@ -55,6 +55,7 @@ struct lookup_table {
 	int obj_nr, exp_nr;
 	struct object_symbol *obj_syms;
 	struct export_symbol *exp_syms;
+	struct object_symbol *local_syms;
 };
 
 #define for_each_obj_symbol(ndx, iter, table) \
@@ -62,6 +63,55 @@ struct lookup_table {
 
 #define for_each_exp_symbol(ndx, iter, table) \
 	for (ndx = 0, iter = table->exp_syms; ndx < table->exp_nr; ndx++, iter++)
+
+static void find_local_syms(struct lookup_table *table, char *hint,
+			    struct sym_compare_type *locals)
+{
+	struct object_symbol *sym, *file_sym;
+	int i, in_file = 0;
+	struct sym_compare_type *local_index;
+
+	for_each_obj_symbol(i, sym, table) {
+		if (sym->type == STT_FILE) {
+			if (in_file && !local_index->name) {
+				if (table->local_syms)
+					ERROR("find_local_syms for %s: found_dup", hint);
+				table->local_syms = file_sym;
+			}
+
+			if (!strcmp(hint, sym->name)) {
+				in_file = 1;
+				file_sym = sym;
+				local_index = locals;
+			}
+			else
+				in_file = 0;
+
+			continue;
+		}
+
+		if (!in_file)
+			continue;
+		if (sym->bind != STB_LOCAL || (sym->type != STT_FUNC && sym->type != STT_OBJECT))
+			continue;
+
+		if (local_index->name &&
+		    local_index->type == sym->type &&
+		    !strcmp(local_index->name, sym->name))
+			local_index++;
+		else
+			in_file = 0;
+	}
+
+	if (in_file && !local_index->name) {
+		if (table->local_syms)
+			ERROR("find_local_syms for %s: found_dup", hint);
+		table->local_syms = file_sym;
+	}
+
+	if (!table->local_syms)
+		ERROR("find_local_syms for %s: found_none", hint);
+}
 
 static void obj_read(struct lookup_table *table, char *path)
 {
@@ -203,7 +253,8 @@ static void symvers_read(struct lookup_table *table, char *path)
 	fclose(file);
 }
 
-struct lookup_table *lookup_open(char *obj_path, char *symvers_path)
+struct lookup_table *lookup_open(char *obj_path, char *symvers_path,
+				 char *hint, struct sym_compare_type *locals)
 {
 	struct lookup_table *table;
 
@@ -215,6 +266,10 @@ struct lookup_table *lookup_open(char *obj_path, char *symvers_path)
 	obj_read(table, obj_path);
 	symvers_read(table, symvers_path);
 
+	table->local_syms = NULL;
+	if (locals)
+		find_local_syms(table, hint, locals);
+
 	return table;
 }
 
@@ -225,40 +280,38 @@ void lookup_close(struct lookup_table *table)
 	free(table);
 }
 
-int lookup_local_symbol(struct lookup_table *table, char *name, char *hint,
+int lookup_local_symbol(struct lookup_table *table, char *name,
                         struct lookup_result *result)
 {
-	struct object_symbol *sym, *match = NULL;
-	int i;
+	struct object_symbol *sym;
 	unsigned long pos = 0;
-	char *curfile = NULL;
+	int i, match = 0, in_file = 0;
+
+	if (!table->local_syms)
+		return 1;
 
 	memset(result, 0, sizeof(*result));
 	for_each_obj_symbol(i, sym, table) {
-		if (sym->type == STT_FILE) {
-			if (!strcmp(sym->name, hint)) {
-				curfile = sym->name;
-				continue; /* begin hint file symbols */
-			} else if (curfile)
-				curfile = NULL; /* end hint file symbols */
+		if (sym->skip)
+			continue;
+
+		if (sym->bind == STB_LOCAL && !strcmp(sym->name, name))
+			pos++;
+
+		if (table->local_syms == sym) {
+			in_file = 1;
+			continue;
 		}
-		if (sym->bind == STB_LOCAL) {
-			if (sym->name && !strcmp(sym->name, name)) {
-				/*
-				 * need to count any occurrence of the symbol
-				 * name, unless we've already found a match
-				 */
-				if (!match)
-					pos++;
 
-				if (!curfile)
-					continue;
+		if (!in_file)
+			continue;
 
-				if (match)
-					/* dup file+symbol, unresolvable ambiguity */
-					return 2;
-				match = sym;
-			}
+		if (sym->type == STT_FILE)
+			break;
+
+		if (sym->bind == STB_LOCAL && !strcmp(sym->name, name)) {
+			match = 1;
+			break;
 		}
 	}
 
@@ -266,8 +319,8 @@ int lookup_local_symbol(struct lookup_table *table, char *name, char *hint,
 		return 1;
 
 	result->pos = pos;
-	result->value = match->value;
-	result->size = match->size;
+	result->value = sym->value;
+	result->size = sym->size;
 	return 0;
 }
 
