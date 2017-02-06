@@ -443,8 +443,7 @@ kpatch-build already works with both livepatch and kpatch.  If your kernel has
 CONFIG\_LIVEPATCH enabled, it detects that and builds a patch module in the
 livepatch format.  Otherwise it builds a kpatch patch module.
 
-Soon the kpatch script will also support both patch module formats (TODO issue
-[#479](https://github.com/dynup/kpatch/issues/479)).
+The kpatch script also supports both patch module formats.
 
 **Q. Isn't this just a virus/rootkit injection framework?**
 
@@ -454,11 +453,10 @@ ability to arbitrarily modify the kernel, with or without kpatch.
 
 **Q. How can I detect if somebody has patched the kernel?**
 
-When a patch module is loaded, the `TAINT_USER` flag is set.  To test for it,
-`cat /proc/sys/kernel/tainted` and check to see if the value of 64 has been
-OR'ed in.
-
-Eventually we hope to have a dedicated `TAINT_KPATCH` flag instead.
+When a patch module is loaded, the `TAINT_USER` or `TAINT_LIVEPATCH` flag is
+set.  (The latter flag was introduced in Linux version 4.0.)  To test for
+these flags, `cat /proc/sys/kernel/tainted` and check to see if the value of
+`TAINT_USER` (64) or `TAINT_LIVEPATCH` (32768) has been OR'ed in.
 
 Note that the `TAINT_OOT_MODULE` flag (4096) will also be set, since the patch
 module is built outside the Linux kernel source tree.
@@ -466,6 +464,11 @@ module is built outside the Linux kernel source tree.
 If your patch module is unsigned, the `TAINT_FORCED_MODULE` flag (2) will also
 be set.  Starting with Linux 3.15, this will be changed to the more specific
 `TAINT_UNSIGNED_MODULE` (8192).
+
+Linux versions starting with 4.9 also support a per-module `TAINT_LIVEPATCH`
+taint flag. This can be checked by verifying the output of
+`cat /sys/module/<kpatch module>/taint` -- a 'K' character indicates the
+presence of `TAINT_LIVEPATCH`.
 
 **Q. Will it destabilize my system?**
 
