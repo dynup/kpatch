@@ -505,6 +505,9 @@ else
 	KBUILD_EXTRA_SYMBOLS="$SYMVERSFILE"
 fi
 
+# unsupported kernel option checking: CONFIG_DEBUG_INFO_SPLIT
+grep -q "CONFIG_DEBUG_INFO_SPLIT=y" "$OBJDIR/.config" && die "kernel option 'CONFIG_DEBUG_INFO_SPLIT' not supported"
+
 echo "Testing patch file"
 cd "$SRCDIR" || die
 patch -N -p1 --dry-run < "$PATCHFILE" || die "source patch file failed to apply"
