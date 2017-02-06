@@ -516,10 +516,10 @@ echo "Reading special section data"
 SPECIAL_VARS=$(readelf -wi "$VMLINUX" |
 	       gawk --non-decimal-data '
 	       BEGIN { a = b = p = e = 0 }
-	       a == 0 && /DW_AT_name.* alt_instr\s*$/ {a = 1; next}
-	       b == 0 && /DW_AT_name.* bug_entry\s*$/ {b = 1; next}
-	       p == 0 && /DW_AT_name.* paravirt_patch_site\s*$/ {p = 1; next}
-	       e == 0 && /DW_AT_name.* exception_table_entry\s*$/ {e = 1; next}
+	       a == 0 && /DW_AT_name.* alt_instr[[:space:]]*$/ {a = 1; next}
+	       b == 0 && /DW_AT_name.* bug_entry[[:space:]]*$/ {b = 1; next}
+	       p == 0 && /DW_AT_name.* paravirt_patch_site[[:space:]]*$/ {p = 1; next}
+	       e == 0 && /DW_AT_name.* exception_table_entry[[:space:]]*$/ {e = 1; next}
 	       a == 1 {printf("export ALT_STRUCT_SIZE=%d\n", $4); a = 2}
 	       b == 1 {printf("export BUG_STRUCT_SIZE=%d\n", $4); b = 2}
 	       p == 1 {printf("export PARA_STRUCT_SIZE=%d\n", $4); p = 2}
