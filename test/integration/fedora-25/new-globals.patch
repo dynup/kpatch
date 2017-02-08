@@ -1,6 +1,6 @@
 diff -Nupr src.orig/fs/proc/cmdline.c src/fs/proc/cmdline.c
---- src.orig/fs/proc/cmdline.c	2016-11-30 19:39:49.317737234 +0000
-+++ src/fs/proc/cmdline.c	2016-11-30 19:41:02.546737234 +0000
+--- src.orig/fs/proc/cmdline.c	2017-02-08 21:31:22.297912856 -0500
++++ src/fs/proc/cmdline.c	2017-02-08 21:32:08.510913975 -0500
 @@ -27,3 +27,10 @@ static int __init proc_cmdline_init(void
  	return 0;
  }
@@ -13,8 +13,8 @@ diff -Nupr src.orig/fs/proc/cmdline.c src/fs/proc/cmdline.c
 +		printk("hello there!\n");
 +}
 diff -Nupr src.orig/fs/proc/meminfo.c src/fs/proc/meminfo.c
---- src.orig/fs/proc/meminfo.c	2016-11-30 19:39:49.317737234 +0000
-+++ src/fs/proc/meminfo.c	2016-11-30 19:41:02.547737234 +0000
+--- src.orig/fs/proc/meminfo.c	2017-02-08 21:06:25.943876606 -0500
++++ src/fs/proc/meminfo.c	2017-02-08 21:33:26.498915865 -0500
 @@ -19,6 +19,8 @@
  #include <asm/pgtable.h>
  #include "internal.h"
@@ -24,11 +24,11 @@ diff -Nupr src.orig/fs/proc/meminfo.c src/fs/proc/meminfo.c
  void __attribute__((weak)) arch_report_meminfo(struct seq_file *m)
  {
  }
-@@ -53,6 +55,7 @@ static int meminfo_proc_show(struct seq_
- 	/*
- 	 * Tagged format, for easy grepping and expansion.
- 	 */
+@@ -65,6 +67,7 @@ static int meminfo_proc_show(struct seq_
+ 
+ 	available = si_mem_available();
+ 
 +	kpatch_print_message();
- 	seq_printf(m,
- 		"MemTotal:       %8lu kB\n"
- 		"MemFree:        %8lu kB\n"
+ 	show_val_kb(m, "MemTotal:       ", i.totalram);
+ 	show_val_kb(m, "MemFree:        ", i.freeram);
+ 	show_val_kb(m, "MemAvailable:   ", available);

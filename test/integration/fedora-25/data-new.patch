@@ -1,8 +1,8 @@
 diff -Nupr src.orig/fs/proc/meminfo.c src/fs/proc/meminfo.c
---- src.orig/fs/proc/meminfo.c	2016-11-30 19:39:49.317737234 +0000
-+++ src/fs/proc/meminfo.c	2016-11-30 19:39:58.934737234 +0000
-@@ -23,6 +23,8 @@ void __attribute__((weak)) arch_report_m
- {
+--- src.orig/fs/proc/meminfo.c	2017-02-08 21:06:25.943876606 -0500
++++ src/fs/proc/meminfo.c	2017-02-08 21:08:07.154879058 -0500
+@@ -42,6 +42,8 @@ static void show_val_kb(struct seq_file
+ 	seq_write(m, " kB\n", 4);
  }
  
 +static int foo = 5;
@@ -10,19 +10,11 @@ diff -Nupr src.orig/fs/proc/meminfo.c src/fs/proc/meminfo.c
  static int meminfo_proc_show(struct seq_file *m, void *v)
  {
  	struct sysinfo i;
-@@ -112,6 +114,7 @@ static int meminfo_proc_show(struct seq_
- 		"CmaTotal:       %8lu kB\n"
- 		"CmaFree:        %8lu kB\n"
+@@ -153,6 +155,7 @@ static int meminfo_proc_show(struct seq_
+ 	show_val_kb(m, "CmaFree:        ",
+ 		    global_page_state(NR_FREE_CMA_PAGES));
  #endif
-+		"kpatch: %d"
- 		,
- 		K(i.totalram),
- 		K(i.freeram),
-@@ -172,6 +175,7 @@ static int meminfo_proc_show(struct seq_
- 		, K(totalcma_pages)
- 		, K(global_page_state(NR_FREE_CMA_PAGES))
- #endif
-+		,foo
- 		);
++	seq_printf(m, "kpatch: %d\n", foo);
  
  	hugetlb_report_meminfo(m);
+ 
