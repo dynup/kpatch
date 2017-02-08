@@ -505,6 +505,13 @@ else
 	KBUILD_EXTRA_SYMBOLS="$SYMVERSFILE"
 fi
 
+# optional kernel configs: CONFIG_PARAVIRT
+if grep "CONFIG_PARAVIRT=y" "$OBJDIR/.config" > /dev/null; then
+	CONFIG_PARAVIRT=1
+else
+	CONFIG_PARAVIRT=0
+fi
+
 # unsupported kernel option checking: CONFIG_DEBUG_INFO_SPLIT
 grep -q "CONFIG_DEBUG_INFO_SPLIT=y" "$OBJDIR/.config" && die "kernel option 'CONFIG_DEBUG_INFO_SPLIT' not supported"
 
@@ -516,8 +523,9 @@ cp -LR "$DATADIR/patch" "$TEMPDIR" || die
 export KCFLAGS="-I$DATADIR/patch -ffunction-sections -fdata-sections"
 
 echo "Reading special section data"
+[[ $CONFIG_PARAVIRT -eq 0 ]] && AWK_OPTIONS="-vskip_p=1"
 SPECIAL_VARS=$(readelf -wi "$VMLINUX" |
-	       gawk --non-decimal-data '
+	       gawk --non-decimal-data $AWK_OPTIONS '
 	       BEGIN { a = b = p = e = 0 }
 
 	       # Set state if name matches
@@ -539,14 +547,15 @@ SPECIAL_VARS=$(readelf -wi "$VMLINUX" |
 	       e == 1 {printf("export EX_STRUCT_SIZE=%d\n", $4); e = 2}
 
 	       # Bail out once we have everything
-	       a == 2 && b == 2 && p == 2 && e == 2 {exit}')
+	       a == 2 && b == 2 && (p == 2 || skip_p) && e == 2 {exit}')
 
 [[ -n $SPECIAL_VARS ]] && eval "$SPECIAL_VARS"
 
-if [[ -z $ALT_STRUCT_SIZE ]] || [[ -z $BUG_STRUCT_SIZE ]] ||
-   [[ -z $PARA_STRUCT_SIZE ]] || [[ -z $EX_STRUCT_SIZE ]]; then
-	die "can't find special struct size"
-fi
+[[ -z $ALT_STRUCT_SIZE ]] && die "can't find special struct alt_instr size"
+[[ -z $BUG_STRUCT_SIZE ]] && die "can't find special struct bug_entry size"
+[[ -z $EX_STRUCT_SIZE ]]  && die "can't find special struct paravirt_patch_site size"
+[[ -z $PARA_STRUCT_SIZE && $CONFIG_PARAVIRT -ne 0 ]] && die "can't find special struct paravirt_patch_site size"
+
 for i in $ALT_STRUCT_SIZE $BUG_STRUCT_SIZE $PARA_STRUCT_SIZE $EX_STRUCT_SIZE; do
 	if [[ ! $i -gt 0 ]] || [[ ! $i -le 16 ]]; then
 		die "invalid special struct size $i"
