@@ -9,9 +9,15 @@ struct lookup_result {
 	unsigned long pos;
 };
 
-struct lookup_table *lookup_open(char *obj_path, char *symvers_path);
+struct sym_compare_type {
+	char *name;
+	int type;
+};
+
+struct lookup_table *lookup_open(char *obj_path, char *symvers_path,
+				 char *hint, struct sym_compare_type *locals);
 void lookup_close(struct lookup_table *table);
-int lookup_local_symbol(struct lookup_table *table, char *name, char *hint,
+int lookup_local_symbol(struct lookup_table *table, char *name,
                         struct lookup_result *result);
 int lookup_global_symbol(struct lookup_table *table, char *name,
                          struct lookup_result *result);
