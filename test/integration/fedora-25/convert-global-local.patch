@@ -1,11 +1,10 @@
 This is a test for #658: a kernel panic seen when patching an exported
 function (e.g., kmalloc) which is used by patch_init().
 ---
-diff --git a/mm/slub.c b/mm/slub.c
-index 067598a..b517aec 100644
---- a/mm/slub.c
-+++ b/mm/slub.c
-@@ -3719,6 +3719,9 @@ void *__kmalloc(size_t size, gfp_t flags)
+diff -Nupr src.orig/mm/slub.c src/mm/slub.c
+--- src.orig/mm/slub.c	2016-12-11 14:17:54.000000000 -0500
++++ src/mm/slub.c	2017-02-08 21:02:17.946870598 -0500
+@@ -3719,6 +3719,9 @@ void *__kmalloc(size_t size, gfp_t flags
  	struct kmem_cache *s;
  	void *ret;
  

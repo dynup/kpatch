@@ -1,7 +1,7 @@
 diff -Nupr src.orig/fs/proc/array.c src/fs/proc/array.c
---- src.orig/fs/proc/array.c	2016-11-30 19:39:49.317737234 +0000
-+++ src/fs/proc/array.c	2016-11-30 19:41:11.931737234 +0000
-@@ -352,13 +352,20 @@ static inline void task_seccomp(struct s
+--- src.orig/fs/proc/array.c	2017-02-08 21:17:58.244893377 -0500
++++ src/fs/proc/array.c	2017-02-08 21:26:21.670905573 -0500
+@@ -348,12 +348,19 @@ static inline void task_seccomp(struct s
  #endif
  }
  
@@ -11,10 +11,9 @@ diff -Nupr src.orig/fs/proc/array.c src/fs/proc/array.c
  {
 +	int *newpid;
 +
- 	seq_printf(m,	"voluntary_ctxt_switches:\t%lu\n"
- 			"nonvoluntary_ctxt_switches:\t%lu\n",
- 			p->nvcsw,
- 			p->nivcsw);
+ 	seq_put_decimal_ull(m, "voluntary_ctxt_switches:\t", p->nvcsw);
+ 	seq_put_decimal_ull(m, "\nnonvoluntary_ctxt_switches:\t", p->nivcsw);
+ 	seq_putc(m, '\n');
 +
 +	newpid = kpatch_shadow_get(p, "newpid");
 +	if (newpid)
@@ -23,17 +22,17 @@ diff -Nupr src.orig/fs/proc/array.c src/fs/proc/array.c
  
  static void task_cpus_allowed(struct seq_file *m, struct task_struct *task)
 diff -Nupr src.orig/kernel/exit.c src/kernel/exit.c
---- src.orig/kernel/exit.c	2016-11-30 19:39:45.166737234 +0000
-+++ src/kernel/exit.c	2016-11-30 19:41:11.932737234 +0000
+--- src.orig/kernel/exit.c	2017-02-08 21:26:31.119905802 -0500
++++ src/kernel/exit.c	2017-02-08 21:27:11.347906776 -0500
 @@ -725,6 +725,7 @@ static void check_stack_usage(void)
  static inline void check_stack_usage(void) {}
  #endif
  
 +#include "kpatch.h"
- void do_exit(long code)
+ void __noreturn do_exit(long code)
  {
  	struct task_struct *tsk = current;
-@@ -828,6 +829,8 @@ void do_exit(long code)
+@@ -828,6 +829,8 @@ void __noreturn do_exit(long code)
  	exit_task_work(tsk);
  	exit_thread(tsk);
  
@@ -43,9 +42,9 @@ diff -Nupr src.orig/kernel/exit.c src/kernel/exit.c
  	 * Flush inherited counters to the parent - before the parent
  	 * gets woken up by child-exit notifications.
 diff -Nupr src.orig/kernel/fork.c src/kernel/fork.c
---- src.orig/kernel/fork.c	2016-11-30 19:39:45.165737234 +0000
-+++ src/kernel/fork.c	2016-11-30 19:41:11.931737234 +0000
-@@ -1749,6 +1749,7 @@ struct task_struct *fork_idle(int cpu)
+--- src.orig/kernel/fork.c	2017-02-08 21:27:34.629907340 -0500
++++ src/kernel/fork.c	2017-02-08 21:28:31.182908710 -0500
+@@ -1904,6 +1904,7 @@ struct task_struct *fork_idle(int cpu)
   * It copies the process, and if successful kick-starts
   * it and waits for it to finish using the VM if required.
   */
@@ -53,7 +52,7 @@ diff -Nupr src.orig/kernel/fork.c src/kernel/fork.c
  long _do_fork(unsigned long clone_flags,
  	      unsigned long stack_start,
  	      unsigned long stack_size,
-@@ -1787,6 +1788,13 @@ long _do_fork(unsigned long clone_flags,
+@@ -1943,6 +1944,13 @@ long _do_fork(unsigned long clone_flags,
  	if (!IS_ERR(p)) {
  		struct completion vfork;
  		struct pid *pid;

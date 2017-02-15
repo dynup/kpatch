@@ -1,15 +1,16 @@
 diff -Nupr src.orig/fs/proc/meminfo.c src/fs/proc/meminfo.c
---- src.orig/fs/proc/meminfo.c	2016-11-30 19:39:49.317737234 +0000
-+++ src/fs/proc/meminfo.c	2016-11-30 19:40:40.686737234 +0000
-@@ -32,6 +32,7 @@ static int meminfo_proc_show(struct seq_
+--- src.orig/fs/proc/meminfo.c	2017-02-08 21:06:25.943876606 -0500
++++ src/fs/proc/meminfo.c	2017-02-08 21:37:44.992922127 -0500
+@@ -51,6 +51,8 @@ static int meminfo_proc_show(struct seq_
  	unsigned long pages[NR_LRU_LISTS];
  	int lru;
  
 +	printk("a\n");
- /*
-  * display in kilobytes.
-  */
-@@ -196,6 +197,7 @@ static const struct file_operations memi
++
+ 	si_meminfo(&i);
+ 	si_swapinfo(&i);
+ 	committed = percpu_counter_read_positive(&vm_committed_as);
+@@ -175,6 +177,7 @@ static const struct file_operations memi
  
  static int __init proc_meminfo_init(void)
  {
