@@ -65,15 +65,15 @@ struct lookup_table {
 	for (ndx = 0, iter = table->exp_syms; ndx < table->exp_nr; ndx++, iter++)
 
 static void find_local_syms(struct lookup_table *table, char *hint,
-			    struct sym_compare_type *locals)
+			    struct sym_compare_type *child_locals)
 {
 	struct object_symbol *sym, *file_sym;
 	int i, in_file = 0;
-	struct sym_compare_type *local_index;
+	struct sym_compare_type *child_sym;
 
 	for_each_obj_symbol(i, sym, table) {
 		if (sym->type == STT_FILE) {
-			if (in_file && !local_index->name) {
+			if (in_file && !child_sym->name) {
 				if (table->local_syms)
 					ERROR("find_local_syms for %s: found_dup", hint);
 				table->local_syms = file_sym;
@@ -82,7 +82,7 @@ static void find_local_syms(struct lookup_table *table, char *hint,
 			if (!strcmp(hint, sym->name)) {
 				in_file = 1;
 				file_sym = sym;
-				local_index = locals;
+				child_sym = child_locals;
 			}
 			else
 				in_file = 0;
@@ -95,15 +95,14 @@ static void find_local_syms(struct lookup_table *table, char *hint,
 		if (sym->bind != STB_LOCAL || (sym->type != STT_FUNC && sym->type != STT_OBJECT))
 			continue;
 
-		if (local_index->name &&
-		    local_index->type == sym->type &&
-		    !strcmp(local_index->name, sym->name))
-			local_index++;
+		if (child_sym->name && child_sym->type == sym->type &&
+		    !strcmp(child_sym->name, sym->name))
+			child_sym++;
 		else
 			in_file = 0;
 	}
 
-	if (in_file && !local_index->name) {
+	if (in_file && !child_sym->name) {
 		if (table->local_syms)
 			ERROR("find_local_syms for %s: found_dup", hint);
 		table->local_syms = file_sym;
