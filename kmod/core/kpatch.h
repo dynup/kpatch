@@ -46,6 +46,7 @@ struct kpatch_func {
 	/* private */
 	struct hlist_node node;
 	enum kpatch_op op;
+	struct kobject kobj;
 };
 
 struct kpatch_dynrela {
@@ -74,6 +75,7 @@ struct kpatch_object {
 
 	/* private */
 	struct module *mod;
+	struct kobject kobj;
 };
 
 struct kpatch_module {
@@ -86,9 +88,10 @@ struct kpatch_module {
 
 	/* private */
 	struct list_head list;
+	struct kobject kobj;
 };
 
-extern struct kobject *kpatch_patches_kobj;
+extern struct kobject *kpatch_root_kobj;
 
 extern int kpatch_register(struct kpatch_module *kpmod, bool replace);
 extern int kpatch_unregister(struct kpatch_module *kpmod);

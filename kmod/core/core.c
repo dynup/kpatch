@@ -71,9 +71,8 @@ static LIST_HEAD(kpmod_list);
 
 static int kpatch_num_patched;
 
-static struct kobject *kpatch_root_kobj;
-struct kobject *kpatch_patches_kobj;
-EXPORT_SYMBOL_GPL(kpatch_patches_kobj);
+struct kobject *kpatch_root_kobj;
+EXPORT_SYMBOL_GPL(kpatch_root_kobj);
 
 struct kpatch_kallsyms_args {
 	const char *objname;
@@ -1127,21 +1126,12 @@ static int kpatch_init(void)
 	if (!kpatch_root_kobj)
 		return -ENOMEM;
 
-	kpatch_patches_kobj = kobject_create_and_add("patches",
-						     kpatch_root_kobj);
-	if (!kpatch_patches_kobj) {
-		ret = -ENOMEM;
-		goto err_root_kobj;
-	}
-
 	ret = register_module_notifier(&kpatch_module_nb);
 	if (ret)
-		goto err_patches_kobj;
+		goto err_root_kobj;
 
 	return 0;
 
-err_patches_kobj:
-	kobject_put(kpatch_patches_kobj);
 err_root_kobj:
 	kobject_put(kpatch_root_kobj);
 	return ret;
@@ -1153,7 +1143,6 @@ static void kpatch_exit(void)
 
 	WARN_ON(kpatch_num_patched != 0);
 	WARN_ON(unregister_module_notifier(&kpatch_module_nb));
-	kobject_put(kpatch_patches_kobj);
 	kobject_put(kpatch_root_kobj);
 }
 
