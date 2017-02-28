@@ -767,6 +767,9 @@ static void kpatch_correlate_static_local_variables(struct kpatch_elf *base,
 			sym->twin = patched_sym;
 			patched_sym->twin = sym;
 
+			/* set initial status, might change */
+			sym->status = patched_sym->status = SAME;
+
 			if (bundled) {
 				sym->sec->twin = patched_sym->sec;
 				patched_sym->sec->twin = sym->sec;
