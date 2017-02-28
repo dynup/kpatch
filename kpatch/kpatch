@@ -32,7 +32,7 @@ VERSION="0.3.4"
 if [[ -e /sys/kernel/livepatch ]] ; then
 	SYSFS="/sys/kernel/livepatch"
 else
-	SYSFS="/sys/kernel/kpatch/patches"
+	SYSFS="/sys/kernel/kpatch"
 fi
 
 usage_cmd() {

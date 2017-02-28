@@ -16,7 +16,7 @@ if [[ "$(cat /sys/kernel/testmod/value)" != "3" ]]
 then
 	exit 1
 fi
-echo 0 > /sys/kernel/kpatch/patches/kpatch_patch/enabled
+echo 0 > /sys/kernel/kpatch/kpatch_patch/enabled
 rmmod kpatch-patch
 if [[ "$(cat /sys/kernel/testmod/value)" != "2" ]]
 then
