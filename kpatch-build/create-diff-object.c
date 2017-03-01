@@ -1691,11 +1691,18 @@ static void kpatch_mark_ignored_sections_same(struct kpatch_elf *kelf)
 			sym->status = SAME;
 		}
 	}
+
+	/* strip temporary global __UNIQUE_ID_kpatch_ignore_section_* symbols */
+	list_for_each_entry(sym, &kelf->symbols, list)
+		if (!strncmp(sym->name, "__UNIQUE_ID_kpatch_ignore_section_",
+		            strlen("__UNIQUE_ID_kpatch_ignore_section_")))
+			sym->status = SAME;
 }
 
 static void kpatch_mark_ignored_functions_same(struct kpatch_elf *kelf)
 {
 	struct section *sec;
+	struct symbol *sym;
 	struct rela *rela;
 
 	sec = find_section_by_name(&kelf->sections, ".kpatch.ignore.functions");
@@ -1717,6 +1724,12 @@ static void kpatch_mark_ignored_functions_same(struct kpatch_elf *kelf)
 		if (rela->sym->sec->rela)
 			rela->sym->sec->rela->status = SAME;
 	}
+
+	/* strip temporary global kpatch_ignore_func_* symbols */
+	list_for_each_entry(sym, &kelf->symbols, list)
+		if (!strncmp(sym->name, "__kpatch_ignore_func_",
+		            strlen("__kpatch_ignore_func_")))
+			sym->status = SAME;
 }
 
 static void kpatch_create_kpatch_arch_section(struct kpatch_elf *kelf, char *objname)
