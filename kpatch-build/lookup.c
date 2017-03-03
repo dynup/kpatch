@@ -56,6 +56,7 @@ struct lookup_table {
 	struct object_symbol *obj_syms;
 	struct export_symbol *exp_syms;
 	struct object_symbol *local_syms;
+	int vmlinux;
 };
 
 #define for_each_obj_symbol(ndx, iter, table) \
@@ -63,6 +64,18 @@ struct lookup_table {
 
 #define for_each_exp_symbol(ndx, iter, table) \
 	for (ndx = 0, iter = table->exp_syms; ndx < table->exp_nr; ndx++, iter++)
+
+static int discarded_sym(struct lookup_table *table,
+			 struct sym_compare_type *sym)
+{
+	if (table->vmlinux && sym->name &&
+	    (!strncmp(sym->name, "__exitcall_", 11) ||
+	     !strncmp(sym->name, "__brk_reservation_fn_", 21) ||
+	     !strncmp(sym->name, "__func_stack_frame_non_standard_", 32)))
+		return 1;
+
+	return 0;
+}
 
 static void find_local_syms(struct lookup_table *table, char *hint,
 			    struct sym_compare_type *child_locals)
@@ -95,6 +108,14 @@ static void find_local_syms(struct lookup_table *table, char *hint,
 		if (sym->bind != STB_LOCAL || (sym->type != STT_FUNC && sym->type != STT_OBJECT))
 			continue;
 
+		/*
+		 * Symbols which get discarded at link time are missing from
+		 * the lookup table, so skip them.
+		 */
+		while (discarded_sym(table, child_sym))
+			child_sym++;
+
+		/* make sure the child symbol and parent symbol match */
 		if (child_sym->name && child_sym->type == sym->type &&
 		    !strcmp(child_sym->name, sym->name))
 			child_sym++;
@@ -261,6 +282,8 @@ struct lookup_table *lookup_open(char *obj_path, char *symvers_path,
 	if (!table)
 		ERROR("malloc table");
 	memset(table, 0, sizeof(*table));
+
+	table->vmlinux = !strcmp(basename(obj_path), "vmlinux");
 
 	obj_read(table, obj_path);
 	symvers_read(table, symvers_path);
