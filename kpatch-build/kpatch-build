@@ -90,8 +90,8 @@ cleanup() {
 }
 
 clean_cache() {
-	[[ -z $USERSRCDIR ]] && rm -rf "$SRCDIR"
-	rm -rf "$VERSIONFILE"
+	rm -rf "$CACHEDIR"
+	mkdir -p "$TEMPDIR" || die "Couldn't create $TEMPDIR"
 }
 
 check_pipe_status() {
@@ -376,8 +376,6 @@ fi
 if [[ -n "$USERSRCDIR" ]]; then
 	echo "Using source directory at $USERSRCDIR"
 
-	clean_cache
-
 	# save vmlinux before it gets removed with mrproper
 	[[ "$VMLINUX" -ef "$SRCDIR"/vmlinux ]] && cp -f "$VMLINUX" $TEMPDIR/vmlinux && VMLINUX=$TEMPDIR/vmlinux
 
@@ -389,6 +387,8 @@ else
 
 		echo "Fedora/Red Hat distribution detected"
 		rpm -q --quiet rpmdevtools || die "rpmdevtools not installed"
+
+		clean_cache
 
 		echo "Downloading kernel source for $ARCHVERSION"
 		if [[ -z "$SRCRPM" ]]; then
@@ -402,8 +402,6 @@ else
 		fi
 
 		echo "Unpacking kernel source"
-
-		clean_cache
 
 		rpm -D "_topdir $RPMTOPDIR" -ivh "$SRCRPM" >> "$LOGFILE" 2>&1 || die
 		rpmbuild -D "_topdir $RPMTOPDIR" -bp "--target=$(uname -m)" "$RPMTOPDIR"/SPECS/kernel.spec >> "$LOGFILE" 2>&1 ||
@@ -447,6 +445,8 @@ else
 		pkgver="${KVER}_$(dpkg-query -W -f='${Version}' linux-image-$ARCHVERSION)"
 		pkgname="linux-source-${pkgver}_all"
 
+		clean_cache
+
 		cd $TEMPDIR
 		echo "Downloading the kernel source for $ARCHVERSION"
 		# Download source deb pkg
@@ -456,7 +456,6 @@ else
 		dpkg -x ${pkgname}.deb $TEMPDIR >> "$LOGFILE" || die "dpkg: Could not extract ${pkgname}.deb"
 		# extract and move to SRCDIR
 		tar $taroptions usr/src/linux-source-$KVER.tar.${extension} >> "$LOGFILE" || die "tar: Failed to extract kernel source package"
-		clean_cache
 		mv linux-source-$KVER "$SRCDIR" || die
 		cp "/boot/config-${ARCHVERSION}" "$SRCDIR/.config" || die
 		if [[ "$ARCHVERSION" == *-* ]]; then
