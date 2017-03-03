@@ -40,7 +40,6 @@ ARCHVERSION="$(uname -r)"
 CPUS="$(getconf _NPROCESSORS_ONLN)"
 CACHEDIR="${CACHEDIR:-$HOME/.kpatch}"
 SRCDIR="$CACHEDIR/src"
-OBJDIR="$CACHEDIR/obj"
 RPMTOPDIR="$CACHEDIR/buildroot"
 VERSIONFILE="$CACHEDIR/version"
 TEMPDIR="$CACHEDIR/tmp"
@@ -79,12 +78,11 @@ cleanup() {
 		# we've reverted our patch above.
 		[[ -d $SRCDIR/.git ]] && (cd $SRCDIR && git update-index -q --refresh)
 	fi
-	if [[ -n $USERSRCDIR ]]; then
-		# restore original .config and vmlinux since they were removed
-		# with mrproper
-		[[ -e $TEMPDIR/vmlinux ]] && cp -f $TEMPDIR/vmlinux $USERSRCDIR
-		[[ -e $TEMPDIR/.config ]] && cp -f $TEMPDIR/.config $USERSRCDIR
-	fi
+
+	# restore original .config and vmlinux if they were removed with mrproper
+	[[ -e $TEMPDIR/.config ]] && mv -f $TEMPDIR/.config $SRCDIR/
+	[[ -e $TEMPDIR/vmlinux ]] && mv -f $TEMPDIR/vmlinux $SRCDIR/
+
 	[[ "$DEBUG" -eq 0 ]] && rm -rf "$TEMPDIR"
 	rm -rf "$RPMTOPDIR"
 	unset KCFLAGS
@@ -93,8 +91,7 @@ cleanup() {
 
 clean_cache() {
 	[[ -z $USERSRCDIR ]] && rm -rf "$SRCDIR"
-	rm -rf "$OBJDIR" "$VERSIONFILE"
-	mkdir -p "$OBJDIR"
+	rm -rf "$VERSIONFILE"
 }
 
 check_pipe_status() {
@@ -319,23 +316,17 @@ mkdir -p "$TEMPDIR" || die "Couldn't create $TEMPDIR"
 rm -rf "$TEMPDIR"/*
 rm -f "$LOGFILE"
 
-[[ $SKIPCLEANUP -eq 0 ]] && trap cleanup EXIT INT TERM HUP
-
 if [[ -n $USERSRCDIR ]]; then
-	# save .config and vmlinux since they'll get removed with mrproper so
-	# we can restore them later and be able to run kpatch-build multiple
-	# times on the same sourcedir
-	[[ -z $CONFIGFILE ]] && CONFIGFILE="$USERSRCDIR"/.config
-	[[ ! -e "$CONFIGFILE" ]] && die "can't find config file"
-	[[ "$CONFIGFILE" = "$USERSRCDIR"/.config ]] && cp -f "$CONFIGFILE" $TEMPDIR
+	SRCDIR="$USERSRCDIR"
 
-	[[ -z $VMLINUX ]] && VMLINUX="$USERSRCDIR"/vmlinux
+	[[ -z $VMLINUX ]] && VMLINUX="$SRCDIR"/vmlinux
 	[[ ! -e "$VMLINUX" ]] && die "can't find vmlinux"
-	[[ "$VMLINUX" = "$USERSRCDIR"/vmlinux ]] && cp -f "$VMLINUX" $TEMPDIR/vmlinux && VMLINUX=$TEMPDIR/vmlinux
 
 	# Extract the target kernel version from vmlinux in this case.
 	ARCHVERSION=$(strings "$VMLINUX" | grep -e "^Linux version" | awk '{ print($3); }')
 fi
+
+[[ $SKIPCLEANUP -eq 0 ]] && trap cleanup EXIT INT TERM HUP
 
 KVER=${ARCHVERSION%%-*}
 if [[ $ARCHVERSION =~ - ]]; then
@@ -384,13 +375,13 @@ fi
 
 if [[ -n "$USERSRCDIR" ]]; then
 	echo "Using source directory at $USERSRCDIR"
-	SRCDIR="$USERSRCDIR"
 
 	clean_cache
 
-	cp -f "$CONFIGFILE" "$OBJDIR/.config"
+	# save vmlinux before it gets removed with mrproper
+	[[ "$VMLINUX" -ef "$SRCDIR"/vmlinux ]] && cp -f "$VMLINUX" $TEMPDIR/vmlinux && VMLINUX=$TEMPDIR/vmlinux
 
-elif [[ -e "$SRCDIR" ]] && [[ -e "$VERSIONFILE" ]] && [[ $(cat "$VERSIONFILE") = $ARCHVERSION ]]; then
+elif [[ -e "$SRCDIR"/.config ]] && [[ -e "$VERSIONFILE" ]] && [[ $(cat "$VERSIONFILE") = $ARCHVERSION ]]; then
 	echo "Using cache at $SRCDIR"
 
 else
@@ -422,7 +413,6 @@ else
 		rm -rf "$RPMTOPDIR"
 		rm -rf "$SRCDIR/.git"
 
-		cp "$SRCDIR/.config" "$OBJDIR" || die
 		if [[ "$ARCHVERSION" == *-* ]]; then
 			echo "-${ARCHVERSION##*-}" > "$SRCDIR/localversion" || die
 		fi
@@ -468,7 +458,7 @@ else
 		tar $taroptions usr/src/linux-source-$KVER.tar.${extension} >> "$LOGFILE" || die "tar: Failed to extract kernel source package"
 		clean_cache
 		mv linux-source-$KVER "$SRCDIR" || die
-		cp "/boot/config-${ARCHVERSION}" "$OBJDIR/.config" || die
+		cp "/boot/config-${ARCHVERSION}" "$SRCDIR/.config" || die
 		if [[ "$ARCHVERSION" == *-* ]]; then
 			echo "-${ARCHVERSION#*-}" > "$SRCDIR/localversion" || die
 		fi
@@ -482,6 +472,11 @@ else
 	fi
 fi
 
+# save .config before it gets removed with mrproper
+[[ -z $CONFIGFILE ]] && CONFIGFILE="$SRCDIR"/.config
+[[ ! -e "$CONFIGFILE" ]] && die "can't find config file"
+[[ "$CONFIGFILE" -ef "$SRCDIR"/.config ]] && cp -f "$CONFIGFILE" $TEMPDIR && CONFIGFILE="$TEMPDIR"/.config
+
 # Build variables - Set some defaults, then adjust features
 # according to .config and kernel version
 KBUILD_EXTRA_SYMBOLS=""
@@ -489,8 +484,8 @@ KPATCH_LDFLAGS=""
 KPATCH_MODULE=true
 
 # kernel option checking: CONFIG_DEBUG_KERNEL and CONFIG_LIVEPATCH
-grep -q "CONFIG_DEBUG_KERNEL=y" "$OBJDIR/.config" || die "kernel doesn't have 'CONFIG_DEBUG_KERNEL' enabled"
-if grep "CONFIG_LIVEPATCH=y" "$OBJDIR/.config" > /dev/null; then
+grep -q "CONFIG_DEBUG_KERNEL=y" "$CONFIGFILE" || die "kernel doesn't have 'CONFIG_DEBUG_KERNEL' enabled"
+if grep -q "CONFIG_LIVEPATCH=y" "$CONFIGFILE"; then
 	# The kernel supports livepatch.
 	if version_gte ${ARCHVERSION//-*/} 4.7.0; then
 		# Use new .klp.rela. sections
@@ -506,14 +501,14 @@ else
 fi
 
 # optional kernel configs: CONFIG_PARAVIRT
-if grep "CONFIG_PARAVIRT=y" "$OBJDIR/.config" > /dev/null; then
+if grep -q "CONFIG_PARAVIRT=y" "$CONFIGFILE"; then
 	CONFIG_PARAVIRT=1
 else
 	CONFIG_PARAVIRT=0
 fi
 
 # unsupported kernel option checking: CONFIG_DEBUG_INFO_SPLIT
-grep -q "CONFIG_DEBUG_INFO_SPLIT=y" "$OBJDIR/.config" && die "kernel option 'CONFIG_DEBUG_INFO_SPLIT' not supported"
+grep -q "CONFIG_DEBUG_INFO_SPLIT=y" "$CONFIGFILE" && die "kernel option 'CONFIG_DEBUG_INFO_SPLIT' not supported"
 
 echo "Testing patch file"
 cd "$SRCDIR" || die
@@ -565,8 +560,9 @@ done
 echo "Building original kernel"
 ./scripts/setlocalversion --save-scmversion || die
 make mrproper >> "$LOGFILE" 2>&1 || die
+cp -f "$CONFIGFILE" "$SRCDIR/.config"
 unset KPATCH_GCC_TEMPDIR
-CROSS_COMPILE="$TOOLSDIR/kpatch-gcc " make "-j$CPUS" $TARGETS "O=$OBJDIR" >> "$LOGFILE" 2>&1 || die
+CROSS_COMPILE="$TOOLSDIR/kpatch-gcc " make "-j$CPUS" $TARGETS >> "$LOGFILE" 2>&1 || die
 
 echo "Building patched kernel"
 patch -N -p1 < "$APPLIEDPATCHFILE" >> "$LOGFILE" 2>&1 || die
@@ -575,7 +571,7 @@ KPATCH_GCC_TEMPDIR=$TEMPDIR
 export KPATCH_GCC_TEMPDIR
 CROSS_COMPILE="$TOOLSDIR/kpatch-gcc " \
 	KBUILD_MODPOST_WARN=1 \
-	make "-j$CPUS" $TARGETS "O=$OBJDIR"  >> "$LOGFILE" 2>&1 || die
+	make "-j$CPUS" $TARGETS >> "$LOGFILE" 2>&1 || die
 [[ "${PIPESTATUS[0]}" -eq 0 ]] || die
 grep -q "undefined reference" "$LOGFILE" | grep -qv kpatch_shadow && die
 grep -q "undefined!" "$LOGFILE" |grep -qv kpatch_shadow && die
@@ -587,7 +583,7 @@ fi
 for i in $(cat "$TEMPDIR/changed_objs")
 do
 	mkdir -p "$TEMPDIR/patched/$(dirname $i)" || die
-	cp -f "$OBJDIR/$i" "$TEMPDIR/patched/$i" || die
+	cp -f "$SRCDIR/$i" "$TEMPDIR/patched/$i" || die
 done
 
 echo "Extracting new and modified ELF sections"
@@ -607,7 +603,7 @@ for i in $FILES; do
 	[[ $i = usr/initramfs_data.o ]] && continue
 
 	mkdir -p "output/$(dirname $i)"
-	cd "$OBJDIR"
+	cd "$SRCDIR"
 	find_kobj $i
 	if [[ $KOBJFILE = vmlinux ]]; then
 		KOBJFILE=$VMLINUX
@@ -618,7 +614,7 @@ for i in $FILES; do
 	if [[ -e "orig/$i" ]]; then
 		# create-diff-object orig.o patched.o kernel-object output.o Module.symvers patch-mod-name
 		"$TOOLSDIR"/create-diff-object "orig/$i" "patched/$i" "$KOBJFILE" \
-			"output/$i" "$OBJDIR/Module.symvers" "kpatch_${PATCHNAME//-/_}" 2>&1 |tee -a "$LOGFILE"
+			"output/$i" "$SRCDIR/Module.symvers" "kpatch_${PATCHNAME//-/_}" 2>&1 |tee -a "$LOGFILE"
 		check_pipe_status create-diff-object
 		# create-diff-object returns 3 if no functional change is found
 		[[ $rc -eq 0 ]] || [[ $rc -eq 3 ]] || ERROR=$(expr $ERROR "+" 1)
@@ -654,7 +650,6 @@ if $KPATCH_MODULE; then
 fi
 
 echo "Building patch module: kpatch-$PATCHNAME.ko"
-cp "$OBJDIR/.config" "$SRCDIR"
 cd "$SRCDIR"
 make prepare >> "$LOGFILE" 2>&1 || die
 
@@ -685,7 +680,7 @@ cd "$TEMPDIR/patch"
 KPATCH_BUILD="$SRCDIR" KPATCH_NAME="$PATCHNAME" \
 KBUILD_EXTRA_SYMBOLS="$KBUILD_EXTRA_SYMBOLS" \
 KPATCH_LDFLAGS="$KPATCH_LDFLAGS" \
-	make "O=$OBJDIR" >> "$LOGFILE" 2>&1 || die
+	make >> "$LOGFILE" 2>&1 || die
 
 if ! $KPATCH_MODULE; then
 	if [[ -z "$KPATCH_LDFLAGS" ]]; then
