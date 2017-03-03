@@ -113,8 +113,8 @@ check_pipe_status() {
 }
 
 # $1 >= $2
-function version_gte {
-	[  "$1" = "`echo -e "$1\n$2" | sort -rV | head -n1`" ]
+version_gte() {
+	[  "$1" = "$(echo -e "$1\n$2" | sort -rV | head -n1)" ]
 }
 
 find_dirs() {
