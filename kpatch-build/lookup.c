@@ -84,6 +84,9 @@ static void find_local_syms(struct lookup_table *table, char *hint,
 	int i, in_file = 0;
 	struct sym_compare_type *child_sym;
 
+	if (!child_locals)
+		return;
+
 	for_each_obj_symbol(i, sym, table) {
 		if (sym->type == STT_FILE) {
 			if (in_file && !child_sym->name) {
@@ -287,10 +290,7 @@ struct lookup_table *lookup_open(char *obj_path, char *symvers_path,
 
 	obj_read(table, obj_path);
 	symvers_read(table, symvers_path);
-
-	table->local_syms = NULL;
-	if (locals)
-		find_local_syms(table, hint, locals);
+	find_local_syms(table, hint, locals);
 
 	return table;
 }
