@@ -681,11 +681,10 @@ static int kpatch_write_relocations(struct kpatch_module *kpmod,
      ( LINUX_VERSION_CODE >= KERNEL_VERSION(4, 4, 0) && \
       UTS_UBUNTU_RELEASE_ABI >= 7 ) \
     )
-               if (loc < core + kpmod->mod->core_layout.ro_size)
+               readonly = (loc < core + kpmod->mod->core_layout.ro_size);
 #else
-               if (loc < core + kpmod->mod->core_ro_size)
+               readonly = (loc < core + kpmod->mod->core_ro_size);
 #endif
-			readonly = 1;
 #endif
 
 		numpages = (PAGE_SIZE - (loc & ~PAGE_MASK) >= size) ? 1 : 2;
