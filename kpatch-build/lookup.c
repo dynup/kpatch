@@ -56,6 +56,7 @@ struct lookup_table {
 	struct object_symbol *obj_syms;
 	struct export_symbol *exp_syms;
 	struct object_symbol *local_syms;
+	int vmlinux;
 };
 
 #define for_each_obj_symbol(ndx, iter, table) \
@@ -64,16 +65,31 @@ struct lookup_table {
 #define for_each_exp_symbol(ndx, iter, table) \
 	for (ndx = 0, iter = table->exp_syms; ndx < table->exp_nr; ndx++, iter++)
 
+static int discarded_sym(struct lookup_table *table,
+			 struct sym_compare_type *sym)
+{
+	if (table->vmlinux && sym->name &&
+	    (!strncmp(sym->name, "__exitcall_", 11) ||
+	     !strncmp(sym->name, "__brk_reservation_fn_", 21) ||
+	     !strncmp(sym->name, "__func_stack_frame_non_standard_", 32)))
+		return 1;
+
+	return 0;
+}
+
 static void find_local_syms(struct lookup_table *table, char *hint,
-			    struct sym_compare_type *locals)
+			    struct sym_compare_type *child_locals)
 {
 	struct object_symbol *sym, *file_sym;
 	int i, in_file = 0;
-	struct sym_compare_type *local_index;
+	struct sym_compare_type *child_sym;
+
+	if (!child_locals)
+		return;
 
 	for_each_obj_symbol(i, sym, table) {
 		if (sym->type == STT_FILE) {
-			if (in_file && !local_index->name) {
+			if (in_file && !child_sym->name) {
 				if (table->local_syms)
 					ERROR("find_local_syms for %s: found_dup", hint);
 				table->local_syms = file_sym;
@@ -82,7 +98,7 @@ static void find_local_syms(struct lookup_table *table, char *hint,
 			if (!strcmp(hint, sym->name)) {
 				in_file = 1;
 				file_sym = sym;
-				local_index = locals;
+				child_sym = child_locals;
 			}
 			else
 				in_file = 0;
@@ -95,15 +111,22 @@ static void find_local_syms(struct lookup_table *table, char *hint,
 		if (sym->bind != STB_LOCAL || (sym->type != STT_FUNC && sym->type != STT_OBJECT))
 			continue;
 
-		if (local_index->name &&
-		    local_index->type == sym->type &&
-		    !strcmp(local_index->name, sym->name))
-			local_index++;
+		/*
+		 * Symbols which get discarded at link time are missing from
+		 * the lookup table, so skip them.
+		 */
+		while (discarded_sym(table, child_sym))
+			child_sym++;
+
+		/* make sure the child symbol and parent symbol match */
+		if (child_sym->name && child_sym->type == sym->type &&
+		    !strcmp(child_sym->name, sym->name))
+			child_sym++;
 		else
 			in_file = 0;
 	}
 
-	if (in_file && !local_index->name) {
+	if (in_file && !child_sym->name) {
 		if (table->local_syms)
 			ERROR("find_local_syms for %s: found_dup", hint);
 		table->local_syms = file_sym;
@@ -263,12 +286,11 @@ struct lookup_table *lookup_open(char *obj_path, char *symvers_path,
 		ERROR("malloc table");
 	memset(table, 0, sizeof(*table));
 
+	table->vmlinux = !strcmp(basename(obj_path), "vmlinux");
+
 	obj_read(table, obj_path);
 	symvers_read(table, symvers_path);
-
-	table->local_syms = NULL;
-	if (locals)
-		find_local_syms(table, hint, locals);
+	find_local_syms(table, hint, locals);
 
 	return table;
 }
