@@ -424,6 +424,10 @@ Limitations
 - Patches which modify functions in vdso are not supported.  These run in
   user-space and ftrace can't hook them.
 
+- Patches which modify functions that are missing a `fentry` call are not
+  supported.  This includes any `lib-y` targets that are archived into a
+  `lib.a` library for later linking (for example, `lib/string.o`).
+
 - Some incompatibilities currently exist between kpatch and usage of ftrace and
   kprobes.  See the Frequently Asked Questions section for more details.
 
