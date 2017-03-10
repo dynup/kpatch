@@ -25,7 +25,7 @@ Installation
 
 ###Prerequisites
 
-####Fedora 23
+####Fedora
 
 *NOTE: You'll need about 15GB of free disk space for the kpatch-build cache in
 `~/.kpatch` and for ccache.*
@@ -33,19 +33,23 @@ Installation
 Install the dependencies for compiling kpatch:
 
 ```bash
-sudo dnf install gcc kernel-devel elfutils elfutils-devel
+UNAME=$(uname -r)
+sudo dnf install gcc kernel-devel-${UNAME%.*} elfutils elfutils-devel
 ```
 
 Install the dependencies for the "kpatch-build" command:
 
 ```bash
 sudo dnf install rpmdevtools pesign yum-utils openssl wget numactl-devel
-sudo dnf builddep kernel
-sudo dnf debuginfo-install kernel
+sudo dnf builddep kernel-${UNAME%.*}
+sudo dnf debuginfo-install kernel-${UNAME%.*}
 
 # optional, but highly recommended
 sudo dnf install ccache
 ccache --max-size=5G
+
+# optional, for kpatch-test
+sudo dnf install patchutils
 ```
 
 ####RHEL 7
@@ -56,7 +60,8 @@ ccache --max-size=5G
 Install the dependencies for compiling kpatch:
 
 ```bash
-sudo yum install gcc kernel-devel elfutils elfutils-devel
+UNAME=$(uname -r)
+sudo yum install gcc kernel-devel-${UNAME%.*} elfutils elfutils-devel
 ```
 
 Install the dependencies for the "kpatch-build" command:
@@ -67,12 +72,15 @@ sudo yum install rpmdevtools pesign yum-utils zlib-devel \
   binutils-devel newt-devel python-devel perl-ExtUtils-Embed \
   audit-libs-devel numactl-devel pciutils-devel bison ncurses-devel
 
-sudo yum-builddep kernel
-sudo debuginfo-install kernel
+sudo yum-builddep kernel-${UNAME%.*}
+sudo debuginfo-install kernel-${UNAME%.*}
 
 # optional, but highly recommended
-sudo yum install https://dl.fedoraproject.org/pub/epel/7/x86_64/c/ccache-3.1.9-3.el7.x86_64.rpm
+sudo yum install https://dl.fedoraproject.org/pub/epel/7/x86_64/c/ccache-3.2.7-3.el7.x86_64.rpm
 ccache --max-size=5G
+
+# optional, for kpatch-test
+sudo dnf install patchutils
 ```
 
 ####CentOS 7
@@ -83,7 +91,8 @@ ccache --max-size=5G
 Install the dependencies for compiling kpatch:
 
 ```bash
-sudo yum install gcc kernel-devel elfutils elfutils-devel
+UNAME=$(uname -r)
+sudo yum install gcc kernel-devel-${UNAME%.*} elfutils elfutils-devel
 ```
 
 Install the dependencies for the "kpatch-build" command:
@@ -96,12 +105,15 @@ sudo yum install rpmdevtools pesign yum-utils zlib-devel \
 # enable CentOS 7 debug repo
 sudo yum-config-manager --enable debug
 
-sudo yum-builddep kernel
-sudo debuginfo-install kernel
+sudo yum-builddep kernel-${UNAME%.*}
+sudo debuginfo-install kernel-${UNAME%.*}
 
 # optional, but highly recommended - enable EPEL 7
 sudo yum install ccache
 ccache --max-size=5G
+
+# optional, for kpatch-test
+sudo dnf install patchutils
 ```
 
 ####Oracle Linux 7
@@ -112,7 +124,8 @@ ccache --max-size=5G
 Install the dependencies for compiling kpatch:
 
 ```bash
-sudo yum install gcc kernel-devel elfutils elfutils-devel
+UNAME=$(uname -r)
+sudo yum install gcc kernel-devel-${UNAME%.*} elfutils elfutils-devel
 ```
 
 Install the dependencies for the "kpatch-build" command:
@@ -125,7 +138,7 @@ sudo yum install rpmdevtools pesign yum-utils zlib-devel \
 # enable ol7_optional_latest repo
 sudo yum-config-manager --enable ol7_optional_latest
 
-sudo yum-builddep kernel
+sudo yum-builddep kernel-${UNAME%.*}
 
 # manually install kernel debuginfo packages
 rpm -ivh https://oss.oracle.com/ol7/debuginfo/kernel-debuginfo-$(uname -r).rpm
@@ -134,6 +147,9 @@ rpm -ivh https://oss.oracle.com/ol7/debuginfo/kernel-debuginfo-common-x86_64-$(u
 # optional, but highly recommended - enable EPEL 7
 sudo yum install ccache
 ccache --max-size=5G
+
+# optional, for kpatch-test
+sudo dnf install patchutils
 ```
 
 ####Ubuntu 14.04
