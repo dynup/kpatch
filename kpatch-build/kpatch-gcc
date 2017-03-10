@@ -32,7 +32,7 @@ if [[ "$TOOLCHAINCMD" = "gcc" ]] ; then
 				arch/x86/vdso/*|\
 				arch/x86/entry/vdso/*|\
 				drivers/firmware/efi/libstub/*|\
-				.*.o)
+				*.*.o)
 					break
 					;;
 				*.o)
