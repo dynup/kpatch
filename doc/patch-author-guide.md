@@ -108,8 +108,36 @@ functions.
 ### Use a kpatch load hook
 
 If you need to change the contents of an existing variable in-place, you can
-use the KPATCH_LOAD_HOOK macro to specify a function to be called when the
+use the `KPATCH_LOAD_HOOK` macro to specify a function to be called when the
 patch module is loaded.
+
+`kpatch-macros.h` provides `KPATCH_LOAD_HOOK` and `KPATCH_UNLOAD_HOOK` macros
+to define such functions.  The signature of both hook functions is `void
+foo(void)` and and they may run in `stop_machine` context (so they must not
+sleep).
+
+Example: a kpatch fix for CVE-2016-5389 utilized the `KPATCH_LOAD_HOOK` and
+`KPATCH_UNLOAD_HOOK` macros to modify variable `sysctl_tcp_challenge_ack_limit`
+in-place:
+
+```
++static bool kpatch_write = false;
++void kpatch_load_tcp_send_challenge_ack(void)
++{
++	if (sysctl_tcp_challenge_ack_limit == 100) {
++		sysctl_tcp_challenge_ack_limit = 1000;
++		kpatch_write = true;
++	}
++}
++void kpatch_unload_tcp_send_challenge_ack(void)
++{
++	if (kpatch_write && sysctl_tcp_challenge_ack_limit == 1000)
++		sysctl_tcp_challenge_ack_limit = 100;
++}
++#include "kpatch-macros.h"
++KPATCH_LOAD_HOOK(kpatch_load_tcp_send_challenge_ack);
++KPATCH_UNLOAD_HOOK(kpatch_unload_tcp_send_challenge_ack);
+```
 
 Don't forget to protect access to the data as needed.
 
@@ -117,7 +145,6 @@ Also be careful when upgrading.  If patch A has a load hook which writes to X,
 and then you load patch B which is a superset of A, in some cases you may want
 to prevent patch B from writing to X, if A is already loaded.
 
-Examples needed.
 
 ### Use a shadow variable
 
