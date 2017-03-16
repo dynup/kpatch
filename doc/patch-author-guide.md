@@ -108,8 +108,36 @@ functions.
 ### Use a kpatch load hook
 
 If you need to change the contents of an existing variable in-place, you can
-use the KPATCH_LOAD_HOOK macro to specify a function to be called when the
+use the `KPATCH_LOAD_HOOK` macro to specify a function to be called when the
 patch module is loaded.
+
+`kpatch-macros.h` provides `KPATCH_LOAD_HOOK` and `KPATCH_UNLOAD_HOOK` macros
+to define such functions.  The signature of both hook functions is `void
+foo(void)` and and they may run in `stop_machine` context (so they must not
+sleep).
+
+Example: a kpatch fix for CVE-2016-5389 utilized the `KPATCH_LOAD_HOOK` and
+`KPATCH_UNLOAD_HOOK` macros to modify variable `sysctl_tcp_challenge_ack_limit`
+in-place:
+
+```
++static bool kpatch_write = false;
++void kpatch_load_tcp_send_challenge_ack(void)
++{
++	if (sysctl_tcp_challenge_ack_limit == 100) {
++		sysctl_tcp_challenge_ack_limit = 1000;
++		kpatch_write = true;
++	}
++}
++void kpatch_unload_tcp_send_challenge_ack(void)
++{
++	if (kpatch_write && sysctl_tcp_challenge_ack_limit == 1000)
++		sysctl_tcp_challenge_ack_limit = 100;
++}
++#include "kpatch-macros.h"
++KPATCH_LOAD_HOOK(kpatch_load_tcp_send_challenge_ack);
++KPATCH_UNLOAD_HOOK(kpatch_unload_tcp_send_challenge_ack);
+```
 
 Don't forget to protect access to the data as needed.
 
@@ -117,14 +145,67 @@ Also be careful when upgrading.  If patch A has a load hook which writes to X,
 and then you load patch B which is a superset of A, in some cases you may want
 to prevent patch B from writing to X, if A is already loaded.
 
-Examples needed.
 
 ### Use a shadow variable
 
 If you need to add a field to an existing data structure, or even many existing
-data structures, you can use the `kpatch_shadow_*()` functions.
+data structures, you can use the `kpatch_shadow_*()` functions:
 
-Example needed (see shadow-newpid.patch in the integration tests directory).
+* `kpatch_shadow_alloc` - allocates a new shadow variable associated with a
+  given object.
+* `kpatch_shadow_get` - find and return a pointer to a shadow variable
+* `kpatch_shadow_free` - find and free a shadow variable
+
+Example: The `shadow-newpid.patch` integration test demonstrates the usage of
+these functions.
+
+A shadow PID variable is allocated in `do_fork()` : it is associated with the
+current `struct task_struct *p` value, given a string lookup key of "newpid",
+sized accordingly, and allocated as per `GFP_KERNEL` flag rules.
+
+`kpatch_shadow_alloc` returns a pointer to the shadow variable, so we can
+dereference and make assignments as usual.  In this patch chunk, the shadow
+`newpid` is allocated then assigned to a rolling `ctr` counter value:
+```
++		int *newpid;
++		static int ctr = 0;
++
++		newpid = kpatch_shadow_alloc(p, "newpid", sizeof(*newpid),
++					     GFP_KERNEL);
++		if (newpid)
++			*newpid = ctr++;
+```
+
+A shadow variable may also be accessed via `kpatch_shadow_get`.  Here the
+patch modifies `task_context_switch_counts()` to fetch the shadow variable
+associated with the current `struct task_struct *p` object and a "newpid" tag.
+As in the previous patch chunk, the shadow variable pointer may be accessed
+as an ordinary pointer type:
+```
++	int *newpid;
++
+ 	seq_put_decimal_ull(m, "voluntary_ctxt_switches:\t", p->nvcsw);
+ 	seq_put_decimal_ull(m, "\nnonvoluntary_ctxt_switches:\t", p->nivcsw);
+ 	seq_putc(m, '\n');
++
++	newpid = kpatch_shadow_get(p, "newpid");
++	if (newpid)
++		seq_printf(m, "newpid:\t%d\n", *newpid);
+```
+
+A shadow variable is freed by calling `kpatch_shadow_free` and providing
+the object / string key combination.  Once freed, the shadow variable is not
+safe to access:
+```
+ 	exit_task_work(tsk);
+ 	exit_thread(tsk);
+ 
++	kpatch_shadow_free(tsk, "newpid");
++
+ 	/*
+ 	 * Flush inherited counters to the parent - before the parent
+ 	 * gets woken up by child-exit notifications.
+```
 
 Data semantic changes
 ---------------------
