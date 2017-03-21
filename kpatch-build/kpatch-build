@@ -547,7 +547,7 @@ SPECIAL_VARS=$(readelf -wi "$VMLINUX" |
 
 [[ -z $ALT_STRUCT_SIZE ]] && die "can't find special struct alt_instr size"
 [[ -z $BUG_STRUCT_SIZE ]] && die "can't find special struct bug_entry size"
-[[ -z $EX_STRUCT_SIZE ]]  && die "can't find special struct paravirt_patch_site size"
+[[ -z $EX_STRUCT_SIZE ]]  && die "can't find special struct exception_table_entry size"
 [[ -z $PARA_STRUCT_SIZE && $CONFIG_PARAVIRT -ne 0 ]] && die "can't find special struct paravirt_patch_site size"
 
 for i in $ALT_STRUCT_SIZE $BUG_STRUCT_SIZE $PARA_STRUCT_SIZE $EX_STRUCT_SIZE; do
