@@ -113,8 +113,16 @@ patch module is loaded.
 
 `kpatch-macros.h` provides `KPATCH_LOAD_HOOK` and `KPATCH_UNLOAD_HOOK` macros
 to define such functions.  The signature of both hook functions is `void
-foo(void)` and and they may run in `stop_machine` context (so they must not
-sleep).
+foo(void)`.  Their execution context is as follows:
+
+* For patches to vmlinux or already loaded kernel modules, hook functions
+will be run by `stop_machine` as part of applying or removing a patch.
+(Therefore the hooks must not block or sleep.)
+
+* For patches to kernel modules which haven't been loaded yet, a
+module-notifier will execute load hooks when the associated module is loaded
+into the `MODULE_STATE_COMING` state.  The load hook is called before any
+module_init code.
 
 Example: a kpatch fix for CVE-2016-5389 utilized the `KPATCH_LOAD_HOOK` and
 `KPATCH_UNLOAD_HOOK` macros to modify variable `sysctl_tcp_challenge_ack_limit`
