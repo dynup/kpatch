@@ -218,10 +218,56 @@ safe to access:
 Data semantic changes
 ---------------------
 
-Sometimes, the data itself remains the same, but how it's used is changed.  A
-common example is locking semantic changes.
+Part of the stable-tree [backport](https://git.kernel.org/pub/scm/linux/kernel/git/stable/linux-stable.git/commit/fs/aio.c?h=linux-3.10.y&id=6745cb91b5ec93a1b34221279863926fba43d0d7)
+to fix CVE-2014-0206 changed the reference count semantic of `struct
+kioctx.reqs_active`. Associating a shadow variable to new instances of this
+structure can be used by patched code to handle both new (post-patch) and
+existing (pre-patch) instances.
 
-Example needed.
+(This example is trimmed to highlight this use-case. Boilerplate code is also
+required to allocate/free a shadow variable called "reqs_active_v2" whenever a
+new `struct kioctx` is created/released. No values are ever assigned to the
+shadow variable.)
+
+Shadow variable existence can be verified before applying the new data
+semantic of the associated object:
+```
+@@ -678,6 +688,9 @@ void aio_complete(struct kiocb *iocb, lo
+ put_rq:
+ 	/* everything turned out well, dispose of the aiocb. */
+ 	aio_put_req(iocb);
++	reqs_active_v2 = kpatch_shadow_get(ctx, "reqs_active_v2");
++	if (reqs_active_v2)
++		atomic_dec(&ctx->reqs_active);
+ 
+ 	/*
+ 	 * We have to order our ring_info tail store above and test
+```
+
+Likewise, shadow variable non-existence can be tested to continue applying the
+old data semantic:
+```
+@@ -705,6 +718,7 @@ static long aio_read_events_ring(struct
+ 	unsigned head, pos;
+ 	long ret = 0;
+ 	int copy_ret;
++	int *reqs_active_v2;
+ 
+ 	mutex_lock(&ctx->ring_lock);
+ 
+@@ -756,7 +770,9 @@ static long aio_read_events_ring(struct
+ 
+ 	pr_debug("%li  h%u t%u\n", ret, head, ctx->tail);
+ 
+-	atomic_sub(ret, &ctx->reqs_active);
++	reqs_active_v2 = kpatch_shadow_get(ctx, "reqs_active_v2");
++	if (!reqs_active_v2)
++		atomic_sub(ret, &ctx->reqs_active);
+ out:
+ 	mutex_unlock(&ctx->ring_lock);
+```
+ 
+Locking semantic example needed.
 
 Init code changes
 -----------------
