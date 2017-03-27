@@ -267,7 +267,63 @@ old data semantic:
  	mutex_unlock(&ctx->ring_lock);
 ```
  
-Locking semantic example needed.
+The previous example can be extended to use shadow variable storage to handle
+locking semantic changes.  Consider the [upstream fix](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/commit/?id=1d147bfa64293b2723c4fec50922168658e613ba)
+for CVE-2014-2706, which added a `ps_lock` to `struct sta_info` to protect
+critical sections throughout `net/mac80211/sta_info.c`.
+
+When allocating a new `struct sta_info`, allocate a corresponding "ps_lock"
+shadow variable large enough to hold a `spinlock_t` instance, then initialize
+the spinlock:
+```
+@@ -333,12 +336,16 @@ struct sta_info *sta_info_alloc(struct ieee80211_sub_if_data *sdata,
+ 	struct sta_info *sta;
+ 	struct timespec uptime;
+ 	int i;
++	spinlock_t *ps_lock;
+ 
+ 	sta = kzalloc(sizeof(*sta) + local->hw.sta_data_size, gfp);
+ 	if (!sta)
+ 		return NULL;
+ 
+ 	spin_lock_init(&sta->lock);
++	ps_lock = kpatch_shadow_alloc(sta, "ps_lock", sizeof(*ps_lock), gfp);
++	if (ps_lock)
++		spin_lock_init(ps_lock);
+ 	INIT_WORK(&sta->drv_unblock_wk, sta_unblock);
+ 	INIT_WORK(&sta->ampdu_mlme.work, ieee80211_ba_session_work);
+ 	mutex_init(&sta->ampdu_mlme.mtx);
+```
+
+Patched code can reference the "ps_lock" shadow variable associated with a
+given `struct sta_info` to determine and apply the correct locking semantic
+for that instance:
+```
+@@ -471,6 +475,23 @@ ieee80211_tx_h_unicast_ps_buf(struct ieee80211_tx_data *tx)
+ 		       sta->sta.addr, sta->sta.aid, ac);
+ 		if (tx->local->total_ps_buffered >= TOTAL_MAX_TX_BUFFER)
+ 			purge_old_ps_buffers(tx->local);
++
++		/* sync with ieee80211_sta_ps_deliver_wakeup */
++		ps_lock = kpatch_shadow_get(sta, "ps_lock");
++		if (ps_lock) {
++			spin_lock(ps_lock);
++			/*
++			 * STA woke up the meantime and all the frames on ps_tx_buf have
++			 * been queued to pending queue. No reordering can happen, go
++			 * ahead and Tx the packet.
++			 */
++			if (!test_sta_flag(sta, WLAN_STA_PS_STA) &&
++			    !test_sta_flag(sta, WLAN_STA_PS_DRIVER)) {
++				spin_unlock(ps_lock);
++				return TX_CONTINUE;
++			}
++		}
++
+ 		if (skb_queue_len(&sta->ps_tx_buf[ac]) >= STA_MAX_TX_BUFFER) {
+ 			struct sk_buff *old = skb_dequeue(&sta->ps_tx_buf[ac]);
+ 			ps_dbg(tx->sdata,
+```
 
 Init code changes
 -----------------
