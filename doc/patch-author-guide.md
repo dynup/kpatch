@@ -113,8 +113,16 @@ patch module is loaded.
 
 `kpatch-macros.h` provides `KPATCH_LOAD_HOOK` and `KPATCH_UNLOAD_HOOK` macros
 to define such functions.  The signature of both hook functions is `void
-foo(void)` and and they may run in `stop_machine` context (so they must not
-sleep).
+foo(void)`.  Their execution context is as follows:
+
+* For patches to vmlinux or already loaded kernel modules, hook functions
+will be run by `stop_machine` as part of applying or removing a patch.
+(Therefore the hooks must not block or sleep.)
+
+* For patches to kernel modules which haven't been loaded yet, a
+module-notifier will execute load hooks when the associated module is loaded
+into the `MODULE_STATE_COMING` state.  The load hook is called before any
+module_init code.
 
 Example: a kpatch fix for CVE-2016-5389 utilized the `KPATCH_LOAD_HOOK` and
 `KPATCH_UNLOAD_HOOK` macros to modify variable `sysctl_tcp_challenge_ack_limit`
@@ -210,10 +218,112 @@ safe to access:
 Data semantic changes
 ---------------------
 
-Sometimes, the data itself remains the same, but how it's used is changed.  A
-common example is locking semantic changes.
+Part of the stable-tree [backport](https://git.kernel.org/pub/scm/linux/kernel/git/stable/linux-stable.git/commit/fs/aio.c?h=linux-3.10.y&id=6745cb91b5ec93a1b34221279863926fba43d0d7)
+to fix CVE-2014-0206 changed the reference count semantic of `struct
+kioctx.reqs_active`. Associating a shadow variable to new instances of this
+structure can be used by patched code to handle both new (post-patch) and
+existing (pre-patch) instances.
 
-Example needed.
+(This example is trimmed to highlight this use-case. Boilerplate code is also
+required to allocate/free a shadow variable called "reqs_active_v2" whenever a
+new `struct kioctx` is created/released. No values are ever assigned to the
+shadow variable.)
+
+Shadow variable existence can be verified before applying the new data
+semantic of the associated object:
+```
+@@ -678,6 +688,9 @@ void aio_complete(struct kiocb *iocb, lo
+ put_rq:
+ 	/* everything turned out well, dispose of the aiocb. */
+ 	aio_put_req(iocb);
++	reqs_active_v2 = kpatch_shadow_get(ctx, "reqs_active_v2");
++	if (reqs_active_v2)
++		atomic_dec(&ctx->reqs_active);
+ 
+ 	/*
+ 	 * We have to order our ring_info tail store above and test
+```
+
+Likewise, shadow variable non-existence can be tested to continue applying the
+old data semantic:
+```
+@@ -705,6 +718,7 @@ static long aio_read_events_ring(struct
+ 	unsigned head, pos;
+ 	long ret = 0;
+ 	int copy_ret;
++	int *reqs_active_v2;
+ 
+ 	mutex_lock(&ctx->ring_lock);
+ 
+@@ -756,7 +770,9 @@ static long aio_read_events_ring(struct
+ 
+ 	pr_debug("%li  h%u t%u\n", ret, head, ctx->tail);
+ 
+-	atomic_sub(ret, &ctx->reqs_active);
++	reqs_active_v2 = kpatch_shadow_get(ctx, "reqs_active_v2");
++	if (!reqs_active_v2)
++		atomic_sub(ret, &ctx->reqs_active);
+ out:
+ 	mutex_unlock(&ctx->ring_lock);
+```
+ 
+The previous example can be extended to use shadow variable storage to handle
+locking semantic changes.  Consider the [upstream fix](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/commit/?id=1d147bfa64293b2723c4fec50922168658e613ba)
+for CVE-2014-2706, which added a `ps_lock` to `struct sta_info` to protect
+critical sections throughout `net/mac80211/sta_info.c`.
+
+When allocating a new `struct sta_info`, allocate a corresponding "ps_lock"
+shadow variable large enough to hold a `spinlock_t` instance, then initialize
+the spinlock:
+```
+@@ -333,12 +336,16 @@ struct sta_info *sta_info_alloc(struct ieee80211_sub_if_data *sdata,
+ 	struct sta_info *sta;
+ 	struct timespec uptime;
+ 	int i;
++	spinlock_t *ps_lock;
+ 
+ 	sta = kzalloc(sizeof(*sta) + local->hw.sta_data_size, gfp);
+ 	if (!sta)
+ 		return NULL;
+ 
+ 	spin_lock_init(&sta->lock);
++	ps_lock = kpatch_shadow_alloc(sta, "ps_lock", sizeof(*ps_lock), gfp);
++	if (ps_lock)
++		spin_lock_init(ps_lock);
+ 	INIT_WORK(&sta->drv_unblock_wk, sta_unblock);
+ 	INIT_WORK(&sta->ampdu_mlme.work, ieee80211_ba_session_work);
+ 	mutex_init(&sta->ampdu_mlme.mtx);
+```
+
+Patched code can reference the "ps_lock" shadow variable associated with a
+given `struct sta_info` to determine and apply the correct locking semantic
+for that instance:
+```
+@@ -471,6 +475,23 @@ ieee80211_tx_h_unicast_ps_buf(struct ieee80211_tx_data *tx)
+ 		       sta->sta.addr, sta->sta.aid, ac);
+ 		if (tx->local->total_ps_buffered >= TOTAL_MAX_TX_BUFFER)
+ 			purge_old_ps_buffers(tx->local);
++
++		/* sync with ieee80211_sta_ps_deliver_wakeup */
++		ps_lock = kpatch_shadow_get(sta, "ps_lock");
++		if (ps_lock) {
++			spin_lock(ps_lock);
++			/*
++			 * STA woke up the meantime and all the frames on ps_tx_buf have
++			 * been queued to pending queue. No reordering can happen, go
++			 * ahead and Tx the packet.
++			 */
++			if (!test_sta_flag(sta, WLAN_STA_PS_STA) &&
++			    !test_sta_flag(sta, WLAN_STA_PS_DRIVER)) {
++				spin_unlock(ps_lock);
++				return TX_CONTINUE;
++			}
++		}
++
+ 		if (skb_queue_len(&sta->ps_tx_buf[ac]) >= STA_MAX_TX_BUFFER) {
+ 			struct sk_buff *old = skb_dequeue(&sta->ps_tx_buf[ac]);
+ 			ps_dbg(tx->sdata,
+```
 
 Init code changes
 -----------------
