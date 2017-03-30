@@ -342,7 +342,10 @@ When changing header files, be extra careful.  If data is being changed, you
 probably need to modify the patch.  See "Data struct changes" above.
 
 If a function prototype is being changed, make sure it's not an exported
-function.  Otherwise it could break out-of-tree modules.
+function.  Otherwise it could break out-of-tree modules.  One way to
+workaround this is to define an entirely new copy of the function (with
+updated code) and patch in-tree callers to invoke it rather than the
+deprecated version.
 
 Many header file changes result in a complete rebuild of the kernel tree, which
 makes kpatch-build have to compare every .o file in the kernel.  It slows the
