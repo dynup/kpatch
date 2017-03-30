@@ -387,3 +387,71 @@ to zero; instead the variable keeps its old value.
 To work around this limitation one needs to retain the reference to the static local.
 This might be as simple as adding the variable back in the patched function in a 
 non-functional way and ensuring the compiler doesn't optimize it away.
+
+Code removal
+------------
+
+Some fixes may replace or completely remove functions and references
+to them. Remember that kpatch modules can only add new functions and
+redirect existing functions, so "removed" functions will continue to exist in
+kernel address space as effectively dead code.
+
+That means this patch (source code removal of `cmdline_proc_show`):
+```
+diff -Nupr src.orig/fs/proc/cmdline.c src/fs/proc/cmdline.c
+--- src.orig/fs/proc/cmdline.c	2016-11-30 19:39:49.317737234 +0000
++++ src/fs/proc/cmdline.c	2016-11-30 19:39:52.696737234 +0000
+@@ -3,15 +3,15 @@
+ #include <linux/proc_fs.h>
+ #include <linux/seq_file.h>
+ 
+-static int cmdline_proc_show(struct seq_file *m, void *v)
+-{
+-	seq_printf(m, "%s\n", saved_command_line);
+-	return 0;
+-}
++static int cmdline_proc_show_v2(struct seq_file *m, void *v)
++{
++	seq_printf(m, "%s kpatch\n", saved_command_line);
++	return 0;
++}
+ 
+ static int cmdline_proc_open(struct inode *inode, struct file *file)
+ {
+-	return single_open(file, cmdline_proc_show, NULL);
++	return single_open(file, cmdline_proc_show_v2, NULL);
+ }
+ 
+ static const struct file_operations cmdline_proc_fops = {
+```
+will generate an equivalent kpatch module to this patch (dead
+`cmdline_proc_show` left in source):
+```
+diff -Nupr src.orig/fs/proc/cmdline.c src/fs/proc/cmdline.c
+--- src.orig/fs/proc/cmdline.c	2016-11-30 19:39:49.317737234 +0000
++++ src/fs/proc/cmdline.c	2016-11-30 19:39:52.696737234 +0000
+@@ -9,9 +9,15 @@ static int cmdline_proc_show(struct seq_
+ 	return 0;
+ }
+ 
++static int cmdline_proc_show_v2(struct seq_file *m, void *v)
++{
++	seq_printf(m, "%s kpatch\n", saved_command_line);
++	return 0;
++}
++
+ static int cmdline_proc_open(struct inode *inode, struct file *file)
+ {
+-	return single_open(file, cmdline_proc_show, NULL);
++	return single_open(file, cmdline_proc_show_v2, NULL);
+ }
+ 
+ static const struct file_operations cmdline_proc_fops = {
+```
+In both versions, `kpatch-build` will determine that only
+`cmdline_proc_open` has changed and that `cmdline_proc_show_v2` is a
+new function.
+
+In some patching cases it might be necessary to completely remove the original
+function to avoid the compiler complaining about a defined, but unused
+function.  This will depend on symbol scope and kernel build options.
