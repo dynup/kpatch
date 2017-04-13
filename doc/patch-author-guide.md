@@ -160,7 +160,7 @@ If you need to add a field to an existing data structure, or even many existing
 data structures, you can use the `kpatch_shadow_*()` functions:
 
 * `kpatch_shadow_alloc` - allocates a new shadow variable associated with a
-  given object.
+  given object
 * `kpatch_shadow_get` - find and return a pointer to a shadow variable
 * `kpatch_shadow_free` - find and free a shadow variable
 
@@ -214,6 +214,15 @@ safe to access:
  	 * Flush inherited counters to the parent - before the parent
  	 * gets woken up by child-exit notifications.
 ```
+Notes:
+* `kpatch_shadow_alloc` initializes only shadow variable metadata. It
+  allocates variable storage via `kmalloc` with the `gfp_t` flags it is
+  given, but otherwise leaves the area untouched. Initialization of a shadow
+  variable is the responsibility of the caller.
+* As soon as `kpatch_shadow_alloc` creates a shadow variable, its presence
+  will be reported by `kpatch_shadow_get`. Care should be taken to avoid any
+  potential race conditions between a kernel thread that allocates a shadow
+  variable and concurrent threads that may attempt to use it.
 
 Data semantic changes
 ---------------------
