@@ -23,9 +23,9 @@ And a few more:
 Installation
 ------------
 
-###Prerequisites
+### Prerequisites
 
-####Fedora
+#### Fedora
 
 *NOTE: You'll need about 15GB of free disk space for the kpatch-build cache in
 `~/.kpatch` and for ccache.*
@@ -52,7 +52,7 @@ ccache --max-size=5G
 sudo dnf install patchutils
 ```
 
-####RHEL 7
+#### RHEL 7
 
 *NOTE: You'll need about 15GB of free disk space for the kpatch-build cache in
 `~/.kpatch` and for ccache.*
@@ -83,7 +83,7 @@ ccache --max-size=5G
 sudo dnf install patchutils
 ```
 
-####CentOS 7
+#### CentOS 7
 
 *NOTE: You'll need about 15GB of free disk space for the kpatch-build cache in
 `~/.kpatch` and for ccache.*
@@ -116,7 +116,7 @@ ccache --max-size=5G
 sudo dnf install patchutils
 ```
 
-####Oracle Linux 7
+#### Oracle Linux 7
 
 *NOTE: You'll need about 15GB of free disk space for the kpatch-build cache in
 `~/.kpatch` and for ccache.*
@@ -152,7 +152,7 @@ ccache --max-size=5G
 sudo dnf install patchutils
 ```
 
-####Ubuntu 14.04
+#### Ubuntu 14.04
 
 *NOTE: You'll need about 15GB of free disk space for the kpatch-build cache in
 `~/.kpatch` and for ccache.*
@@ -191,7 +191,7 @@ wget -Nq http://ddebs.ubuntu.com/dbgsym-release-key.asc -O- | sudo apt-key add -
 apt-get update && apt-get install linux-image-$(uname -r)-dbgsym
 ```
 
-####Debian 8.0
+#### Debian 8.0
 
 *NOTE: You'll need about 15GB of free disk space for the kpatch-build cache in
 `~/.kpatch` and for ccache.*
@@ -225,7 +225,7 @@ Install the dependencies for the "kpatch-build" command:
     apt-get install ccache
     ccache --max-size=5G
 
-####Debian 7.x
+#### Debian 7.x
 
 *NOTE: You'll need about 15GB of free disk space for the kpatch-build cache in
 `~/.kpatch` and for ccache.*
@@ -260,13 +260,13 @@ Configure ccache (installed by kpatch package):
     ccache --max-size=5G
 
 
-###Build
+### Build
 
 Compile kpatch:
 
     make
 
-###Install
+### Install
 
 OPTIONAL: Install kpatch to `/usr/local`:
 
