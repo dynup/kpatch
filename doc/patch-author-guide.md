@@ -160,7 +160,7 @@ If you need to add a field to an existing data structure, or even many existing
 data structures, you can use the `kpatch_shadow_*()` functions:
 
 * `kpatch_shadow_alloc` - allocates a new shadow variable associated with a
-  given object.
+  given object
 * `kpatch_shadow_get` - find and return a pointer to a shadow variable
 * `kpatch_shadow_free` - find and free a shadow variable
 
@@ -214,6 +214,15 @@ safe to access:
  	 * Flush inherited counters to the parent - before the parent
  	 * gets woken up by child-exit notifications.
 ```
+Notes:
+* `kpatch_shadow_alloc` initializes only shadow variable metadata. It
+  allocates variable storage via `kmalloc` with the `gfp_t` flags it is
+  given, but otherwise leaves the area untouched. Initialization of a shadow
+  variable is the responsibility of the caller.
+* As soon as `kpatch_shadow_alloc` creates a shadow variable, its presence
+  will be reported by `kpatch_shadow_get`. Care should be taken to avoid any
+  potential race conditions between a kernel thread that allocates a shadow
+  variable and concurrent threads that may attempt to use it.
 
 Data semantic changes
 ---------------------
@@ -342,7 +351,10 @@ When changing header files, be extra careful.  If data is being changed, you
 probably need to modify the patch.  See "Data struct changes" above.
 
 If a function prototype is being changed, make sure it's not an exported
-function.  Otherwise it could break out-of-tree modules.
+function.  Otherwise it could break out-of-tree modules.  One way to
+workaround this is to define an entirely new copy of the function (with
+updated code) and patch in-tree callers to invoke it rather than the
+deprecated version.
 
 Many header file changes result in a complete rebuild of the kernel tree, which
 makes kpatch-build have to compare every .o file in the kernel.  It slows the
@@ -365,12 +377,24 @@ Some examples:
   function will also change.  In this case there's nothing you can do to
   prevent the extra changes.
 
+* If a changed function was originally inlined, but turned into a callable
+  function after patching, consider adding `__always_inline` to the function
+  definition.  Likewise, if a function is only inlined after patching,
+  consider using `noinline` to prevent the compiler from doing so.
+
 * If your patch adds a call to a function where the original version of the
   function's ELF symbol has a .constprop or .isra suffix, and the corresponding
   patched function doesn't, that means the patch caused gcc to no longer
   perform an interprocedural optimization, which affects the function and all
   its callers.  If you want to prevent this from happening, copy/paste the
   function with a new name and call the new function from your patch.
+
+* Moving around source code lines can introduce unique instructions if any
+  `__LINE__` preprocessor macros are in use. This can be mitigated by adding
+  any new functions to the bottom of source files, using newline whitespace to
+  maintain original line counts, etc. A more exact fix can be employed by
+  modifying the source code that invokes `__LINE__` and hard-coding the
+  original line number in place.
 
 Removing references to static local variables
 ---------------------------------------------
@@ -384,3 +408,71 @@ to zero; instead the variable keeps its old value.
 To work around this limitation one needs to retain the reference to the static local.
 This might be as simple as adding the variable back in the patched function in a 
 non-functional way and ensuring the compiler doesn't optimize it away.
+
+Code removal
+------------
+
+Some fixes may replace or completely remove functions and references
+to them. Remember that kpatch modules can only add new functions and
+redirect existing functions, so "removed" functions will continue to exist in
+kernel address space as effectively dead code.
+
+That means this patch (source code removal of `cmdline_proc_show`):
+```
+diff -Nupr src.orig/fs/proc/cmdline.c src/fs/proc/cmdline.c
+--- src.orig/fs/proc/cmdline.c	2016-11-30 19:39:49.317737234 +0000
++++ src/fs/proc/cmdline.c	2016-11-30 19:39:52.696737234 +0000
+@@ -3,15 +3,15 @@
+ #include <linux/proc_fs.h>
+ #include <linux/seq_file.h>
+ 
+-static int cmdline_proc_show(struct seq_file *m, void *v)
+-{
+-	seq_printf(m, "%s\n", saved_command_line);
+-	return 0;
+-}
++static int cmdline_proc_show_v2(struct seq_file *m, void *v)
++{
++	seq_printf(m, "%s kpatch\n", saved_command_line);
++	return 0;
++}
+ 
+ static int cmdline_proc_open(struct inode *inode, struct file *file)
+ {
+-	return single_open(file, cmdline_proc_show, NULL);
++	return single_open(file, cmdline_proc_show_v2, NULL);
+ }
+ 
+ static const struct file_operations cmdline_proc_fops = {
+```
+will generate an equivalent kpatch module to this patch (dead
+`cmdline_proc_show` left in source):
+```
+diff -Nupr src.orig/fs/proc/cmdline.c src/fs/proc/cmdline.c
+--- src.orig/fs/proc/cmdline.c	2016-11-30 19:39:49.317737234 +0000
++++ src/fs/proc/cmdline.c	2016-11-30 19:39:52.696737234 +0000
+@@ -9,9 +9,15 @@ static int cmdline_proc_show(struct seq_
+ 	return 0;
+ }
+ 
++static int cmdline_proc_show_v2(struct seq_file *m, void *v)
++{
++	seq_printf(m, "%s kpatch\n", saved_command_line);
++	return 0;
++}
++
+ static int cmdline_proc_open(struct inode *inode, struct file *file)
+ {
+-	return single_open(file, cmdline_proc_show, NULL);
++	return single_open(file, cmdline_proc_show_v2, NULL);
+ }
+ 
+ static const struct file_operations cmdline_proc_fops = {
+```
+In both versions, `kpatch-build` will determine that only
+`cmdline_proc_open` has changed and that `cmdline_proc_show_v2` is a
+new function.
+
+In some patching cases it might be necessary to completely remove the original
+function to avoid the compiler complaining about a defined, but unused
+function.  This will depend on symbol scope and kernel build options.

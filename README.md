@@ -514,7 +514,8 @@ so it looks like a normal function to the kernel.
 - **oops stack traces**: Yes.  If the replacement function is involved in an
   oops, the stack trace will show the function and kernel module name of the
   replacement function, just like any other kernel module function.  The oops
-  message will also show the taint flag (currently `TAINT_USER`).
+  message will also show the taint flag (see the FAQ "How can I detect if
+  somebody has patched the kernel" for specifics).
 - **kdump/crash**: Yes.  Replacement functions are normal functions, so crash
   will have no issues.
 - **ftrace**: Yes, but certain uses of ftrace which involve opening the
