@@ -377,12 +377,24 @@ Some examples:
   function will also change.  In this case there's nothing you can do to
   prevent the extra changes.
 
+* If a changed function was originally inlined, but turned into a callable
+  function after patching, consider adding `__always_inline` to the function
+  definition.  Likewise, if a function is only inlined after patching,
+  consider using `noinline` to prevent the compiler from doing so.
+
 * If your patch adds a call to a function where the original version of the
   function's ELF symbol has a .constprop or .isra suffix, and the corresponding
   patched function doesn't, that means the patch caused gcc to no longer
   perform an interprocedural optimization, which affects the function and all
   its callers.  If you want to prevent this from happening, copy/paste the
   function with a new name and call the new function from your patch.
+
+* Moving around source code lines can introduce unique instructions if any
+  `__LINE__` preprocessor macros are in use. This can be mitigated by adding
+  any new functions to the bottom of source files, using newline whitespace to
+  maintain original line counts, etc. A more exact fix can be employed by
+  modifying the source code that invokes `__LINE__` and hard-coding the
+  original line number in place.
 
 Removing references to static local variables
 ---------------------------------------------
