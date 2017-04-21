@@ -2123,22 +2123,8 @@ static void kpatch_create_intermediate_sections(struct kpatch_elf *kelf,
 			} else {
 				/*
 				 * We have a patch to a module which references
-				 * a global symbol.
-				 */
-
-				/*
-				 * __fentry__ relas can't be converted to
-				 * dynrelas because the ftrace module init code
-				 * runs before the dynrela code can initialize
-				 * them.  __fentry__ is exported by the kernel,
-				 * so leave it as a normal rela.
-				 */
-				if (!strcmp(rela->sym->name, "__fentry__"))
-					continue;
-
-				/*
-				 * Try to find the symbol in the module being
-				 * patched.
+				 * a global symbol.  Try to find the symbol in
+				 * the module being patched.
 				 */
 				if (lookup_global_symbol(table, rela->sym->name,
 							 &result)) {
@@ -2151,10 +2137,19 @@ static void kpatch_create_intermediate_sections(struct kpatch_elf *kelf,
 					 * patch module.
 					 */
 					sym_objname = lookup_exported_symbol_objname(table, rela->sym->name);
-
-					/* Not exported, must be in another .o in patch module */
 					if (!sym_objname)
 						sym_objname = pmod_name;
+
+					/*
+					 * For a symbol exported by vmlinux, use
+					 * the original rela.
+					 *
+					 * For a symbol exported by a module,
+					 * convert to a dynrela because the
+					 * module might not be loaded yet.
+					 */
+					if (!strcmp(sym_objname, "vmlinux"))
+						continue;
 
 					external = 1;
 				}
