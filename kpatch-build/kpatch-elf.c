@@ -71,7 +71,9 @@ int is_debug_section(struct section *sec)
 		name = sec->base->name;
 	else
 		name = sec->name;
-	return !strncmp(name, ".debug_", 7);
+
+	return !strncmp(name, ".debug_", 7) ||
+	       !strncmp(name, ".eh_frame", 9);
 }
 
 struct section *find_section_by_index(struct list_head *list, unsigned int index)
