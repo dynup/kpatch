@@ -424,39 +424,28 @@ else
 		if [[ $DISTRO = ubuntu ]]; then
 
 			# url may be changed for a different mirror
-			url="http://archive.ubuntu.com/ubuntu/pool/main/l/linux"
-			extension="bz2"
+			url="http://archive.ubuntu.com/ubuntu/pool/main/l"
 			sublevel="SUBLEVEL = 0"
-			taroptions="xvjf"
 			UBUNTU_KERNEL=1
 
 		elif [[ $DISTRO = debian ]]; then
 
 			# url may be changed for a different mirror
-			url="http://ftp.debian.org/debian/pool/main/l/linux"
-			extension="xz"
+			url="http://ftp.debian.org/debian/pool/main/l"
 			sublevel="SUBLEVEL ="
-			taroptions="xvf"
 		fi
 
-		# The linux-source packages are formatted like the following for:
-		# ubuntu: linux-source-3.13.0_3.13.0-24.46_all.deb
-		# debian: linux-source-3.14_3.14.7-1_all.deb
-		pkgver="${KVER}_$(dpkg-query -W -f='${Version}' linux-image-$ARCHVERSION)"
-		pkgname="linux-source-${pkgver}_all"
+		pkgname="$(dpkg-query -W -f='${Source}' linux-image-$ARCHVERSION)"
+		pkgver="$(dpkg-query -W -f='${Version}' linux-image-$ARCHVERSION)"
+		dscname="${pkgname}_${pkgver}.dsc"
 
 		clean_cache
 
 		cd $TEMPDIR
-		echo "Downloading the kernel source for $ARCHVERSION"
+		echo "Downloading and unpacking the kernel source for $ARCHVERSION"
 		# Download source deb pkg
-		(wget "$url/${pkgname}.deb" 2>&1) >> "$LOGFILE" || die "wget: Could not fetch $url/${pkgname}.deb"
-		# Unpack
-		echo "Unpacking kernel source"
-		dpkg -x ${pkgname}.deb $TEMPDIR >> "$LOGFILE" || die "dpkg: Could not extract ${pkgname}.deb"
-		# extract and move to SRCDIR
-		tar $taroptions usr/src/linux-source-$KVER.tar.${extension} >> "$LOGFILE" || die "tar: Failed to extract kernel source package"
-		mv linux-source-$KVER "$SRCDIR" || die
+		(dget -u "$url/${pkgname}/${dscname}" 2>&1) >> "$LOGFILE" || die "dget: Could not fetch/unpack $url/${pkgname}/${dscname}"
+		mv ${pkgname}-$KVER "$SRCDIR" || die
 		cp "/boot/config-${ARCHVERSION}" "$SRCDIR/.config" || die
 		if [[ "$ARCHVERSION" == *-* ]]; then
 			echo "-${ARCHVERSION#*-}" > "$SRCDIR/localversion" || die
