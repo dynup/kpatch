@@ -585,6 +585,7 @@ do
 	cp -f "$SRCDIR/$i" "$TEMPDIR/patched/$i" || die
 done
 
+unset KCFLAGS
 echo "Extracting new and modified ELF sections"
 FILES="$(cat "$TEMPDIR/changed_objs")"
 cd "$TEMPDIR"
@@ -607,6 +608,13 @@ for i in $FILES; do
 	if [[ $KOBJFILE = vmlinux ]]; then
 		KOBJFILE=$VMLINUX
 	else
+		cd "$SRCDIR"
+		patch -p1 -R -d "$SRCDIR" < "$SRCDIR/$APPLIEDPATCHFILE" &> /dev/null
+		make "-j$CPUS" $KOBJFILE "O=$OBJDIR" >> "$LOGFILE" 2>&1 || die
+		cd "$OBJDIR"
+
+		# pass original module to create-diff-object
+		cp -f "$KOBJFILE" "$TEMPDIR/module/$KOBJFILE" || die
 		KOBJFILE="$TEMPDIR/module/$KOBJFILE"
 	fi
 	cd $TEMPDIR
