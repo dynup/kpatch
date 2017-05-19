@@ -286,7 +286,7 @@ struct lookup_table *lookup_open(char *obj_path, char *symvers_path,
 		ERROR("malloc table");
 	memset(table, 0, sizeof(*table));
 
-	table->vmlinux = !strcmp(basename(obj_path), "vmlinux");
+	table->vmlinux = !strncmp(basename(obj_path), "vmlinux", 7);
 
 	obj_read(table, obj_path);
 	symvers_read(table, symvers_path);
