@@ -166,7 +166,7 @@ apt-get install make gcc libelf-dev
 Install the dependencies for the "kpatch-build" command:
 
 ```bash
-apt-get install dpkg-dev
+apt-get install dpkg-dev devscripts
 apt-get build-dep linux
 
 # optional, but highly recommended
