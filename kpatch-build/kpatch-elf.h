@@ -79,7 +79,7 @@ struct symbol {
 		int include; /* used in the patched elf */
 		int strip; /* used in the output elf */
 	};
-	int has_fentry_call;
+	int has_func_profiling;
 };
 
 struct rela {

@@ -1014,7 +1014,7 @@ static void kpatch_replace_sections_syms(struct kpatch_elf *kelf)
 	log_debug("\n");
 }
 
-static void kpatch_check_fentry_calls(struct kpatch_elf *kelf)
+static void kpatch_check_func_profiling_calls(struct kpatch_elf *kelf)
 {
 	struct symbol *sym;
 	int errs = 0;
@@ -1022,8 +1022,8 @@ static void kpatch_check_fentry_calls(struct kpatch_elf *kelf)
 	list_for_each_entry(sym, &kelf->symbols, list) {
 		if (sym->type != STT_FUNC || sym->status != CHANGED)
 			continue;
-		if (!sym->twin->has_fentry_call) {
-			log_normal("function %s has no fentry call, unable to patch\n",
+		if (!sym->twin->has_func_profiling) {
+			log_normal("function %s has no fentry/mcount call, unable to patch\n",
 				   sym->name);
 			errs++;
 		}
@@ -2294,7 +2294,7 @@ static void kpatch_create_mcount_sections(struct kpatch_elf *kelf)
 	nr = 0;
 	list_for_each_entry(sym, &kelf->symbols, list)
 		if (sym->type == STT_FUNC && sym->status != SAME &&
-		    sym->has_fentry_call)
+		    sym->has_func_profiling)
 			nr++;
 
 	/* create text/rela section pair */
@@ -2308,8 +2308,8 @@ static void kpatch_create_mcount_sections(struct kpatch_elf *kelf)
 		if (sym->type != STT_FUNC || sym->status == SAME)
 			continue;
 
-		if (!sym->has_fentry_call) {
-			log_debug("function %s has no fentry call, no mcount record is needed\n",
+		if (!sym->has_func_profiling) {
+			log_debug("function %s has no fentry/mcount call, no mcount record is needed\n",
 				  sym->name);
 			continue;
 		}
@@ -2533,7 +2533,7 @@ int main(int argc, char *argv[])
 	 */
 	kpatch_mark_ignored_sections(kelf_patched);
 	kpatch_compare_correlated_elements(kelf_patched);
-	kpatch_check_fentry_calls(kelf_patched);
+	kpatch_check_func_profiling_calls(kelf_patched);
 	kpatch_elf_teardown(kelf_base);
 	kpatch_elf_free(kelf_base);
 

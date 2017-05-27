@@ -350,7 +350,7 @@ void kpatch_create_symbol_list(struct kpatch_elf *kelf)
 }
 
 /* Check which functions have fentry calls; save this info for later use. */
-static void kpatch_find_fentry_calls(struct kpatch_elf *kelf)
+static void kpatch_find_func_profiling_calls(struct kpatch_elf *kelf)
 {
 	struct symbol *sym;
 	struct rela *rela;
@@ -364,7 +364,7 @@ static void kpatch_find_fentry_calls(struct kpatch_elf *kelf)
 		    strcmp(rela->sym->name, "__fentry__"))
 			continue;
 
-		sym->has_fentry_call = 1;
+		sym->has_func_profiling = 1;
 	}
 }
 
@@ -405,7 +405,7 @@ struct kpatch_elf *kpatch_elf_open(const char *name)
 		kpatch_create_rela_list(kelf, sec);
 	}
 
-	kpatch_find_fentry_calls(kelf);
+	kpatch_find_func_profiling_calls(kelf);
 	return kelf;
 }
 
