@@ -179,6 +179,46 @@ gcc_version_check() {
 	return
 }
 
+find_special_section_data() {
+	if [[ $ARCH = "ppc64le" ]]; then
+		return
+	fi
+
+	[[ $CONFIG_PARAVIRT -eq 0 ]] && AWK_OPTIONS="-vskip_p=1"
+	SPECIAL_VARS=$(readelf -wi "$VMLINUX" |
+		       gawk --non-decimal-data $AWK_OPTIONS '
+		       BEGIN { a = b = p = e = 0 }
+
+		       # Set state if name matches
+		       a == 0 && /DW_AT_name.* alt_instr[[:space:]]*$/ {a = 1; next}
+		       b == 0 && /DW_AT_name.* bug_entry[[:space:]]*$/ {b = 1; next}
+		       p == 0 && /DW_AT_name.* paravirt_patch_site[[:space:]]*$/ {p = 1; next}
+		       e == 0 && /DW_AT_name.* exception_table_entry[[:space:]]*$/ {e = 1; next}
+
+		       # Reset state unless this abbrev describes the struct size
+		       a == 1 && !/DW_AT_byte_size/ { a = 0; next }
+		       b == 1 && !/DW_AT_byte_size/ { b = 0; next }
+		       p == 1 && !/DW_AT_byte_size/ { p = 0; next }
+		       e == 1 && !/DW_AT_byte_size/ { e = 0; next }
+
+		       # Now that we know the size, stop parsing for it
+		       a == 1 {printf("export ALT_STRUCT_SIZE=%d\n", $4); a = 2}
+		       b == 1 {printf("export BUG_STRUCT_SIZE=%d\n", $4); b = 2}
+		       p == 1 {printf("export PARA_STRUCT_SIZE=%d\n", $4); p = 2}
+		       e == 1 {printf("export EX_STRUCT_SIZE=%d\n", $4); e = 2}
+
+		       # Bail out once we have everything
+		       a == 2 && b == 2 && (p == 2 || skip_p) && e == 2 {exit}')
+
+	[[ -n $SPECIAL_VARS ]] && eval "$SPECIAL_VARS"
+
+	[[ -z $ALT_STRUCT_SIZE ]] && die "can't find special struct alt_instr size"
+	[[ -z $BUG_STRUCT_SIZE ]] && die "can't find special struct bug_entry size"
+	[[ -z $EX_STRUCT_SIZE ]]  && die "can't find special struct paravirt_patch_site size"
+	[[ -z $PARA_STRUCT_SIZE && $CONFIG_PARAVIRT -ne 0 ]] && die "can't find special struct paravirt_patch_site size"
+
+}
+
 find_parent_obj() {
 	dir=$(dirname $1)
 	absdir=$(readlink -f $dir)
@@ -519,44 +559,7 @@ cp -LR "$DATADIR/patch" "$TEMPDIR" || die
 export KCFLAGS="-I$DATADIR/patch -ffunction-sections -fdata-sections"
 
 echo "Reading special section data"
-[[ $CONFIG_PARAVIRT -eq 0 ]] && AWK_OPTIONS="-vskip_p=1"
-SPECIAL_VARS=$(readelf -wi "$VMLINUX" |
-	       gawk --non-decimal-data $AWK_OPTIONS '
-	       BEGIN { a = b = p = e = 0 }
-
-	       # Set state if name matches
-	       a == 0 && /DW_AT_name.* alt_instr[[:space:]]*$/ {a = 1; next}
-	       b == 0 && /DW_AT_name.* bug_entry[[:space:]]*$/ {b = 1; next}
-	       p == 0 && /DW_AT_name.* paravirt_patch_site[[:space:]]*$/ {p = 1; next}
-	       e == 0 && /DW_AT_name.* exception_table_entry[[:space:]]*$/ {e = 1; next}
-
-	       # Reset state unless this abbrev describes the struct size
-	       a == 1 && !/DW_AT_byte_size/ { a = 0; next }
-	       b == 1 && !/DW_AT_byte_size/ { b = 0; next }
-	       p == 1 && !/DW_AT_byte_size/ { p = 0; next }
-	       e == 1 && !/DW_AT_byte_size/ { e = 0; next }
-
-	       # Now that we know the size, stop parsing for it
-	       a == 1 {printf("export ALT_STRUCT_SIZE=%d\n", $4); a = 2}
-	       b == 1 {printf("export BUG_STRUCT_SIZE=%d\n", $4); b = 2}
-	       p == 1 {printf("export PARA_STRUCT_SIZE=%d\n", $4); p = 2}
-	       e == 1 {printf("export EX_STRUCT_SIZE=%d\n", $4); e = 2}
-
-	       # Bail out once we have everything
-	       a == 2 && b == 2 && (p == 2 || skip_p) && e == 2 {exit}')
-
-[[ -n $SPECIAL_VARS ]] && eval "$SPECIAL_VARS"
-
-[[ -z $ALT_STRUCT_SIZE ]] && die "can't find special struct alt_instr size"
-[[ -z $BUG_STRUCT_SIZE ]] && die "can't find special struct bug_entry size"
-[[ -z $EX_STRUCT_SIZE ]]  && die "can't find special struct exception_table_entry size"
-[[ -z $PARA_STRUCT_SIZE && $CONFIG_PARAVIRT -ne 0 ]] && die "can't find special struct paravirt_patch_site size"
-
-for i in $ALT_STRUCT_SIZE $BUG_STRUCT_SIZE $PARA_STRUCT_SIZE $EX_STRUCT_SIZE; do
-	if [[ ! $i -gt 0 ]] || [[ ! $i -le 16 ]]; then
-		die "invalid special struct size $i"
-	fi
-done
+find_special_section_data
 
 echo "Building original kernel"
 ./scripts/setlocalversion --save-scmversion || die
