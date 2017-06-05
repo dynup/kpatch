@@ -80,9 +80,9 @@ static int discarded_sym(struct lookup_table *table,
 static void find_local_syms(struct lookup_table *table, char *hint,
 			    struct sym_compare_type *child_locals)
 {
-	struct object_symbol *sym, *file_sym;
+	struct object_symbol *sym, *file_sym = NULL;
 	int i, in_file = 0;
-	struct sym_compare_type *child_sym;
+	struct sym_compare_type *child_sym = NULL;
 
 	if (!child_locals)
 		return;
