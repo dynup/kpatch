@@ -1454,21 +1454,6 @@ static int bug_table_group_size(struct kpatch_elf *kelf, int offset)
 	return size;
 }
 
-static int parainstructions_group_size(struct kpatch_elf *kelf, int offset)
-{
-	static int size = 0;
-	char *str;
-
-	if (!size) {
-		str = getenv("PARA_STRUCT_SIZE");
-		if (!str)
-			ERROR("PARA_STRUCT_SIZE not set");
-		size = atoi(str);
-	}
-
-	return size;
-}
-
 static int ex_table_group_size(struct kpatch_elf *kelf, int offset)
 {
 	static int size = 0;
@@ -1478,6 +1463,22 @@ static int ex_table_group_size(struct kpatch_elf *kelf, int offset)
 		str = getenv("EX_STRUCT_SIZE");
 		if (!str)
 			ERROR("EX_STRUCT_SIZE not set");
+		size = atoi(str);
+	}
+
+	return size;
+}
+
+#ifdef __x86_64__
+static int parainstructions_group_size(struct kpatch_elf *kelf, int offset)
+{
+	static int size = 0;
+	char *str;
+
+	if (!size) {
+		str = getenv("PARA_STRUCT_SIZE");
+		if (!str)
+			ERROR("PARA_STRUCT_SIZE not set");
 		size = atoi(str);
 	}
 
@@ -1503,6 +1504,28 @@ static int smp_locks_group_size(struct kpatch_elf *kelf, int offset)
 {
 	return 4;
 }
+#endif
+#ifdef __powerpc__
+static int fixup_entry_group_size(struct kpatch_elf *kelf, int offset)
+{
+	static int size = 0;
+	char *str;
+
+	if (!size) {
+		str = getenv("FIXUP_STRUCT_SIZE");
+		if (!str)
+			ERROR("FIXUP_STRUCT_SIZE not set");
+		size = atoi(str);
+	}
+
+	return size;
+}
+
+static int fixup_lwsync_group_size(struct kpatch_elf *kelf, int offset)
+{
+	return 4;
+}
+#endif
 
 /*
  * The rela groups in the .fixup section vary in size.  The beginning of each
@@ -1557,6 +1580,7 @@ static struct special_section special_sections[] = {
 		.name		= "__bug_table",
 		.group_size	= bug_table_group_size,
 	},
+#ifdef __x86_64__
 	{
 		.name		= ".smp_locks",
 		.group_size	= smp_locks_group_size,
@@ -1565,6 +1589,7 @@ static struct special_section special_sections[] = {
 		.name		= ".parainstructions",
 		.group_size	= parainstructions_group_size,
 	},
+#endif
 	{
 		.name		= ".fixup",
 		.group_size	= fixup_group_size,
@@ -1573,10 +1598,30 @@ static struct special_section special_sections[] = {
 		.name		= "__ex_table", /* must come after .fixup */
 		.group_size	= ex_table_group_size,
 	},
+#ifdef __x86_64__
 	{
 		.name		= ".altinstructions",
 		.group_size	= altinstructions_group_size,
 	},
+#endif
+#ifdef __powerpc__
+	{
+		.name		= "__ftr_fixup",
+		.group_size	= fixup_entry_group_size,
+	},
+	{
+		.name		= "__mmu_ftr_fixup",
+		.group_size	= fixup_entry_group_size,
+	},
+	{
+		.name		= "__fw_ftr_fixup",
+		.group_size	= fixup_entry_group_size,
+	},
+	{
+		.name		= "__lwsync_fixup",
+		.group_size	= fixup_lwsync_group_size,
+	},
+#endif
 	{},
 };
 

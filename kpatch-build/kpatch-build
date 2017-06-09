@@ -180,8 +180,41 @@ gcc_version_check() {
 	return
 }
 
+find_special_section_data_ppc64le() {
+	SPECIAL_VARS=$(readelf -wi "$VMLINUX" |
+		       gawk --non-decimal-data '
+		       BEGIN { f = b = e = 0 }
+
+		       # Set state if name matches
+		       f == 0 && /DW_AT_name.* fixup_entry[[:space:]]*$/ {f = 1; next}
+		       b == 0 && /DW_AT_name.* bug_entry[[:space:]]*$/ {b = 1; next}
+		       e == 0 && /DW_AT_name.* exception_table_entry[[:space:]]*$/ {e = 1; next}
+
+		       # Reset state unless this abbrev describes the struct size
+		       f == 1 && !/DW_AT_byte_size/ { f = 0; next }
+		       b == 1 && !/DW_AT_byte_size/ { b = 0; next }
+		       e == 1 && !/DW_AT_byte_size/ { e = 0; next }
+
+		       # Now that we know the size, stop parsing for it
+		       f == 1 {printf("export FIXUP_STRUCT_SIZE=%d\n", $4); a = 2}
+		       b == 1 {printf("export BUG_STRUCT_SIZE=%d\n", $4); b = 2}
+		       e == 1 {printf("export EX_STRUCT_SIZE=%d\n", $4); e = 2}
+
+		       # Bail out once we have everything
+		       f == 2 && b == 2 && e == 2 {exit}')
+
+	[[ -n $SPECIAL_VARS ]] && eval "$SPECIAL_VARS"
+
+	[[ -z $FIXUP_STRUCT_SIZE ]] && die "can't find special struct fixup_entry size"
+	[[ -z $BUG_STRUCT_SIZE ]] && die "can't find special struct bug_entry size"
+	[[ -z $EX_STRUCT_SIZE ]]  && die "can't find special struct exception_table_entry size"
+
+	return
+}
+
 find_special_section_data() {
 	if [[ $ARCH = "ppc64le" ]]; then
+		find_special_section_data_ppc64le
 		return
 	fi
 
@@ -218,6 +251,7 @@ find_special_section_data() {
 	[[ -z $EX_STRUCT_SIZE ]]  && die "can't find special struct paravirt_patch_site size"
 	[[ -z $PARA_STRUCT_SIZE && $CONFIG_PARAVIRT -ne 0 ]] && die "can't find special struct paravirt_patch_site size"
 
+	return
 }
 
 find_parent_obj() {
