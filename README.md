@@ -190,6 +190,10 @@ EOF
 wget -Nq http://ddebs.ubuntu.com/dbgsym-release-key.asc -O- | sudo apt-key add -
 apt-get update && apt-get install linux-image-$(uname -r)-dbgsym
 ```
+If there are no packages published yet to the codename-security pocket, the
+apt update may report a "404 Not Found" error, as well as a complaint about
+disabling the repository by default.  This message may be ignored (see issue
+#710).
 
 #### Debian 8.0
 
