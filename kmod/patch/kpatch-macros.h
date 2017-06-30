@@ -40,6 +40,17 @@ struct kpatch_unload {
 	void *__kpatch_ignore_func_##_fn __section(.kpatch.ignore.functions) = _fn;
 
 /*
+ * KPATCH_REVERT_FUNCTION macro
+ *
+ * This macro is for forcing a function to be patched with its original
+ * contents.  This is needed for the case where the patch is a cumulative
+ * upgrade to a previous patch which modified the function, and now the current
+ * patch needs to revert that change.
+ */
+#define KPATCH_REVERT_FUNCTION(_fn) \
+	void *__kpatch_revert_func_##_fn __section(.kpatch.revert.functions) = _fn;
+
+/*
  * KPATCH_LOAD_HOOK macro
  *
  * The first line only ensures that the hook being registered has the required

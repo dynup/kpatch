@@ -1785,6 +1785,39 @@ static void kpatch_create_kpatch_arch_section(struct kpatch_elf *kelf, char *obj
 	karch_sec->sh.sh_size = karch_sec->data->d_size;
 }
 
+static void kpatch_mark_reverted_functions_changed(struct kpatch_elf *kelf)
+{
+	struct section *sec;
+	struct symbol *sym;
+	struct rela *rela;
+
+	sec = find_section_by_name(&kelf->sections, ".kpatch.revert.functions");
+	if (!sec)
+		return;
+
+	list_for_each_entry(rela, &sec->rela->relas, list) {
+		if (!rela->sym->sec)
+			ERROR("expected bundled symbol");
+		if (rela->sym->type != STT_FUNC)
+			ERROR("expected function symbol");
+		log_normal("reverting function: %s\n", rela->sym->name);
+		if (rela->sym->status != SAME)
+			log_normal("NOTICE: change detected in function %s, unnecessary KPATCH_REVERT_FUNCTION()?\n", rela->sym->name);
+		rela->sym->status = CHANGED;
+		rela->sym->sec->status = CHANGED;
+		if (rela->sym->sec->secsym)
+			rela->sym->sec->secsym->status = CHANGED;
+		if (rela->sym->sec->rela)
+			rela->sym->sec->rela->status = CHANGED;
+	}
+
+	/* strip temporary global kpatch_revert_func_* symbols */
+	list_for_each_entry(sym, &kelf->symbols, list)
+		if (!strncmp(sym->name, "__kpatch_revert_func_",
+		            strlen("__kpatch_revert_func_")))
+			sym->status = SAME;
+}
+
 static void kpatch_process_special_sections(struct kpatch_elf *kelf)
 {
 	struct special_section *special;
@@ -2528,6 +2561,7 @@ int main(int argc, char *argv[])
 
 	kpatch_mark_ignored_functions_same(kelf_patched);
 	kpatch_mark_ignored_sections_same(kelf_patched);
+	kpatch_mark_reverted_functions_changed(kelf_patched);
 
 	kpatch_include_standard_elements(kelf_patched);
 	num_changed = kpatch_include_changed_functions(kelf_patched);
