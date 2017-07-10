@@ -225,6 +225,7 @@ out:
 		log_debug("section %s has changed\n", sec->name);
 }
 
+#ifdef __x86_64__
 /*
  * Determine if a section has changed only due to a WARN* or might_sleep
  * macro call's embedding of the line number into an instruction operand.
@@ -330,6 +331,12 @@ static int kpatch_line_macro_change_only(struct section *sec)
 
 	return 1;
 }
+#else
+static int kpatch_line_macro_change_only(struct section *sec)
+{
+	return 0;
+}
+#endif
 
 static void kpatch_compare_sections(struct list_head *seclist)
 {
@@ -868,6 +875,7 @@ static void kpatch_compare_correlated_elements(struct kpatch_elf *kelf)
 	kpatch_compare_symbols(&kelf->symbols);
 }
 
+#ifdef __x86_64__
 static void rela_insn(struct section *sec, struct rela *rela, struct insn *insn)
 {
 	unsigned long insn_addr, start, end, rela_addr;
@@ -886,6 +894,9 @@ static void rela_insn(struct section *sec, struct rela *rela, struct insn *insn)
 			return;
 	}
 }
+#else
+static void rela_insn(struct section *sec, struct rela *rela, struct insn *insn) { }
+#endif
 
 /*
  * Mangle the relas a little.  The compiler will sometimes use section symbols
