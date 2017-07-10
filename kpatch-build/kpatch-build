@@ -36,6 +36,7 @@
 
 BASE="$PWD"
 SCRIPTDIR="$(readlink -f $(dirname $(type -p $0)))"
+ARCH="$(uname -m)"
 ARCHVERSION="$(uname -r)"
 CPUS="$(getconf _NPROCESSORS_ONLN)"
 CACHEDIR="${CACHEDIR:-$HOME/.kpatch}"
@@ -158,11 +159,21 @@ gcc_version_check() {
 		return 1
 	fi
 
-	# ensure gcc version is >= 4.8
-	gccver=$(echo $gccver |cut -d'.' -f1,2)
-	if [[ $gccver < 4.8 ]]; then
-		warn "gcc >= 4.8 required"
-		return 1
+	# On ppc64le, livepatch relies on gcc support for -mprofile-kernel flag.
+	# Script with differnet checks is run during kernel build, to ensure that
+	# the required gcc supports is available. This check is done during kernel
+	# build by:
+	# <linux-sources>/arch/powerpc/tools/gcc-check-mprofile-kernel.sh
+	# Postpond the check until kernel build, instead of duplicating it here.
+	if [[ $ARCH = "ppc64le" ]]; then
+		return
+	else
+		# ensure gcc version is >= 4.8
+		gccver=$(echo $gccver |cut -d'.' -f1,2)
+		if [[ $gccver < 4.8 ]]; then
+			warn "gcc >= 4.8 required"
+			return 1
+		fi
 	fi
 
 	return
