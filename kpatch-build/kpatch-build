@@ -660,8 +660,7 @@ if $KPATCH_MODULE; then
 	check_pipe_status create-kpatch-module
 else
 	cp $TEMPDIR/patch/tmp_output.o $TEMPDIR/patch/output.o || die
-
- fi
+fi
 
 cd "$TEMPDIR/patch"
 
