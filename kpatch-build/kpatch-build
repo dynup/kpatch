@@ -241,13 +241,14 @@ usage() {
 	echo "		-c, --config	   Specify kernel config file" >&2
 	echo "		-v, --vmlinux	   Specify original vmlinux" >&2
 	echo "		-t, --target	   Specify custom kernel build targets" >&2
+	echo "		-o, --output	   Specify output folder" >&2
 	echo "		-d, --debug	   Keep scratch files in /tmp" >&2
 	echo "		--skip-cleanup     Skip post-build cleanup" >&2
 	echo "		--skip-gcc-check   Skip gcc version matching check" >&2
 	echo "		                   (not recommended)" >&2
 }
 
-options=$(getopt -o hr:s:c:v:t:d -l "help,sourcerpm:,sourcedir:,config:,vmlinux:,target:,debug,skip-gcc-check,skip-cleanup" -- "$@") || die "getopt failed"
+options=$(getopt -o hr:s:c:v:t:o:d -l "help,sourcerpm:,sourcedir:,config:,vmlinux:,target:,output:,debug,skip-gcc-check,skip-cleanup" -- "$@") || die "getopt failed"
 
 eval set -- "$options"
 
@@ -283,6 +284,11 @@ while [[ $# -gt 0 ]]; do
 	-t|--target)
 		TARGETS="$TARGETS $2"
 		shift
+		;;
+	-o|--output)
+		BASE=$(readlink -f "$2")
+		shift
+		[[ ! -d "$BASE" ]] && die "output dir $BASE not found"
 		;;
 	-d|--debug)
 		echo "DEBUG mode enabled"
