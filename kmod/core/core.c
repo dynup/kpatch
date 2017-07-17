@@ -676,7 +676,7 @@ static int kpatch_write_relocations(struct kpatch_module *kpmod,
 			continue;
 		}
 
-#ifdef CONFIG_DEBUG_SET_MODULE_RONX
+#if defined(CONFIG_DEBUG_SET_MODULE_RONX) || defined(CONFIG_ARCH_HAS_SET_MEMORY)
 #if (( LINUX_VERSION_CODE >= KERNEL_VERSION(4, 5, 0) ) || \
      ( LINUX_VERSION_CODE >= KERNEL_VERSION(4, 4, 0) && \
       UTS_UBUNTU_RELEASE_ABI >= 7 ) \
