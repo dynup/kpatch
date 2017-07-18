@@ -147,9 +147,9 @@ find_core_symvers() {
 
 gcc_version_check() {
 	# ensure gcc version matches that used to build the kernel
-	local gccver=$(gcc --version |head -n1 |cut -d' ' -f3-)
-	local kgccver=$(readelf -p .comment $VMLINUX |grep GCC: | tr -s ' ' | cut -d ' ' -f6-)
-	if [[ $gccver != $kgccver ]]; then
+	local gccver=$(gcc --version | head -n1 | cut -d' ' -f2- | sed 's/GNU/GCC/g')
+	local kgccver=$(readelf -p .comment $VMLINUX | grep GCC: | tr -s ' ' | cut -d ' ' -f5- | sed 's/GNU/GCC/g')
+	if [[ "$gccver" != "$kgccver" ]]; then
 		warn "gcc/kernel version mismatch"
 		echo "gcc version:    $gccver"
 		echo "kernel version: $kgccver"
@@ -158,12 +158,15 @@ gcc_version_check() {
 		return 1
 	fi
 
-	# ensure gcc version is >= 4.8
-	gccver=$(echo $gccver |cut -d'.' -f1,2)
-	if [[ $gccver < 4.8 ]]; then
-		warn "gcc >= 4.8 required"
+	# ensure gcc support -mfentry
+	TMP=".$$$$.tmp"
+	gcc -c -pg -mfentry -x c /dev/null -o $TMP > /dev/null 2>&1
+	if [[ $? -ne 0 ]]; then
+		rm -f "$TMP"
+		warn "gcc doesn't support -mfentry"
 		return 1
 	fi
+	rm -f "$TMP"
 
 	return
 }
