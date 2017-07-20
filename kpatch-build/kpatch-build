@@ -241,13 +241,14 @@ usage() {
 	echo "		-c, --config	   Specify kernel config file" >&2
 	echo "		-v, --vmlinux	   Specify original vmlinux" >&2
 	echo "		-t, --target	   Specify custom kernel build targets" >&2
+	echo "		-o, --output	   Specify output folder" >&2
 	echo "		-d, --debug	   Keep scratch files in /tmp" >&2
 	echo "		--skip-cleanup     Skip post-build cleanup" >&2
 	echo "		--skip-gcc-check   Skip gcc version matching check" >&2
 	echo "		                   (not recommended)" >&2
 }
 
-options=$(getopt -o hr:s:c:v:t:d -l "help,sourcerpm:,sourcedir:,config:,vmlinux:,target:,debug,skip-gcc-check,skip-cleanup" -- "$@") || die "getopt failed"
+options=$(getopt -o hr:s:c:v:t:o:d -l "help,sourcerpm:,sourcedir:,config:,vmlinux:,target:,output:,debug,skip-gcc-check,skip-cleanup" -- "$@") || die "getopt failed"
 
 eval set -- "$options"
 
@@ -258,30 +259,35 @@ while [[ $# -gt 0 ]]; do
 		exit 0
 		;;
 	-r|--sourcerpm)
+		[[ ! -f "$2" ]] && die "source rpm '$2' not found"
 		SRCRPM=$(readlink -f "$2")
 		shift
-		[[ ! -f "$SRCRPM" ]] && die "source rpm $SRCRPM not found"
 		rpmname=$(basename "$SRCRPM")
 		ARCHVERSION=${rpmname%.src.rpm}.$(uname -m)
 		ARCHVERSION=${ARCHVERSION#kernel-}
 		;;
 	-s|--sourcedir)
+		[[ ! -d "$2" ]] && die "source dir '$2' not found"
 		USERSRCDIR=$(readlink -f "$2")
 		shift
-		[[ ! -d "$USERSRCDIR" ]] && die "source dir $USERSRCDIR not found"
 		;;
 	-c|--config)
+		[[ ! -f "$2" ]] && die "config file '$2' not found"
 		CONFIGFILE=$(readlink -f "$2")
 		shift
-		[[ ! -f "$CONFIGFILE" ]] && die "config file $CONFIGFILE not found"
 		;;
 	-v|--vmlinux)
+		[[ ! -f "$2" ]] && die "vmlinux file '$2' not found"
 		VMLINUX=$(readlink -f "$2")
 		shift
-		[[ ! -f "$VMLINUX" ]] && die "vmlinux file $VMLINUX not found"
 		;;
 	-t|--target)
 		TARGETS="$TARGETS $2"
+		shift
+		;;
+	-o|--output)
+		[[ ! -d "$2" ]] && die "output dir '$2' not found"
+		BASE=$(readlink -f "$2")
 		shift
 		;;
 	-d|--debug)
@@ -298,13 +304,9 @@ while [[ $# -gt 0 ]]; do
 		SKIPGCCCHECK=1
 		;;
 	--)
-		if [[ -z "$2" ]]; then
-			warn "no patch file specified"
-			usage
-			exit 1
-		fi
+		[[ -z "$2" ]] && die "no patch file specified"
+		[[ ! -f "$2" ]] && die "patch file '$2' not found"
 		PATCHFILE=$(readlink -f "$2")
-		[[ ! -f "$PATCHFILE" ]] && die "patch file $PATCHFILE not found"
 		break
 		;;
 	esac
@@ -660,8 +662,7 @@ if $KPATCH_MODULE; then
 	check_pipe_status create-kpatch-module
 else
 	cp $TEMPDIR/patch/tmp_output.o $TEMPDIR/patch/output.o || die
-
- fi
+fi
 
 cd "$TEMPDIR/patch"
 

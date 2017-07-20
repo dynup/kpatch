@@ -62,6 +62,9 @@ struct lookup_table {
 #define for_each_obj_symbol(ndx, iter, table) \
 	for (ndx = 0, iter = table->obj_syms; ndx < table->obj_nr; ndx++, iter++)
 
+#define for_each_obj_symbol_continue(ndx, iter, table) \
+	for (iter = table->obj_syms + ndx; ndx < table->obj_nr; ndx++, iter++)
+
 #define for_each_exp_symbol(ndx, iter, table) \
 	for (ndx = 0, iter = table->exp_syms; ndx < table->exp_nr; ndx++, iter++)
 
@@ -77,59 +80,86 @@ static int discarded_sym(struct lookup_table *table,
 	return 0;
 }
 
+static int locals_match(struct lookup_table *table, int idx,
+			struct sym_compare_type *child_locals)
+{
+	struct sym_compare_type *child;
+	struct object_symbol *sym;
+	int i, found;
+
+	i = idx + 1;
+	for_each_obj_symbol_continue(i, sym, table) {
+		if (sym->type == STT_FILE)
+			break;
+		if (sym->bind != STB_LOCAL)
+			continue;
+		if (sym->type != STT_FUNC && sym->type != STT_OBJECT)
+			continue;
+
+		found = 0;
+		for (child = child_locals; child->name; child++) {
+			if (child->type == sym->type &&
+			    !strcmp(child->name, sym->name)) {
+				found = 1;
+				break;
+			}
+		}
+
+		if (!found)
+			return 0;
+	}
+
+	for (child = child_locals; child->name; child++) {
+		/*
+		 * Symbols which get discarded at link time are missing from
+		 * the lookup table, so skip them.
+		 */
+		if (discarded_sym(table, child))
+			continue;
+
+		found = 0;
+		i = idx + 1;
+		for_each_obj_symbol_continue(i, sym, table) {
+			if (sym->type == STT_FILE)
+				break;
+			if (sym->bind != STB_LOCAL)
+				continue;
+			if (sym->type != STT_FUNC && sym->type != STT_OBJECT)
+				continue;
+
+			if (!strcmp(child->name, sym->name)) {
+				found = 1;
+				break;
+			}
+		}
+
+		if (!found)
+			return 0;
+	}
+
+	return 1;
+}
+
 static void find_local_syms(struct lookup_table *table, char *hint,
 			    struct sym_compare_type *child_locals)
 {
-	struct object_symbol *sym, *file_sym;
-	int i, in_file = 0;
-	struct sym_compare_type *child_sym;
+	struct object_symbol *sym;
+	int i;
 
 	if (!child_locals)
 		return;
 
 	for_each_obj_symbol(i, sym, table) {
-		if (sym->type == STT_FILE) {
-			if (in_file && !child_sym->name) {
-				if (table->local_syms)
-					ERROR("find_local_syms for %s: found_dup", hint);
-				table->local_syms = file_sym;
-			}
-
-			if (!strcmp(hint, sym->name)) {
-				in_file = 1;
-				file_sym = sym;
-				child_sym = child_locals;
-			}
-			else
-				in_file = 0;
-
+		if (sym->type != STT_FILE)
 			continue;
-		}
-
-		if (!in_file)
+		if (strcmp(hint, sym->name))
 			continue;
-		if (sym->bind != STB_LOCAL || (sym->type != STT_FUNC && sym->type != STT_OBJECT))
+		if (!locals_match(table, i, child_locals))
 			continue;
-
-		/*
-		 * Symbols which get discarded at link time are missing from
-		 * the lookup table, so skip them.
-		 */
-		while (discarded_sym(table, child_sym))
-			child_sym++;
-
-		/* make sure the child symbol and parent symbol match */
-		if (child_sym->name && child_sym->type == sym->type &&
-		    !strcmp(child_sym->name, sym->name))
-			child_sym++;
-		else
-			in_file = 0;
-	}
-
-	if (in_file && !child_sym->name) {
 		if (table->local_syms)
 			ERROR("find_local_syms for %s: found_dup", hint);
-		table->local_syms = file_sym;
+
+		table->local_syms = sym;
 	}
 
 	if (!table->local_syms)
