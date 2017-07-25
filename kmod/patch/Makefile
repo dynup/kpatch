@@ -3,9 +3,9 @@ KPATCH_BUILD ?= /lib/modules/$(shell uname -r)/build
 KPATCH_MAKE = $(MAKE) -C $(KPATCH_BUILD) M=$(PWD)
 LDFLAGS += $(KPATCH_LDFLAGS)
 
-# ppc64le kernel modules are expected to compiled with
-# -mcmodel=large flag. This enable 64-bit relocations,
-# instead of 32-bit offset from TOC pointer.
+# ppc64le kernel modules are expected to compile with the
+# -mcmodel=large flag.  This enables 64-bit relocations
+# instead of a 32-bit offset from the TOC pointer.
 PROCESSOR = $(shell uname -p)
 ifeq ($(PROCESSOR), ppc64le)
 KBUILD_CFLAGS_MODULE += -mcmodel=large

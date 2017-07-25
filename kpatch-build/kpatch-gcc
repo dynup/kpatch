@@ -15,9 +15,11 @@ if [[ "$TOOLCHAINCMD" = "gcc" ]] ; then
 	while [ "$#" -gt 0 ]; do
 		if [ "$1" = "-o" ]; then
 			obj=$2
-			# skip copying the original .o files, when .tmp_mc_*.o
-			# is passed from recordmcount.pl.
+
+			# skip copying the temporary .o files created by
+			# recordmcount.pl
 			[[ $obj = */.tmp_mc_*.o ]] && break;
+
 			[[ $obj = */.tmp_*.o ]] && obj=${obj/.tmp_/}
 			case "$obj" in
 				*.mod.o|\

@@ -201,8 +201,10 @@ static void create_klp_relasecs_and_syms(struct kpatch_elf *kelf, struct section
 		 *     0000000000000058  0000003900000026 R_PPC64_ADDR64         0000000000000000 __per_cpu_offset + 0
 		 *     [...]
 		 *
-		 * when more .o files are linked together, the .toc entries might get re-arranged. Capture new .toc rela
-		 * offset value, which will be used below to setting the rela->addend. */
+		 * On ppc64le, when .o files are linked together, the .toc
+		 * entries might get re-arranged.  Capture the new .toc rela
+		 * offset value, which is used below to set the rela->addend.
+		 */
 		toc_offset = rela->addend;
 
 		base = rela->sym->sec;
@@ -245,10 +247,11 @@ static void create_klp_relasecs_and_syms(struct kpatch_elf *kelf, struct section
 			rela->offset = krelas[index].offset;
 
 		/*
-		 * gcc6 adds offset for 0x8 for every local function entry in
-		 * .toc section, for avoiding setup of toc but when the previously
-		 * local function becomes global, toc is anyways setup. So remove
-		 * the wrong addend.
+		 * GCC 6+ adds 0x8 to the offset of every local function entry
+		 * in the .toc section, for avoiding the setup of the toc when
+		 * the function is called locally.  But when the previously
+		 * local function becomes global, we don't want to skip the
+		 * .toc setup anymore.
 		 */
 		if (!strcmp(base->name, ".toc") &&
 			rela->sym->type == STT_FUNC && rela->sym->bind == STB_LOCAL) {

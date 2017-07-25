@@ -160,12 +160,12 @@ gcc_version_check() {
 		return 1
 	fi
 
-	# On ppc64le, livepatch relies on gcc support for -mprofile-kernel flag.
-	# Script with differnet checks is run during kernel build, to ensure that
-	# the required gcc supports is available. This check is done during kernel
-	# build by:
-	# <linux-sources>/arch/powerpc/tools/gcc-check-mprofile-kernel.sh
-	# Postpond the check until kernel build, instead of duplicating it here.
+	# On ppc64le, livepatch needs the GCC -mprofile-kernel flag.  A script
+	# is run during the kernel build to ensure the flag is present:
+	#
+	#   <linux>/arch/powerpc/tools/gcc-check-mprofile-kernel.sh
+	#
+	# Postpone the check to the kernel build instead of duplicating it here.
 	if [[ $ARCH = "ppc64le" ]]; then
 		return
 	else
