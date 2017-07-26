@@ -349,7 +349,7 @@ void kpatch_create_symbol_list(struct kpatch_elf *kelf)
 
 }
 
-/* Check which functions have fentry calls; save this info for later use. */
+/* Check which functions have fentry/mcount calls; save this info for later use. */
 static void kpatch_find_func_profiling_calls(struct kpatch_elf *kelf)
 {
 	struct symbol *sym;
@@ -357,7 +357,14 @@ static void kpatch_find_func_profiling_calls(struct kpatch_elf *kelf)
 	list_for_each_entry(sym, &kelf->symbols, list) {
 		if (sym->type != STT_FUNC || !sym->sec || !sym->sec->rela)
 			continue;
-
+#ifdef __powerpc__
+		list_for_each_entry(rela, &sym->sec->rela->relas, list) {
+			if (!strcmp(rela->sym->name, "_mcount")) {
+				sym->has_func_profiling = 1;
+				break;
+			}
+		}
+#else
 		rela = list_first_entry(&sym->sec->rela->relas, struct rela,
 					list);
 		if (rela->type != R_X86_64_NONE ||
@@ -365,6 +372,7 @@ static void kpatch_find_func_profiling_calls(struct kpatch_elf *kelf)
 			continue;
 
 		sym->has_func_profiling = 1;
+#endif
 	}
 }
 

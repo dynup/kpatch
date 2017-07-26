@@ -49,6 +49,7 @@ APPLIEDPATCHFILE="kpatch.patch"
 DEBUG=0
 SKIPCLEANUP=0
 SKIPGCCCHECK=0
+ARCH_KCFLAGS=""
 
 warn() {
 	echo "ERROR: $1" >&2
@@ -556,7 +557,12 @@ cd "$SRCDIR" || die
 patch -N -p1 --dry-run < "$PATCHFILE" || die "source patch file failed to apply"
 cp "$PATCHFILE" "$APPLIEDPATCHFILE" || die
 cp -LR "$DATADIR/patch" "$TEMPDIR" || die
-export KCFLAGS="-I$DATADIR/patch -ffunction-sections -fdata-sections"
+
+if [[ $ARCH = "ppc64le" ]]; then
+	ARCH_KCFLAGS="-mcmodel=large"
+fi
+
+export KCFLAGS="-I$DATADIR/patch -ffunction-sections -fdata-sections $ARCH_KCFLAGS"
 
 echo "Reading special section data"
 find_special_section_data
@@ -648,7 +654,7 @@ do
 done
 echo
 
-export KCFLAGS="-I$DATADIR/patch"
+export KCFLAGS="-I$DATADIR/patch $ARCH_KCFLAGS"
 if $KPATCH_MODULE; then
 	export KCPPFLAGS="-D__KPATCH_MODULE__"
 fi
