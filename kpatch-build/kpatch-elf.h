@@ -131,6 +131,10 @@ struct rela *find_rela_by_offset(struct section *relasec, unsigned int offset);
 
 int offset_of_string(struct list_head *list, char *name);
 
+#ifndef R_PPC64_ENTRY
+#define R_PPC64_ENTRY   118
+#endif
+
 /*************
  * Functions
  * **********/
