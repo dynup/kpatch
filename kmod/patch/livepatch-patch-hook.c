@@ -248,6 +248,11 @@ static int __init patch_init(void)
 		goto out;
 	lpatch->mod = THIS_MODULE;
 	lpatch->objs = lobjects;
+#if __powerpc__
+#if (LINUX_VERSION_CODE >= KERNEL_VERSION(4, 12, 0))
+	lpatch->immediate = true;
+#endif
+#endif
 
 	i = 0;
 	list_for_each_entry(object, &patch_objects, list) {

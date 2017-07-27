@@ -59,6 +59,12 @@
 	error(2, 0, "unreconcilable difference"); \
 })
 
+#ifdef __powerpc__
+#define ABSOLUTE_RELA_TYPE R_PPC64_ADDR64
+#else
+#define ABSOLUTE_RELA_TYPE R_X86_64_64
+#endif
+
 char *childobj;
 
 enum loglevel loglevel = NORMAL;
@@ -146,6 +152,11 @@ static int kpatch_mangled_strcmp(char *s1, char *s2)
 
 static int rela_equal(struct rela *rela1, struct rela *rela2)
 {
+#ifdef __powerpc__
+	struct section *toc_relasec1, *toc_relasec2;
+	struct rela *r_toc_relasec1, *r_toc_relasec2;
+#endif
+
 	if (rela1->type != rela2->type ||
 	    rela1->offset != rela2->offset)
 		return 0;
@@ -153,6 +164,65 @@ static int rela_equal(struct rela *rela1, struct rela *rela2)
 	if (rela1->string)
 		return rela2->string && !strcmp(rela1->string, rela2->string);
 
+#ifdef __powerpc__
+/*
+ * Relocation section '.rela.toc' at offset 0x91f0 contains 122 entries:
+ *     Offset             Info             Type               Symbol's Value  Symbol's Name + Addend
+ *     [...]
+ *     0000000000000090  0000001c00000026 R_PPC64_ADDR64         0000000000000000 .rodata.__dev_remove_pack.str1.8 + 0
+ *     0000000000000098  0000001a00000026 R_PPC64_ADDR64         0000000000000000 .rodata.__dev_getfirstbyhwtype.str1.8 + 0
+ *     00000000000000a0  0000001a00000026 R_PPC64_ADDR64         0000000000000000 .rodata.__dev_getfirstbyhwtype.str1.8 + 10
+ *     00000000000000a8  000000cb00000026 R_PPC64_ADDR64         0000000000000000 dev_base_lock + 0
+ *
+ * Relocation section '.rela.text.netdev_master_upper_dev_get' at offset 0xe38 contains 10 entries:
+ *     Offset             Info             Type               Symbol's Value  Symbol's Name + Addend
+ *     [...]
+ *     00000000000000a0  0000004e00000032 R_PPC64_TOC16_HA       0000000000000000 .toc + 98
+ *     00000000000000a8  0000004e00000040 R_PPC64_TOC16_LO_DS    0000000000000000 .toc + 98
+ *     00000000000000ac  0000004e00000032 R_PPC64_TOC16_HA       0000000000000000 .toc + a0
+ *     00000000000000b0  0000004e00000040 R_PPC64_TOC16_LO_DS    0000000000000000 .toc + a0
+ *     00000000000000b4  000000b90000000a R_PPC64_REL24          0000000000000000 printk + 0
+ *     00000000000000bc  000000a10000000a R_PPC64_REL24          0000000000000000 dump_stack + 0
+ *
+ * With -mcmodel=large on ppc64le, GCC might generate entries in the .toc
+ * section for relocation symbol references.   The .toc offsets may change
+ * between the original and patched .o, so comparing ".toc + offset" isn't
+ * right.  Compare the .toc-based symbols by reading the corresponding relas
+ * from the .toc section.
+ */
+	if (!strcmp(rela1->sym->name, ".toc") &&
+	    !strcmp(rela2->sym->name, ".toc")) {
+
+		toc_relasec1 = rela1->sym->sec->rela;
+		if (!toc_relasec1)
+			ERROR("cannot find .rela.toc");
+
+		r_toc_relasec1 = find_rela_by_offset(toc_relasec1, rela1->addend);
+		if (!r_toc_relasec1)
+			ERROR(".toc entry not found %s + %x", rela1->sym->name, rela1->addend);
+
+		toc_relasec2 = rela2->sym->sec->rela;
+		if (!toc_relasec2)
+			ERROR("cannot find .rela.toc");
+
+		r_toc_relasec2 = find_rela_by_offset(toc_relasec2, rela2->addend);
+		if (!r_toc_relasec2)
+			ERROR(".toc entry not found %s + %x", rela2->sym->name, rela2->addend);
+
+		if (r_toc_relasec1->string)
+			return r_toc_relasec2->string &&
+				!strcmp(r_toc_relasec1->string, r_toc_relasec2->string);
+
+		if ((r_toc_relasec1->addend != r_toc_relasec2->addend))
+			return 0;
+
+		if (is_special_static(r_toc_relasec1->sym))
+			return !kpatch_mangled_strcmp(r_toc_relasec1->sym->name,
+					r_toc_relasec2->sym->name);
+
+		return !strcmp(r_toc_relasec1->sym->name, r_toc_relasec2->sym->name);
+	}
+#endif
 	if (rela1->addend != rela2->addend)
 		return 0;
 
@@ -166,6 +236,15 @@ static int rela_equal(struct rela *rela1, struct rela *rela2)
 static void kpatch_compare_correlated_rela_section(struct section *sec)
 {
 	struct rela *rela1, *rela2 = NULL;
+
+	/*
+	 * On ppc64le, don't compare the .rela.toc section.  The .toc and
+	 * .rela.toc sections are included as standard elements.
+	 */
+	if (!strcmp(sec->name, ".rela.toc")) {
+		sec->status = SAME;
+		return;
+	}
 
 	rela2 = list_entry(sec->twin->relas.next, struct rela, list);
 	list_for_each_entry(rela1, &sec->relas, list) {
@@ -198,7 +277,6 @@ static void kpatch_compare_correlated_section(struct section *sec)
 	/* Compare section headers (must match or fatal) */
 	if (sec1->sh.sh_type != sec2->sh.sh_type ||
 	    sec1->sh.sh_flags != sec2->sh.sh_flags ||
-	    sec1->sh.sh_addr != sec2->sh.sh_addr ||
 	    sec1->sh.sh_addralign != sec2->sh.sh_addralign ||
 	    sec1->sh.sh_entsize != sec2->sh.sh_entsize)
 		DIFF_FATAL("%s section header details differ", sec1->name);
@@ -225,6 +303,7 @@ out:
 		log_debug("section %s has changed\n", sec->name);
 }
 
+#ifdef __x86_64__
 /*
  * Determine if a section has changed only due to a WARN* or might_sleep
  * macro call's embedding of the line number into an instruction operand.
@@ -330,6 +409,12 @@ static int kpatch_line_macro_change_only(struct section *sec)
 
 	return 1;
 }
+#else
+static int kpatch_line_macro_change_only(struct section *sec)
+{
+	return 0;
+}
+#endif
 
 static void kpatch_compare_sections(struct list_head *seclist)
 {
@@ -868,6 +953,7 @@ static void kpatch_compare_correlated_elements(struct kpatch_elf *kelf)
 	kpatch_compare_symbols(&kelf->symbols);
 }
 
+#ifdef __x86_64__
 static void rela_insn(struct section *sec, struct rela *rela, struct insn *insn)
 {
 	unsigned long insn_addr, start, end, rela_addr;
@@ -886,6 +972,7 @@ static void rela_insn(struct section *sec, struct rela *rela, struct insn *insn)
 			return;
 	}
 }
+#endif
 
 /*
  * Mangle the relas a little.  The compiler will sometimes use section symbols
@@ -922,6 +1009,20 @@ static void kpatch_replace_sections_syms(struct kpatch_elf *kelf)
 				continue;
 			}
 
+#ifdef __powerpc__
+			/*
+			 * With -mcmodel=large, R_PPC64_REL24 is only used for
+			 * functions.  Assuming the function is bundled in a
+			 * section, the section symbol should have been
+			 * replaced with a text symbol already.  Otherwise,
+			 * bail out.  If we hit this situation, more core is
+			 * needed here to calculate the value of 'add_off'.
+			 */
+			if (rela->type == R_PPC64_REL24)
+				ERROR("Unexpected relocation type R_PPC64_REL24 for %s\n", rela->sym->name);
+
+			add_off = 0;
+#else
 			if (rela->type == R_X86_64_PC32) {
 				struct insn insn;
 				rela_insn(sec, rela, &insn);
@@ -933,6 +1034,7 @@ static void kpatch_replace_sections_syms(struct kpatch_elf *kelf)
 				add_off = 0;
 			else
 				continue;
+#endif
 
 			/*
 			 * Attempt to replace references to unbundled sections
@@ -1003,7 +1105,7 @@ static void kpatch_replace_sections_syms(struct kpatch_elf *kelf)
 	log_debug("\n");
 }
 
-static void kpatch_check_fentry_calls(struct kpatch_elf *kelf)
+static void kpatch_check_func_profiling_calls(struct kpatch_elf *kelf)
 {
 	struct symbol *sym;
 	int errs = 0;
@@ -1011,8 +1113,8 @@ static void kpatch_check_fentry_calls(struct kpatch_elf *kelf)
 	list_for_each_entry(sym, &kelf->symbols, list) {
 		if (sym->type != STT_FUNC || sym->status != CHANGED)
 			continue;
-		if (!sym->twin->has_fentry_call) {
-			log_normal("function %s has no fentry call, unable to patch\n",
+		if (!sym->twin->has_func_profiling) {
+			log_normal("function %s has no fentry/mcount call, unable to patch\n",
 				   sym->name);
 			errs++;
 		}
@@ -1103,18 +1205,32 @@ out:
 static void kpatch_include_standard_elements(struct kpatch_elf *kelf)
 {
 	struct section *sec;
+	struct rela *rela;
 
 	list_for_each_entry(sec, &kelf->sections, list) {
 		/* include these sections even if they haven't changed */
 		if (!strcmp(sec->name, ".shstrtab") ||
 		    !strcmp(sec->name, ".strtab") ||
 		    !strcmp(sec->name, ".symtab") ||
+		    !strcmp(sec->name, ".toc") ||
 		    !strcmp(sec->name, ".rodata") ||
 		    (!strncmp(sec->name, ".rodata.", 8) &&
 		     strstr(sec->name, ".str1."))) {
 			sec->include = 1;
 			if (sec->secsym)
 				sec->secsym->include = 1;
+		}
+
+		/*
+		 * On ppc64le, the .rela.toc section refers to symbols which
+		 * are needed for function symbol relocations.  Include all the
+		 * symbols.
+		 */
+		if (!strcmp(sec->name, ".rela.toc"))
+		{
+			sec->include = 1;
+			list_for_each_entry(rela, &sec->relas, list)
+				kpatch_include_symbol(rela->sym, 0);
 		}
 	}
 
@@ -1340,21 +1456,6 @@ static int bug_table_group_size(struct kpatch_elf *kelf, int offset)
 	return size;
 }
 
-static int parainstructions_group_size(struct kpatch_elf *kelf, int offset)
-{
-	static int size = 0;
-	char *str;
-
-	if (!size) {
-		str = getenv("PARA_STRUCT_SIZE");
-		if (!str)
-			ERROR("PARA_STRUCT_SIZE not set");
-		size = atoi(str);
-	}
-
-	return size;
-}
-
 static int ex_table_group_size(struct kpatch_elf *kelf, int offset)
 {
 	static int size = 0;
@@ -1364,6 +1465,22 @@ static int ex_table_group_size(struct kpatch_elf *kelf, int offset)
 		str = getenv("EX_STRUCT_SIZE");
 		if (!str)
 			ERROR("EX_STRUCT_SIZE not set");
+		size = atoi(str);
+	}
+
+	return size;
+}
+
+#ifdef __x86_64__
+static int parainstructions_group_size(struct kpatch_elf *kelf, int offset)
+{
+	static int size = 0;
+	char *str;
+
+	if (!size) {
+		str = getenv("PARA_STRUCT_SIZE");
+		if (!str)
+			ERROR("PARA_STRUCT_SIZE not set");
 		size = atoi(str);
 	}
 
@@ -1389,6 +1506,28 @@ static int smp_locks_group_size(struct kpatch_elf *kelf, int offset)
 {
 	return 4;
 }
+#endif
+#ifdef __powerpc__
+static int fixup_entry_group_size(struct kpatch_elf *kelf, int offset)
+{
+	static int size = 0;
+	char *str;
+
+	if (!size) {
+		str = getenv("FIXUP_STRUCT_SIZE");
+		if (!str)
+			ERROR("FIXUP_STRUCT_SIZE not set");
+		size = atoi(str);
+	}
+
+	return size;
+}
+
+static int fixup_lwsync_group_size(struct kpatch_elf *kelf, int offset)
+{
+	return 4;
+}
+#endif
 
 /*
  * The rela groups in the .fixup section vary in size.  The beginning of each
@@ -1443,6 +1582,7 @@ static struct special_section special_sections[] = {
 		.name		= "__bug_table",
 		.group_size	= bug_table_group_size,
 	},
+#ifdef __x86_64__
 	{
 		.name		= ".smp_locks",
 		.group_size	= smp_locks_group_size,
@@ -1451,6 +1591,7 @@ static struct special_section special_sections[] = {
 		.name		= ".parainstructions",
 		.group_size	= parainstructions_group_size,
 	},
+#endif
 	{
 		.name		= ".fixup",
 		.group_size	= fixup_group_size,
@@ -1459,10 +1600,30 @@ static struct special_section special_sections[] = {
 		.name		= "__ex_table", /* must come after .fixup */
 		.group_size	= ex_table_group_size,
 	},
+#ifdef __x86_64__
 	{
 		.name		= ".altinstructions",
 		.group_size	= altinstructions_group_size,
 	},
+#endif
+#ifdef __powerpc__
+	{
+		.name		= "__ftr_fixup",
+		.group_size	= fixup_entry_group_size,
+	},
+	{
+		.name		= "__mmu_ftr_fixup",
+		.group_size	= fixup_entry_group_size,
+	},
+	{
+		.name		= "__fw_ftr_fixup",
+		.group_size	= fixup_entry_group_size,
+	},
+	{
+		.name		= "__lwsync_fixup",
+		.group_size	= fixup_lwsync_group_size,
+	},
+#endif
 	{},
 };
 
@@ -1765,7 +1926,7 @@ static void kpatch_create_kpatch_arch_section(struct kpatch_elf *kelf, char *obj
 		/* entries[index].sec */
 		ALLOC_LINK(rela, &karch_sec->rela->relas);
 		rela->sym = sec->secsym;
-		rela->type = R_X86_64_64;
+		rela->type = ABSOLUTE_RELA_TYPE;
 		rela->addend = 0;
 		rela->offset = index * sizeof(*entries) + \
 			       offsetof(struct kpatch_arch, sec);
@@ -1773,7 +1934,7 @@ static void kpatch_create_kpatch_arch_section(struct kpatch_elf *kelf, char *obj
 		/* entries[index].objname */
 		ALLOC_LINK(rela, &karch_sec->rela->relas);
 		rela->sym = strsym;
-		rela->type = R_X86_64_64;
+		rela->type = ABSOLUTE_RELA_TYPE;
 		rela->addend = offset_of_string(&kelf->strings, objname);
 		rela->offset = index * sizeof(*entries) + \
 			       offsetof(struct kpatch_arch, objname);
@@ -1969,7 +2130,7 @@ static void kpatch_create_patches_sections(struct kpatch_elf *kelf,
 			 */
 			ALLOC_LINK(rela, &relasec->relas);
 			rela->sym = sym;
-			rela->type = R_X86_64_64;
+			rela->type = ABSOLUTE_RELA_TYPE;
 			rela->addend = 0;
 			rela->offset = index * sizeof(*funcs);
 
@@ -1979,7 +2140,7 @@ static void kpatch_create_patches_sections(struct kpatch_elf *kelf,
 			 */
 			ALLOC_LINK(rela, &relasec->relas);
 			rela->sym = strsym;
-			rela->type = R_X86_64_64;
+			rela->type = ABSOLUTE_RELA_TYPE;
 			rela->addend = offset_of_string(&kelf->strings, sym->name);
 			rela->offset = index * sizeof(*funcs) +
 			               offsetof(struct kpatch_patch_func, name);
@@ -1990,7 +2151,7 @@ static void kpatch_create_patches_sections(struct kpatch_elf *kelf,
 			 */
 			ALLOC_LINK(rela, &relasec->relas);
 			rela->sym = strsym;
-			rela->type = R_X86_64_64;
+			rela->type = ABSOLUTE_RELA_TYPE;
 			rela->addend = objname_offset;
 			rela->offset = index * sizeof(*funcs) +
 			               offsetof(struct kpatch_patch_func,objname);
@@ -2094,6 +2255,25 @@ static void kpatch_create_intermediate_sections(struct kpatch_elf *kelf,
 			 */
 			sym_objname = objname;
 
+			/*
+			 * On ppc64le, the function prologue generated by GCC 6
+			 * has the sequence:
+			 *
+			 *	.globl my_func
+			 *	.type my_func, @function
+			 *	.quad .TOC.-my_func
+			 * my_func:
+			 *	.reloc ., R_PPC64_ENTRY ; optional
+			 *	ld r2,-8(r12)
+			 *	add r2,r2,r12
+			 *	.localentry my_func, .-my_func
+			 *
+			 * The R_PPC64_ENTRY is optional and its symbol might
+			 * have an empty name.  Leave it as a normal rela.
+			 */
+			if (rela->type == R_PPC64_ENTRY)
+				continue;
+
 			if (rela->sym->bind == STB_LOCAL) {
 				/* An unchanged local symbol */
 				ret = lookup_local_symbol(table,
@@ -2109,9 +2289,30 @@ static void kpatch_create_intermediate_sections(struct kpatch_elf *kelf,
 				 * a global symbol.  Use a normal rela for
 				 * exported symbols and a dynrela otherwise.
 				 */
+#ifdef __powerpc__
+				/*
+				 * An exported symbol might be local to an
+				 * object file and any access to the function
+				 * might be through localentry (toc+offset)
+				 * instead of global offset.
+				 *
+				 * fs/proc/proc_sysctl::sysctl_head_grab:
+				 * 166: 0000000000000000   256 FUNC    GLOBAL DEFAULT [<localentry>: 8]    42 unregister_sysctl_table
+				 * 167: 0000000000000000     0 NOTYPE  GLOBAL DEFAULT  UND .TOC.
+				 *
+				 * These type of symbols have a type of
+				 * STT_FUNC.  Treat them like local symbols.
+				 * They will be handled by the livepatch
+				 * relocation code.
+				 */
+				if (lookup_is_exported_symbol(table, rela->sym->name)) {
+					if (rela->sym->type != STT_FUNC)
+						continue;
+				}
+#else
 				if (lookup_is_exported_symbol(table, rela->sym->name))
 					continue;
-
+#endif
 				/*
 				 * If lookup_global_symbol() fails, assume the
 				 * symbol is defined in another object in the
@@ -2170,7 +2371,7 @@ static void kpatch_create_intermediate_sections(struct kpatch_elf *kelf,
 			/* add rela to fill in ksyms[index].name field */
 			ALLOC_LINK(rela2, &ksym_sec->rela->relas);
 			rela2->sym = strsym;
-			rela2->type = R_X86_64_64;
+			rela2->type = ABSOLUTE_RELA_TYPE;
 			rela2->addend = offset_of_string(&kelf->strings, rela->sym->name);
 			rela2->offset = index * sizeof(*ksyms) + \
 					offsetof(struct kpatch_symbol, name);
@@ -2178,7 +2379,7 @@ static void kpatch_create_intermediate_sections(struct kpatch_elf *kelf,
 			/* add rela to fill in ksyms[index].objname field */
 			ALLOC_LINK(rela2, &ksym_sec->rela->relas);
 			rela2->sym = strsym;
-			rela2->type = R_X86_64_64;
+			rela2->type = ABSOLUTE_RELA_TYPE;
 			rela2->addend = offset_of_string(&kelf->strings, sym_objname);
 			rela2->offset = index * sizeof(*ksyms) + \
 					offsetof(struct kpatch_symbol, objname);
@@ -2199,7 +2400,7 @@ static void kpatch_create_intermediate_sections(struct kpatch_elf *kelf,
 				ERROR("can't create dynrela for section %s (symbol %s): no bundled section or section symbol",
 				      sec->name, rela->sym->name);
 
-			rela2->type = R_X86_64_64;
+			rela2->type = ABSOLUTE_RELA_TYPE;
 			rela2->addend = rela->offset;
 			rela2->offset = index * sizeof(*krelas) + \
 					offsetof(struct kpatch_relocation, dest);
@@ -2207,7 +2408,7 @@ static void kpatch_create_intermediate_sections(struct kpatch_elf *kelf,
 			/* add rela to fill in krelas[index].objname field */
 			ALLOC_LINK(rela2, &krela_sec->rela->relas);
 			rela2->sym = strsym;
-			rela2->type = R_X86_64_64;
+			rela2->type = ABSOLUTE_RELA_TYPE;
 			rela2->addend = offset_of_string(&kelf->strings, objname);
 			rela2->offset = index * sizeof(*krelas) + \
 				offsetof(struct kpatch_relocation, objname);
@@ -2215,7 +2416,7 @@ static void kpatch_create_intermediate_sections(struct kpatch_elf *kelf,
 			/* add rela to fill in krelas[index].ksym field */
 			ALLOC_LINK(rela2, &krela_sec->rela->relas);
 			rela2->sym = ksym_sec_sym;
-			rela2->type = R_X86_64_64;
+			rela2->type = ABSOLUTE_RELA_TYPE;
 			rela2->addend = index * sizeof(*ksyms);
 			rela2->offset = index * sizeof(*krelas) + \
 				offsetof(struct kpatch_relocation, ksym);
@@ -2258,12 +2459,15 @@ static void kpatch_create_hooks_objname_rela(struct kpatch_elf *kelf, char *objn
 
 		ALLOC_LINK(rela, &sec->relas);
 		rela->sym = strsym;
-		rela->type = R_X86_64_64;
+		rela->type = ABSOLUTE_RELA_TYPE;
 		rela->addend = objname_offset;
 		rela->offset = offsetof(struct kpatch_patch_hook, objname);
 	}
 }
 
+#ifdef __powerpc__
+void kpatch_create_mcount_sections(struct kpatch_elf *kelf) { }
+#else
 /*
  * This function basically reimplements the functionality of the Linux
  * recordmcount script, so that patched functions can be recognized by ftrace.
@@ -2283,7 +2487,7 @@ static void kpatch_create_mcount_sections(struct kpatch_elf *kelf)
 	nr = 0;
 	list_for_each_entry(sym, &kelf->symbols, list)
 		if (sym->type == STT_FUNC && sym->status != SAME &&
-		    sym->has_fentry_call)
+		    sym->has_func_profiling)
 			nr++;
 
 	/* create text/rela section pair */
@@ -2297,8 +2501,8 @@ static void kpatch_create_mcount_sections(struct kpatch_elf *kelf)
 		if (sym->type != STT_FUNC || sym->status == SAME)
 			continue;
 
-		if (!sym->has_fentry_call) {
-			log_debug("function %s has no fentry call, no mcount record is needed\n",
+		if (!sym->has_func_profiling) {
+			log_debug("function %s has no fentry/mcount call, no mcount record is needed\n",
 				  sym->name);
 			continue;
 		}
@@ -2338,6 +2542,7 @@ static void kpatch_create_mcount_sections(struct kpatch_elf *kelf)
 	if (index != nr)
 		ERROR("size mismatch in funcs sections");
 }
+#endif
 
 /*
  * This function strips out symbols that were referenced by changed rela
@@ -2522,7 +2727,7 @@ int main(int argc, char *argv[])
 	 */
 	kpatch_mark_ignored_sections(kelf_patched);
 	kpatch_compare_correlated_elements(kelf_patched);
-	kpatch_check_fentry_calls(kelf_patched);
+	kpatch_check_func_profiling_calls(kelf_patched);
 	kpatch_elf_teardown(kelf_base);
 	kpatch_elf_free(kelf_base);
 
