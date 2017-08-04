@@ -15,7 +15,12 @@ if [[ "$TOOLCHAINCMD" = "gcc" ]] ; then
 	while [ "$#" -gt 0 ]; do
 		if [ "$1" = "-o" ]; then
 			obj=$2
-			[[ $2 = */.tmp_*.o ]] && obj=${2/.tmp_/}
+
+			# skip copying the temporary .o files created by
+			# recordmcount.pl
+			[[ $obj = */.tmp_mc_*.o ]] && break;
+
+			[[ $obj = */.tmp_*.o ]] && obj=${obj/.tmp_/}
 			case "$obj" in
 				*.mod.o|\
 				*built-in.o|\
@@ -32,6 +37,7 @@ if [[ "$TOOLCHAINCMD" = "gcc" ]] ; then
 				arch/x86/vdso/*|\
 				arch/x86/entry/vdso/*|\
 				drivers/firmware/efi/libstub/*|\
+				arch/powerpc/kernel/prom_init.o|\
 				*.*.o)
 					break
 					;;

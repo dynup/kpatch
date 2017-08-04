@@ -79,7 +79,7 @@ struct symbol {
 		int include; /* used in the patched elf */
 		int strip; /* used in the output elf */
 	};
-	int has_fentry_call;
+	int has_func_profiling;
 };
 
 struct rela {
@@ -130,6 +130,10 @@ struct rela *find_rela_by_offset(struct section *relasec, unsigned int offset);
 }
 
 int offset_of_string(struct list_head *list, char *name);
+
+#ifndef R_PPC64_ENTRY
+#define R_PPC64_ENTRY   118
+#endif
 
 /*************
  * Functions
