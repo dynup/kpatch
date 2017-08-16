@@ -559,8 +559,8 @@ KBUILD_EXTRA_SYMBOLS=""
 KPATCH_LDFLAGS=""
 KPATCH_MODULE=true
 
-# kernel option checking: CONFIG_DEBUG_KERNEL and CONFIG_LIVEPATCH
-grep -q "CONFIG_DEBUG_KERNEL=y" "$CONFIGFILE" || die "kernel doesn't have 'CONFIG_DEBUG_KERNEL' enabled"
+# kernel option checking
+grep -q "CONFIG_DEBUG_INFO=y" "$CONFIGFILE" || die "kernel doesn't have 'CONFIG_DEBUG_INFO' enabled"
 if grep -q "CONFIG_LIVEPATCH=y" "$CONFIGFILE"; then
 	# The kernel supports livepatch.
 	if version_gte ${ARCHVERSION//-*/} 4.7.0; then
