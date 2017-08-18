@@ -6,7 +6,7 @@ LDFLAGS += $(KPATCH_LDFLAGS)
 # ppc64le kernel modules are expected to compile with the
 # -mcmodel=large flag.  This enables 64-bit relocations
 # instead of a 32-bit offset from the TOC pointer.
-PROCESSOR = $(shell uname -p)
+PROCESSOR = $(shell uname -m)
 ifeq ($(PROCESSOR), ppc64le)
 KBUILD_CFLAGS_MODULE += -mcmodel=large
 endif
