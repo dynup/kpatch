@@ -3,7 +3,7 @@ CC    = gcc
 
 INSTALL = /usr/bin/install
 
-ARCH       = $(shell uname -p)
+ARCH       = $(shell uname -m)
 
 PREFIX    ?= /usr/local
 LIBDIR    ?= lib
