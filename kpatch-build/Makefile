@@ -1,7 +1,7 @@
 include ../Makefile.inc
 
-CFLAGS  += -I../kmod/patch -Iinsn -Wall -g -Werror
-LDFLAGS += -lelf
+CFLAGS += -MMD -MP -I../kmod/patch -Iinsn -Wall -g -Werror
+LDLIBS = -lelf
 
 TARGETS = create-diff-object create-klp-module create-kpatch-module
 SOURCES = create-diff-object.c kpatch-elf.c \
@@ -19,16 +19,10 @@ all: $(TARGETS)
 
 -include $(SOURCES:.c=.d)
 
-%.o : %.c
-	$(CC) -MMD -MP $(CFLAGS) -c -o $@ $<
-
 create-diff-object: create-diff-object.o kpatch-elf.o \
 					lookup.o $(INSN)
 create-klp-module: create-klp-module.o kpatch-elf.o
 create-kpatch-module: create-kpatch-module.o kpatch-elf.o
-
-$(TARGETS):
-	$(CC) $(CFLAGS) $^ -o $@ $(LDFLAGS)
 
 install: all
 	$(INSTALL) -d $(LIBEXECDIR)
