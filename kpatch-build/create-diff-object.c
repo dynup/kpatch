@@ -940,6 +940,52 @@ static void kpatch_correlate_static_local_variables(struct kpatch_elf *base,
 	}
 }
 
+/*
+ * At least section .rela__bug_table may contain local constants.  They may
+ * end up in different sections (e.g. .rodata.$FUNC.isra.37.str1.1 and
+ * .rodata.$FUNC.isra.36.str1.1) due to gcc's function name mangling (see
+ * kpatch_rename_mangled_functions()) and are therefore not considered as
+ * twins.  If the sections have the same content then consider them as twins.
+ */
+static void kpatch_correlate_local_constants(struct kpatch_elf *base,
+					     struct kpatch_elf *patched)
+{
+	struct symbol *sym;
+	struct symbol *sym1, *sym2;
+	Elf_Data *dat1, *dat2;
+
+	list_for_each_entry(sym, &base->symbols, list) {
+		if (sym->type != STT_NOTYPE)
+			continue;
+		if (strncmp(".LC", sym->name, 3))
+			continue;
+
+		/*
+		 * Only consider the case if the symbols are twins but the
+		 * their sections are not.
+		 */
+		sym1 = sym;
+		sym2 = sym->twin;
+		if (!sym1->sec || !sym2 || !sym2->sec)
+			continue;
+		if (sym1->sec->twin == sym2->sec)
+			continue;
+
+		dat1 = sym1->sec->data;
+		dat2 = sym2->sec->data;
+		if (dat1->d_size != dat2->d_size)
+			continue;
+		if (memcmp(dat1->d_buf, dat2->d_buf, dat1->d_size))
+			continue;
+
+		log_debug("renamed section for local constant %s matches, twinning\n",
+				  sym->name);
+
+		sym1->sec->twin = sym2->sec;
+		sym2->sec->twin = sym1->sec;
+	}
+}
+
 static void kpatch_correlate_elfs(struct kpatch_elf *kelf1, struct kpatch_elf *kelf2)
 {
 	kpatch_correlate_sections(&kelf1->sections, &kelf2->sections);
@@ -2719,6 +2765,7 @@ int main(int argc, char *argv[])
 
 	kpatch_correlate_elfs(kelf_base, kelf_patched);
 	kpatch_correlate_static_local_variables(kelf_base, kelf_patched);
+	kpatch_correlate_local_constants(kelf_base, kelf_patched);
 
 	/*
 	 * After this point, we don't care about kelf_base anymore.
