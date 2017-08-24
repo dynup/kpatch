@@ -546,6 +546,24 @@ static void kpatch_correlate_symbols(struct list_head *symlist1, struct list_hea
 			if (is_special_static(sym1))
 				continue;
 
+			/*
+			 * The .LCx symbols point to strings, usually used for
+			 * the bug table.  Don't correlate and compare the
+			 * symbols themselves, because the suffix number might
+			 * change.
+			 *
+			 * If the symbol is used by the bug table (usual case),
+			 * it may get pulled in by
+			 * kpatch_regenerate_special_section().
+			 *
+			 * If the symbol is used outside of the bug table (not
+			 * sure if this actually happens anywhere), any string
+			 * changes will be detected elsewhere in rela_equal().
+			 */
+			if (sym1->type == STT_NOTYPE &&
+			    !strncmp(sym1->name, ".LC", 3))
+				continue;
+
 			/* group section symbols must have correlated sections */
 			if (sym1->sec &&
 			    sym1->sec->sh.sh_type == SHT_GROUP &&
