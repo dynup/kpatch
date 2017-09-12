@@ -96,6 +96,7 @@ static int is_special_static(struct symbol *sym)
 		"descriptor.",
 		"__func__.",
 		"_rs.",
+		"CSWTCH.",
 		NULL,
 	};
 	char **prefix;
