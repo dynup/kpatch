@@ -45,11 +45,12 @@ RPMTOPDIR="$CACHEDIR/buildroot"
 VERSIONFILE="$CACHEDIR/version"
 TEMPDIR="$CACHEDIR/tmp"
 LOGFILE="$CACHEDIR/build.log"
-APPLIEDPATCHFILE="kpatch.patch"
 DEBUG=0
 SKIPCLEANUP=0
 SKIPGCCCHECK=0
 ARCH_KCFLAGS=""
+declare -a PATCH_LIST
+APPLIED_PATCHES=0
 
 warn() {
 	echo "ERROR: $1" >&2
@@ -71,15 +72,34 @@ die() {
 	exit 1
 }
 
+apply_patches() {
+	local patch
+
+	for patch in "${PATCH_LIST[@]}"; do
+		patch -N -p1 --dry-run < "$patch" >> "$LOGFILE" 2>&1 || die "$patch file failed to apply"
+		patch -N -p1 < "$patch" >> "$LOGFILE" 2>&1 || die "$patch file failed to apply"
+		(( APPLIED_PATCHES++ ))
+	done
+}
+
+remove_patches() {
+	local patch
+	local idx
+
+	for (( ; APPLIED_PATCHES>0; APPLIED_PATCHES-- )); do
+		idx=$(( APPLIED_PATCHES - 1))
+		patch="${PATCH_LIST[$idx]}"
+		patch -p1 -R -d "$SRCDIR" < "$patch" &> /dev/null
+	done
+}
+
 cleanup() {
 	rm -f "$SRCDIR/.scmversion"
-	if [[ -e "$SRCDIR/$APPLIEDPATCHFILE" ]]; then
-		patch -p1 -R -d "$SRCDIR" < "$SRCDIR/$APPLIEDPATCHFILE" &> /dev/null
-		rm -f "$SRCDIR/$APPLIEDPATCHFILE"
-		# If $SRCDIR was a git repo, make sure git actually sees that
-		# we've reverted our patch above.
-		[[ -d $SRCDIR/.git ]] && (cd $SRCDIR && git update-index -q --refresh)
-	fi
+
+	remove_patches
+	# If $SRCDIR was a git repo, make sure git actually sees that
+	# we've reverted our patch(es).
+	[[ -d $SRCDIR/.git ]] && (cd $SRCDIR && git update-index -q --refresh)
 
 	# restore original .config and vmlinux if they were removed with mrproper
 	[[ -e $TEMPDIR/.config ]] && mv -f $TEMPDIR/.config $SRCDIR/
@@ -319,8 +339,16 @@ find_kobj() {
 	done
 }
 
+# Only allow alphanumerics and '_' and '-' in the module name.  Everything else
+# is replaced with '-'.  Also truncate to 48 chars so the full name fits in the
+# kernel's 56-byte module name array.
+module_name_string() {
+	echo ${1//[^a-zA-Z0-9_-]/-} |cut -c 1-48
+}
+
 usage() {
-	echo "usage: $(basename $0) [options] <patch file>" >&2
+	echo "usage: $(basename $0) [options] <patch1 ... patchN>" >&2
+	echo "		patchN		   Input patchfile(s)" >&2
 	echo "		-h, --help	   Show this help message" >&2
 	echo "		-r, --sourcerpm	   Specify kernel source RPM" >&2
 	echo "		-s, --sourcedir	   Specify kernel source directory" >&2
@@ -335,7 +363,7 @@ usage() {
 	echo "		                   (not recommended)" >&2
 }
 
-options=$(getopt -o hr:s:c:v:j:t:o:d -l "help,sourcerpm:,sourcedir:,config:,vmlinux:,jobs:,target:,output:,debug,skip-gcc-check,skip-cleanup" -- "$@") || die "getopt failed"
+options=$(getopt -o hr:s:c:v:j:t:n:o:d -l "help,sourcerpm:,sourcedir:,config:,vmlinux:,jobs:,target:,name:,output:,debug,skip-gcc-check,skip-cleanup" -- "$@") || die "getopt failed"
 
 eval set -- "$options"
 
@@ -377,6 +405,10 @@ while [[ $# -gt 0 ]]; do
 		TARGETS="$TARGETS $2"
 		shift
 		;;
+	-n|--name)
+		MODNAME=$(module_name_string "$2")
+		shift
+		;;
 	-o|--output)
 		[[ ! -d "$2" ]] && die "output dir '$2' not found"
 		BASE=$(readlink -f "$2")
@@ -395,15 +427,20 @@ while [[ $# -gt 0 ]]; do
 		echo "WARNING: Skipping gcc version matching check (not recommended)"
 		SKIPGCCCHECK=1
 		;;
-	--)
-		[[ -z "$2" ]] && die "no patch file specified"
-		[[ ! -f "$2" ]] && die "patch file '$2' not found"
-		PATCHFILE=$(readlink -f "$2")
-		break
+	*)
+		[[ "$1" = "--" ]] && shift && continue
+		[[ ! -f "$1" ]] && die "patch file '$1' not found"
+		PATCH_LIST+=($(readlink -f "$1"))
 		;;
 	esac
 	shift
 done
+
+if [[ ${#PATCH_LIST[@]} -eq 0 ]]; then
+	warn "no patch file(s) specified"
+	usage
+	exit 1
+fi
 
 # ensure cachedir and tempdir are setup properly and cleaned
 mkdir -p "$TEMPDIR" || die "Couldn't create $TEMPDIR"
@@ -429,16 +466,6 @@ if [[ $ARCHVERSION =~ - ]]; then
 fi
 
 [[ -z $TARGETS ]] && TARGETS="vmlinux modules"
-
-PATCHNAME=$(basename "$PATCHFILE")
-if [[ "$PATCHNAME" =~ \.patch$ ]] || [[ "$PATCHNAME" =~ \.diff$ ]]; then
-	PATCHNAME="${PATCHNAME%.*}"
-fi
-
-# Only allow alphanumerics and '_' and '-' in the module name.  Everything else
-# is replaced with '-'.  Also truncate to 48 chars so the full name fits in the
-# kernel's 56-byte module name array.
-PATCHNAME=$(echo ${PATCHNAME//[^a-zA-Z0-9_-]/-} |cut -c 1-48)
 
 source /etc/os-release
 DISTRO=$ID
@@ -592,10 +619,11 @@ fi
 # unsupported kernel option checking: CONFIG_DEBUG_INFO_SPLIT
 grep -q "CONFIG_DEBUG_INFO_SPLIT=y" "$CONFIGFILE" && die "kernel option 'CONFIG_DEBUG_INFO_SPLIT' not supported"
 
-echo "Testing patch file"
+echo "Testing patch file(s)"
 cd "$SRCDIR" || die
-patch -N -p1 --dry-run < "$PATCHFILE" || die "source patch file failed to apply"
-cp "$PATCHFILE" "$APPLIEDPATCHFILE" || die
+apply_patches
+remove_patches
+
 cp -LR "$DATADIR/patch" "$TEMPDIR" || die
 
 if [[ $ARCH = "ppc64le" ]]; then
@@ -615,7 +643,7 @@ unset KPATCH_GCC_TEMPDIR
 CROSS_COMPILE="$TOOLSDIR/kpatch-gcc " make "-j$CPUS" $TARGETS >> "$LOGFILE" 2>&1 || die
 
 echo "Building patched kernel"
-patch -N -p1 < "$APPLIEDPATCHFILE" >> "$LOGFILE" 2>&1 || die
+apply_patches
 mkdir -p "$TEMPDIR/orig" "$TEMPDIR/patched"
 KPATCH_GCC_TEMPDIR=$TEMPDIR
 export KPATCH_GCC_TEMPDIR
@@ -637,6 +665,28 @@ do
 done
 
 echo "Extracting new and modified ELF sections"
+# If no kpatch module name was provided on the command line:
+#   - For single input .patch, use the patch filename
+#   - For multiple input .patches, use "patch"
+#   - Prefix with "kpatch" or "livepatch" accordingly
+if [[ -z $MODNAME ]] ; then
+	if [[ ${#PATCH_LIST[@]} -eq 1 ]]; then
+		MODNAME=$(basename "${PATCH_LIST[0]}")
+		if [[ "$MODNAME" =~ \.patch$ ]] || [[ "$MODNAME" =~ \.diff$ ]]; then
+			MODNAME="${MODNAME%.*}"
+		fi
+	else
+		MODNAME="patch"
+	fi
+
+	if $KPATCH_MODULE; then
+		MODNAME="kpatch-$MODNAME"
+	else
+		MODNAME="livepatch-$MODNAME"
+	fi
+
+	MODNAME=$(module_name_string "$MODNAME")
+fi
 FILES="$(cat "$TEMPDIR/changed_objs")"
 cd "$TEMPDIR"
 mkdir output
@@ -664,7 +714,7 @@ for i in $FILES; do
 	if [[ -e "orig/$i" ]]; then
 		# create-diff-object orig.o patched.o kernel-object output.o Module.symvers patch-mod-name
 		"$TOOLSDIR"/create-diff-object "orig/$i" "patched/$i" "$KOBJFILE" \
-			"output/$i" "$SRCDIR/Module.symvers" "kpatch_${PATCHNAME//-/_}" 2>&1 |tee -a "$LOGFILE"
+			"output/$i" "$SRCDIR/Module.symvers" "${MODNAME//-/_}" 2>&1 |tee -a "$LOGFILE"
 		check_pipe_status create-diff-object
 		# create-diff-object returns 3 if no functional change is found
 		[[ $rc -eq 0 ]] || [[ $rc -eq 3 ]] || ERROR=$(expr $ERROR "+" 1)
@@ -699,7 +749,7 @@ if $KPATCH_MODULE; then
 	export KCPPFLAGS="-D__KPATCH_MODULE__"
 fi
 
-echo "Building patch module: kpatch-$PATCHNAME.ko"
+echo "Building patch module: $MODNAME.ko"
 cd "$SRCDIR"
 make prepare >> "$LOGFILE" 2>&1 || die
 
@@ -726,7 +776,7 @@ fi
 
 cd "$TEMPDIR/patch"
 
-KPATCH_BUILD="$SRCDIR" KPATCH_NAME="$PATCHNAME" \
+KPATCH_BUILD="$SRCDIR" KPATCH_NAME="$MODNAME" \
 KBUILD_EXTRA_SYMBOLS="$KBUILD_EXTRA_SYMBOLS" \
 KPATCH_LDFLAGS="$KPATCH_LDFLAGS" \
 	make >> "$LOGFILE" 2>&1 || die
@@ -735,12 +785,12 @@ if ! $KPATCH_MODULE; then
 	if [[ -z "$KPATCH_LDFLAGS" ]]; then
 		extra_flags="--no-klp-arch-sections"
 	fi
-	cp $TEMPDIR/patch/kpatch-$PATCHNAME.ko $TEMPDIR/patch/tmp.ko || die
-	"$TOOLSDIR"/create-klp-module $extra_flags $TEMPDIR/patch/tmp.ko $TEMPDIR/patch/kpatch-$PATCHNAME.ko 2>&1 |tee -a "$LOGFILE"
+	cp $TEMPDIR/patch/$MODNAME.ko $TEMPDIR/patch/tmp.ko || die
+	"$TOOLSDIR"/create-klp-module $extra_flags $TEMPDIR/patch/tmp.ko $TEMPDIR/patch/$MODNAME.ko 2>&1 |tee -a "$LOGFILE"
 	check_pipe_status create-klp-module
 fi
 
-cp -f "$TEMPDIR/patch/kpatch-$PATCHNAME.ko" "$BASE" || die
+cp -f "$TEMPDIR/patch/$MODNAME.ko" "$BASE" || die
 
 [[ "$DEBUG" -eq 0 ]] && rm -f "$LOGFILE"
 
