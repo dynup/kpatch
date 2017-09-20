@@ -1,4 +1,3 @@
-KPATCH_NAME ?= patch
 KPATCH_BUILD ?= /lib/modules/$(shell uname -r)/build
 KPATCH_MAKE = $(MAKE) -C $(KPATCH_BUILD) M=$(PWD)
 LDFLAGS += $(KPATCH_LDFLAGS)
@@ -11,14 +10,14 @@ ifeq ($(PROCESSOR), ppc64le)
 KBUILD_CFLAGS_MODULE += -mcmodel=large
 endif
 
-obj-m += kpatch-$(KPATCH_NAME).o
+obj-m += $(KPATCH_NAME).o
 
-kpatch-$(KPATCH_NAME)-objs += patch-hook.o kpatch.lds output.o
+$(KPATCH_NAME)-objs += patch-hook.o kpatch.lds output.o
 
-all: kpatch-$(KPATCH_NAME).ko
+all: $(KPATCH_NAME).ko
 
-kpatch-$(KPATCH_NAME).ko:
-	$(KPATCH_MAKE) kpatch-$(KPATCH_NAME).ko
+$(KPATCH_NAME).ko:
+	$(KPATCH_MAKE) $(KPATCH_NAME).ko
 
 patch-hook.o: patch-hook.c kpatch-patch-hook.c livepatch-patch-hook.c
 	$(KPATCH_MAKE) patch-hook.o

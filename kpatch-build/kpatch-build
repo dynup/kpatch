@@ -467,22 +467,6 @@ fi
 
 [[ -z $TARGETS ]] && TARGETS="vmlinux modules"
 
-# If no kpatch module name was provided on the command line:
-#   - For single input .patch, use the patch filename
-#   - For multiple input .patches, use "patch"
-if [[ -z $MODNAME ]] ; then
-	if [[ ${#PATCH_LIST[@]} -eq 1 ]]; then
-		MODNAME=$(basename "${PATCH_LIST[0]}")
-		if [[ "$MODNAME" =~ \.patch$ ]] || [[ "$MODNAME" =~ \.diff$ ]]; then
-			MODNAME="${MODNAME%.*}"
-		fi
-	else
-		MODNAME="patch"
-	fi
-
-	MODNAME=$(module_name_string "$MODNAME")
-fi
-
 source /etc/os-release
 DISTRO=$ID
 if [[ $DISTRO = fedora ]] || [[ $DISTRO = rhel ]] || [[ $DISTRO = ol ]] || [[ $DISTRO = centos ]]; then
@@ -681,6 +665,28 @@ do
 done
 
 echo "Extracting new and modified ELF sections"
+# If no kpatch module name was provided on the command line:
+#   - For single input .patch, use the patch filename
+#   - For multiple input .patches, use "patch"
+#   - Prefix with "kpatch" or "livepatch" accordingly
+if [[ -z $MODNAME ]] ; then
+	if [[ ${#PATCH_LIST[@]} -eq 1 ]]; then
+		MODNAME=$(basename "${PATCH_LIST[0]}")
+		if [[ "$MODNAME" =~ \.patch$ ]] || [[ "$MODNAME" =~ \.diff$ ]]; then
+			MODNAME="${MODNAME%.*}"
+		fi
+	else
+		MODNAME="patch"
+	fi
+
+	if $KPATCH_MODULE; then
+		MODNAME="kpatch-$MODNAME"
+	else
+		MODNAME="livepatch-$MODNAME"
+	fi
+
+	MODNAME=$(module_name_string "$MODNAME")
+fi
 FILES="$(cat "$TEMPDIR/changed_objs")"
 cd "$TEMPDIR"
 mkdir output
@@ -708,7 +714,7 @@ for i in $FILES; do
 	if [[ -e "orig/$i" ]]; then
 		# create-diff-object orig.o patched.o kernel-object output.o Module.symvers patch-mod-name
 		"$TOOLSDIR"/create-diff-object "orig/$i" "patched/$i" "$KOBJFILE" \
-			"output/$i" "$SRCDIR/Module.symvers" "kpatch_${MODNAME//-/_}" 2>&1 |tee -a "$LOGFILE"
+			"output/$i" "$SRCDIR/Module.symvers" "${MODNAME//-/_}" 2>&1 |tee -a "$LOGFILE"
 		check_pipe_status create-diff-object
 		# create-diff-object returns 3 if no functional change is found
 		[[ $rc -eq 0 ]] || [[ $rc -eq 3 ]] || ERROR=$(expr $ERROR "+" 1)
@@ -743,7 +749,7 @@ if $KPATCH_MODULE; then
 	export KCPPFLAGS="-D__KPATCH_MODULE__"
 fi
 
-echo "Building patch module: kpatch-$MODNAME.ko"
+echo "Building patch module: $MODNAME.ko"
 cd "$SRCDIR"
 make prepare >> "$LOGFILE" 2>&1 || die
 
@@ -779,12 +785,12 @@ if ! $KPATCH_MODULE; then
 	if [[ -z "$KPATCH_LDFLAGS" ]]; then
 		extra_flags="--no-klp-arch-sections"
 	fi
-	cp $TEMPDIR/patch/kpatch-$MODNAME.ko $TEMPDIR/patch/tmp.ko || die
-	"$TOOLSDIR"/create-klp-module $extra_flags $TEMPDIR/patch/tmp.ko $TEMPDIR/patch/kpatch-$MODNAME.ko 2>&1 |tee -a "$LOGFILE"
+	cp $TEMPDIR/patch/$MODNAME.ko $TEMPDIR/patch/tmp.ko || die
+	"$TOOLSDIR"/create-klp-module $extra_flags $TEMPDIR/patch/tmp.ko $TEMPDIR/patch/$MODNAME.ko 2>&1 |tee -a "$LOGFILE"
 	check_pipe_status create-klp-module
 fi
 
-cp -f "$TEMPDIR/patch/kpatch-$MODNAME.ko" "$BASE" || die
+cp -f "$TEMPDIR/patch/$MODNAME.ko" "$BASE" || die
 
 [[ "$DEBUG" -eq 0 ]] && rm -f "$LOGFILE"
 
