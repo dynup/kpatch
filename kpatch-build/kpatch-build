@@ -319,6 +319,13 @@ find_kobj() {
 	done
 }
 
+# Only allow alphanumerics and '_' and '-' in the module name.  Everything else
+# is replaced with '-'.  Also truncate to 48 chars so the full name fits in the
+# kernel's 56-byte module name array.
+module_name_string() {
+	echo ${1//[^a-zA-Z0-9_-]/-} |cut -c 1-48
+}
+
 usage() {
 	echo "usage: $(basename $0) [options] <patch file>" >&2
 	echo "		-h, --help	   Show this help message" >&2
@@ -335,7 +342,7 @@ usage() {
 	echo "		                   (not recommended)" >&2
 }
 
-options=$(getopt -o hr:s:c:v:j:t:o:d -l "help,sourcerpm:,sourcedir:,config:,vmlinux:,jobs:,target:,output:,debug,skip-gcc-check,skip-cleanup" -- "$@") || die "getopt failed"
+options=$(getopt -o hr:s:c:v:j:t:n:o:d -l "help,sourcerpm:,sourcedir:,config:,vmlinux:,jobs:,target:,name:,output:,debug,skip-gcc-check,skip-cleanup" -- "$@") || die "getopt failed"
 
 eval set -- "$options"
 
@@ -375,6 +382,10 @@ while [[ $# -gt 0 ]]; do
 		;;
 	-t|--target)
 		TARGETS="$TARGETS $2"
+		shift
+		;;
+	-n|--name)
+		MODNAME=$(module_name_string "$2")
 		shift
 		;;
 	-o|--output)
@@ -430,15 +441,16 @@ fi
 
 [[ -z $TARGETS ]] && TARGETS="vmlinux modules"
 
-PATCHNAME=$(basename "$PATCHFILE")
-if [[ "$PATCHNAME" =~ \.patch$ ]] || [[ "$PATCHNAME" =~ \.diff$ ]]; then
-	PATCHNAME="${PATCHNAME%.*}"
-fi
+# If no kpatch module name was provided on the command line, derive one
+# from the .patch filename
+if [[ -z $MODNAME ]] ; then
+	MODNAME=$(basename "$PATCHFILE")
+	if [[ "$MODNAME" =~ \.patch$ ]] || [[ "$MODNAME" =~ \.diff$ ]]; then
+		MODNAME="${MODNAME%.*}"
+	fi
 
-# Only allow alphanumerics and '_' and '-' in the module name.  Everything else
-# is replaced with '-'.  Also truncate to 48 chars so the full name fits in the
-# kernel's 56-byte module name array.
-PATCHNAME=$(echo ${PATCHNAME//[^a-zA-Z0-9_-]/-} |cut -c 1-48)
+	MODNAME=$(module_name_string "$MODNAME")
+fi
 
 source /etc/os-release
 DISTRO=$ID
@@ -664,7 +676,7 @@ for i in $FILES; do
 	if [[ -e "orig/$i" ]]; then
 		# create-diff-object orig.o patched.o kernel-object output.o Module.symvers patch-mod-name
 		"$TOOLSDIR"/create-diff-object "orig/$i" "patched/$i" "$KOBJFILE" \
-			"output/$i" "$SRCDIR/Module.symvers" "kpatch_${PATCHNAME//-/_}" 2>&1 |tee -a "$LOGFILE"
+			"output/$i" "$SRCDIR/Module.symvers" "kpatch_${MODNAME//-/_}" 2>&1 |tee -a "$LOGFILE"
 		check_pipe_status create-diff-object
 		# create-diff-object returns 3 if no functional change is found
 		[[ $rc -eq 0 ]] || [[ $rc -eq 3 ]] || ERROR=$(expr $ERROR "+" 1)
@@ -699,7 +711,7 @@ if $KPATCH_MODULE; then
 	export KCPPFLAGS="-D__KPATCH_MODULE__"
 fi
 
-echo "Building patch module: kpatch-$PATCHNAME.ko"
+echo "Building patch module: kpatch-$MODNAME.ko"
 cd "$SRCDIR"
 make prepare >> "$LOGFILE" 2>&1 || die
 
@@ -726,7 +738,7 @@ fi
 
 cd "$TEMPDIR/patch"
 
-KPATCH_BUILD="$SRCDIR" KPATCH_NAME="$PATCHNAME" \
+KPATCH_BUILD="$SRCDIR" KPATCH_NAME="$MODNAME" \
 KBUILD_EXTRA_SYMBOLS="$KBUILD_EXTRA_SYMBOLS" \
 KPATCH_LDFLAGS="$KPATCH_LDFLAGS" \
 	make >> "$LOGFILE" 2>&1 || die
@@ -735,12 +747,12 @@ if ! $KPATCH_MODULE; then
 	if [[ -z "$KPATCH_LDFLAGS" ]]; then
 		extra_flags="--no-klp-arch-sections"
 	fi
-	cp $TEMPDIR/patch/kpatch-$PATCHNAME.ko $TEMPDIR/patch/tmp.ko || die
-	"$TOOLSDIR"/create-klp-module $extra_flags $TEMPDIR/patch/tmp.ko $TEMPDIR/patch/kpatch-$PATCHNAME.ko 2>&1 |tee -a "$LOGFILE"
+	cp $TEMPDIR/patch/kpatch-$MODNAME.ko $TEMPDIR/patch/tmp.ko || die
+	"$TOOLSDIR"/create-klp-module $extra_flags $TEMPDIR/patch/tmp.ko $TEMPDIR/patch/kpatch-$MODNAME.ko 2>&1 |tee -a "$LOGFILE"
 	check_pipe_status create-klp-module
 fi
 
-cp -f "$TEMPDIR/patch/kpatch-$PATCHNAME.ko" "$BASE" || die
+cp -f "$TEMPDIR/patch/kpatch-$MODNAME.ko" "$BASE" || die
 
 [[ "$DEBUG" -eq 0 ]] && rm -f "$LOGFILE"
 
