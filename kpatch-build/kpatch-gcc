@@ -14,13 +14,13 @@ declare -a args=("$@")
 if [[ "$TOOLCHAINCMD" = "gcc" ]] ; then
 	while [ "$#" -gt 0 ]; do
 		if [ "$1" = "-o" ]; then
-			obj=$2
+			obj="$2"
 
 			# skip copying the temporary .o files created by
 			# recordmcount.pl
-			[[ $obj = */.tmp_mc_*.o ]] && break;
+			[[ "$obj" = */.tmp_mc_*.o ]] && break;
 
-			[[ $obj = */.tmp_*.o ]] && obj=${obj/.tmp_/}
+			[[ "$obj" = */.tmp_*.o ]] && obj="${obj/.tmp_/}"
 			case "$obj" in
 				*.mod.o|\
 				*built-in.o|\
@@ -43,8 +43,8 @@ if [[ "$TOOLCHAINCMD" = "gcc" ]] ; then
 					break
 					;;
 				*.o)
-					mkdir -p "$KPATCH_GCC_TEMPDIR/orig/$(dirname $obj)"
-					[[ -e $obj ]] && cp -f "$obj" "$KPATCH_GCC_TEMPDIR/orig/$obj"
+					mkdir -p "$KPATCH_GCC_TEMPDIR/orig/$(dirname "$obj")"
+					[[ -e "$obj" ]] && cp -f "$obj" "$KPATCH_GCC_TEMPDIR/orig/$obj"
 					echo "$obj" >> "$KPATCH_GCC_TEMPDIR/changed_objs"
 					break
 					;;
@@ -58,10 +58,10 @@ if [[ "$TOOLCHAINCMD" = "gcc" ]] ; then
 elif [[ "$TOOLCHAINCMD" = "ld" ]] ; then
 	while [ "$#" -gt 0 ]; do
 		if [ "$1" = "-o" ]; then
-			obj=$2
+			obj="$2"
 			case "$obj" in
 				*.ko)
-					mkdir -p "$KPATCH_GCC_TEMPDIR/module/$(dirname $obj)"
+					mkdir -p "$KPATCH_GCC_TEMPDIR/module/$(dirname "$obj")"
 					cp -f "$obj" "$KPATCH_GCC_TEMPDIR/module/$obj"
 					break
 					;;
