@@ -43,7 +43,8 @@ static void create_dynamic_rela_sections(struct kpatch_elf *kelf, struct section
 	struct kpatch_patch_dynrela *dynrelas;
 	struct kpatch_relocation *krelas;
 	struct kpatch_symbol *ksym, *ksyms;
-	struct section *base, *dynsec;
+	struct section *dynsec;
+	struct symbol *sym;
 	struct rela *rela;
 	int index, nr, offset, dest_offset, objname_offset, name_offset;
 
@@ -58,19 +59,16 @@ static void create_dynamic_rela_sections(struct kpatch_elf *kelf, struct section
 		offset = index * sizeof(*krelas);
 
 		/*
-		 * To fill in each dynrela entry, find base section (dest),
+		 * To fill in each dynrela entry, find dest location,
 		 * objname offset, ksym, and symbol name offset
 		 */
 
-		/* Get base section */
+		/* Get dest location */
 		rela = find_rela_by_offset(krelasec->rela,
 					   offset + offsetof(struct kpatch_relocation, dest));
 		if (!rela)
 			ERROR("find_rela_by_offset");
-
-		base = rela->sym->sec;
-		if (!base)
-			ERROR("base sec of krela not found");
+		sym = rela->sym;
 		dest_offset = rela->addend;
 
 		/* Get objname offset */
@@ -103,7 +101,7 @@ static void create_dynamic_rela_sections(struct kpatch_elf *kelf, struct section
 
 		/* dest */
 		ALLOC_LINK(rela, &dynsec->rela->relas);
-		rela->sym = base->sym ? base->sym : base->secsym;
+		rela->sym = sym;
 		rela->type = R_X86_64_64;
 		rela->addend = dest_offset;
 		rela->offset = index * sizeof(*dynrelas);

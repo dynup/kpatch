@@ -155,9 +155,9 @@ static struct section *find_or_add_klp_relasec(struct kpatch_elf *kelf,
 static void create_klp_relasecs_and_syms(struct kpatch_elf *kelf, struct section *krelasec,
 					 struct section *ksymsec, char *strings)
 {
-	struct section *base, *klp_relasec;
+	struct section *klp_relasec;
 	struct kpatch_relocation *krelas;
-	struct symbol *sym;
+	struct symbol *sym, *dest;
 	struct rela *rela;
 	char *objname;
 	int nr, index, offset, toc_offset;
@@ -207,9 +207,7 @@ static void create_klp_relasecs_and_syms(struct kpatch_elf *kelf, struct section
 		 */
 		toc_offset = rela->addend;
 
-		base = rela->sym->sec;
-		if (!base)
-			ERROR("base sec of krela not found");
+		dest = rela->sym;
 
 		/* Get the name of the object the rela belongs to */
 		rela = find_rela_by_offset(krelasec->rela,
@@ -232,8 +230,8 @@ static void create_klp_relasecs_and_syms(struct kpatch_elf *kelf, struct section
 		if (!sym)
 			ERROR("error finding or adding ksym to symtab");
 
-		/* Create (or find) the .klp.rela. section for this base sec and object */
-		klp_relasec = find_or_add_klp_relasec(kelf, base, objname);
+		/* Create (or find) the .klp.rela. section for this dest sec and object */
+		klp_relasec = find_or_add_klp_relasec(kelf, dest->sec, objname);
 		if (!klp_relasec)
 			ERROR("error finding or adding klp relasec");
 
@@ -241,10 +239,10 @@ static void create_klp_relasecs_and_syms(struct kpatch_elf *kelf, struct section
 		ALLOC_LINK(rela, &klp_relasec->relas);
 		rela->sym = sym;
 		rela->type = krelas[index].type;
-		if (!strcmp(base->name, ".toc"))
+		if (!strcmp(dest->sec->name, ".toc"))
 			rela->offset = toc_offset;
 		else
-			rela->offset = krelas[index].offset;
+			rela->offset = krelas[index].offset + dest->sym.st_value;
 
 		/*
 		 * GCC 6+ adds 0x8 to the offset of every local function entry
@@ -253,7 +251,7 @@ static void create_klp_relasecs_and_syms(struct kpatch_elf *kelf, struct section
 		 * local function becomes global, we don't want to skip the
 		 * .toc setup anymore.
 		 */
-		if (!strcmp(base->name, ".toc") &&
+		if (!strcmp(dest->sec->name, ".toc") &&
 			rela->sym->type == STT_FUNC && rela->sym->bind == STB_LOCAL) {
 				rela->addend = 0;
 		} else {
