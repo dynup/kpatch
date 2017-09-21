@@ -444,7 +444,7 @@ fi
 
 # ensure cachedir and tempdir are setup properly and cleaned
 mkdir -p "$TEMPDIR" || die "Couldn't create $TEMPDIR"
-rm -rf "$TEMPDIR"/*
+rm -rf "${TEMPDIR:?}"/*
 rm -f "$LOGFILE"
 
 if [[ -n "$USERSRCDIR" ]]; then
@@ -562,7 +562,7 @@ else
 
 		clean_cache
 
-		cd "$TEMPDIR"
+		cd "$TEMPDIR" || die
 		echo "Downloading and unpacking the kernel source for $ARCHVERSION"
 		# Download source deb pkg
 		(dget -u "$url/${pkgname}/${dscname}" 2>&1) >> "$LOGFILE" || die "dget: Could not fetch/unpack $url/${pkgname}/${dscname}"
@@ -688,7 +688,7 @@ if [[ -z "$MODNAME" ]] ; then
 	MODNAME="$(module_name_string "$MODNAME")"
 fi
 FILES="$(cat "$TEMPDIR/changed_objs")"
-cd "$TEMPDIR"
+cd "$TEMPDIR" || die
 mkdir output
 declare -a objnames
 CHANGED=0
@@ -703,14 +703,14 @@ for i in $FILES; do
 	[[ "$i" = usr/initramfs_data.o ]] && continue
 
 	mkdir -p "output/$(dirname "$i")"
-	cd "$SRCDIR"
+	cd "$SRCDIR" || die
 	find_kobj "$i"
 	if [[ "$KOBJFILE" = vmlinux ]]; then
 		KOBJFILE="$VMLINUX"
 	else
 		KOBJFILE="$TEMPDIR/module/$KOBJFILE"
 	fi
-	cd "$TEMPDIR"
+	cd "$TEMPDIR" || die
 	if [[ -e "orig/$i" ]]; then
 		# create-diff-object orig.o patched.o kernel-object output.o Module.symvers patch-mod-name
 		"$TOOLSDIR"/create-diff-object "orig/$i" "patched/$i" "$KOBJFILE" \
@@ -750,7 +750,7 @@ if "$KPATCH_MODULE"; then
 fi
 
 echo "Building patch module: $MODNAME.ko"
-cd "$SRCDIR"
+cd "$SRCDIR" || die
 make prepare >> "$LOGFILE" 2>&1 || die
 
 if [[ ! -z "$UBUNTU_KERNEL" ]]; then
@@ -760,7 +760,7 @@ if [[ ! -z "$UBUNTU_KERNEL" ]]; then
 	echo "#define UTS_UBUNTU_RELEASE_ABI "$UBUNTU_ABI"" >> "$SRCDIR"/include/generated/utsrelease.h
 fi
 
-cd "$TEMPDIR/output"
+cd "$TEMPDIR/output" || die
 ld -r $KPATCH_LDFLAGS -o ../patch/tmp_output.o $(find . -name "*.o") >> "$LOGFILE" 2>&1 || die
 
 if "$KPATCH_MODULE"; then
@@ -774,7 +774,7 @@ else
 	cp "$TEMPDIR"/patch/tmp_output.o "$TEMPDIR"/patch/output.o || die
 fi
 
-cd "$TEMPDIR/patch"
+cd "$TEMPDIR/patch" || die
 
 KPATCH_BUILD="$SRCDIR" KPATCH_NAME="$MODNAME" \
 KBUILD_EXTRA_SYMBOLS="$KBUILD_EXTRA_SYMBOLS" \

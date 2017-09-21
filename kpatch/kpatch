@@ -62,7 +62,7 @@ usage () {
 }
 
 warn() {
-	echo "kpatch: $@" >&2
+	echo "kpatch: $*" >&2
 }
 
 die() {
@@ -129,7 +129,7 @@ core_loaded () {
 }
 
 get_module_name () {
-	echo "$(readelf -p .gnu.linkonce.this_module "$1" | grep '\[.*\]' | awk '{print $3}')"
+	readelf -p .gnu.linkonce.this_module "$1" | grep '\[.*\]' | awk '{print $3}'
 }
 
 verify_module_checksum () {
@@ -334,7 +334,7 @@ case "$1" in
 	echo "Loaded patch modules:"
 	for module in "$SYSFS"/*; do
 		if [[ -e "$module" ]] && [[ "$(cat "$module/enabled")" -eq 1 ]]; then
-			echo "$(basename "$module")"
+			basename "$module"
 		fi
 	done
 	echo ""
