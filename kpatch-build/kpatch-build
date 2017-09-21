@@ -757,7 +757,7 @@ if [[ ! -z "$UBUNTU_KERNEL" ]]; then
 	# UBUNTU: add UTS_UBUNTU_RELEASE_ABI to utsrelease.h after regenerating it
 	UBUNTU_ABI="${ARCHVERSION#*-}"
 	UBUNTU_ABI="${UBUNTU_ABI%-*}"
-	echo "#define UTS_UBUNTU_RELEASE_ABI "$UBUNTU_ABI"" >> "$SRCDIR"/include/generated/utsrelease.h
+	echo "#define UTS_UBUNTU_RELEASE_ABI $UBUNTU_ABI" >> "$SRCDIR"/include/generated/utsrelease.h
 fi
 
 cd "$TEMPDIR/output" || die
