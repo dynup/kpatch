@@ -135,8 +135,6 @@ build_module() {
 	prefix=$(basename ${file%%.patch})
 	module=kpatch-$prefix.ko
 
-	[[ $prefix = COMBINED ]] && return
-
 	if [[ $prefix =~ -FAIL ]]; then
 		shouldfail=1
 	else
@@ -165,7 +163,6 @@ run_load_test() {
 	module=kpatch-$prefix.ko
 	testprog="$(dirname $1)/$prefix-LOADED.test"
 
-	[[ $prefix = COMBINED ]] && return
 	[[ $prefix =~ -FAIL ]] && return
 
 	if [[ ! -e $module ]]; then
@@ -225,12 +222,6 @@ build_combined_module() {
 		return
 	fi
 
-	if ! which combinediff > /dev/null; then
-		log "patchutils not installed, skipping combined module build"
-		error "PLEASE INSTALL PATCHUTILS"
-		return
-	fi
-
 	declare -a COMBINED_LIST
 	for file in "${PATCH_LIST[@]}"; do
 		[[ $file =~ -FAIL ]] && log "combine: skipping $file" && continue
@@ -242,35 +233,14 @@ build_combined_module() {
 		return
 	fi
 
-	rm -f COMBINED.patch TMP.patch
-	first=1
-	for file in "${COMBINED_LIST[@]}"; do
-		prefix=${file%%.patch}
-
-		log "combine: $prefix"
-
-		if [[ $first -eq 1 ]]; then
-			cp -f $file COMBINED.patch
-			first=0
-			continue
-		fi
-
-		combinediff COMBINED.patch $file > TMP.patch
-		mv -f TMP.patch COMBINED.patch
-	done
-
 	log "build: combined module"
 
-	if ! $KPATCHBUILD COMBINED.patch >> $LOG 2>&1; then
+	if ! $KPATCHBUILD -n kpatch-COMBINED "${COMBINED_LIST[@]}" >> $LOG 2>&1; then
 		error "combined build failed"
 	fi
 }
 
 run_combined_test() {
-	if [[ ! -e COMBINED.patch ]]; then
-		return
-	fi
-
 	if [[ ! -e kpatch-COMBINED.ko ]]; then
 		log "can't find kpatch-COMBINED.ko, skipping"
 		return
