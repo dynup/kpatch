@@ -476,3 +476,34 @@ new function.
 In some patching cases it might be necessary to completely remove the original
 function to avoid the compiler complaining about a defined, but unused
 function.  This will depend on symbol scope and kernel build options.
+
+Other issues
+------------
+
+When adding a call to `printk_once()`, `pr_warn_once()`, or any other "once"
+variation of `printk()`, you'll get the following eror:
+
+```
+ERROR: vmx.o: 1 unsupported section change(s)
+vmx.o: WARNING: unable to correlate static local variable __print_once.60588 used by vmx_update_pi_irte, assuming variable is new
+vmx.o: changed function: vmx_update_pi_irte
+vmx.o: data section .data..read_mostly selected for inclusion
+/usr/lib/kpatch/create-diff-object: unreconcilable difference
+```
+This error occurs because the `printk_once()` adds a static local variable to
+the `.data..read_mostly` section.  kpatch-build strict disallows any changes to
+that section, because in some cases a change to this section indicates a bug.
+
+To work around this issue, you'll need to manually implement your own "once"
+logic which doesn't store the static variable in the `.data..read_mostly`
+section.
+
+For example, a `pr_warn_once()` can be replaced with:
+```
+	static bool print_once;
+	...
+	if (!print_once) {
+		print_once = true;
+		pr_warn("...");
+	}
+```
