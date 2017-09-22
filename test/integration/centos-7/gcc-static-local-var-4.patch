@@ -1,6 +1,6 @@
 diff -Nupr src.orig/fs/aio.c src/fs/aio.c
---- src.orig/fs/aio.c	2016-11-30 19:51:03.826178250 +0000
-+++ src/fs/aio.c	2016-11-30 19:52:53.149178250 +0000
+--- src.orig/fs/aio.c	2017-09-22 15:27:21.702056192 -0400
++++ src/fs/aio.c	2017-09-22 15:27:33.299104215 -0400
 @@ -219,9 +219,16 @@ static int __init aio_setup(void)
  }
  __initcall(aio_setup);

@@ -1,7 +1,7 @@
 diff -Nupr src.orig/fs/proc/generic.c src/fs/proc/generic.c
---- src.orig/fs/proc/generic.c	2016-11-30 19:51:03.948178250 +0000
-+++ src/fs/proc/generic.c	2016-11-30 19:53:21.229178250 +0000
-@@ -133,6 +133,7 @@ int proc_alloc_inum(unsigned int *inum)
+--- src.orig/fs/proc/generic.c	2017-09-22 15:27:21.698056175 -0400
++++ src/fs/proc/generic.c	2017-09-22 15:27:48.190165879 -0400
+@@ -194,6 +194,7 @@ int proc_alloc_inum(unsigned int *inum)
  	unsigned int i;
  	int error;
  
