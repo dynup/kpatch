@@ -1,6 +1,6 @@
 diff -Nupr src.orig/fs/proc/proc_sysctl.c src/fs/proc/proc_sysctl.c
---- src.orig/fs/proc/proc_sysctl.c	2016-11-30 19:51:03.949178250 +0000
-+++ src/fs/proc/proc_sysctl.c	2016-11-30 19:51:04.736178250 +0000
+--- src.orig/fs/proc/proc_sysctl.c	2017-09-22 15:27:21.698056175 -0400
++++ src/fs/proc/proc_sysctl.c	2017-09-22 15:27:21.769056469 -0400
 @@ -266,6 +266,8 @@ void sysctl_head_put(struct ctl_table_he
  
  static struct ctl_table_header *sysctl_head_grab(struct ctl_table_header *head)

@@ -1,6 +1,6 @@
 diff -Nupr src.orig/drivers/tty/n_tty.c src/drivers/tty/n_tty.c
---- src.orig/drivers/tty/n_tty.c	2016-11-30 19:51:03.562178250 +0000
-+++ src/drivers/tty/n_tty.c	2016-11-30 19:53:18.852178250 +0000
+--- src.orig/drivers/tty/n_tty.c	2017-09-22 15:27:21.084053633 -0400
++++ src/drivers/tty/n_tty.c	2017-09-22 15:27:45.888156346 -0400
 @@ -2016,7 +2016,7 @@ do_it_again:
   *		  lock themselves)
   */

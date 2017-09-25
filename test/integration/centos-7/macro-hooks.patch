@@ -1,7 +1,7 @@
 diff -Nupr src.orig/fs/aio.c src/fs/aio.c
---- src.orig/fs/aio.c	2016-11-30 19:51:03.826178250 +0000
-+++ src/fs/aio.c	2016-11-30 19:52:59.946178250 +0000
-@@ -1675,6 +1675,20 @@ SYSCALL_DEFINE3(io_cancel, aio_context_t
+--- src.orig/fs/aio.c	2017-09-22 15:27:21.702056192 -0400
++++ src/fs/aio.c	2017-09-22 15:27:36.703118311 -0400
+@@ -1683,6 +1683,20 @@ SYSCALL_DEFINE3(io_cancel, aio_context_t
  	return ret;
  }
  

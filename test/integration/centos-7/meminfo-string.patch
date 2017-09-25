@@ -1,7 +1,7 @@
 diff -Nupr src.orig/fs/proc/meminfo.c src/fs/proc/meminfo.c
---- src.orig/fs/proc/meminfo.c	2016-11-30 19:51:03.948178250 +0000
-+++ src/fs/proc/meminfo.c	2016-11-30 19:53:09.537178250 +0000
-@@ -131,7 +131,7 @@ static int meminfo_proc_show(struct seq_
+--- src.orig/fs/proc/meminfo.c	2017-09-22 15:27:21.699056179 -0400
++++ src/fs/proc/meminfo.c	2017-09-22 15:27:41.274137239 -0400
+@@ -99,7 +99,7 @@ static int meminfo_proc_show(struct seq_
  		"Committed_AS:   %8lu kB\n"
  		"VmallocTotal:   %8lu kB\n"
  		"VmallocUsed:    %8lu kB\n"
