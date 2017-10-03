@@ -1919,6 +1919,13 @@ static void kpatch_mark_ignored_sections(struct kpatch_elf *kelf)
 	struct rela *rela;
 	char *name;
 
+	/* Ignore any discarded sections */
+	list_for_each_entry(sec, &kelf->sections, list) {
+		if (!strncmp(sec->name, ".discard", 8) ||
+		    !strncmp(sec->name, ".rela.discard", 13))
+			sec->ignore = 1;
+	}
+
 	sec = find_section_by_name(&kelf->sections, ".kpatch.ignore.sections");
 	if (!sec)
 		return;
@@ -1960,10 +1967,12 @@ static void kpatch_mark_ignored_sections_same(struct kpatch_elf *kelf)
 		if (!sec->ignore)
 			continue;
 		sec->status = SAME;
-		if (sec->secsym)
-			sec->secsym->status = SAME;
-		if (sec->rela)
-			sec->rela->status = SAME;
+		if (!is_rela_section(sec)) {
+			if (sec->secsym)
+				sec->secsym->status = SAME;
+			if (sec->rela)
+				sec->rela->status = SAME;
+		}
 		list_for_each_entry(sym, &kelf->symbols, list) {
 			if (sym->sec != sec)
 				continue;
