@@ -449,7 +449,7 @@ int main(int argc, char *argv[])
 	char *strings;
 	int ksyms_nr, krelas_nr;
 
-	arguments.debug = 0;
+	memset(&arguments, 0, sizeof(arguments));
 	argp_parse (&argp, argc, argv, 0, 0, &arguments);
 	if (arguments.debug)
 		loglevel = DEBUG;
