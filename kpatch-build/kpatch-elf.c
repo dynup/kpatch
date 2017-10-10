@@ -626,6 +626,7 @@ struct section *create_section_pair(struct kpatch_elf *kelf, char *name,
 	sec->data->d_buf = malloc(size);
 	if (!sec->data->d_buf)
 		ERROR("malloc");
+	memset(sec->data->d_buf, 0, size);
 	sec->data->d_size = size;
 	sec->data->d_type = ELF_T_BYTE;
 

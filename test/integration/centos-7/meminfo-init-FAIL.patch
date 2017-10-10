@@ -1,7 +1,7 @@
 diff -Nupr src.orig/fs/proc/meminfo.c src/fs/proc/meminfo.c
---- src.orig/fs/proc/meminfo.c	2016-11-30 19:51:03.948178250 +0000
-+++ src/fs/proc/meminfo.c	2016-11-30 19:53:07.136178250 +0000
-@@ -223,6 +223,7 @@ static const struct file_operations memi
+--- src.orig/fs/proc/meminfo.c	2017-09-22 15:27:21.699056179 -0400
++++ src/fs/proc/meminfo.c	2017-09-22 15:27:40.130132502 -0400
+@@ -191,6 +191,7 @@ static const struct file_operations memi
  
  static int __init proc_meminfo_init(void)
  {

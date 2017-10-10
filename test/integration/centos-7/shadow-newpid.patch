@@ -1,7 +1,7 @@
 diff -Nupr src.orig/fs/proc/array.c src/fs/proc/array.c
---- src.orig/fs/proc/array.c	2016-11-30 20:10:24.498178250 +0000
-+++ src/fs/proc/array.c	2016-11-30 20:38:11.599178250 +0000
-@@ -337,13 +337,20 @@ static inline void task_seccomp(struct s
+--- src.orig/fs/proc/array.c	2017-09-22 16:52:10.597110096 -0400
++++ src/fs/proc/array.c	2017-09-22 16:59:40.799972178 -0400
+@@ -359,13 +359,20 @@ static inline void task_seccomp(struct s
  #endif
  }
  
@@ -23,9 +23,9 @@ diff -Nupr src.orig/fs/proc/array.c src/fs/proc/array.c
  
  static void task_cpus_allowed(struct seq_file *m, struct task_struct *task)
 diff -Nupr src.orig/kernel/exit.c src/kernel/exit.c
---- src.orig/kernel/exit.c	2016-11-30 20:10:24.806178250 +0000
-+++ src/kernel/exit.c	2016-11-30 20:38:11.600178250 +0000
-@@ -706,6 +706,7 @@ static void check_stack_usage(void)
+--- src.orig/kernel/exit.c	2017-09-22 16:52:10.506109720 -0400
++++ src/kernel/exit.c	2017-09-22 16:59:40.799972178 -0400
+@@ -715,6 +715,7 @@ static void check_stack_usage(void)
  static inline void check_stack_usage(void) {}
  #endif
  
@@ -33,7 +33,7 @@ diff -Nupr src.orig/kernel/exit.c src/kernel/exit.c
  void do_exit(long code)
  {
  	struct task_struct *tsk = current;
-@@ -801,6 +802,8 @@ void do_exit(long code)
+@@ -812,6 +813,8 @@ void do_exit(long code)
  	check_stack_usage();
  	exit_thread();
  
@@ -43,9 +43,9 @@ diff -Nupr src.orig/kernel/exit.c src/kernel/exit.c
  	 * Flush inherited counters to the parent - before the parent
  	 * gets woken up by child-exit notifications.
 diff -Nupr src.orig/kernel/fork.c src/kernel/fork.c
---- src.orig/kernel/fork.c	2016-11-30 20:10:24.806178250 +0000
-+++ src/kernel/fork.c	2016-11-30 20:41:16.098178250 +0000
-@@ -1585,6 +1585,7 @@ struct task_struct *fork_idle(int cpu)
+--- src.orig/kernel/fork.c	2017-09-22 16:52:10.504109711 -0400
++++ src/kernel/fork.c	2017-09-22 17:00:44.938237460 -0400
+@@ -1700,6 +1700,7 @@ struct task_struct *fork_idle(int cpu)
   * It copies the process, and if successful kick-starts
   * it and waits for it to finish using the VM if required.
   */
@@ -53,10 +53,10 @@ diff -Nupr src.orig/kernel/fork.c src/kernel/fork.c
  long do_fork(unsigned long clone_flags,
  	      unsigned long stack_start,
  	      unsigned long stack_size,
-@@ -1621,6 +1622,13 @@ long do_fork(unsigned long clone_flags,
- 	 */
+@@ -1737,6 +1738,13 @@ long do_fork(unsigned long clone_flags,
  	if (!IS_ERR(p)) {
  		struct completion vfork;
+ 		struct pid *pid;
 +		int *newpid;
 +		static int ctr = 0;
 +

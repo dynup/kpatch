@@ -1,12 +1,12 @@
 diff -Nupr src.orig/arch/x86/kvm/x86.c src/arch/x86/kvm/x86.c
---- src.orig/arch/x86/kvm/x86.c	2016-11-30 19:51:01.978178250 +0000
-+++ src/arch/x86/kvm/x86.c	2016-11-30 19:53:23.573178250 +0000
-@@ -222,6 +222,8 @@ static void shared_msr_update(unsigned s
+--- src.orig/arch/x86/kvm/x86.c	2017-09-22 15:27:20.852052672 -0400
++++ src/arch/x86/kvm/x86.c	2017-09-22 15:27:49.362170732 -0400
+@@ -248,6 +248,8 @@ static void shared_msr_update(unsigned s
  
  void kvm_define_shared_msr(unsigned slot, u32 msr)
  {
 +	if (!jiffies)
 +		printk("kpatch kvm define shared msr\n");
  	BUG_ON(slot >= KVM_NR_SHARED_MSRS);
+ 	shared_msrs_global.msrs[slot] = msr;
  	if (slot >= shared_msrs_global.nr)
- 		shared_msrs_global.nr = slot + 1;

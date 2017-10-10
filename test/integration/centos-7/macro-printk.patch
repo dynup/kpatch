@@ -1,7 +1,7 @@
 diff -Nupr src.orig/net/ipv4/fib_frontend.c src/net/ipv4/fib_frontend.c
---- src.orig/net/ipv4/fib_frontend.c	2016-11-30 20:10:24.893178250 +0000
-+++ src/net/ipv4/fib_frontend.c	2016-11-30 20:22:25.183178250 +0000
-@@ -623,6 +623,7 @@ errout:
+--- src.orig/net/ipv4/fib_frontend.c	2017-09-22 16:52:10.646110299 -0400
++++ src/net/ipv4/fib_frontend.c	2017-09-22 16:55:14.395870305 -0400
+@@ -633,6 +633,7 @@ errout:
  	return err;
  }
  
@@ -9,18 +9,18 @@ diff -Nupr src.orig/net/ipv4/fib_frontend.c src/net/ipv4/fib_frontend.c
  static int inet_rtm_newroute(struct sk_buff *skb, struct nlmsghdr *nlh)
  {
  	struct net *net = sock_net(skb->sk);
-@@ -641,6 +642,7 @@ static int inet_rtm_newroute(struct sk_b
+@@ -651,6 +652,7 @@ static int inet_rtm_newroute(struct sk_b
  	}
  
- 	err = fib_table_insert(tb, &cfg);
+ 	err = fib_table_insert(net, tb, &cfg);
 +	KPATCH_PRINTK("[inet_rtm_newroute]: err is %d\n", err);
  errout:
  	return err;
  }
 diff -Nupr src.orig/net/ipv4/fib_semantics.c src/net/ipv4/fib_semantics.c
---- src.orig/net/ipv4/fib_semantics.c	2016-11-30 20:10:24.893178250 +0000
-+++ src/net/ipv4/fib_semantics.c	2016-11-30 20:28:53.154178250 +0000
-@@ -798,6 +798,7 @@ fib_convert_metrics(struct fib_info *fi,
+--- src.orig/net/ipv4/fib_semantics.c	2017-09-22 16:52:10.645110295 -0400
++++ src/net/ipv4/fib_semantics.c	2017-09-22 16:54:05.175584004 -0400
+@@ -925,6 +925,7 @@ fib_convert_metrics(struct fib_info *fi,
  	return 0;
  }
  
@@ -28,7 +28,7 @@ diff -Nupr src.orig/net/ipv4/fib_semantics.c src/net/ipv4/fib_semantics.c
  struct fib_info *fib_create_info(struct fib_config *cfg)
  {
  	int err;
-@@ -822,6 +823,7 @@ struct fib_info *fib_create_info(struct
+@@ -949,6 +950,7 @@ struct fib_info *fib_create_info(struct
  #endif
  
  	err = -ENOBUFS;
@@ -36,7 +36,7 @@ diff -Nupr src.orig/net/ipv4/fib_semantics.c src/net/ipv4/fib_semantics.c
  	if (fib_info_cnt >= fib_info_hash_size) {
  		unsigned int new_size = fib_info_hash_size << 1;
  		struct hlist_head *new_info_hash;
-@@ -842,6 +844,7 @@ struct fib_info *fib_create_info(struct
+@@ -969,6 +971,7 @@ struct fib_info *fib_create_info(struct
  		if (!fib_info_hash_size)
  			goto failure;
  	}
@@ -44,7 +44,7 @@ diff -Nupr src.orig/net/ipv4/fib_semantics.c src/net/ipv4/fib_semantics.c
  
  	fi = kzalloc(sizeof(*fi)+nhs*sizeof(struct fib_nh), GFP_KERNEL);
  	if (fi == NULL)
-@@ -853,6 +856,7 @@ struct fib_info *fib_create_info(struct
+@@ -980,6 +983,7 @@ struct fib_info *fib_create_info(struct
  	} else
  		fi->fib_metrics = (u32 *) dst_default_metrics;
  	fib_info_cnt++;
@@ -52,7 +52,7 @@ diff -Nupr src.orig/net/ipv4/fib_semantics.c src/net/ipv4/fib_semantics.c
  
  	fi->fib_net = net;
  	fi->fib_protocol = cfg->fc_protocol;
-@@ -869,8 +873,10 @@ struct fib_info *fib_create_info(struct
+@@ -996,8 +1000,10 @@ struct fib_info *fib_create_info(struct
  		if (!nexthop_nh->nh_pcpu_rth_output)
  			goto failure;
  	} endfor_nexthops(fi)
@@ -63,7 +63,7 @@ diff -Nupr src.orig/net/ipv4/fib_semantics.c src/net/ipv4/fib_semantics.c
  	if (err)
  		goto failure;
  
-@@ -905,6 +911,7 @@ struct fib_info *fib_create_info(struct
+@@ -1048,6 +1054,7 @@ struct fib_info *fib_create_info(struct
  		nh->nh_weight = 1;
  #endif
  	}
@@ -71,7 +71,7 @@ diff -Nupr src.orig/net/ipv4/fib_semantics.c src/net/ipv4/fib_semantics.c
  
  	if (fib_props[cfg->fc_type].error) {
  		if (cfg->fc_gw || cfg->fc_oif || cfg->fc_mp)
-@@ -922,6 +929,7 @@ struct fib_info *fib_create_info(struct
+@@ -1065,6 +1072,7 @@ struct fib_info *fib_create_info(struct
  			goto err_inval;
  		}
  	}
@@ -79,7 +79,7 @@ diff -Nupr src.orig/net/ipv4/fib_semantics.c src/net/ipv4/fib_semantics.c
  
  	if (cfg->fc_scope > RT_SCOPE_HOST)
  		goto err_inval;
-@@ -944,6 +952,7 @@ struct fib_info *fib_create_info(struct
+@@ -1087,6 +1095,7 @@ struct fib_info *fib_create_info(struct
  				goto failure;
  		} endfor_nexthops(fi)
  	}
@@ -87,15 +87,15 @@ diff -Nupr src.orig/net/ipv4/fib_semantics.c src/net/ipv4/fib_semantics.c
  
  	if (fi->fib_prefsrc) {
  		if (cfg->fc_type != RTN_LOCAL || !cfg->fc_dst ||
-@@ -955,6 +964,7 @@ struct fib_info *fib_create_info(struct
- 	change_nexthops(fi) {
+@@ -1099,6 +1108,7 @@ struct fib_info *fib_create_info(struct
  		fib_info_update_nh_saddr(net, nexthop_nh);
+ 		fib_add_weight(fi, nexthop_nh);
  	} endfor_nexthops(fi)
 +	KPATCH_PRINTK("[fib_create_info]: 9 create error err is %d\n",err);
  
- link_it:
- 	ofi = fib_find_info(fi);
-@@ -964,6 +974,7 @@ link_it:
+ 	fib_rebalance(fi);
+ 
+@@ -1110,6 +1120,7 @@ link_it:
  		ofi->fib_treeref++;
  		return ofi;
  	}
@@ -103,7 +103,7 @@ diff -Nupr src.orig/net/ipv4/fib_semantics.c src/net/ipv4/fib_semantics.c
  
  	fi->fib_treeref++;
  	atomic_inc(&fi->fib_clntref);
-@@ -987,6 +998,7 @@ link_it:
+@@ -1133,6 +1144,7 @@ link_it:
  		hlist_add_head(&nexthop_nh->nh_hash, head);
  	} endfor_nexthops(fi)
  	spin_unlock_bh(&fib_info_lock);
@@ -111,7 +111,7 @@ diff -Nupr src.orig/net/ipv4/fib_semantics.c src/net/ipv4/fib_semantics.c
  	return fi;
  
  err_inval:
-@@ -997,6 +1009,7 @@ failure:
+@@ -1143,6 +1155,7 @@ failure:
  		fi->fib_dead = 1;
  		free_fib_info(fi);
  	}
@@ -120,17 +120,17 @@ diff -Nupr src.orig/net/ipv4/fib_semantics.c src/net/ipv4/fib_semantics.c
  	return ERR_PTR(err);
  }
 diff -Nupr src.orig/net/ipv4/fib_trie.c src/net/ipv4/fib_trie.c
---- src.orig/net/ipv4/fib_trie.c	2016-11-30 20:10:24.893178250 +0000
-+++ src/net/ipv4/fib_trie.c	2016-11-30 20:30:19.709178250 +0000
-@@ -1065,6 +1065,7 @@ static int fib_insert_alias(struct trie
+--- src.orig/net/ipv4/fib_trie.c	2017-09-22 16:52:10.645110295 -0400
++++ src/net/ipv4/fib_trie.c	2017-09-22 16:55:39.940975963 -0400
+@@ -1191,6 +1191,7 @@ static int fib_insert_alias(struct trie
  }
  
  /* Caller must hold RTNL. */
 +#include "kpatch-macros.h"
- int fib_table_insert(struct fib_table *tb, struct fib_config *cfg)
+ int fib_table_insert(struct net *net, struct fib_table *tb,
+ 		     struct fib_config *cfg)
  {
- 	struct trie *t = (struct trie *)tb->tb_data;
-@@ -1087,11 +1088,14 @@ int fib_table_insert(struct fib_table *t
+@@ -1216,11 +1217,14 @@ int fib_table_insert(struct net *net, st
  	if ((plen < KEYLENGTH) && (key << plen))
  		return -EINVAL;
  

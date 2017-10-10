@@ -1,6 +1,6 @@
 diff -Nupr src.orig/arch/x86/kernel/ldt.c src/arch/x86/kernel/ldt.c
---- src.orig/arch/x86/kernel/ldt.c	2016-11-30 19:51:01.968178250 +0000
-+++ src/arch/x86/kernel/ldt.c	2016-11-30 19:52:57.597178250 +0000
+--- src.orig/arch/x86/kernel/ldt.c	2017-09-22 15:27:20.847052651 -0400
++++ src/arch/x86/kernel/ldt.c	2017-09-22 15:27:35.573113632 -0400
 @@ -98,6 +98,12 @@ static inline int copy_ldt(mm_context_t
  	return 0;
  }

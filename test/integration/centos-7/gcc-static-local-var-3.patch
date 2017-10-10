@@ -1,7 +1,7 @@
 diff -Nupr src.orig/kernel/sys.c src/kernel/sys.c
---- src.orig/kernel/sys.c	2016-11-30 20:10:24.820178250 +0000
-+++ src/kernel/sys.c	2016-11-30 20:20:28.184178250 +0000
-@@ -548,8 +548,15 @@ SYSCALL_DEFINE4(reboot, int, magic1, int
+--- src.orig/kernel/sys.c	2017-09-22 15:27:21.601055773 -0400
++++ src/kernel/sys.c	2017-09-22 15:27:32.170099540 -0400
+@@ -554,8 +554,15 @@ SYSCALL_DEFINE4(reboot, int, magic1, int
  	return ret;
  }
  

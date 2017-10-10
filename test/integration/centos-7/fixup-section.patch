@@ -1,6 +1,6 @@
 diff -Nupr src.orig/fs/readdir.c src/fs/readdir.c
---- src.orig/fs/readdir.c	2016-11-30 19:51:03.953178250 +0000
-+++ src/fs/readdir.c	2016-11-30 19:51:16.235178250 +0000
+--- src.orig/fs/readdir.c	2017-09-22 15:27:21.658056010 -0400
++++ src/fs/readdir.c	2017-09-22 15:27:26.378075555 -0400
 @@ -166,6 +166,8 @@ static int filldir(void * __buf, const c
  			goto efault;
  	}
