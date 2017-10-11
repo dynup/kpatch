@@ -17,7 +17,7 @@ are safe to apply.  Every patch must also be analyzed in-depth by a human.
 
 The most important point here cannot be stressed enough.  Here comes the bold:
 
-**Do not blindly apply patches.  There is no subsitute for human analysis and
+**Do not blindly apply patches.  There is no substitute for human analysis and
 reasoning on a per-patch basis.  All patches must be thoroughly analyzed by a
 human kernel expert who completely understands the patch and the affected code
 and how they relate to the live patching environment.**
@@ -167,7 +167,7 @@ data structures, you can use the `kpatch_shadow_*()` functions:
 Example: The `shadow-newpid.patch` integration test demonstrates the usage of
 these functions.
 
-A shadow PID variable is allocated in `do_fork()` : it is associated with the
+A shadow PID variable is allocated in `do_fork()`: it is associated with the
 current `struct task_struct *p` value, given a string lookup key of "newpid",
 sized accordingly, and allocated as per `GFP_KERNEL` flag rules.
 
