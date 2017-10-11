@@ -286,16 +286,16 @@ find_parent_obj() {
 		num=0
 		if [[ -n "$last_deep_find" ]]; then
 			parent="$(grep -l "$grepname" "$last_deep_find"/.*.cmd | grep -v "$pdir/.${file}.cmd" |head -n1)"
-			num="$(grep -l "$grepname" "$last_deep_find"/.*.cmd | grep -v "$pdir/.${file}.cmd" |wc -l)"
+			num="$(grep -l "$grepname" "$last_deep_find"/.*.cmd | grep -vc "$pdir/.${file}.cmd")"
 		fi
 		if [[ "$num" -eq 0 ]]; then
-			parent="$(find * -name ".*.cmd" | xargs grep -l "$grepname" | grep -v "$pdir/.${file}.cmd" |head -n1)"
-			num="$(find * -name ".*.cmd" | xargs grep -l "$grepname" | grep -v "$pdir/.${file}.cmd" | wc -l)"
+			parent="$(find * -name ".*.cmd" -print0 | xargs -0 grep -l "$grepname" | grep -v "$pdir/.${file}.cmd" |head -n1)"
+			num="$(find * -name ".*.cmd" -print0 | xargs -0 grep -l "$grepname" | grep -vc "$pdir/.${file}.cmd")"
 			[[ "$num" -eq 1 ]] && last_deep_find="$(dirname "$parent")"
 		fi
 	else
 		parent="$(grep -l "$grepname" "$dir"/.*.cmd | grep -v "$dir/.${file}.cmd" |head -n1)"
-		num="$(grep -l "$grepname" "$dir"/.*.cmd | grep -v "$dir/.${file}.cmd" | wc -l)"
+		num="$(grep -l "$grepname" "$dir"/.*.cmd | grep -vc "$dir/.${file}.cmd")"
 	fi
 
 	[[ "$num" -eq 0 ]] && PARENT="" && return
@@ -717,7 +717,7 @@ for i in $FILES; do
 			"output/$i" "$SRCDIR/Module.symvers" "${MODNAME//-/_}" 2>&1 |tee -a "$LOGFILE"
 		check_pipe_status create-diff-object
 		# create-diff-object returns 3 if no functional change is found
-		[[ "$rc" -eq 0 ]] || [[ "$rc" -eq 3 ]] || ERROR="$(expr $ERROR "+" 1)"
+		[[ "$rc" -eq 0 ]] || [[ "$rc" -eq 3 ]] || ERROR="$((ERROR + 1))"
 		if [[ "$rc" -eq 0 ]]; then
 			[[ -n "$ERROR_IF_DIFF" ]] && die "$ERROR_IF_DIFF"
 			CHANGED=1
