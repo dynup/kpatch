@@ -195,6 +195,13 @@ apt update may report a "404 Not Found" error, as well as a complaint about
 disabling the repository by default.  This message may be ignored (see issue
 #710).
 
+#### Debian 9 (Stretch)
+
+Since Stretch the stock kernel can be used without changes, however the
+version of kpatch in Stretch is too old so you still need to build it
+manually. Follow the instructions for Debian Jessie (next section) but skip
+building a custom kernel/rebooting.
+
 #### Debian 8 (Jessie)
 
 *NOTE: You'll need about 15GB of free disk space for the kpatch-build cache in
