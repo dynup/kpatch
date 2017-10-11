@@ -270,6 +270,7 @@ Compile kpatch:
 
     make
 
+
 ### Install
 
 OPTIONAL: Install kpatch to `/usr/local`:
@@ -351,6 +352,7 @@ can have some major pitfalls if you're not careful.  To learn more about how to
 properly create live patches, see the [Patch Author
 Guide](doc/patch-author-guide.md).
 
+
 How it works
 ------------
 
@@ -404,6 +406,7 @@ The primary steps in kpatch-build are:
 	* Generate the resulting output object containing the new and modified sections
 - Link all the output objects into a cumulative object
 - Generate the patch module
+
 
 ### Patching
 
@@ -508,7 +511,7 @@ updating the instruction directly.  This approach also ensures that the code
 modification path is reliable, since ftrace has been doing it successfully for
 years.
 
-**Q Is kpatch compatible with \<insert kernel debugging subsystem here\>?**
+**Q. Is kpatch compatible with \<insert kernel debugging subsystem here\>?**
 
 We aim to be good kernel citizens and maintain compatibility.  A kpatch
 replacement function is no different than a function loaded by any other kernel
@@ -555,7 +558,7 @@ We hope to make the following changes to other projects:
 	- ftrace improvements to close any windows that would allow a patch to
 	  be inadvertently disabled
 
-**Q: Is it possible to register a function that gets called atomically with
+**Q. Is it possible to register a function that gets called atomically with
 `stop_machine` when the patch module loads and unloads?**
 
 We do have plans to implement something like that.
@@ -617,6 +620,7 @@ Contributions are very welcome.  Feel free to open issues or PRs on github.
 For big PRs, it's a good idea to discuss them first in github issues or on the
 [mailing list](https://www.redhat.com/mailman/listinfo/kpatch) before you write
 a lot of code.
+
 
 License
 -------
