@@ -195,7 +195,7 @@ apt update may report a "404 Not Found" error, as well as a complaint about
 disabling the repository by default.  This message may be ignored (see issue
 #710).
 
-#### Debian 8.0
+#### Debian 8 (Jessie)
 
 *NOTE: You'll need about 15GB of free disk space for the kpatch-build cache in
 `~/.kpatch` and for ccache.*
@@ -229,7 +229,7 @@ Install the dependencies for the "kpatch-build" command:
     apt-get install ccache
     ccache --max-size=5G
 
-#### Debian 7.x
+#### Debian 7 (Lenny)
 
 *NOTE: You'll need about 15GB of free disk space for the kpatch-build cache in
 `~/.kpatch` and for ccache.*
