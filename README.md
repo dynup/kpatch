@@ -13,7 +13,7 @@ may occur!**
 
 Here's a video of kpatch in action:
 
-[![kpatch video](http://img.youtube.com/vi/juyQ5TsJRTA/0.jpg)](http://www.youtube.com/watch?v=juyQ5TsJRTA)
+[![kpatch video](https://img.youtube.com/vi/juyQ5TsJRTA/0.jpg)](https://www.youtube.com/watch?v=juyQ5TsJRTA)
 
 And a few more:
 
