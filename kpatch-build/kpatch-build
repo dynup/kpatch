@@ -167,10 +167,28 @@ find_core_symvers() {
 	[[ -e "$SYMVERSFILE" ]]
 }
 
+gcc_version_from_file() {
+	readelf -p .comment "$1" | grep -o 'GCC:.*'
+}
 gcc_version_check() {
+	local c="$TEMPDIR/test.c" o="$TEMPDIR/test.o"
+	local out gccver kgccver
+
+	# gcc --version varies between distributions therefore extract version
+	# by compiling a test file and compare it to vmlinux's version.
+	echo 'void main(void) {}' > "$c"
+	out="$(gcc -c -pg -ffunction-sections -o "$o" "$c" 2>&1)"
+	gccver="$(gcc_version_from_file "$o")"
+	kgccver="$(gcc_version_from_file "$VMLINUX")"
+	rm -f "$c" "$o"
+
+	if [[ -n "$out" ]]; then
+		warn "gcc >= 4.8 required for -pg -ffunction-settings"
+		echo "gcc output: $out"
+		return 1
+	fi
+
 	# ensure gcc version matches that used to build the kernel
-	local gccver="$(gcc --version |head -n1 |cut -d' ' -f3-)"
-	local kgccver="$(readelf -p .comment "$VMLINUX" |grep GCC: | tr -s ' ' | cut -d ' ' -f6-)"
 	if [[ "$gccver" != "$kgccver" ]]; then
 		warn "gcc/kernel version mismatch"
 		echo "gcc version:    $gccver"
@@ -178,23 +196,6 @@ gcc_version_check() {
 		echo "Install the matching gcc version (recommended) or use --skip-gcc-check"
 		echo "to skip the version matching enforcement (not recommended)"
 		return 1
-	fi
-
-	# On ppc64le, livepatch needs the GCC -mprofile-kernel flag.  A script
-	# is run during the kernel build to ensure the flag is present:
-	#
-	#   <linux>/arch/powerpc/tools/gcc-check-mprofile-kernel.sh
-	#
-	# Postpone the check to the kernel build instead of duplicating it here.
-	if [[ "$ARCH" = "ppc64le" ]]; then
-		return
-	else
-		# ensure gcc version is >= 4.8
-		gccver="$(echo "$gccver" |cut -d'.' -f1,2)"
-		if [[ "$gccver" < 4.8 ]]; then
-			warn "gcc >= 4.8 required"
-			return 1
-		fi
 	fi
 
 	return
