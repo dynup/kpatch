@@ -286,7 +286,7 @@ find_parent_obj() {
 	if [[ "$DEEP_FIND" -eq 1 ]]; then
 		num=0
 		if [[ -n "$last_deep_find" ]]; then
-			parent="$(grep -l "$grepname" "$last_deep_find"/.*.cmd | grep -Fv "$pdir/.${file}.cmd" |head -n1)"
+			parent="$(grep -l "$grepname" "$last_deep_find"/.*.cmd | grep -Fv "$pdir/.${file}.cmd" | head -n1)"
 			num="$(grep -l "$grepname" "$last_deep_find"/.*.cmd | grep -Fvc "$pdir/.${file}.cmd")"
 		fi
 		if [[ "$num" -eq 0 ]]; then
@@ -295,7 +295,7 @@ find_parent_obj() {
 			[[ "$num" -eq 1 ]] && last_deep_find="$(dirname "$parent")"
 		fi
 	else
-		parent="$(grep -l "$grepname" "$dir"/.*.cmd | grep -Fv "$dir/.${file}.cmd" |head -n1)"
+		parent="$(grep -l "$grepname" "$dir"/.*.cmd | grep -Fv "$dir/.${file}.cmd" | head -n1)"
 		num="$(grep -l "$grepname" "$dir"/.*.cmd | grep -Fvc "$dir/.${file}.cmd")"
 	fi
 
@@ -344,7 +344,7 @@ find_kobj() {
 # is replaced with '-'.  Also truncate to 48 chars so the full name fits in the
 # kernel's 56-byte module name array.
 module_name_string() {
-	echo "${1//[^a-zA-Z0-9_-]/-}" |cut -c 1-48
+	echo "${1//[^a-zA-Z0-9_-]/-}" | cut -c 1-48
 }
 
 usage() {
@@ -723,7 +723,7 @@ for i in $FILES; do
 	if [[ -e "orig/$i" ]]; then
 		# create-diff-object orig.o patched.o kernel-object output.o Module.symvers patch-mod-name
 		"$TOOLSDIR"/create-diff-object "orig/$i" "patched/$i" "$KOBJFILE" \
-			"output/$i" "$SRCDIR/Module.symvers" "${MODNAME//-/_}" 2>&1 |tee -a "$LOGFILE"
+			"output/$i" "$SRCDIR/Module.symvers" "${MODNAME//-/_}" 2>&1 | tee -a "$LOGFILE"
 		check_pipe_status create-diff-object
 		# create-diff-object returns 3 if no functional change is found
 		[[ "$rc" -eq 0 ]] || [[ "$rc" -eq 3 ]] || ERROR="$((ERROR + 1))"
@@ -779,7 +779,7 @@ if "$KPATCH_MODULE"; then
 	md5sum ../patch/tmp_output.o | awk '{printf "%s\0", $1}' > checksum.tmp || die
 	objcopy --add-section .kpatch.checksum=checksum.tmp --set-section-flags .kpatch.checksum=alloc,load,contents,readonly  ../patch/tmp_output.o || die
 	rm -f checksum.tmp
-	"$TOOLSDIR"/create-kpatch-module "$TEMPDIR"/patch/tmp_output.o "$TEMPDIR"/patch/output.o 2>&1 |tee -a "$LOGFILE"
+	"$TOOLSDIR"/create-kpatch-module "$TEMPDIR"/patch/tmp_output.o "$TEMPDIR"/patch/output.o 2>&1 | tee -a "$LOGFILE"
 	check_pipe_status create-kpatch-module
 else
 	cp "$TEMPDIR"/patch/tmp_output.o "$TEMPDIR"/patch/output.o || die
@@ -797,7 +797,7 @@ if ! "$KPATCH_MODULE"; then
 		extra_flags="--no-klp-arch-sections"
 	fi
 	cp "$TEMPDIR/patch/$MODNAME.ko" "$TEMPDIR/patch/tmp.ko" || die
-	"$TOOLSDIR"/create-klp-module $extra_flags "$TEMPDIR/patch/tmp.ko" "$TEMPDIR/patch/$MODNAME.ko" 2>&1 |tee -a "$LOGFILE"
+	"$TOOLSDIR"/create-klp-module $extra_flags "$TEMPDIR/patch/tmp.ko" "$TEMPDIR/patch/$MODNAME.ko" 2>&1 | tee -a "$LOGFILE"
 	check_pipe_status create-klp-module
 fi
 
