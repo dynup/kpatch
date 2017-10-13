@@ -468,6 +468,8 @@ fi
 
 [[ -z "$TARGETS" ]] && TARGETS="vmlinux modules"
 
+# Don't check external file.
+# shellcheck disable=SC1091
 source /etc/os-release
 DISTRO="$ID"
 if [[ "$DISTRO" = fedora ]] || [[ "$DISTRO" = rhel ]] || [[ "$DISTRO" = ol ]] || [[ "$DISTRO" = centos ]]; then
@@ -641,6 +643,8 @@ echo "Building original kernel"
 make mrproper >> "$LOGFILE" 2>&1 || die
 cp -f "$CONFIGFILE" "$SRCDIR/.config"
 unset KPATCH_GCC_TEMPDIR
+# $TARGETS used as list, no quotes.
+# shellcheck disable=SC2086
 CROSS_COMPILE="$TOOLSDIR/kpatch-gcc " make "-j$CPUS" $TARGETS >> "$LOGFILE" 2>&1 || die
 
 echo "Building patched kernel"
@@ -648,6 +652,8 @@ apply_patches
 mkdir -p "$TEMPDIR/orig" "$TEMPDIR/patched"
 KPATCH_GCC_TEMPDIR="$TEMPDIR"
 export KPATCH_GCC_TEMPDIR
+# $TARGETS used as list, no quotes.
+# shellcheck disable=SC2086
 CROSS_COMPILE="$TOOLSDIR/kpatch-gcc " \
 	KBUILD_MODPOST_WARN=1 \
 	make "-j$CPUS" $TARGETS >> "$LOGFILE" 2>&1 || die
@@ -659,6 +665,8 @@ if [[ ! -e "$TEMPDIR/changed_objs" ]]; then
 	die "no changed objects found"
 fi
 
+# Read as words, no quotes.
+# shellcheck disable=SC2013
 for i in $(cat "$TEMPDIR/changed_objs")
 do
 	mkdir -p "$TEMPDIR/patched/$(dirname "$i")" || die
@@ -762,6 +770,8 @@ if [[ ! -z "$UBUNTU_KERNEL" ]]; then
 fi
 
 cd "$TEMPDIR/output" || die
+# $KPATCH_LDFLAGS and result of find used as list, no quotes.
+# shellcheck disable=SC2086,SC2046
 ld -r $KPATCH_LDFLAGS -o ../patch/tmp_output.o $(find . -name "*.o") >> "$LOGFILE" 2>&1 || die
 
 if "$KPATCH_MODULE"; then
