@@ -6,7 +6,7 @@ INSTALL_DIRS = $(SUBDIRS:%=install-%)
 UNINSTALL_DIRS = $(SUBDIRS:%=uninstall-%)
 CLEAN_DIRS   = $(SUBDIRS:%=clean-%)
 
-.PHONY: all install uninstall clean
+.PHONY: all install uninstall clean check
 .PHONY: $(SUBDIRS) $(BUILD_DIRS) $(INSTALL_DIRS) $(CLEAN_DIRS)
 
 
@@ -25,3 +25,6 @@ $(UNINSTALL_DIRS):
 clean: $(CLEAN_DIRS)
 $(CLEAN_DIRS):
 	$(MAKE) -C $(@:clean-%=%) clean
+
+check:
+	shellcheck kpatch/kpatch kpatch-build/kpatch-build kpatch-build/kpatch-gcc
