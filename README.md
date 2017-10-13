@@ -13,7 +13,7 @@ may occur!**
 
 Here's a video of kpatch in action:
 
-[![kpatch video](http://img.youtube.com/vi/juyQ5TsJRTA/0.jpg)](http://www.youtube.com/watch?v=juyQ5TsJRTA)
+[![kpatch video](https://img.youtube.com/vi/juyQ5TsJRTA/0.jpg)](https://www.youtube.com/watch?v=juyQ5TsJRTA)
 
 And a few more:
 
@@ -195,7 +195,14 @@ apt update may report a "404 Not Found" error, as well as a complaint about
 disabling the repository by default.  This message may be ignored (see issue
 #710).
 
-#### Debian 8.0
+#### Debian 9 (Stretch)
+
+Since Stretch the stock kernel can be used without changes, however the
+version of kpatch in Stretch is too old so you still need to build it
+manually. Follow the instructions for Debian Jessie (next section) but skip
+building a custom kernel/rebooting.
+
+#### Debian 8 (Jessie)
 
 *NOTE: You'll need about 15GB of free disk space for the kpatch-build cache in
 `~/.kpatch` and for ccache.*
@@ -229,7 +236,7 @@ Install the dependencies for the "kpatch-build" command:
     apt-get install ccache
     ccache --max-size=5G
 
-#### Debian 7.x
+#### Debian 7 (Lenny)
 
 *NOTE: You'll need about 15GB of free disk space for the kpatch-build cache in
 `~/.kpatch` and for ccache.*
@@ -269,6 +276,7 @@ Configure ccache (installed by kpatch package):
 Compile kpatch:
 
     make
+
 
 ### Install
 
@@ -351,6 +359,7 @@ can have some major pitfalls if you're not careful.  To learn more about how to
 properly create live patches, see the [Patch Author
 Guide](doc/patch-author-guide.md).
 
+
 How it works
 ------------
 
@@ -404,6 +413,7 @@ The primary steps in kpatch-build are:
 	* Generate the resulting output object containing the new and modified sections
 - Link all the output objects into a cumulative object
 - Generate the patch module
+
 
 ### Patching
 
@@ -508,7 +518,7 @@ updating the instruction directly.  This approach also ensures that the code
 modification path is reliable, since ftrace has been doing it successfully for
 years.
 
-**Q Is kpatch compatible with \<insert kernel debugging subsystem here\>?**
+**Q. Is kpatch compatible with \<insert kernel debugging subsystem here\>?**
 
 We aim to be good kernel citizens and maintain compatibility.  A kpatch
 replacement function is no different than a function loaded by any other kernel
@@ -555,7 +565,7 @@ We hope to make the following changes to other projects:
 	- ftrace improvements to close any windows that would allow a patch to
 	  be inadvertently disabled
 
-**Q: Is it possible to register a function that gets called atomically with
+**Q. Is it possible to register a function that gets called atomically with
 `stop_machine` when the patch module loads and unloads?**
 
 We do have plans to implement something like that.
@@ -617,6 +627,7 @@ Contributions are very welcome.  Feel free to open issues or PRs on github.
 For big PRs, it's a good idea to discuss them first in github issues or on the
 [mailing list](https://www.redhat.com/mailman/listinfo/kpatch) before you write
 a lot of code.
+
 
 License
 -------
