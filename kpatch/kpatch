@@ -160,7 +160,8 @@ load_module () {
 		fi
 	fi
 
-	local modname="$(get_module_name "$module")"
+	local modname
+	modname="$(get_module_name "$module")"
 	local moddir="$SYSFS/$modname"
 	if [[ -d "$moddir" ]] ; then
 		if [[ "$(cat "${moddir}/enabled")" -eq 0 ]]; then
