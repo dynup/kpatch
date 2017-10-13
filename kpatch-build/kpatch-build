@@ -290,8 +290,8 @@ find_parent_obj() {
 			num="$(grep -l "$grepname" "$last_deep_find"/.*.cmd | grep -vc "$pdir/.${file}.cmd")"
 		fi
 		if [[ "$num" -eq 0 ]]; then
-			parent="$(find * -name ".*.cmd" -print0 | xargs -0 grep -l "$grepname" | grep -v "$pdir/.${file}.cmd" |head -n1)"
-			num="$(find * -name ".*.cmd" -print0 | xargs -0 grep -l "$grepname" | grep -vc "$pdir/.${file}.cmd")"
+			parent="$(find ./* -name ".*.cmd" -print0 | xargs -0 grep -l "$grepname" | grep -v "$pdir/.${file}.cmd" | cut -c3- | head -n1)"
+			num="$(find ./* -name ".*.cmd" -print0 | xargs -0 grep -l "$grepname" | grep -vc "$pdir/.${file}.cmd")"
 			[[ "$num" -eq 1 ]] && last_deep_find="$(dirname "$parent")"
 		fi
 	else
