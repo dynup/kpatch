@@ -6,6 +6,7 @@ INSTALL_DIRS = $(SUBDIRS:%=install-%)
 UNINSTALL_DIRS = $(SUBDIRS:%=uninstall-%)
 CLEAN_DIRS   = $(SUBDIRS:%=clean-%)
 
+.PHONY: all install uninstall clean
 .PHONY: $(SUBDIRS) $(BUILD_DIRS) $(INSTALL_DIRS) $(CLEAN_DIRS)
 
 
