@@ -1793,7 +1793,7 @@ static void kpatch_regenerate_special_section(struct kpatch_elf *kelf,
 {
 	struct rela *rela, *safe;
 	char *src, *dest;
-	int group_size, src_offset, dest_offset, include, align, aligned_size;
+	int group_size, src_offset, dest_offset, include;
 
 	LIST_HEAD(newrelas);
 
@@ -1817,6 +1817,18 @@ static void kpatch_regenerate_special_section(struct kpatch_elf *kelf,
 	for ( ; src_offset < sec->base->sh.sh_size; src_offset += group_size) {
 
 		group_size = special->group_size(kelf, src_offset);
+
+		/*
+		 * In some cases the struct has padding at the end to ensure
+		 * that all structs after it are properly aligned.  But the
+		 * last struct in the section may not be padded.  In that case,
+		 * shrink the group_size such that it still (hopefully)
+		 * contains the data but doesn't go past the end of the
+		 * section.
+		 */
+		if (src_offset + group_size > sec->base->sh.sh_size)
+			group_size = sec->base->sh.sh_size - src_offset;
+
 		include = should_keep_rela_group(sec, src_offset, group_size);
 
 		if (!include)
@@ -1852,12 +1864,6 @@ static void kpatch_regenerate_special_section(struct kpatch_elf *kelf,
 		memcpy(dest + dest_offset, src + src_offset, group_size);
 		dest_offset += group_size;
 	}
-
-	/* verify that group_size is a divisor of aligned section size */
-	align = sec->base->sh.sh_addralign;
-	aligned_size = ((sec->base->sh.sh_size + align - 1) / align) * align;
-	if (src_offset != aligned_size)
-		ERROR("group size mismatch for section %s\n", sec->base->name);
 
 	if (!dest_offset) {
 		/* no changed or global functions referenced */
