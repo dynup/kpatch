@@ -136,6 +136,10 @@ version_gte() {
 	[  "$1" = "$(echo -e "$1\n$2" | sort -rV | head -n1)" ]
 }
 
+is_rhel() {
+	[[ $1 =~ \.el[78]\. ]]
+}
+
 find_dirs() {
 	if [[ -e "$SCRIPTDIR/create-diff-object" ]]; then
 		# git repo
@@ -599,10 +603,10 @@ KPATCH_MODULE=true
 grep -q "CONFIG_DEBUG_INFO=y" "$CONFIGFILE" || die "kernel doesn't have 'CONFIG_DEBUG_INFO' enabled"
 if grep -q "CONFIG_LIVEPATCH=y" "$CONFIGFILE"; then
 	# The kernel supports livepatch.
-	if version_gte "${ARCHVERSION//-*/}" 4.7.0; then
+	if version_gte "${ARCHVERSION//-*/}" 4.7.0 || is_rhel "$ARCHVERSION"; then
 		# Use new .klp.rela. sections
 		KPATCH_MODULE=false
-		if version_gte "${ARCHVERSION//-*/}" 4.9.0; then
+		if version_gte "${ARCHVERSION//-*/}" 4.9.0 || is_rhel "$ARCHVERSION"; then
 			KPATCH_LDFLAGS="--unique=.parainstructions --unique=.altinstructions"
 		fi
 	fi
