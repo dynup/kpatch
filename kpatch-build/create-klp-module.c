@@ -239,10 +239,19 @@ static void create_klp_relasecs_and_syms(struct kpatch_elf *kelf, struct section
 		ALLOC_LINK(rela, &klp_relasec->relas);
 		rela->sym = sym;
 		rela->type = krelas[index].type;
-		if (!strcmp(dest->sec->name, ".toc"))
+		if (!strcmp(dest->sec->name, ".toc")) {
 			rela->offset = toc_offset;
-		else
+		} else {
 			rela->offset = krelas[index].offset + dest->sym.st_value;
+			/*
+			 * With GCC 6+ every local function symbol has the value of 0x8.
+			 * If the destination sym is local function, don't add the
+			 * sym value to the offset.
+			 */
+			if (dest->sym.st_value &&
+			    dest->type == STT_FUNC && dest->bind == STB_LOCAL)
+				rela->offset -= 8;
+		}
 
 		/*
 		 * GCC 6+ adds 0x8 to the offset of every local function entry
