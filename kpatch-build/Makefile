@@ -35,4 +35,4 @@ uninstall:
 	$(RM) $(BINDIR)/kpatch-build
 
 clean:
-	$(RM) $(TARGETS) *.o *.d insn/*.d
+	$(RM) $(TARGETS) *.o *.d insn/*.o insn/*.d
