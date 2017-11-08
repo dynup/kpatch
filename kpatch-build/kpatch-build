@@ -361,6 +361,7 @@ usage() {
 	echo "		-v, --vmlinux	   Specify original vmlinux" >&2
 	echo "		-j, --jobs	   Specify the number of make jobs" >&2
 	echo "		-t, --target	   Specify custom kernel build targets" >&2
+	echo "		-n, --name	   Specify the name of the kpatch module" >&2
 	echo "		-o, --output	   Specify output folder" >&2
 	echo "		-d, --debug	   Keep scratch files in /tmp" >&2
 	echo "		--skip-cleanup     Skip post-build cleanup" >&2
