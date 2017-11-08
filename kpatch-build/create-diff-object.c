@@ -1113,6 +1113,13 @@ static void kpatch_replace_sections_syms(struct kpatch_elf *kelf)
 			 */
 			if (rela->sym->sec && rela->sym->sec->sym) {
 				rela->sym = rela->sym->sec->sym;
+
+				/*
+				 * ppc64le: a GCC 6+ bundled function is at
+				 * offset 8 in its section.
+				 */
+				rela->addend -= rela->sym->sym.st_value;
+
 				continue;
 			}
 

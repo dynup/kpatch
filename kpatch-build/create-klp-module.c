@@ -238,25 +238,12 @@ static void create_klp_relasecs_and_syms(struct kpatch_elf *kelf, struct section
 		/* Add the rela to the .klp.rela. section */
 		ALLOC_LINK(rela, &klp_relasec->relas);
 		rela->sym = sym;
+		rela->addend = krelas[index].addend;
 		rela->type = krelas[index].type;
 		if (!strcmp(dest->sec->name, ".toc"))
 			rela->offset = toc_offset;
 		else
 			rela->offset = krelas[index].offset + dest->sym.st_value;
-
-		/*
-		 * GCC 6+ adds 0x8 to the offset of every local function entry
-		 * in the .toc section, for avoiding the setup of the toc when
-		 * the function is called locally.  But when the previously
-		 * local function becomes global, we don't want to skip the
-		 * .toc setup anymore.
-		 */
-		if (!strcmp(dest->sec->name, ".toc") &&
-			rela->sym->type == STT_FUNC && rela->sym->bind == STB_LOCAL) {
-				rela->addend = 0;
-		} else {
-			rela->addend = krelas[index].addend;
-		}
 	}
 }
 
