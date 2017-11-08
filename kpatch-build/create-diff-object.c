@@ -135,7 +135,7 @@ static int is_bundleable(struct symbol *sym)
  * the object file.  The local entry point is 8 bytes after the global entry
  * point.
  */
-static int is_localentry_sym(struct symbol *sym)
+static int is_gcc6_localentry_bundled_sym(struct symbol *sym)
 {
 	if (sym->type != STT_FUNC || sym->sym.st_shndx == SHN_UNDEF)
 		return 0;
@@ -149,7 +149,7 @@ static int is_localentry_sym(struct symbol *sym)
 	return 1;
 }
 #else
-static int is_localentry_sym(struct symbol *sym)
+static int is_gcc6_localentry_bundled_sym(struct symbol *sym)
 {
 	return 0;
 }
@@ -166,7 +166,8 @@ static void kpatch_bundle_symbols(struct kpatch_elf *kelf)
 
 	list_for_each_entry(sym, &kelf->symbols, list) {
 		if (is_bundleable(sym)) {
-			if (sym->sym.st_value != 0 && !is_localentry_sym(sym)) {
+			if (sym->sym.st_value != 0 &&
+			    !is_gcc6_localentry_bundled_sym(sym)) {
 				ERROR("symbol %s at offset %lu within section %s, expected 0",
 				      sym->name, sym->sym.st_value,
 				      sym->sec->name);
