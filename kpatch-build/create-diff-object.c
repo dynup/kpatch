@@ -2517,7 +2517,6 @@ static void kpatch_create_intermediate_sections(struct kpatch_elf *kelf,
 			krelas[index].addend = rela->addend;
 			krelas[index].type = rela->type;
 			krelas[index].external = external;
-			krelas[index].offset = rela->offset;
 
 			/* add rela to fill in krelas[index].dest field */
 			ALLOC_LINK(rela2, &krela_sec->rela->relas);
