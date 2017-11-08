@@ -544,7 +544,6 @@ static void kpatch_compare_correlated_symbol(struct symbol *sym)
 	struct symbol *sym1 = sym, *sym2 = sym->twin;
 
 	if (sym1->sym.st_info != sym2->sym.st_info ||
-	    sym1->sym.st_other != sym2->sym.st_other ||
 	    (sym1->sec && !sym2->sec) ||
 	    (sym2->sec && !sym1->sec))
 		DIFF_FATAL("symbol info mismatch: %s", sym1->name);
