@@ -763,8 +763,6 @@ if "$KPATCH_MODULE"; then
 fi
 
 echo "Building patch module: $MODNAME.ko"
-cd "$SRCDIR" || die
-make prepare >> "$LOGFILE" 2>&1 || die
 
 if [[ ! -z "$UBUNTU_KERNEL" ]]; then
 	# UBUNTU: add UTS_UBUNTU_RELEASE_ABI to utsrelease.h after regenerating it
