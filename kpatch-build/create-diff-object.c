@@ -137,16 +137,8 @@ static int is_bundleable(struct symbol *sym)
  */
 static int is_gcc6_localentry_bundled_sym(struct symbol *sym)
 {
-	if (sym->type != STT_FUNC || sym->sym.st_shndx == SHN_UNDEF)
-		return 0;
-
-	if (sym->sym.st_value != 0x8)
-		return 0;
-
-	if (!PPC64_LOCAL_ENTRY_OFFSET(sym->sym.st_other))
-		return 0;
-
-	return 1;
+	return (PPC64_LOCAL_ENTRY_OFFSET(sym->sym.st_other) &&
+		sym->sym.st_value == 8);
 }
 #else
 static int is_gcc6_localentry_bundled_sym(struct symbol *sym)
