@@ -205,13 +205,10 @@ static void create_klp_relasecs_and_syms(struct kpatch_elf *kelf, struct section
 
 		/* Add the klp rela to the .klp.rela. section */
 		ALLOC_LINK(rela, &klp_relasec->relas);
+		rela->offset = dest->sym.st_value + dest_off;
 		rela->type = krelas[index].type;
 		rela->sym = sym;
 		rela->addend = krelas[index].addend;
-		if (!strcmp(dest->sec->name, ".toc"))
-			rela->offset = dest_off;
-		else
-			rela->offset = dest_off + dest->sym.st_value;
 	}
 }
 

@@ -2520,12 +2520,10 @@ static void kpatch_create_intermediate_sections(struct kpatch_elf *kelf,
 
 			/* add rela to fill in krelas[index].dest field */
 			ALLOC_LINK(rela2, &krela_sec->rela->relas);
-			if (sec->base->sym)
-				rela2->sym = sec->base->sym;
-			else if (sec->base->secsym)
+			if (sec->base->secsym)
 				rela2->sym = sec->base->secsym;
 			else
-				ERROR("can't create dynrela for section %s (symbol %s): no bundled section or section symbol",
+				ERROR("can't create dynrela for section %s (symbol %s): no bundled or section symbol",
 				      sec->name, rela->sym->name);
 
 			rela2->type = ABSOLUTE_RELA_TYPE;
