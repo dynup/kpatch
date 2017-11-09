@@ -174,6 +174,7 @@ find_core_symvers() {
 gcc_version_from_file() {
 	readelf -p .comment "$1" | grep -o 'GCC:.*'
 }
+
 gcc_version_check() {
 	local c="$TEMPDIR/test.c" o="$TEMPDIR/test.o"
 	local out gccver kgccver
@@ -207,26 +208,26 @@ gcc_version_check() {
 
 find_special_section_data_ppc64le() {
 	SPECIAL_VARS="$(readelf -wi "$VMLINUX" |
-		       gawk --non-decimal-data '
-		       BEGIN { f = b = e = 0 }
+		gawk --non-decimal-data '
+		BEGIN { f = b = e = 0 }
 
-		       # Set state if name matches
-		       f == 0 && /DW_AT_name.* fixup_entry[[:space:]]*$/ {f = 1; next}
-		       b == 0 && /DW_AT_name.* bug_entry[[:space:]]*$/ {b = 1; next}
-		       e == 0 && /DW_AT_name.* exception_table_entry[[:space:]]*$/ {e = 1; next}
+		# Set state if name matches
+		f == 0 && /DW_AT_name.* fixup_entry[[:space:]]*$/ {f = 1; next}
+		b == 0 && /DW_AT_name.* bug_entry[[:space:]]*$/ {b = 1; next}
+		e == 0 && /DW_AT_name.* exception_table_entry[[:space:]]*$/ {e = 1; next}
 
-		       # Reset state unless this abbrev describes the struct size
-		       f == 1 && !/DW_AT_byte_size/ { f = 0; next }
-		       b == 1 && !/DW_AT_byte_size/ { b = 0; next }
-		       e == 1 && !/DW_AT_byte_size/ { e = 0; next }
+		# Reset state unless this abbrev describes the struct size
+		f == 1 && !/DW_AT_byte_size/ { f = 0; next }
+		b == 1 && !/DW_AT_byte_size/ { b = 0; next }
+		e == 1 && !/DW_AT_byte_size/ { e = 0; next }
 
-		       # Now that we know the size, stop parsing for it
-		       f == 1 {printf("export FIXUP_STRUCT_SIZE=%d\n", $4); a = 2}
-		       b == 1 {printf("export BUG_STRUCT_SIZE=%d\n", $4); b = 2}
-		       e == 1 {printf("export EX_STRUCT_SIZE=%d\n", $4); e = 2}
+		# Now that we know the size, stop parsing for it
+		f == 1 {printf("export FIXUP_STRUCT_SIZE=%d\n", $4); a = 2}
+		b == 1 {printf("export BUG_STRUCT_SIZE=%d\n", $4); b = 2}
+		e == 1 {printf("export EX_STRUCT_SIZE=%d\n", $4); e = 2}
 
-		       # Bail out once we have everything
-		       f == 2 && b == 2 && e == 2 {exit}')"
+		# Bail out once we have everything
+		f == 2 && b == 2 && e == 2 {exit}')"
 
 	[[ -n "$SPECIAL_VARS" ]] && eval "$SPECIAL_VARS"
 
@@ -245,29 +246,29 @@ find_special_section_data() {
 
 	[[ "$CONFIG_PARAVIRT" -eq 0 ]] && AWK_OPTIONS="-vskip_p=1"
 	SPECIAL_VARS="$(readelf -wi "$VMLINUX" |
-		       gawk --non-decimal-data $AWK_OPTIONS '
-		       BEGIN { a = b = p = e = 0 }
+		gawk --non-decimal-data $AWK_OPTIONS '
+		BEGIN { a = b = p = e = 0 }
 
-		       # Set state if name matches
-		       a == 0 && /DW_AT_name.* alt_instr[[:space:]]*$/ {a = 1; next}
-		       b == 0 && /DW_AT_name.* bug_entry[[:space:]]*$/ {b = 1; next}
-		       p == 0 && /DW_AT_name.* paravirt_patch_site[[:space:]]*$/ {p = 1; next}
-		       e == 0 && /DW_AT_name.* exception_table_entry[[:space:]]*$/ {e = 1; next}
+		# Set state if name matches
+		a == 0 && /DW_AT_name.* alt_instr[[:space:]]*$/ {a = 1; next}
+		b == 0 && /DW_AT_name.* bug_entry[[:space:]]*$/ {b = 1; next}
+		p == 0 && /DW_AT_name.* paravirt_patch_site[[:space:]]*$/ {p = 1; next}
+		e == 0 && /DW_AT_name.* exception_table_entry[[:space:]]*$/ {e = 1; next}
 
-		       # Reset state unless this abbrev describes the struct size
-		       a == 1 && !/DW_AT_byte_size/ { a = 0; next }
-		       b == 1 && !/DW_AT_byte_size/ { b = 0; next }
-		       p == 1 && !/DW_AT_byte_size/ { p = 0; next }
-		       e == 1 && !/DW_AT_byte_size/ { e = 0; next }
+		# Reset state unless this abbrev describes the struct size
+		a == 1 && !/DW_AT_byte_size/ { a = 0; next }
+		b == 1 && !/DW_AT_byte_size/ { b = 0; next }
+		p == 1 && !/DW_AT_byte_size/ { p = 0; next }
+		e == 1 && !/DW_AT_byte_size/ { e = 0; next }
 
-		       # Now that we know the size, stop parsing for it
-		       a == 1 {printf("export ALT_STRUCT_SIZE=%d\n", $4); a = 2}
-		       b == 1 {printf("export BUG_STRUCT_SIZE=%d\n", $4); b = 2}
-		       p == 1 {printf("export PARA_STRUCT_SIZE=%d\n", $4); p = 2}
-		       e == 1 {printf("export EX_STRUCT_SIZE=%d\n", $4); e = 2}
+		# Now that we know the size, stop parsing for it
+		a == 1 {printf("export ALT_STRUCT_SIZE=%d\n", $4); a = 2}
+		b == 1 {printf("export BUG_STRUCT_SIZE=%d\n", $4); b = 2}
+		p == 1 {printf("export PARA_STRUCT_SIZE=%d\n", $4); p = 2}
+		e == 1 {printf("export EX_STRUCT_SIZE=%d\n", $4); e = 2}
 
-		       # Bail out once we have everything
-		       a == 2 && b == 2 && (p == 2 || skip_p) && e == 2 {exit}')"
+		# Bail out once we have everything
+		a == 2 && b == 2 && (p == 2 || skip_p) && e == 2 {exit}')"
 
 	[[ -n "$SPECIAL_VARS" ]] && eval "$SPECIAL_VARS"
 
@@ -353,22 +354,24 @@ module_name_string() {
 
 usage() {
 	echo "usage: $(basename "$0") [options] <patch1 ... patchN>" >&2
-	echo "		patchN		   Input patchfile(s)" >&2
-	echo "		-h, --help	   Show this help message" >&2
-	echo "		-r, --sourcerpm	   Specify kernel source RPM" >&2
-	echo "		-s, --sourcedir	   Specify kernel source directory" >&2
-	echo "		-c, --config	   Specify kernel config file" >&2
-	echo "		-v, --vmlinux	   Specify original vmlinux" >&2
-	echo "		-j, --jobs	   Specify the number of make jobs" >&2
-	echo "		-t, --target	   Specify custom kernel build targets" >&2
-	echo "		-o, --output	   Specify output folder" >&2
-	echo "		-d, --debug	   Keep scratch files in /tmp" >&2
+	echo "		patchN             Input patchfile(s)" >&2
+	echo "		-h, --help         Show this help message" >&2
+	echo "		-a, --archversion  Specify the kernel arch version" >&2
+	echo "		-r, --sourcerpm    Specify kernel source RPM" >&2
+	echo "		-s, --sourcedir    Specify kernel source directory" >&2
+	echo "		-c, --config       Specify kernel config file" >&2
+	echo "		-v, --vmlinux      Specify original vmlinux" >&2
+	echo "		-j, --jobs         Specify the number of make jobs" >&2
+	echo "		-t, --target       Specify custom kernel build targets" >&2
+	echo "		-n, --name         Specify the name of the kpatch module" >&2
+	echo "		-o, --output       Specify output folder" >&2
+	echo "		-d, --debug        Keep scratch files in /tmp" >&2
 	echo "		--skip-cleanup     Skip post-build cleanup" >&2
 	echo "		--skip-gcc-check   Skip gcc version matching check" >&2
 	echo "		                   (not recommended)" >&2
 }
 
-options="$(getopt -o hr:s:c:v:j:t:n:o:d -l "help,sourcerpm:,sourcedir:,config:,vmlinux:,jobs:,target:,name:,output:,debug,skip-gcc-check,skip-cleanup" -- "$@")" || die "getopt failed"
+options="$(getopt -o ha:r:s:c:v:j:t:n:o:d -l "help,archversion:,sourcerpm:,sourcedir:,config:,vmlinux:,jobs:,target:,name:,output:,debug,skip-gcc-check,skip-cleanup" -- "$@")" || die "getopt failed"
 
 eval set -- "$options"
 
@@ -377,6 +380,10 @@ while [[ $# -gt 0 ]]; do
 	-h|--help)
 		usage
 		exit 0
+		;;
+	-a|--archversion)
+		ARCHVERSION="$2"
+		shift
 		;;
 	-r|--sourcerpm)
 		[[ ! -f "$2" ]] && die "source rpm '$2' not found"
@@ -459,7 +466,7 @@ if [[ -n "$USERSRCDIR" ]]; then
 	[[ ! -e "$VMLINUX" ]] && die "can't find vmlinux"
 
 	# Extract the target kernel version from vmlinux in this case.
-	ARCHVERSION="$(strings "$VMLINUX" | grep -e "^Linux version" | awk '{ print($3); }')"
+	ARCHVERSION="$(strings "$VMLINUX" | grep -m 1 -e "^Linux version" | awk '{ print($3); }')"
 fi
 
 [[ "$SKIPCLEANUP" -eq 0 ]] && trap cleanup EXIT INT TERM HUP
@@ -488,7 +495,7 @@ elif [[ "$DISTRO" = ubuntu ]] || [[ "$DISTRO" = debian ]]; then
 	if [[ "$DISTRO" = ubuntu ]]; then
 		[[ -e "$VMLINUX" ]] || die "linux-image-$ARCHVERSION-dbgsym not installed"
 
-        elif [[ "$DISTRO" = debian ]]; then
+	elif [[ "$DISTRO" = debian ]]; then
 		[[ -e "$VMLINUX" ]] || die "linux-image-$ARCHVERSION-dbg not installed"
 	fi
 
@@ -662,8 +669,8 @@ CROSS_COMPILE="$TOOLSDIR/kpatch-gcc " \
 	KBUILD_MODPOST_WARN=1 \
 	make "-j$CPUS" $TARGETS >> "$LOGFILE" 2>&1 || die
 [[ "${PIPESTATUS[0]}" -eq 0 ]] || die
-grep -q "undefined reference" "$LOGFILE" | grep -qv kpatch_shadow && die
-grep -q "undefined!" "$LOGFILE" |grep -qv kpatch_shadow && die
+grep "undefined reference" "$LOGFILE" | grep -qv kpatch_shadow && die
+grep "undefined!" "$LOGFILE" | grep -qv kpatch_shadow && die
 
 if [[ ! -e "$TEMPDIR/changed_objs" ]]; then
 	die "no changed objects found"
@@ -763,8 +770,6 @@ if "$KPATCH_MODULE"; then
 fi
 
 echo "Building patch module: $MODNAME.ko"
-cd "$SRCDIR" || die
-make prepare >> "$LOGFILE" 2>&1 || die
 
 if [[ ! -z "$UBUNTU_KERNEL" ]]; then
 	# UBUNTU: add UTS_UBUNTU_RELEASE_ABI to utsrelease.h after regenerating it

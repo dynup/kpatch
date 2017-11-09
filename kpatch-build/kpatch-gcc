@@ -6,7 +6,7 @@ TOOLCHAINCMD="$1"
 shift
 
 if [[ -z "$KPATCH_GCC_TEMPDIR" ]]; then
-    exec "$TOOLCHAINCMD" "$@"
+	exec "$TOOLCHAINCMD" "$@"
 fi
 
 declare -a args=("$@")
