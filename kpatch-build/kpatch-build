@@ -35,7 +35,7 @@
 # - Runs kpatch tools to create and link the patch kernel module
 
 BASE="$PWD"
-SCRIPTDIR="$(readlink -f $(dirname $(type -p $0)))"
+SCRIPTDIR="$(readlink -f "$(dirname "$(type -p "$0")")")"
 ARCH="$(uname -m)"
 ARCHVERSION="$(uname -r)"
 CPUS="$(getconf _NPROCESSORS_ONLN)"
@@ -57,13 +57,13 @@ warn() {
 }
 
 die() {
-	if [[ -z $1 ]]; then
+	if [[ -z "$1" ]]; then
 		msg="kpatch build failed"
 	else
 		msg="$1"
 	fi
 
-	if [[ -e $LOGFILE ]]; then
+	if [[ -e "$LOGFILE" ]]; then
 		warn "$msg. Check $LOGFILE for more details."
 	else
 		warn "$msg."
@@ -99,11 +99,11 @@ cleanup() {
 	remove_patches
 	# If $SRCDIR was a git repo, make sure git actually sees that
 	# we've reverted our patch(es).
-	[[ -d $SRCDIR/.git ]] && (cd $SRCDIR && git update-index -q --refresh)
+	[[ -d "$SRCDIR/.git" ]] && (cd "$SRCDIR" && git update-index -q --refresh)
 
 	# restore original .config and vmlinux if they were removed with mrproper
-	[[ -e $TEMPDIR/.config ]] && mv -f $TEMPDIR/.config $SRCDIR/
-	[[ -e $TEMPDIR/vmlinux ]] && mv -f $TEMPDIR/vmlinux $SRCDIR/
+	[[ -e "$TEMPDIR/.config" ]] && mv -f "$TEMPDIR/.config" "$SRCDIR/"
+	[[ -e "$TEMPDIR/vmlinux" ]] && mv -f "$TEMPDIR/vmlinux" "$SRCDIR/"
 
 	[[ "$DEBUG" -eq 0 ]] && rm -rf "$TEMPDIR"
 	rm -rf "$RPMTOPDIR"
@@ -118,7 +118,7 @@ clean_cache() {
 
 check_pipe_status() {
 	rc="${PIPESTATUS[0]}"
-	if [[ $rc = 139 ]]; then
+	if [[ "$rc" = 139 ]]; then
 		# There doesn't seem to be a consistent/portable way of
 		# accessing the last executed command in bash, so just
 		# pass in the script name for now..
@@ -136,15 +136,19 @@ version_gte() {
 	[  "$1" = "$(echo -e "$1\n$2" | sort -rV | head -n1)" ]
 }
 
+is_rhel() {
+	[[ $1 =~ \.el[78]\. ]]
+}
+
 find_dirs() {
 	if [[ -e "$SCRIPTDIR/create-diff-object" ]]; then
 		# git repo
 		TOOLSDIR="$SCRIPTDIR"
-		DATADIR="$(readlink -f $SCRIPTDIR/../kmod)"
+		DATADIR="$(readlink -f "$SCRIPTDIR/../kmod")"
 	elif [[ -e "$SCRIPTDIR/../libexec/kpatch/create-diff-object" ]]; then
 		# installation path
-		TOOLSDIR="$(readlink -f $SCRIPTDIR/../libexec/kpatch)"
-		DATADIR="$(readlink -f $SCRIPTDIR/../share/kpatch)"
+		TOOLSDIR="$(readlink -f "$SCRIPTDIR/../libexec/kpatch")"
+		DATADIR="$(readlink -f "$SCRIPTDIR/../share/kpatch")"
 	else
 		return 1
 	fi
@@ -157,21 +161,39 @@ find_core_symvers() {
 		SYMVERSFILE="$DATADIR/core/Module.symvers"
 	elif [[ -e "$SCRIPTDIR/../libexec/kpatch/create-diff-object" ]]; then
 		# installation path
-		if [[ -e $SCRIPTDIR/../lib/kpatch/$ARCHVERSION/Module.symvers ]]; then
-			SYMVERSFILE="$(readlink -f $SCRIPTDIR/../lib/kpatch/$ARCHVERSION/Module.symvers)"
+		if [[ -e "$SCRIPTDIR/../lib/kpatch/$ARCHVERSION/Module.symvers" ]]; then
+			SYMVERSFILE="$(readlink -f "$SCRIPTDIR/../lib/kpatch/$ARCHVERSION/Module.symvers")"
 		elif [[ -e /lib/modules/$ARCHVERSION/extra/kpatch/Module.symvers ]]; then
-			SYMVERSFILE="$(readlink -f /lib/modules/$ARCHVERSION/extra/kpatch/Module.symvers)"
+			SYMVERSFILE="$(readlink -f "/lib/modules/$ARCHVERSION/extra/kpatch/Module.symvers")"
 		fi
 	fi
 
 	[[ -e "$SYMVERSFILE" ]]
 }
 
+gcc_version_from_file() {
+	readelf -p .comment "$1" | grep -o 'GCC:.*'
+}
 gcc_version_check() {
+	local c="$TEMPDIR/test.c" o="$TEMPDIR/test.o"
+	local out gccver kgccver
+
+	# gcc --version varies between distributions therefore extract version
+	# by compiling a test file and compare it to vmlinux's version.
+	echo 'void main(void) {}' > "$c"
+	out="$(gcc -c -pg -ffunction-sections -o "$o" "$c" 2>&1)"
+	gccver="$(gcc_version_from_file "$o")"
+	kgccver="$(gcc_version_from_file "$VMLINUX")"
+	rm -f "$c" "$o"
+
+	if [[ -n "$out" ]]; then
+		warn "gcc >= 4.8 required for -pg -ffunction-settings"
+		echo "gcc output: $out"
+		return 1
+	fi
+
 	# ensure gcc version matches that used to build the kernel
-	local gccver=$(gcc --version |head -n1 |cut -d' ' -f3-)
-	local kgccver=$(readelf -p .comment $VMLINUX |grep GCC: | tr -s ' ' | cut -d ' ' -f6-)
-	if [[ $gccver != $kgccver ]]; then
+	if [[ "$gccver" != "$kgccver" ]]; then
 		warn "gcc/kernel version mismatch"
 		echo "gcc version:    $gccver"
 		echo "kernel version: $kgccver"
@@ -180,28 +202,11 @@ gcc_version_check() {
 		return 1
 	fi
 
-	# On ppc64le, livepatch needs the GCC -mprofile-kernel flag.  A script
-	# is run during the kernel build to ensure the flag is present:
-	#
-	#   <linux>/arch/powerpc/tools/gcc-check-mprofile-kernel.sh
-	#
-	# Postpone the check to the kernel build instead of duplicating it here.
-	if [[ $ARCH = "ppc64le" ]]; then
-		return
-	else
-		# ensure gcc version is >= 4.8
-		gccver=$(echo $gccver |cut -d'.' -f1,2)
-		if [[ $gccver < 4.8 ]]; then
-			warn "gcc >= 4.8 required"
-			return 1
-		fi
-	fi
-
 	return
 }
 
 find_special_section_data_ppc64le() {
-	SPECIAL_VARS=$(readelf -wi "$VMLINUX" |
+	SPECIAL_VARS="$(readelf -wi "$VMLINUX" |
 		       gawk --non-decimal-data '
 		       BEGIN { f = b = e = 0 }
 
@@ -221,25 +226,25 @@ find_special_section_data_ppc64le() {
 		       e == 1 {printf("export EX_STRUCT_SIZE=%d\n", $4); e = 2}
 
 		       # Bail out once we have everything
-		       f == 2 && b == 2 && e == 2 {exit}')
+		       f == 2 && b == 2 && e == 2 {exit}')"
 
-	[[ -n $SPECIAL_VARS ]] && eval "$SPECIAL_VARS"
+	[[ -n "$SPECIAL_VARS" ]] && eval "$SPECIAL_VARS"
 
-	[[ -z $FIXUP_STRUCT_SIZE ]] && die "can't find special struct fixup_entry size"
-	[[ -z $BUG_STRUCT_SIZE ]] && die "can't find special struct bug_entry size"
-	[[ -z $EX_STRUCT_SIZE ]]  && die "can't find special struct exception_table_entry size"
+	[[ -z "$FIXUP_STRUCT_SIZE" ]] && die "can't find special struct fixup_entry size"
+	[[ -z "$BUG_STRUCT_SIZE" ]] && die "can't find special struct bug_entry size"
+	[[ -z "$EX_STRUCT_SIZE" ]]  && die "can't find special struct exception_table_entry size"
 
 	return
 }
 
 find_special_section_data() {
-	if [[ $ARCH = "ppc64le" ]]; then
+	if [[ "$ARCH" = "ppc64le" ]]; then
 		find_special_section_data_ppc64le
 		return
 	fi
 
-	[[ $CONFIG_PARAVIRT -eq 0 ]] && AWK_OPTIONS="-vskip_p=1"
-	SPECIAL_VARS=$(readelf -wi "$VMLINUX" |
+	[[ "$CONFIG_PARAVIRT" -eq 0 ]] && AWK_OPTIONS="-vskip_p=1"
+	SPECIAL_VARS="$(readelf -wi "$VMLINUX" |
 		       gawk --non-decimal-data $AWK_OPTIONS '
 		       BEGIN { a = b = p = e = 0 }
 
@@ -262,64 +267,64 @@ find_special_section_data() {
 		       e == 1 {printf("export EX_STRUCT_SIZE=%d\n", $4); e = 2}
 
 		       # Bail out once we have everything
-		       a == 2 && b == 2 && (p == 2 || skip_p) && e == 2 {exit}')
+		       a == 2 && b == 2 && (p == 2 || skip_p) && e == 2 {exit}')"
 
-	[[ -n $SPECIAL_VARS ]] && eval "$SPECIAL_VARS"
+	[[ -n "$SPECIAL_VARS" ]] && eval "$SPECIAL_VARS"
 
-	[[ -z $ALT_STRUCT_SIZE ]] && die "can't find special struct alt_instr size"
-	[[ -z $BUG_STRUCT_SIZE ]] && die "can't find special struct bug_entry size"
-	[[ -z $EX_STRUCT_SIZE ]]  && die "can't find special struct paravirt_patch_site size"
-	[[ -z $PARA_STRUCT_SIZE && $CONFIG_PARAVIRT -ne 0 ]] && die "can't find special struct paravirt_patch_site size"
+	[[ -z "$ALT_STRUCT_SIZE" ]] && die "can't find special struct alt_instr size"
+	[[ -z "$BUG_STRUCT_SIZE" ]] && die "can't find special struct bug_entry size"
+	[[ -z "$EX_STRUCT_SIZE" ]]  && die "can't find special struct paravirt_patch_site size"
+	[[ -z "$PARA_STRUCT_SIZE" && "$CONFIG_PARAVIRT" -ne 0 ]] && die "can't find special struct paravirt_patch_site size"
 
 	return
 }
 
 find_parent_obj() {
-	dir=$(dirname $1)
-	absdir=$(readlink -f $dir)
-	pwddir=$(readlink -f .)
-	pdir=${absdir#$pwddir/}
-	file=$(basename $1)
-	grepname=${1%.o}
-	grepname=$grepname\\\.o
-	if [[ $DEEP_FIND -eq 1 ]]; then
+	dir="$(dirname "$1")"
+	absdir="$(readlink -f "$dir")"
+	pwddir="$(readlink -f .)"
+	pdir="${absdir#$pwddir/}"
+	file="$(basename "$1")"
+	grepname="${1%.o}"
+	grepname="$grepname\.o"
+	if [[ "$DEEP_FIND" -eq 1 ]]; then
 		num=0
-		if [[ -n $last_deep_find ]]; then
-			parent=$(grep -l $grepname $last_deep_find/.*.cmd | grep -v $pdir/.${file}.cmd |head -n1)
-			num=$(grep -l $grepname $last_deep_find/.*.cmd | grep -v $pdir/.${file}.cmd |wc -l)
+		if [[ -n "$last_deep_find" ]]; then
+			parent="$(grep -l "$grepname" "$last_deep_find"/.*.cmd | grep -Fv "$pdir/.${file}.cmd" | head -n1)"
+			num="$(grep -l "$grepname" "$last_deep_find"/.*.cmd | grep -Fvc "$pdir/.${file}.cmd")"
 		fi
-		if [[ $num -eq 0 ]]; then
-			parent=$(find * -name ".*.cmd" | xargs grep -l $grepname | grep -v $pdir/.${file}.cmd |head -n1)
-			num=$(find * -name ".*.cmd" | xargs grep -l $grepname | grep -v $pdir/.${file}.cmd | wc -l)
-			[[ $num -eq 1 ]] && last_deep_find=$(dirname $parent)
+		if [[ "$num" -eq 0 ]]; then
+			parent="$(find ./* -name ".*.cmd" -print0 | xargs -0 grep -l "$grepname" | grep -Fv "$pdir/.${file}.cmd" | cut -c3- | head -n1)"
+			num="$(find ./* -name ".*.cmd" -print0 | xargs -0 grep -l "$grepname" | grep -Fvc "$pdir/.${file}.cmd")"
+			[[ "$num" -eq 1 ]] && last_deep_find="$(dirname "$parent")"
 		fi
 	else
-		parent=$(grep -l $grepname $dir/.*.cmd | grep -v $dir/.${file}.cmd |head -n1)
-		num=$(grep -l $grepname $dir/.*.cmd | grep -v $dir/.${file}.cmd | wc -l)
+		parent="$(grep -l "$grepname" "$dir"/.*.cmd | grep -Fv "$dir/.${file}.cmd" | head -n1)"
+		num="$(grep -l "$grepname" "$dir"/.*.cmd | grep -Fvc "$dir/.${file}.cmd")"
 	fi
 
-	[[ $num -eq 0 ]] && PARENT="" && return
-	[[ $num -gt 1 ]] && ERROR_IF_DIFF="two parent matches for $1"
+	[[ "$num" -eq 0 ]] && PARENT="" && return
+	[[ "$num" -gt 1 ]] && ERROR_IF_DIFF="two parent matches for $1"
 
-	dir=$(dirname $parent)
-	PARENT=$(basename $parent)
-	PARENT=${PARENT#.}
-	PARENT=${PARENT%.cmd}
-	PARENT=$dir/$PARENT
-	[[ ! -e $PARENT ]] && die "ERROR: can't find parent $PARENT for $1"
+	dir="$(dirname "$parent")"
+	PARENT="$(basename "$parent")"
+	PARENT="${PARENT#.}"
+	PARENT="${PARENT%.cmd}"
+	PARENT="$dir/$PARENT"
+	[[ ! -e "$PARENT" ]] && die "ERROR: can't find parent $PARENT for $1"
 }
 
 find_kobj() {
-	arg=$1
-	KOBJFILE=$arg
+	arg="$1"
+	KOBJFILE="$arg"
 	DEEP_FIND=0
 	ERROR_IF_DIFF=
 	while true; do
-		find_parent_obj $KOBJFILE
-		[[ -n $PARENT ]] && DEEP_FIND=0
-		if [[ -z $PARENT ]]; then
-			[[ $KOBJFILE = *.ko ]] && return
-			case $KOBJFILE in
+		find_parent_obj "$KOBJFILE"
+		[[ -n "$PARENT" ]] && DEEP_FIND=0
+		if [[ -z "$PARENT" ]]; then
+			[[ "$KOBJFILE" = *.ko ]] && return
+			case "$KOBJFILE" in
 				*/built-in.o|\
 				arch/x86/lib/lib.a|\
 				arch/x86/kernel/head*.o|\
@@ -329,13 +334,13 @@ find_kobj() {
 					KOBJFILE=vmlinux
 					return
 			esac
-			if [[ $DEEP_FIND -eq 0 ]]; then
+			if [[ "$DEEP_FIND" -eq 0 ]]; then
 				DEEP_FIND=1
 				continue;
 			fi
 			die "invalid ancestor $KOBJFILE for $arg"
 		fi
-		KOBJFILE=$PARENT
+		KOBJFILE="$PARENT"
 	done
 }
 
@@ -343,11 +348,11 @@ find_kobj() {
 # is replaced with '-'.  Also truncate to 48 chars so the full name fits in the
 # kernel's 56-byte module name array.
 module_name_string() {
-	echo ${1//[^a-zA-Z0-9_-]/-} |cut -c 1-48
+	echo "${1//[^a-zA-Z0-9_-]/-}" | cut -c 1-48
 }
 
 usage() {
-	echo "usage: $(basename $0) [options] <patch1 ... patchN>" >&2
+	echo "usage: $(basename "$0") [options] <patch1 ... patchN>" >&2
 	echo "		patchN		   Input patchfile(s)" >&2
 	echo "		-h, --help	   Show this help message" >&2
 	echo "		-r, --sourcerpm	   Specify kernel source RPM" >&2
@@ -363,7 +368,7 @@ usage() {
 	echo "		                   (not recommended)" >&2
 }
 
-options=$(getopt -o hr:s:c:v:j:t:n:o:d -l "help,sourcerpm:,sourcedir:,config:,vmlinux:,jobs:,target:,name:,output:,debug,skip-gcc-check,skip-cleanup" -- "$@") || die "getopt failed"
+options="$(getopt -o hr:s:c:v:j:t:n:o:d -l "help,sourcerpm:,sourcedir:,config:,vmlinux:,jobs:,target:,name:,output:,debug,skip-gcc-check,skip-cleanup" -- "$@")" || die "getopt failed"
 
 eval set -- "$options"
 
@@ -375,25 +380,25 @@ while [[ $# -gt 0 ]]; do
 		;;
 	-r|--sourcerpm)
 		[[ ! -f "$2" ]] && die "source rpm '$2' not found"
-		SRCRPM=$(readlink -f "$2")
+		SRCRPM="$(readlink -f "$2")"
 		shift
-		rpmname=$(basename "$SRCRPM")
-		ARCHVERSION=${rpmname%.src.rpm}.$(uname -m)
-		ARCHVERSION=${ARCHVERSION#kernel-}
+		rpmname="$(basename "$SRCRPM")"
+		ARCHVERSION="${rpmname%.src.rpm}.$(uname -m)"
+		ARCHVERSION="${ARCHVERSION#kernel-}"
 		;;
 	-s|--sourcedir)
 		[[ ! -d "$2" ]] && die "source dir '$2' not found"
-		USERSRCDIR=$(readlink -f "$2")
+		USERSRCDIR="$(readlink -f "$2")"
 		shift
 		;;
 	-c|--config)
 		[[ ! -f "$2" ]] && die "config file '$2' not found"
-		CONFIGFILE=$(readlink -f "$2")
+		CONFIGFILE="$(readlink -f "$2")"
 		shift
 		;;
 	-v|--vmlinux)
 		[[ ! -f "$2" ]] && die "vmlinux file '$2' not found"
-		VMLINUX=$(readlink -f "$2")
+		VMLINUX="$(readlink -f "$2")"
 		shift
 		;;
 	-j|--jobs)
@@ -406,12 +411,12 @@ while [[ $# -gt 0 ]]; do
 		shift
 		;;
 	-n|--name)
-		MODNAME=$(module_name_string "$2")
+		MODNAME="$(module_name_string "$2")"
 		shift
 		;;
 	-o|--output)
 		[[ ! -d "$2" ]] && die "output dir '$2' not found"
-		BASE=$(readlink -f "$2")
+		BASE="$(readlink -f "$2")"
 		shift
 		;;
 	-d|--debug)
@@ -430,7 +435,7 @@ while [[ $# -gt 0 ]]; do
 	*)
 		[[ "$1" = "--" ]] && shift && continue
 		[[ ! -f "$1" ]] && die "patch file '$1' not found"
-		PATCH_LIST+=($(readlink -f "$1"))
+		PATCH_LIST+=("$(readlink -f "$1")")
 		;;
 	esac
 	shift
@@ -444,53 +449,55 @@ fi
 
 # ensure cachedir and tempdir are setup properly and cleaned
 mkdir -p "$TEMPDIR" || die "Couldn't create $TEMPDIR"
-rm -rf "$TEMPDIR"/*
+rm -rf "${TEMPDIR:?}"/*
 rm -f "$LOGFILE"
 
-if [[ -n $USERSRCDIR ]]; then
+if [[ -n "$USERSRCDIR" ]]; then
 	SRCDIR="$USERSRCDIR"
 
-	[[ -z $VMLINUX ]] && VMLINUX="$SRCDIR"/vmlinux
+	[[ -z "$VMLINUX" ]] && VMLINUX="$SRCDIR"/vmlinux
 	[[ ! -e "$VMLINUX" ]] && die "can't find vmlinux"
 
 	# Extract the target kernel version from vmlinux in this case.
-	ARCHVERSION=$(strings "$VMLINUX" | grep -e "^Linux version" | awk '{ print($3); }')
+	ARCHVERSION="$(strings "$VMLINUX" | grep -e "^Linux version" | awk '{ print($3); }')"
 fi
 
-[[ $SKIPCLEANUP -eq 0 ]] && trap cleanup EXIT INT TERM HUP
+[[ "$SKIPCLEANUP" -eq 0 ]] && trap cleanup EXIT INT TERM HUP
 
-KVER=${ARCHVERSION%%-*}
-if [[ $ARCHVERSION =~ - ]]; then
-	KREL=${ARCHVERSION##*-}
-	KREL=${KREL%.*}
+KVER="${ARCHVERSION%%-*}"
+if [[ "$ARCHVERSION" =~ - ]]; then
+	KREL="${ARCHVERSION##*-}"
+	KREL="${KREL%.*}"
 fi
 
-[[ -z $TARGETS ]] && TARGETS="vmlinux modules"
+[[ -z "$TARGETS" ]] && TARGETS="vmlinux modules"
 
+# Don't check external file.
+# shellcheck disable=SC1091
 source /etc/os-release
-DISTRO=$ID
-if [[ $DISTRO = fedora ]] || [[ $DISTRO = rhel ]] || [[ $DISTRO = ol ]] || [[ $DISTRO = centos ]]; then
-	[[ -z $VMLINUX ]] && VMLINUX=/usr/lib/debug/lib/modules/$ARCHVERSION/vmlinux
+DISTRO="$ID"
+if [[ "$DISTRO" = fedora ]] || [[ "$DISTRO" = rhel ]] || [[ "$DISTRO" = ol ]] || [[ "$DISTRO" = centos ]]; then
+	[[ -z "$VMLINUX" ]] && VMLINUX="/usr/lib/debug/lib/modules/$ARCHVERSION/vmlinux"
 	[[ -e "$VMLINUX" ]] || die "kernel-debuginfo-$ARCHVERSION not installed"
 
-	export PATH=/usr/lib64/ccache:$PATH
+	export PATH="/usr/lib64/ccache:$PATH"
 
-elif [[ $DISTRO = ubuntu ]] || [[ $DISTRO = debian ]]; then
-	[[ -z $VMLINUX ]] && VMLINUX=/usr/lib/debug/boot/vmlinux-$ARCHVERSION
+elif [[ "$DISTRO" = ubuntu ]] || [[ "$DISTRO" = debian ]]; then
+	[[ -z "$VMLINUX" ]] && VMLINUX="/usr/lib/debug/boot/vmlinux-$ARCHVERSION"
 
-	if [[ $DISTRO = ubuntu ]]; then
+	if [[ "$DISTRO" = ubuntu ]]; then
 		[[ -e "$VMLINUX" ]] || die "linux-image-$ARCHVERSION-dbgsym not installed"
 
-        elif [[ $DISTRO = debian ]]; then
+        elif [[ "$DISTRO" = debian ]]; then
 		[[ -e "$VMLINUX" ]] || die "linux-image-$ARCHVERSION-dbg not installed"
 	fi
 
-	export PATH=/usr/lib/ccache:$PATH
+	export PATH="/usr/lib/ccache:$PATH"
 fi
 
 find_dirs || die "can't find supporting tools"
 
-if [[ $SKIPGCCCHECK -eq 0 ]]; then
+if [[ "$SKIPGCCCHECK" -eq 0 ]]; then
 	gcc_version_check || die
 fi
 
@@ -498,13 +505,13 @@ if [[ -n "$USERSRCDIR" ]]; then
 	echo "Using source directory at $USERSRCDIR"
 
 	# save vmlinux before it gets removed with mrproper
-	[[ "$VMLINUX" -ef "$SRCDIR"/vmlinux ]] && cp -f "$VMLINUX" $TEMPDIR/vmlinux && VMLINUX=$TEMPDIR/vmlinux
+	[[ "$VMLINUX" -ef "$SRCDIR"/vmlinux ]] && cp -f "$VMLINUX" "$TEMPDIR/vmlinux" && VMLINUX="$TEMPDIR/vmlinux"
 
-elif [[ -e "$SRCDIR"/.config ]] && [[ -e "$VERSIONFILE" ]] && [[ $(cat "$VERSIONFILE") = $ARCHVERSION ]]; then
+elif [[ -e "$SRCDIR"/.config ]] && [[ -e "$VERSIONFILE" ]] && [[ "$(cat "$VERSIONFILE")" = "$ARCHVERSION" ]]; then
 	echo "Using cache at $SRCDIR"
 
 else
-	if [[ $DISTRO = fedora ]] || [[ $DISTRO = rhel ]] || [[ $DISTRO = ol ]] || [[ $DISTRO = centos ]]; then
+	if [[ "$DISTRO" = fedora ]] || [[ "$DISTRO" = rhel ]] || [[ "$DISTRO" = ol ]] || [[ "$DISTRO" = centos ]]; then
 
 		echo "Fedora/Red Hat distribution detected"
 		rpm -q --quiet rpmdevtools || die "rpmdevtools not installed"
@@ -513,8 +520,8 @@ else
 
 		echo "Downloading kernel source for $ARCHVERSION"
 		if [[ -z "$SRCRPM" ]]; then
-			if [[ $DISTRO = fedora ]]; then
-				wget -P $TEMPDIR http://kojipkgs.fedoraproject.org/packages/kernel/$KVER/$KREL/src/kernel-$KVER-$KREL.src.rpm >> "$LOGFILE" 2>&1 || die
+			if [[ "$DISTRO" = fedora ]]; then
+				wget -P "$TEMPDIR" "http://kojipkgs.fedoraproject.org/packages/kernel/$KVER/$KREL/src/kernel-$KVER-$KREL.src.rpm" >> "$LOGFILE" 2>&1 || die
 			else
 				rpm -q --quiet yum-utils || die "yum-utils not installed"
 				yumdownloader --source --destdir "$TEMPDIR" "kernel-$ARCHVERSION" >> "$LOGFILE" 2>&1 || die
@@ -536,37 +543,37 @@ else
 			echo "-${ARCHVERSION##*-}" > "$SRCDIR/localversion" || die
 		fi
 
-		echo $ARCHVERSION > "$VERSIONFILE" || die
+		echo "$ARCHVERSION" > "$VERSIONFILE" || die
 
-	elif [[ $DISTRO = ubuntu ]] || [[ $DISTRO = debian ]]; then
+	elif [[ "$DISTRO" = ubuntu ]] || [[ "$DISTRO" = debian ]]; then
 
 		echo "Debian/Ubuntu distribution detected"
 
-		if [[ $DISTRO = ubuntu ]]; then
+		if [[ "$DISTRO" = ubuntu ]]; then
 
 			# url may be changed for a different mirror
 			url="http://archive.ubuntu.com/ubuntu/pool/main/l"
 			sublevel="SUBLEVEL = 0"
 			UBUNTU_KERNEL=1
 
-		elif [[ $DISTRO = debian ]]; then
+		elif [[ "$DISTRO" = debian ]]; then
 
 			# url may be changed for a different mirror
 			url="http://ftp.debian.org/debian/pool/main/l"
 			sublevel="SUBLEVEL ="
 		fi
 
-		pkgname="$(dpkg-query -W -f='${Source}' linux-image-$ARCHVERSION)"
-		pkgver="$(dpkg-query -W -f='${Version}' linux-image-$ARCHVERSION)"
+		pkgname="$(dpkg-query -W -f='${Source}' "linux-image-$ARCHVERSION")"
+		pkgver="$(dpkg-query -W -f='${Version}' "linux-image-$ARCHVERSION")"
 		dscname="${pkgname}_${pkgver}.dsc"
 
 		clean_cache
 
-		cd $TEMPDIR
+		cd "$TEMPDIR" || die
 		echo "Downloading and unpacking the kernel source for $ARCHVERSION"
 		# Download source deb pkg
 		(dget -u "$url/${pkgname}/${dscname}" 2>&1) >> "$LOGFILE" || die "dget: Could not fetch/unpack $url/${pkgname}/${dscname}"
-		mv ${pkgname}-$KVER "$SRCDIR" || die
+		mv "${pkgname}-$KVER" "$SRCDIR" || die
 		cp "/boot/config-${ARCHVERSION}" "$SRCDIR/.config" || die
 		if [[ "$ARCHVERSION" == *-* ]]; then
 			echo "-${ARCHVERSION#*-}" > "$SRCDIR/localversion" || die
@@ -574,7 +581,7 @@ else
 		# for some reason the Ubuntu kernel versions don't follow the
 		# upstream SUBLEVEL; they are always at SUBLEVEL 0
 		sed -i "s/^SUBLEVEL.*/${sublevel}/" "$SRCDIR/Makefile" || die
-		echo $ARCHVERSION > "$VERSIONFILE" || die
+		echo "$ARCHVERSION" > "$VERSIONFILE" || die
 
 	else
 		die "Unsupported distribution"
@@ -582,9 +589,9 @@ else
 fi
 
 # save .config before it gets removed with mrproper
-[[ -z $CONFIGFILE ]] && CONFIGFILE="$SRCDIR"/.config
+[[ -z "$CONFIGFILE" ]] && CONFIGFILE="$SRCDIR"/.config
 [[ ! -e "$CONFIGFILE" ]] && die "can't find config file"
-[[ "$CONFIGFILE" -ef "$SRCDIR"/.config ]] && cp -f "$CONFIGFILE" $TEMPDIR && CONFIGFILE="$TEMPDIR"/.config
+[[ "$CONFIGFILE" -ef "$SRCDIR"/.config ]] && cp -f "$CONFIGFILE" "$TEMPDIR" && CONFIGFILE="$TEMPDIR"/.config
 
 # Build variables - Set some defaults, then adjust features
 # according to .config and kernel version
@@ -596,10 +603,10 @@ KPATCH_MODULE=true
 grep -q "CONFIG_DEBUG_INFO=y" "$CONFIGFILE" || die "kernel doesn't have 'CONFIG_DEBUG_INFO' enabled"
 if grep -q "CONFIG_LIVEPATCH=y" "$CONFIGFILE"; then
 	# The kernel supports livepatch.
-	if version_gte ${ARCHVERSION//-*/} 4.7.0; then
+	if version_gte "${ARCHVERSION//-*/}" 4.7.0 || is_rhel "$ARCHVERSION"; then
 		# Use new .klp.rela. sections
 		KPATCH_MODULE=false
-		if version_gte ${ARCHVERSION//-*/} 4.9.0; then
+		if version_gte "${ARCHVERSION//-*/}" 4.9.0 || is_rhel "$ARCHVERSION"; then
 			KPATCH_LDFLAGS="--unique=.parainstructions --unique=.altinstructions"
 		fi
 	fi
@@ -626,7 +633,7 @@ remove_patches
 
 cp -LR "$DATADIR/patch" "$TEMPDIR" || die
 
-if [[ $ARCH = "ppc64le" ]]; then
+if [[ "$ARCH" = "ppc64le" ]]; then
 	ARCH_KCFLAGS="-mcmodel=large"
 fi
 
@@ -640,13 +647,17 @@ echo "Building original kernel"
 make mrproper >> "$LOGFILE" 2>&1 || die
 cp -f "$CONFIGFILE" "$SRCDIR/.config"
 unset KPATCH_GCC_TEMPDIR
+# $TARGETS used as list, no quotes.
+# shellcheck disable=SC2086
 CROSS_COMPILE="$TOOLSDIR/kpatch-gcc " make "-j$CPUS" $TARGETS >> "$LOGFILE" 2>&1 || die
 
 echo "Building patched kernel"
 apply_patches
 mkdir -p "$TEMPDIR/orig" "$TEMPDIR/patched"
-KPATCH_GCC_TEMPDIR=$TEMPDIR
+KPATCH_GCC_TEMPDIR="$TEMPDIR"
 export KPATCH_GCC_TEMPDIR
+# $TARGETS used as list, no quotes.
+# shellcheck disable=SC2086
 CROSS_COMPILE="$TOOLSDIR/kpatch-gcc " \
 	KBUILD_MODPOST_WARN=1 \
 	make "-j$CPUS" $TARGETS >> "$LOGFILE" 2>&1 || die
@@ -658,9 +669,11 @@ if [[ ! -e "$TEMPDIR/changed_objs" ]]; then
 	die "no changed objects found"
 fi
 
+# Read as words, no quotes.
+# shellcheck disable=SC2013
 for i in $(cat "$TEMPDIR/changed_objs")
 do
-	mkdir -p "$TEMPDIR/patched/$(dirname $i)" || die
+	mkdir -p "$TEMPDIR/patched/$(dirname "$i")" || die
 	cp -f "$SRCDIR/$i" "$TEMPDIR/patched/$i" || die
 done
 
@@ -669,9 +682,9 @@ echo "Extracting new and modified ELF sections"
 #   - For single input .patch, use the patch filename
 #   - For multiple input .patches, use "patch"
 #   - Prefix with "kpatch" or "livepatch" accordingly
-if [[ -z $MODNAME ]] ; then
-	if [[ ${#PATCH_LIST[@]} -eq 1 ]]; then
-		MODNAME=$(basename "${PATCH_LIST[0]}")
+if [[ -z "$MODNAME" ]] ; then
+	if [[ "${#PATCH_LIST[@]}" -eq 1 ]]; then
+		MODNAME="$(basename "${PATCH_LIST[0]}")"
 		if [[ "$MODNAME" =~ \.patch$ ]] || [[ "$MODNAME" =~ \.diff$ ]]; then
 			MODNAME="${MODNAME%.*}"
 		fi
@@ -679,16 +692,16 @@ if [[ -z $MODNAME ]] ; then
 		MODNAME="patch"
 	fi
 
-	if $KPATCH_MODULE; then
+	if "$KPATCH_MODULE"; then
 		MODNAME="kpatch-$MODNAME"
 	else
 		MODNAME="livepatch-$MODNAME"
 	fi
 
-	MODNAME=$(module_name_string "$MODNAME")
+	MODNAME="$(module_name_string "$MODNAME")"
 fi
 FILES="$(cat "$TEMPDIR/changed_objs")"
-cd "$TEMPDIR"
+cd "$TEMPDIR" || die
 mkdir output
 declare -a objnames
 CHANGED=0
@@ -697,96 +710,98 @@ for i in $FILES; do
 	# In RHEL 7 based kernels, copy_user_64.o misuses the .fixup section,
 	# which confuses create-diff-object.  It's fine to skip it, it's an
 	# assembly file anyway.
-	[[ $DISTRO = rhel ]] || [[ $DISTRO = centos ]] || [[ $DISTRO = ol ]] && \
-		[[ $i = arch/x86/lib/copy_user_64.o ]] && continue
+	[[ "$DISTRO" = rhel ]] || [[ "$DISTRO" = centos ]] || [[ "$DISTRO" = ol ]] && \
+		[[ "$i" = arch/x86/lib/copy_user_64.o ]] && continue
 
-	[[ $i = usr/initramfs_data.o ]] && continue
+	[[ "$i" = usr/initramfs_data.o ]] && continue
 
-	mkdir -p "output/$(dirname $i)"
-	cd "$SRCDIR"
-	find_kobj $i
-	if [[ $KOBJFILE = vmlinux ]]; then
-		KOBJFILE=$VMLINUX
+	mkdir -p "output/$(dirname "$i")"
+	cd "$SRCDIR" || die
+	find_kobj "$i"
+	if [[ "$KOBJFILE" = vmlinux ]]; then
+		KOBJFILE="$VMLINUX"
 	else
 		KOBJFILE="$TEMPDIR/module/$KOBJFILE"
 	fi
-	cd $TEMPDIR
+	cd "$TEMPDIR" || die
 	if [[ -e "orig/$i" ]]; then
 		# create-diff-object orig.o patched.o kernel-object output.o Module.symvers patch-mod-name
 		"$TOOLSDIR"/create-diff-object "orig/$i" "patched/$i" "$KOBJFILE" \
-			"output/$i" "$SRCDIR/Module.symvers" "${MODNAME//-/_}" 2>&1 |tee -a "$LOGFILE"
+			"output/$i" "$SRCDIR/Module.symvers" "${MODNAME//-/_}" 2>&1 | tee -a "$LOGFILE"
 		check_pipe_status create-diff-object
 		# create-diff-object returns 3 if no functional change is found
-		[[ $rc -eq 0 ]] || [[ $rc -eq 3 ]] || ERROR=$(expr $ERROR "+" 1)
-		if [[ $rc -eq 0 ]]; then
-			[[ -n $ERROR_IF_DIFF ]] && die $ERROR_IF_DIFF
+		[[ "$rc" -eq 0 ]] || [[ "$rc" -eq 3 ]] || ERROR="$((ERROR + 1))"
+		if [[ "$rc" -eq 0 ]]; then
+			[[ -n "$ERROR_IF_DIFF" ]] && die "$ERROR_IF_DIFF"
 			CHANGED=1
-			objnames[${#objnames[@]}]=$KOBJFILE
+			objnames[${#objnames[@]}]="$KOBJFILE"
 		fi
 	else
 		cp -f "patched/$i" "output/$i"
-		objnames[${#objnames[@]}]=$KOBJFILE
+		objnames[${#objnames[@]}]="$KOBJFILE"
 	fi
 done
 
-if [[ $ERROR -ne 0 ]]; then
+if [[ "$ERROR" -ne 0 ]]; then
 	die "$ERROR error(s) encountered"
 fi
 
-if [[ $CHANGED -eq 0 ]]; then
+if [[ "$CHANGED" -eq 0 ]]; then
 	die "no functional changes found"
 fi
 
 echo -n "Patched objects:"
 for i in $(echo "${objnames[@]}" | tr ' ' '\n' | sort -u | tr '\n' ' ')
 do
-	echo -n " $(basename $i)"
+	echo -n " $(basename "$i")"
 done
 echo
 
 export KCFLAGS="-I$DATADIR/patch $ARCH_KCFLAGS"
-if $KPATCH_MODULE; then
+if "$KPATCH_MODULE"; then
 	export KCPPFLAGS="-D__KPATCH_MODULE__"
 fi
 
 echo "Building patch module: $MODNAME.ko"
-cd "$SRCDIR"
+cd "$SRCDIR" || die
 make prepare >> "$LOGFILE" 2>&1 || die
 
-if [[ ! -z $UBUNTU_KERNEL ]]; then
+if [[ ! -z "$UBUNTU_KERNEL" ]]; then
 	# UBUNTU: add UTS_UBUNTU_RELEASE_ABI to utsrelease.h after regenerating it
-	UBUNTU_ABI=${ARCHVERSION#*-}
-	UBUNTU_ABI=${UBUNTU_ABI%-*}
-	echo "#define UTS_UBUNTU_RELEASE_ABI "$UBUNTU_ABI"" >> "$SRCDIR"/include/generated/utsrelease.h
+	UBUNTU_ABI="${ARCHVERSION#*-}"
+	UBUNTU_ABI="${UBUNTU_ABI%-*}"
+	echo "#define UTS_UBUNTU_RELEASE_ABI $UBUNTU_ABI" >> "$SRCDIR"/include/generated/utsrelease.h
 fi
 
-cd "$TEMPDIR/output"
+cd "$TEMPDIR/output" || die
+# $KPATCH_LDFLAGS and result of find used as list, no quotes.
+# shellcheck disable=SC2086,SC2046
 ld -r $KPATCH_LDFLAGS -o ../patch/tmp_output.o $(find . -name "*.o") >> "$LOGFILE" 2>&1 || die
 
-if $KPATCH_MODULE; then
+if "$KPATCH_MODULE"; then
 	# Add .kpatch.checksum for kpatch script
 	md5sum ../patch/tmp_output.o | awk '{printf "%s\0", $1}' > checksum.tmp || die
 	objcopy --add-section .kpatch.checksum=checksum.tmp --set-section-flags .kpatch.checksum=alloc,load,contents,readonly  ../patch/tmp_output.o || die
 	rm -f checksum.tmp
-	"$TOOLSDIR"/create-kpatch-module $TEMPDIR/patch/tmp_output.o $TEMPDIR/patch/output.o 2>&1 |tee -a "$LOGFILE"
+	"$TOOLSDIR"/create-kpatch-module "$TEMPDIR"/patch/tmp_output.o "$TEMPDIR"/patch/output.o 2>&1 | tee -a "$LOGFILE"
 	check_pipe_status create-kpatch-module
 else
-	cp $TEMPDIR/patch/tmp_output.o $TEMPDIR/patch/output.o || die
+	cp "$TEMPDIR"/patch/tmp_output.o "$TEMPDIR"/patch/output.o || die
 fi
 
-cd "$TEMPDIR/patch"
+cd "$TEMPDIR/patch" || die
 
 KPATCH_BUILD="$SRCDIR" KPATCH_NAME="$MODNAME" \
 KBUILD_EXTRA_SYMBOLS="$KBUILD_EXTRA_SYMBOLS" \
 KPATCH_LDFLAGS="$KPATCH_LDFLAGS" \
 	make >> "$LOGFILE" 2>&1 || die
 
-if ! $KPATCH_MODULE; then
+if ! "$KPATCH_MODULE"; then
 	if [[ -z "$KPATCH_LDFLAGS" ]]; then
 		extra_flags="--no-klp-arch-sections"
 	fi
-	cp $TEMPDIR/patch/$MODNAME.ko $TEMPDIR/patch/tmp.ko || die
-	"$TOOLSDIR"/create-klp-module $extra_flags $TEMPDIR/patch/tmp.ko $TEMPDIR/patch/$MODNAME.ko 2>&1 |tee -a "$LOGFILE"
+	cp "$TEMPDIR/patch/$MODNAME.ko" "$TEMPDIR/patch/tmp.ko" || die
+	"$TOOLSDIR"/create-klp-module $extra_flags "$TEMPDIR/patch/tmp.ko" "$TEMPDIR/patch/$MODNAME.ko" 2>&1 | tee -a "$LOGFILE"
 	check_pipe_status create-klp-module
 fi
 

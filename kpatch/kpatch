@@ -24,16 +24,8 @@
 # displaying information about kernel patch modules installed on the system.
 
 INSTALLDIR=/var/lib/kpatch
-SCRIPTDIR="$(readlink -f $(dirname $(type -p $0)))"
+SCRIPTDIR="$(readlink -f "$(dirname "$(type -p "$0")")")"
 VERSION="0.4.0"
-
-# Livepatch is built into the kernel, if it's not present
-# we must use kpatch core module.
-if [[ -e /sys/kernel/livepatch ]] ; then
-	SYSFS="/sys/kernel/livepatch"
-else
-	SYSFS="/sys/kernel/kpatch"
-fi
 
 usage_cmd() {
 	printf '   %-20s\n      %s\n' "$1" "$2" >&2
@@ -62,7 +54,7 @@ usage () {
 }
 
 warn() {
-	echo "kpatch: $@" >&2
+	echo "kpatch: $*" >&2
 }
 
 die() {
@@ -74,14 +66,14 @@ __find_module () {
 	MODULE="$1"
 	[[ -f "$MODULE" ]] && return
 
-	MODULE=$INSTALLDIR/$(uname -r)/"$1"
+	MODULE="$INSTALLDIR/$(uname -r)/$1"
 	[[ -f "$MODULE" ]] && return
 
 	return 1
 }
 
 mod_name () {
-	MODNAME="$(basename $1)"
+	MODNAME="$(basename "$1")"
 	MODNAME="${MODNAME%.ko}"
 	MODNAME="${MODNAME//-/_}"
 }
@@ -93,9 +85,9 @@ find_module () {
 		mod_name "$MODULE"
 		return
 	else
-		for i in $INSTALLDIR/$(uname -r)/*; do
+		for i in "$INSTALLDIR/$(uname -r)"/*; do
 			mod_name "$i"
-			if [[ $MODNAME == $arg ]]; then
+			if [[ "$MODNAME" == "$arg" ]]; then
 				MODULE="$i"
 				return
 			fi
@@ -129,19 +121,36 @@ core_loaded () {
 }
 
 get_module_name () {
-	echo $(readelf -p .gnu.linkonce.this_module $1 | grep '\[.*\]' | awk '{print $3}')
+	readelf -p .gnu.linkonce.this_module "$1" | grep '\[.*\]' | awk '{print $3}'
+}
+
+init_sysfs_var() {
+	# If the kernel is configured with CONFIG_LIVEPATCH, use that.
+	# Otherwise, use the kpatch core module (kpatch.ko).
+	if [[ -e /sys/kernel/livepatch ]] ; then
+		# livepatch ABI
+		SYSFS="/sys/kernel/livepatch"
+
+	elif [[ -e /sys/kernel/kpatch/patches ]] ; then
+		# kpatch pre-0.4 ABI
+		SYSFS="/sys/kernel/kpatch/patches"
+
+	else
+		# kpatch 0.4 ABI
+		SYSFS="/sys/kernel/kpatch"
+	fi
 }
 
 verify_module_checksum () {
-	modname=$(get_module_name $1)
-	[[ -z $modname ]] && return 1
+	modname="$(get_module_name "$1")"
+	[[ -z "$modname" ]] && return 1
 
-	checksum=$(readelf -p .kpatch.checksum $1 | grep '\[.*\]' | awk '{print $3}')
+	checksum="$(readelf -p .kpatch.checksum "$1" | grep '\[.*\]' | awk '{print $3}')"
 
 	# Fail checksum match only if both exist and diverge
-	if [[ ! -z $checksum ]] && [[ -e "$SYSFS/${modname}/checksum" ]] ; then
-		sysfs_checksum=$(cat $SYSFS/${modname}/checksum)
-		[[ $checksum == $sysfs_checksum ]] || return 1
+	if [[ ! -z "$checksum" ]] && [[ -e "$SYSFS/${modname}/checksum" ]] ; then
+		sysfs_checksum="$(cat "$SYSFS/${modname}/checksum")"
+		[[ "$checksum" == "$sysfs_checksum" ]] || return 1
 	fi
 
 	return 0
@@ -158,15 +167,20 @@ load_module () {
 			echo "loading core module: $COREMOD"
 			insmod "$COREMOD" || die "failed to load core module"
 		fi
+
+		# Now that the core module has been loaded, set $SYSFS to the
+		# correct value based on the loaded core module's ABI.
+		init_sysfs_var
 	fi
 
-	local modname=$(get_module_name $module)
+	local modname
+	modname="$(get_module_name "$module")"
 	local moddir="$SYSFS/$modname"
-	if [[ -d $moddir ]] ; then
-		if [[ $(cat "${moddir}/enabled") -eq 0 ]]; then
-			if verify_module_checksum $module; then # same checksum
+	if [[ -d "$moddir" ]] ; then
+		if [[ "$(cat "${moddir}/enabled")" -eq 0 ]]; then
+			if verify_module_checksum "$module"; then # same checksum
 				echo "module already loaded, re-enabling"
-				echo 1 > ${moddir}/enabled || die "failed to re-enable module $modname"
+				echo 1 > "${moddir}/enabled" || die "failed to re-enable module $modname"
 				return
 			else
 				die "error: cannot re-enable patch module $modname, cannot verify checksum match"
@@ -179,10 +193,10 @@ load_module () {
 	echo "loading patch module: $module"
 	local i=0
 	while true; do
-		out=$(insmod "$module" 2>&1)
-		[[ -z $out ]] && break
-		echo $out 1>&2
-		[[ ! $out =~ "Device or resource busy" ]] &&
+		out="$(insmod "$module" 2>&1)"
+		[[ -z "$out" ]] && break
+		echo "$out" 1>&2
+		[[ ! "$out" =~ "Device or resource busy" ]] &&
 			die "failed to load module $module"
 
 		# "Device or resource busy" means the activeness safety check
@@ -205,30 +219,36 @@ unload_module () {
 	PATCH="${PATCH%.ko}"
 	ENABLED="$SYSFS/$PATCH/enabled"
 	[[ -e "$ENABLED" ]] || die "patch module $1 is not loaded"
-	if [[ $(cat "$ENABLED") -eq 1 ]]; then
+	if [[ "$(cat "$ENABLED")" -eq 1 ]]; then
 		echo "disabling patch module: $PATCH"
-		echo 0 > $ENABLED || die "can't disable $PATCH"
+		echo 0 > "$ENABLED" || die "can't disable $PATCH"
 	fi
 
 	echo "unloading patch module: $PATCH"
 	# ignore any error here because rmmod can fail if the module used
 	# KPATCH_FORCE_UNSAFE.
-	rmmod $PATCH 2> /dev/null || return 0
+	rmmod "$PATCH" 2> /dev/null || return 0
 }
 
 get_module_version() {
-	MODVER=$(modinfo -F vermagic "$1") || return 1
-	MODVER=${MODVER/ */}
+	MODVER="$(modinfo -F vermagic "$1")" || return 1
+	MODVER="${MODVER/ */}"
 }
 
 unset MODULE
+
+# Initialize the $SYSFS var.  This only works if the core module has been
+# loaded.  Otherwise, the value of $SYSFS doesn't matter at this point anyway,
+# and we'll have to call this function again after loading it.
+init_sysfs_var
+
 [[ "$#" -lt 1 ]] && usage
 case "$1" in
 "load")
 	[[ "$#" -ne 2 ]] && usage
 	case "$2" in
 	"--all")
-		for i in "$INSTALLDIR"/$(uname -r)/*.ko; do
+		for i in "$INSTALLDIR/$(uname -r)"/*.ko; do
 			[[ -e "$i" ]] || continue
 			load_module "$i" || die "failed to load module $i"
 		done
@@ -245,26 +265,26 @@ case "$1" in
 	[[ "$#" -ne 2 ]] && usage
 	case "$2" in
 	"--all")
-		for module in $SYSFS/*; do
-			[[ -e $module ]] || continue
-			unload_module $(basename $module) || die "failed to unload module $module"
+		for module in "$SYSFS"/*; do
+			[[ -e "$module" ]] || continue
+			unload_module "$(basename "$module")" || die "failed to unload module $module"
 		done
 		;;
 	*)
-		unload_module "$(basename $2)" || die "failed to unload module $2"
+		unload_module "$(basename "$2")" || die "failed to unload module $2"
 		;;
 	esac
 	;;
 
 "install")
-	KVER=$(uname -r)
+	KVER="$(uname -r)"
 	shift
-	options=$(getopt -o k: -l "kernel-version:" -- "$@") || die "getopt failed"
+	options="$(getopt -o k: -l "kernel-version:" -- "$@")" || die "getopt failed"
 	eval set -- "$options"
 	while [[ $# -gt 0 ]]; do
 		case "$1" in
 		-k|--kernel-version)
-			KVER=$2
+			KVER="$2"
 			shift
 			;;
 		--)
@@ -276,75 +296,75 @@ case "$1" in
 	done
 
 	[[ ! -e "$PATCH" ]] && die "$PATCH doesn't exist"
-	[[ ${PATCH: -3} == ".ko" ]] || die "$PATCH isn't a .ko file"
+	[[ "${PATCH: -3}" == ".ko" ]] || die "$PATCH isn't a .ko file"
 
 	get_module_version "$PATCH" || die "modinfo failed"
-	[[ $KVER != $MODVER ]] && die "invalid module version $MODVER for kernel $KVER"
+	[[ "$KVER" != "$MODVER" ]] && die "invalid module version $MODVER for kernel $KVER"
 
-	[[ -e $INSTALLDIR/$KVER/$(basename "$PATCH") ]] && die "$PATCH is already installed"
+	[[ -e "$INSTALLDIR/$KVER/$(basename "$PATCH")" ]] && die "$PATCH is already installed"
 
 	echo "installing $PATCH ($KVER)"
-	mkdir -p $INSTALLDIR/$KVER || die "failed to create install directory"
-	cp -f "$PATCH" $INSTALLDIR/$KVER || die "failed to install module $PATCH"
+	mkdir -p "$INSTALLDIR/$KVER" || die "failed to create install directory"
+	cp -f "$PATCH" "$INSTALLDIR/$KVER" || die "failed to install module $PATCH"
 	systemctl enable kpatch.service
 	;;
 
 "uninstall")
-	KVER=$(uname -r)
+	KVER="$(uname -r)"
 	shift
-	options=$(getopt -o k: -l "kernel-version:" -- "$@") || die "getopt failed"
+	options="$(getopt -o k: -l "kernel-version:" -- "$@")" || die "getopt failed"
 	eval set -- "$options"
 	while [[ $# -gt 0 ]]; do
 		case "$1" in
 		-k|--kernel-version)
-			KVER=$2
+			KVER="$2"
 			shift
 			;;
 		--)
 			[[ -z "$2" ]] && die "no module file specified"
 			PATCH="$2"
-			[[ "$PATCH" != $(basename "$PATCH") ]] && die "please supply patch module name without path"
+			[[ "$PATCH" != "$(basename "$PATCH")" ]] && die "please supply patch module name without path"
 			;;
 		esac
 		shift
 	done
 
-	MODULE=$INSTALLDIR/$KVER/"$PATCH"
+	MODULE="$INSTALLDIR/$KVER/$PATCH"
 	if [[ ! -f "$MODULE" ]]; then
 		mod_name "$PATCH"
-		PATCHNAME=$MODNAME
-		for i in $INSTALLDIR/$KVER/*; do
+		PATCHNAME="$MODNAME"
+		for i in "$INSTALLDIR/$KVER"/*; do
 			mod_name "$i"
-			if [[ $MODNAME == $PATCHNAME ]]; then
+			if [[ "$MODNAME" == "$PATCHNAME" ]]; then
 				MODULE="$i"
 				break
 			fi
 		done
 	fi
 
-	[[ ! -e $MODULE ]] && die "$PATCH is not installed for kernel $KVER"
+	[[ ! -e "$MODULE" ]] && die "$PATCH is not installed for kernel $KVER"
 	
 
 	echo "uninstalling $PATCH ($KVER)"
-	rm -f $MODULE || die "failed to uninstall module $PATCH"
+	rm -f "$MODULE" || die "failed to uninstall module $PATCH"
 	;;
 
 "list")
 	[[ "$#" -ne 1 ]] && usage
 	echo "Loaded patch modules:"
-	for module in $SYSFS/*; do
-		if [[ -e $module ]] && [[ $(cat $module/enabled) -eq 1 ]]; then
-			echo $(basename "$module")
+	for module in "$SYSFS"/*; do
+		if [[ -e "$module" ]] && [[ "$(cat "$module/enabled")" -eq 1 ]]; then
+			basename "$module"
 		fi
 	done
 	echo ""
 	echo "Installed patch modules:"
-	for kdir in $INSTALLDIR/*; do
+	for kdir in "$INSTALLDIR"/*; do
 		[[ -e "$kdir" ]] || continue
-		for module in $kdir/*; do
+		for module in "$kdir"/*; do
 			[[ -e "$module" ]] || continue
 			mod_name "$module"
-			echo "$MODNAME ($(basename $kdir))"
+			echo "$MODNAME ($(basename "$kdir"))"
 		done
 	done
 	;;
