@@ -669,8 +669,8 @@ CROSS_COMPILE="$TOOLSDIR/kpatch-gcc " \
 	KBUILD_MODPOST_WARN=1 \
 	make "-j$CPUS" $TARGETS >> "$LOGFILE" 2>&1 || die
 [[ "${PIPESTATUS[0]}" -eq 0 ]] || die
-grep -q "undefined reference" "$LOGFILE" | grep -qv kpatch_shadow && die
-grep -q "undefined!" "$LOGFILE" |grep -qv kpatch_shadow && die
+grep "undefined reference" "$LOGFILE" | grep -qv kpatch_shadow && die
+grep "undefined!" "$LOGFILE" | grep -qv kpatch_shadow && die
 
 if [[ ! -e "$TEMPDIR/changed_objs" ]]; then
 	die "no changed objects found"
