@@ -466,7 +466,7 @@ if [[ -n "$USERSRCDIR" ]]; then
 	[[ ! -e "$VMLINUX" ]] && die "can't find vmlinux"
 
 	# Extract the target kernel version from vmlinux in this case.
-	ARCHVERSION="$(strings "$VMLINUX" | grep -e "^Linux version" | awk '{ print($3); }')"
+	ARCHVERSION="$(strings "$VMLINUX" | grep -m 1 -e "^Linux version" | awk '{ print($3); }')"
 fi
 
 [[ "$SKIPCLEANUP" -eq 0 ]] && trap cleanup EXIT INT TERM HUP
