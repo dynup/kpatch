@@ -49,6 +49,8 @@ usage () {
 	echo >&2
 	usage_cmd "list" "list installed patch modules"
 	echo >&2
+	usage_cmd "signal" "signal/poke any process stalling the current patch transition"
+	echo >&2
 	usage_cmd "version" "display the kpatch version"
 	exit 1
 }
@@ -210,6 +212,33 @@ show_stalled_processes() {
 		tid=${proc_task#*/task/}
 		is_stalled "$module" "$tid" && echo "$tid $(cat "$proc_task"/comm 2>/dev/null)"
 	done
+}
+
+signal_stalled_processes() {
+	local module
+	local proc_task
+	local tid
+
+	module=$(get_transition_patch)
+	[[ -z "$module" ]] && return
+
+	if [[ -e "/sys/kernel/livepatch/$module/signal" ]] ; then
+		echo 1 > "/sys/kernel/livepatch/$module/signal"
+	else
+		for proc_task in /proc/[0-9]*/task/[0-9]*; do
+			tid=${proc_task#*/task/}
+			if is_stalled "$module" "$tid" ; then
+				if [[ "$tid" -eq "$$" ]] ; then
+					echo "skipping pid $tid $(cat "$proc_task"/comm 2>/dev/null)"
+				else
+					echo "signaling pid $tid $(cat "$proc_task"/comm 2>/dev/null)"
+					kill -SIGSTOP "$tid"
+					sleep .1
+					kill -SIGCONT "$tid"
+				fi
+			fi
+		done
+	fi
 }
 
 load_module () {
@@ -440,6 +469,11 @@ case "$1" in
 	find_module "$PATCH" || die "can't find $PATCH"
 	echo "Patch information for $PATCH:"
 	modinfo "$MODULE" || die "failed to get info for module $PATCH"
+	;;
+
+"signal")
+	[[ "$#" -ne 1 ]] && usage
+	signal_stalled_processes
 	;;
 
 "help"|"-h"|"--help")
