@@ -156,6 +156,62 @@ verify_module_checksum () {
 	return 0
 }
 
+in_transition() {
+	local moddir="$SYSFS/$1"
+	[[ $(cat "$moddir/transition" 2>/dev/null) == "1" ]] && return 0
+	return 1
+}
+
+is_stalled() {
+	local module="$1"
+	local pid="$2"
+	local patch_enabled
+	local patch_state
+
+	patch_enabled="$(cat "$SYSFS/$module/enabled" 2>/dev/null)"
+	patch_state="$(cat "/proc/$pid/patch_state" 2>/dev/null)"
+
+	# No patch transition in progress
+	[[ "$patch_state" == "-1" ]] && return 1
+
+	[[ -z "$patch_enabled" ]] || [[ -z "$patch_state" ]] && return 1
+
+	# Stalls can be determined if the process state does not match
+	# the transition target (ie, "enabled" and "patched", "disabled"
+	# and "unpatched").  The state value enumerations match, so we
+	# can just compare them directly:
+	[[ "$patch_enabled" != "$patch_state" ]] && return 0
+	return 1
+}
+
+get_transition_patch() {
+	local module
+	local modname
+	for module in "$SYSFS"/*; do
+		modname=$(basename "$module")
+		if in_transition "$modname" ; then
+			echo "$modname"
+			return
+		fi
+	done
+}
+
+show_stalled_processes() {
+	local module
+	local proc_task
+	local tid
+
+	module=$(get_transition_patch)
+	[[ -z "$module" ]] && return
+
+	echo ""
+	echo "Stalled processes:"
+	for proc_task in /proc/[0-9]*/task/[0-9]*; do
+		tid=${proc_task#*/task/}
+		is_stalled "$module" "$tid" && echo "$tid $(cat "$proc_task"/comm 2>/dev/null)"
+	done
+}
+
 load_module () {
 	local module="$1"
 
@@ -353,10 +409,19 @@ case "$1" in
 	[[ "$#" -ne 1 ]] && usage
 	echo "Loaded patch modules:"
 	for module in "$SYSFS"/*; do
-		if [[ -e "$module" ]] && [[ "$(cat "$module/enabled")" -eq 1 ]]; then
-			basename "$module"
+		if [[ -e "$module" ]]; then
+			modname=$(basename "$module")
+			if [[ "$(cat "$module/enabled" 2>/dev/null)" -eq 1 ]]; then
+				in_transition "$modname" && state="enabling..." \
+							 || state="enabled"
+			else
+				in_transition "$modname" && state="disabling..." \
+							 || state="disabled"
+			fi
+			echo "$modname [$state]"
 		fi
 	done
+	show_stalled_processes
 	echo ""
 	echo "Installed patch modules:"
 	for kdir in "$INSTALLDIR"/*; do
