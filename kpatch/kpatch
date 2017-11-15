@@ -145,7 +145,7 @@ verify_module_checksum () {
 	modname="$(get_module_name "$1")"
 	[[ -z "$modname" ]] && return 1
 
-	checksum="$(readelf -p .kpatch.checksum "$1" | grep '\[.*\]' | awk '{print $3}')"
+	checksum="$(readelf -p .kpatch.checksum "$1" 2>&1 | grep '\[.*\]' | awk '{print $3}')"
 
 	# Fail checksum match only if both exist and diverge
 	if [[ ! -z "$checksum" ]] && [[ -e "$SYSFS/${modname}/checksum" ]] ; then
