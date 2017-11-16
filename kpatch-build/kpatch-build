@@ -76,7 +76,7 @@ die() {
 logger() {
 	local to_stdout=${1:-0}
 
-	if [[ "$to_stdout" -eq 1 ]]; then
+	if [[ $DEBUG -ge 2 ]] || [[ "$to_stdout" -eq 1 ]]; then
 		# Log to both stdout and the logfile
 		tee -a "$LOGFILE"
 	else
@@ -380,6 +380,7 @@ usage() {
 	echo "		-o, --output       Specify output folder" >&2
 	echo "		-d, --debug        Enable 'xtrace' and keep scratch files" >&2
 	echo "		                   in <CACHEDIR>/tmp" >&2
+	echo "		                   (can be specified multiple times)" >&2
 	echo "		--skip-cleanup     Skip post-build cleanup" >&2
 	echo "		--skip-gcc-check   Skip gcc version matching check" >&2
 	echo "		                   (not recommended)" >&2
@@ -438,9 +439,10 @@ while [[ $# -gt 0 ]]; do
 		shift
 		;;
 	-d|--debug)
-		echo "DEBUG mode enabled"
-		DEBUG=1
-		set -o xtrace
+		DEBUG=$((DEBUG + 1))
+		if [[ $DEBUG -eq 1 ]]; then
+			echo "DEBUG mode enabled"
+		fi
 		;;
 	--skip-cleanup)
 		echo "Skipping cleanup"
@@ -463,6 +465,10 @@ if [[ ${#PATCH_LIST[@]} -eq 0 ]]; then
 	warn "no patch file(s) specified"
 	usage
 	exit 1
+fi
+
+if [[ $DEBUG -eq 1 ]] || [[ $DEBUG -ge 3 ]]; then
+	set -o xtrace
 fi
 
 if [[ -n "$ARCHVERSION" ]] && [[ -n "$VMLINUX" ]]; then
@@ -680,6 +686,10 @@ export KCFLAGS="-I$DATADIR/patch -ffunction-sections -fdata-sections $ARCH_KCFLA
 
 echo "Reading special section data"
 find_special_section_data
+
+if [[ $DEBUG -ge 4 ]]; then
+	export KPATCH_GCC_DEBUG=1
+fi
 
 echo "Building original kernel"
 ./scripts/setlocalversion --save-scmversion || die

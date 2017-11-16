@@ -1,6 +1,8 @@
 #!/bin/bash
 
-set -x
+if [[ ${KPATCH_GCC_DEBUG:-0} -ne 0 ]]; then
+	set -o xtrace
+fi
 
 TOOLCHAINCMD="$1"
 shift
