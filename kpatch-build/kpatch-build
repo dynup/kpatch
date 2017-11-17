@@ -34,6 +34,8 @@
 # - Builds the patched objects with gcc flags -f[function|data]-sections
 # - Runs kpatch tools to create and link the patch kernel module
 
+set -o pipefail
+
 BASE="$PWD"
 SCRIPTDIR="$(readlink -f "$(dirname "$(type -p "$0")")")"
 ARCH="$(uname -m)"
@@ -71,12 +73,24 @@ die() {
 	exit 1
 }
 
+logger() {
+	local to_stdout=${1:-0}
+
+	if [[ $DEBUG -ge 2 ]] || [[ "$to_stdout" -eq 1 ]]; then
+		# Log to both stdout and the logfile
+		tee -a "$LOGFILE"
+	else
+		# Log only to the logfile
+		cat >> "$LOGFILE"
+	fi
+}
+
 apply_patches() {
 	local patch
 
 	for patch in "${PATCH_LIST[@]}"; do
-		patch -N -p1 --dry-run < "$patch" >> "$LOGFILE" 2>&1 || die "$patch file failed to apply"
-		patch -N -p1 < "$patch" >> "$LOGFILE" 2>&1 || die "$patch file failed to apply"
+		patch -N -p1 --dry-run < "$patch" 2>&1 | logger || die "$patch file failed to apply"
+		patch -N -p1 < "$patch" 2>&1 | logger || die "$patch file failed to apply"
 		(( APPLIED_PATCHES++ ))
 	done
 }
@@ -364,7 +378,9 @@ usage() {
 	echo "		-t, --target       Specify custom kernel build targets" >&2
 	echo "		-n, --name         Specify the name of the kpatch module" >&2
 	echo "		-o, --output       Specify output folder" >&2
-	echo "		-d, --debug        Keep scratch files in /tmp" >&2
+	echo "		-d, --debug        Enable 'xtrace' and keep scratch files" >&2
+	echo "		                   in <CACHEDIR>/tmp" >&2
+	echo "		                   (can be specified multiple times)" >&2
 	echo "		--skip-cleanup     Skip post-build cleanup" >&2
 	echo "		--skip-gcc-check   Skip gcc version matching check" >&2
 	echo "		                   (not recommended)" >&2
@@ -423,9 +439,10 @@ while [[ $# -gt 0 ]]; do
 		shift
 		;;
 	-d|--debug)
-		echo "DEBUG mode enabled"
-		DEBUG=1
-		set -o xtrace
+		DEBUG=$((DEBUG + 1))
+		if [[ $DEBUG -eq 1 ]]; then
+			echo "DEBUG mode enabled"
+		fi
 		;;
 	--skip-cleanup)
 		echo "Skipping cleanup"
@@ -448,6 +465,10 @@ if [[ ${#PATCH_LIST[@]} -eq 0 ]]; then
 	warn "no patch file(s) specified"
 	usage
 	exit 1
+fi
+
+if [[ $DEBUG -eq 1 ]] || [[ $DEBUG -ge 3 ]]; then
+	set -o xtrace
 fi
 
 if [[ -n "$ARCHVERSION" ]] && [[ -n "$VMLINUX" ]]; then
@@ -545,21 +566,21 @@ else
 		echo "Downloading kernel source for $ARCHVERSION"
 		if [[ -z "$SRCRPM" ]]; then
 			if [[ "$DISTRO" = fedora ]]; then
-				wget -P "$TEMPDIR" "http://kojipkgs.fedoraproject.org/packages/kernel/$KVER/$KREL/src/kernel-$KVER-$KREL.src.rpm" >> "$LOGFILE" 2>&1 || die
+				wget -P "$TEMPDIR" "http://kojipkgs.fedoraproject.org/packages/kernel/$KVER/$KREL/src/kernel-$KVER-$KREL.src.rpm" 2>&1 | logger || die
 			else
 				rpm -q --quiet yum-utils || die "yum-utils not installed"
-				yumdownloader --source --destdir "$TEMPDIR" "kernel-$ARCHVERSION" >> "$LOGFILE" 2>&1 || die
+				yumdownloader --source --destdir "$TEMPDIR" "kernel-$ARCHVERSION" 2>&1 | logger || die
 			fi
 			SRCRPM="$TEMPDIR/kernel-$KVER-$KREL.src.rpm"
 		fi
 
 		echo "Unpacking kernel source"
 
-		rpm -D "_topdir $RPMTOPDIR" -ivh "$SRCRPM" >> "$LOGFILE" 2>&1 || die
-		rpmbuild -D "_topdir $RPMTOPDIR" -bp "--target=$(uname -m)" "$RPMTOPDIR"/SPECS/kernel.spec >> "$LOGFILE" 2>&1 ||
+		rpm -D "_topdir $RPMTOPDIR" -ivh "$SRCRPM" 2>&1 | logger || die
+		rpmbuild -D "_topdir $RPMTOPDIR" -bp "--target=$(uname -m)" "$RPMTOPDIR"/SPECS/kernel.spec 2>&1 | logger ||
 			die "rpmbuild -bp failed.  you may need to run 'yum-builddep kernel' first."
 
-		mv "$RPMTOPDIR"/BUILD/kernel-*/linux-"${ARCHVERSION%.*}"*"${ARCHVERSION##*.}" "$SRCDIR" >> "$LOGFILE" 2>&1 || die
+		mv "$RPMTOPDIR"/BUILD/kernel-*/linux-"${ARCHVERSION%.*}"*"${ARCHVERSION##*.}" "$SRCDIR" 2>&1 | logger || die
 		rm -rf "$RPMTOPDIR"
 		rm -rf "$SRCDIR/.git"
 
@@ -596,7 +617,7 @@ else
 		cd "$TEMPDIR" || die
 		echo "Downloading and unpacking the kernel source for $ARCHVERSION"
 		# Download source deb pkg
-		(dget -u "$url/${pkgname}/${dscname}" 2>&1) >> "$LOGFILE" || die "dget: Could not fetch/unpack $url/${pkgname}/${dscname}"
+		(dget -u "$url/${pkgname}/${dscname}" 2>&1) | logger || die "dget: Could not fetch/unpack $url/${pkgname}/${dscname}"
 		mv "${pkgname}-$KVER" "$SRCDIR" || die
 		cp "/boot/config-${ARCHVERSION}" "$SRCDIR/.config" || die
 		if [[ "$ARCHVERSION" == *-* ]]; then
@@ -666,14 +687,18 @@ export KCFLAGS="-I$DATADIR/patch -ffunction-sections -fdata-sections $ARCH_KCFLA
 echo "Reading special section data"
 find_special_section_data
 
+if [[ $DEBUG -ge 4 ]]; then
+	export KPATCH_GCC_DEBUG=1
+fi
+
 echo "Building original kernel"
 ./scripts/setlocalversion --save-scmversion || die
-make mrproper >> "$LOGFILE" 2>&1 || die
+make mrproper 2>&1 | logger || die
 cp -f "$CONFIGFILE" "$SRCDIR/.config"
 unset KPATCH_GCC_TEMPDIR
 # $TARGETS used as list, no quotes.
 # shellcheck disable=SC2086
-CROSS_COMPILE="$TOOLSDIR/kpatch-gcc " make "-j$CPUS" $TARGETS >> "$LOGFILE" 2>&1 || die
+CROSS_COMPILE="$TOOLSDIR/kpatch-gcc " make "-j$CPUS" $TARGETS 2>&1 | logger || die
 
 echo "Building patched kernel"
 apply_patches
@@ -684,8 +709,7 @@ export KPATCH_GCC_TEMPDIR
 # shellcheck disable=SC2086
 CROSS_COMPILE="$TOOLSDIR/kpatch-gcc " \
 	KBUILD_MODPOST_WARN=1 \
-	make "-j$CPUS" $TARGETS >> "$LOGFILE" 2>&1 || die
-[[ "${PIPESTATUS[0]}" -eq 0 ]] || die
+	make "-j$CPUS" $TARGETS 2>&1 | logger || die
 grep "undefined reference" "$LOGFILE" | grep -qv kpatch_shadow && die
 grep "undefined!" "$LOGFILE" | grep -qv kpatch_shadow && die
 
@@ -751,7 +775,7 @@ for i in $FILES; do
 	if [[ -e "orig/$i" ]]; then
 		# create-diff-object orig.o patched.o kernel-object output.o Module.symvers patch-mod-name
 		"$TOOLSDIR"/create-diff-object "orig/$i" "patched/$i" "$KOBJFILE" \
-			"output/$i" "$SRCDIR/Module.symvers" "${MODNAME//-/_}" 2>&1 | tee -a "$LOGFILE"
+			"output/$i" "$SRCDIR/Module.symvers" "${MODNAME//-/_}" 2>&1 | logger 1
 		check_pipe_status create-diff-object
 		# create-diff-object returns 3 if no functional change is found
 		[[ "$rc" -eq 0 ]] || [[ "$rc" -eq 3 ]] || ERROR="$((ERROR + 1))"
@@ -798,14 +822,14 @@ fi
 cd "$TEMPDIR/output" || die
 # $KPATCH_LDFLAGS and result of find used as list, no quotes.
 # shellcheck disable=SC2086,SC2046
-ld -r $KPATCH_LDFLAGS -o ../patch/tmp_output.o $(find . -name "*.o") >> "$LOGFILE" 2>&1 || die
+ld -r $KPATCH_LDFLAGS -o ../patch/tmp_output.o $(find . -name "*.o") 2>&1 | logger || die
 
 if "$KPATCH_MODULE"; then
 	# Add .kpatch.checksum for kpatch script
 	md5sum ../patch/tmp_output.o | awk '{printf "%s\0", $1}' > checksum.tmp || die
 	objcopy --add-section .kpatch.checksum=checksum.tmp --set-section-flags .kpatch.checksum=alloc,load,contents,readonly  ../patch/tmp_output.o || die
 	rm -f checksum.tmp
-	"$TOOLSDIR"/create-kpatch-module "$TEMPDIR"/patch/tmp_output.o "$TEMPDIR"/patch/output.o 2>&1 | tee -a "$LOGFILE"
+	"$TOOLSDIR"/create-kpatch-module "$TEMPDIR"/patch/tmp_output.o "$TEMPDIR"/patch/output.o 2>&1 | logger 1
 	check_pipe_status create-kpatch-module
 else
 	cp "$TEMPDIR"/patch/tmp_output.o "$TEMPDIR"/patch/output.o || die
@@ -816,14 +840,14 @@ cd "$TEMPDIR/patch" || die
 KPATCH_BUILD="$SRCDIR" KPATCH_NAME="$MODNAME" \
 KBUILD_EXTRA_SYMBOLS="$KBUILD_EXTRA_SYMBOLS" \
 KPATCH_LDFLAGS="$KPATCH_LDFLAGS" \
-	make >> "$LOGFILE" 2>&1 || die
+	make 2>&1 | logger || die
 
 if ! "$KPATCH_MODULE"; then
 	if [[ -z "$KPATCH_LDFLAGS" ]]; then
 		extra_flags="--no-klp-arch-sections"
 	fi
 	cp "$TEMPDIR/patch/$MODNAME.ko" "$TEMPDIR/patch/tmp.ko" || die
-	"$TOOLSDIR"/create-klp-module $extra_flags "$TEMPDIR/patch/tmp.ko" "$TEMPDIR/patch/$MODNAME.ko" 2>&1 | tee -a "$LOGFILE"
+	"$TOOLSDIR"/create-klp-module $extra_flags "$TEMPDIR/patch/tmp.ko" "$TEMPDIR/patch/$MODNAME.ko" 2>&1 | logger 1
 	check_pipe_status create-klp-module
 fi
 
