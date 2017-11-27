@@ -1,0 +1,45 @@
+diff -Nupr src.orig/kernel/audit.c src/kernel/audit.c
+--- src.orig/kernel/audit.c	2017-11-17 15:58:51.516211972 -0500
++++ src/kernel/audit.c	2017-11-17 15:59:14.324211972 -0500
+@@ -282,6 +282,12 @@ void audit_panic(const char *message)
+ 	}
+ }
+ 
++void kpatch_audit_foo(void)
++{
++	if (!jiffies)
++		printk("kpatch audit foo\n");
++}
++
+ static inline int audit_rate_check(void)
+ {
+ 	static unsigned long	last_check = 0;
+@@ -292,6 +298,7 @@ static inline int audit_rate_check(void)
+ 	unsigned long		elapsed;
+ 	int			retval	   = 0;
+ 
++	kpatch_audit_foo();
+ 	if (!audit_rate_limit) return 1;
+ 
+ 	spin_lock_irqsave(&lock, flags);
+@@ -311,6 +318,11 @@ static inline int audit_rate_check(void)
+ 	return retval;
+ }
+ 
++noinline void kpatch_audit_check(void)
++{
++	audit_rate_check();
++}
++
+ /**
+  * audit_log_lost - conditionally log lost audit message event
+  * @message: the message stating reason for lost audit message
+@@ -357,6 +369,8 @@ static int audit_log_config_change(char
+ 	struct audit_buffer *ab;
+ 	int rc = 0;
+ 
++	kpatch_audit_check();
++
+ 	ab = audit_log_start(NULL, GFP_KERNEL, AUDIT_CONFIG_CHANGE);
+ 	if (unlikely(!ab))
+ 		return rc;
