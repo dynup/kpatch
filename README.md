@@ -270,6 +270,28 @@ Configure ccache (installed by kpatch package):
 
     ccache --max-size=5G
 
+#### Gentoo
+
+*NOTE: You'll need about 15GB of free disk space for the kpatch-build cache in
+`~/.kpatch` and for ccache.*
+
+Install Kpatch and Kpatch dependencies:
+
+```bash
+emerge --ask sys-kernel/kpatch
+```
+
+Install ccache (optional):
+
+```bash
+emerge --ask dev-util/ccache
+```
+
+Configure ccache:
+
+```bash
+ccache --max-size=5G
+```
 
 ### Build
 
