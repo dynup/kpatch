@@ -19,6 +19,9 @@ to work on other distros.
 -h|--help
    Show this help message
 
+-a|--archversion
+   Specify the kernel arch version
+
 -r|--sourcerpm
    Specify kernel source RPM
  
@@ -31,11 +34,24 @@ to work on other distros.
 -v|--vmlinux
    Specify original vmlinux
 
+-j|--jobs
+   Specify the number of make jobs
+
 -t|--target
    Specify custom kernel build targets
 
+-n|--name
+   Specify the name of the kpatch module
+
+-o|--output
+   Specify output folder
+
 -d|--debug
    Keep scratch files in /tmp
+   (can be specified multiple times)
+
+--skip-cleanup
+   Skip post-build cleanup
 
 --skip-gcc-check
    Skips check that ensures that the system gcc version and
