@@ -158,10 +158,12 @@ find_dirs() {
 		# git repo
 		TOOLSDIR="$SCRIPTDIR"
 		DATADIR="$(readlink -f "$SCRIPTDIR/../kmod")"
+		PLUGINDIR="$(readlink -f "$SCRIPTDIR/gcc-plugins")"
 	elif [[ -e "$SCRIPTDIR/../libexec/kpatch/create-diff-object" ]]; then
 		# installation path
 		TOOLSDIR="$(readlink -f "$SCRIPTDIR/../libexec/kpatch")"
 		DATADIR="$(readlink -f "$SCRIPTDIR/../share/kpatch")"
+		PLUGINDIR="$TOOLSDIR"
 	else
 		return 1
 	fi
@@ -679,7 +681,7 @@ remove_patches
 cp -LR "$DATADIR/patch" "$TEMPDIR" || die
 
 if [[ "$ARCH" = "ppc64le" ]]; then
-	ARCH_KCFLAGS="-mcmodel=large"
+	ARCH_KCFLAGS="-mcmodel=large -fplugin=$PLUGINDIR/ppc64le-plugin.so"
 fi
 
 export KCFLAGS="-I$DATADIR/patch -ffunction-sections -fdata-sections $ARCH_KCFLAGS"

@@ -135,21 +135,13 @@ static int is_bundleable(struct symbol *sym)
  * the object file.  The local entry point is 8 bytes after the global entry
  * point.
  */
-static int is_localentry_sym(struct symbol *sym)
+static int is_gcc6_localentry_bundled_sym(struct symbol *sym)
 {
-	if (sym->type != STT_FUNC || sym->sym.st_shndx == SHN_UNDEF)
-		return 0;
-
-	if (sym->sym.st_value != 0x8)
-		return 0;
-
-	if (!PPC64_LOCAL_ENTRY_OFFSET(sym->sym.st_other))
-		return 0;
-
-	return 1;
+	return (PPC64_LOCAL_ENTRY_OFFSET(sym->sym.st_other) &&
+		sym->sym.st_value == 8);
 }
 #else
-static int is_localentry_sym(struct symbol *sym)
+static int is_gcc6_localentry_bundled_sym(struct symbol *sym)
 {
 	return 0;
 }
@@ -166,7 +158,8 @@ static void kpatch_bundle_symbols(struct kpatch_elf *kelf)
 
 	list_for_each_entry(sym, &kelf->symbols, list) {
 		if (is_bundleable(sym)) {
-			if (sym->sym.st_value != 0 && !is_localentry_sym(sym)) {
+			if (sym->sym.st_value != 0 &&
+			    !is_gcc6_localentry_bundled_sym(sym)) {
 				ERROR("symbol %s at offset %lu within section %s, expected 0",
 				      sym->name, sym->sym.st_value,
 				      sym->sec->name);
@@ -551,7 +544,6 @@ static void kpatch_compare_correlated_symbol(struct symbol *sym)
 	struct symbol *sym1 = sym, *sym2 = sym->twin;
 
 	if (sym1->sym.st_info != sym2->sym.st_info ||
-	    sym1->sym.st_other != sym2->sym.st_other ||
 	    (sym1->sec && !sym2->sec) ||
 	    (sym2->sec && !sym1->sec))
 		DIFF_FATAL("symbol info mismatch: %s", sym1->name);
@@ -1121,6 +1113,13 @@ static void kpatch_replace_sections_syms(struct kpatch_elf *kelf)
 			 */
 			if (rela->sym->sec && rela->sym->sec->sym) {
 				rela->sym = rela->sym->sec->sym;
+
+				/*
+				 * ppc64le: a GCC 6+ bundled function is at
+				 * offset 8 in its section.
+				 */
+				rela->addend -= rela->sym->sym.st_value;
+
 				continue;
 			}
 
@@ -2518,16 +2517,13 @@ static void kpatch_create_intermediate_sections(struct kpatch_elf *kelf,
 			krelas[index].addend = rela->addend;
 			krelas[index].type = rela->type;
 			krelas[index].external = external;
-			krelas[index].offset = rela->offset;
 
 			/* add rela to fill in krelas[index].dest field */
 			ALLOC_LINK(rela2, &krela_sec->rela->relas);
-			if (sec->base->sym)
-				rela2->sym = sec->base->sym;
-			else if (sec->base->secsym)
+			if (sec->base->secsym)
 				rela2->sym = sec->base->secsym;
 			else
-				ERROR("can't create dynrela for section %s (symbol %s): no bundled section or section symbol",
+				ERROR("can't create dynrela for section %s (symbol %s): no bundled or section symbol",
 				      sec->name, rela->sym->name);
 
 			rela2->type = ABSOLUTE_RELA_TYPE;

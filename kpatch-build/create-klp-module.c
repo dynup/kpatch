@@ -160,7 +160,7 @@ static void create_klp_relasecs_and_syms(struct kpatch_elf *kelf, struct section
 	struct symbol *sym, *dest;
 	struct rela *rela;
 	char *objname;
-	int nr, index, offset, toc_offset;
+	int nr, index, offset, dest_off;
 
 	krelas = krelasec->data->d_buf;
 	nr = krelasec->data->d_size / sizeof(*krelas);
@@ -168,48 +168,16 @@ static void create_klp_relasecs_and_syms(struct kpatch_elf *kelf, struct section
 	for (index = 0; index < nr; index++) {
 		offset = index * sizeof(*krelas);
 
-		/* Get the base section to which the rela applies */
+		/* Get the rela dest sym + offset */
 		rela = find_rela_by_offset(krelasec->rela,
 					   offset + offsetof(struct kpatch_relocation, dest));
 		if (!rela)
 			ERROR("find_rela_by_offset");
 
-		/*
-		 * Patched file:
-		 * Relocation section '.rela.toc' at offset 0x46358 contains 60 entries:
-		 *     Offset             Info             Type               Symbol's Value  Symbol's Name + Addend
-		 *     0000000000000000  000001ee00000026 R_PPC64_ADDR64         0000000000000000 jiffies + 0
-		 *     0000000000000008  0000009400000026 R_PPC64_ADDR64         0000000000000000 __tracepoints + 0
-		 *     0000000000000010  000001db00000026 R_PPC64_ADDR64         0000000000000000 __cpu_online_mask + 0
-		 *     0000000000000018  0000009c00000026 R_PPC64_ADDR64         0000000000000000 .data..percpu + 0
-		 *     0000000000000020  000001ac00000026 R_PPC64_ADDR64         0000000000000000 __per_cpu_offset + 0
-		 *     0000000000000028  0000006900000026 R_PPC64_ADDR64         0000000000000000 .rodata.str1.8 + 0
-		 *     [...]
-		 *
-		 * Output file:
-		 * Relocation section '.rela.toc' at offset 0x1270 contains 58 entries:
-		 *     Offset             Info             Type               Symbol's Value  Symbol's Name + Addend
-		 *     0000000000000000  0000000700000026 R_PPC64_ADDR64         0000000000000000 .data + 0
-		 *     0000000000000008  0000003c00000026 R_PPC64_ADDR64         0000000000000000 __kpatch_funcs + 0
-		 *     0000000000000010  0000005300000026 R_PPC64_ADDR64         0000000000000000 kmalloc_caches + 0
-		 *     0000000000000018  0000001100000026 R_PPC64_ADDR64         0000000000000000 .rodata.str1.8 + 0
-		 *     0000000000000020  0000001600000026 R_PPC64_ADDR64         0000000000000000 .bss + 0
-		 *     0000000000000028  0000004200000026 R_PPC64_ADDR64         0000000000000038 __kpatch_funcs_end + 0
-		 *     0000000000000030  0000003400000026 R_PPC64_ADDR64         0000000000000000 __this_module + 0
-		 *     0000000000000038  0000004d00000026 R_PPC64_ADDR64         0000000000000000 jiffies + 0
-		 *     0000000000000048  0000004500000026 R_PPC64_ADDR64         0000000000000000 __cpu_online_mask + 0
-		 *     0000000000000058  0000003900000026 R_PPC64_ADDR64         0000000000000000 __per_cpu_offset + 0
-		 *     [...]
-		 *
-		 * On ppc64le, when .o files are linked together, the .toc
-		 * entries might get re-arranged.  Capture the new .toc rela
-		 * offset value, which is used below to set the rela->addend.
-		 */
-		toc_offset = rela->addend;
-
 		dest = rela->sym;
+		dest_off = rela->addend;
 
-		/* Get the name of the object the rela belongs to */
+		/* Get the name of the object the dest belongs to */
 		rela = find_rela_by_offset(krelasec->rela,
 					   offset + offsetof(struct kpatch_relocation, objname));
 		if (!rela)
@@ -219,44 +187,28 @@ static void create_klp_relasecs_and_syms(struct kpatch_elf *kelf, struct section
 		if (!objname)
 			ERROR("strdup");
 
-		/* Get the corresponding .kpatch.symbol entry */
+		/* Get the .kpatch.symbol entry for the rela src */
 		rela = find_rela_by_offset(krelasec->rela,
 					   offset + offsetof(struct kpatch_relocation, ksym));
 		if (!rela)
 			ERROR("find_rela_by_offset");
 
-		/* Create (or find) a real symbol out of the .kpatch.symbol entry */
+		/* Create (or find) a klp symbol from the rela src entry */
 		sym = find_or_add_ksym_to_symbols(kelf, ksymsec, strings, rela->addend);
 		if (!sym)
 			ERROR("error finding or adding ksym to symtab");
 
-		/* Create (or find) the .klp.rela. section for this dest sec and object */
+		/* Create (or find) the .klp.rela. section for the dest sec and object */
 		klp_relasec = find_or_add_klp_relasec(kelf, dest->sec, objname);
 		if (!klp_relasec)
 			ERROR("error finding or adding klp relasec");
 
-		/* Add the rela to the .klp.rela. section */
+		/* Add the klp rela to the .klp.rela. section */
 		ALLOC_LINK(rela, &klp_relasec->relas);
-		rela->sym = sym;
+		rela->offset = dest->sym.st_value + dest_off;
 		rela->type = krelas[index].type;
-		if (!strcmp(dest->sec->name, ".toc"))
-			rela->offset = toc_offset;
-		else
-			rela->offset = krelas[index].offset + dest->sym.st_value;
-
-		/*
-		 * GCC 6+ adds 0x8 to the offset of every local function entry
-		 * in the .toc section, for avoiding the setup of the toc when
-		 * the function is called locally.  But when the previously
-		 * local function becomes global, we don't want to skip the
-		 * .toc setup anymore.
-		 */
-		if (!strcmp(dest->sec->name, ".toc") &&
-			rela->sym->type == STT_FUNC && rela->sym->bind == STB_LOCAL) {
-				rela->addend = 0;
-		} else {
-			rela->addend = krelas[index].addend;
-		}
+		rela->sym = sym;
+		rela->addend = krelas[index].addend;
 	}
 }
 
