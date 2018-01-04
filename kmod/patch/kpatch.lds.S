@@ -9,23 +9,36 @@ __kpatch_checksum = ADDR(.kpatch.checksum);
 
 SECTIONS
 {
-  .kpatch.hooks.load : {
-    __kpatch_hooks_load = . ;
-    *(.kpatch.hooks.load)
-    __kpatch_hooks_load_end = . ;
+  .kpatch.callbacks.pre_patch : {
+    __kpatch_callbacks_pre_patch = . ;
+    *(.kpatch.callbacks.pre_patch)
+    __kpatch_callbacks_pre_patch_end = . ;
     /*
      * Pad the end of the section with zeros in case the section is empty.
      * This prevents the kernel from discarding the section at module
-     * load time. __kpatch_hooks_load_end will still point to the end of
-     * the section before the padding.  If the .kpatch.hooks.load section
-     * is empty, __kpatch_hooks_load equals __kpatch_hooks_load_end.
+     * load time. __kpatch_callbacks_pre_patch_end will still point to the
+     * end of the section before the padding.  If the
+     * .kpatch.callbacks.pre_patch section is empty,
+     * __kpatch_callbacks_pre_patch equals __kpatch_callbacks_pre_patch_end.
      */
     QUAD(0);
   }
-  .kpatch.hooks.unload : {
-    __kpatch_hooks_unload = . ;
-    *(.kpatch.hooks.unload)
-    __kpatch_hooks_unload_end = . ;
+  .kpatch.callbacks.post_patch : {
+    __kpatch_callbacks_post_patch = . ;
+    *(.kpatch.callbacks.post_patch)
+    __kpatch_callbacks_post_patch_end = . ;
+    QUAD(0);
+  }
+  .kpatch.callbacks.pre_unpatch : {
+    __kpatch_callbacks_pre_unpatch = . ;
+    *(.kpatch.callbacks.pre_unpatch)
+    __kpatch_callbacks_pre_unpatch_end = . ;
+    QUAD(0);
+  }
+  .kpatch.callbacks.post_unpatch : {
+    __kpatch_callbacks_post_unpatch = . ;
+    *(.kpatch.callbacks.post_unpatch)
+    __kpatch_callbacks_post_unpatch_end = . ;
     QUAD(0);
   }
   .kpatch.force : {

@@ -105,53 +105,99 @@ Not only is this an easy solution, it's also safer than touching data since
 kpatch creates a barrier between the calling of old functions and new
 functions.
 
-### Use a kpatch load hook
+### Use a kpatch callback macro
 
-If you need to change the contents of an existing variable in-place, you can
-use the `KPATCH_LOAD_HOOK` macro to specify a function to be called when the
-patch module is loaded.
+Kpatch supports livepatch style callbacks, as described by the kernel's
+[Documentation/livepatch/callbacks.txt](https://github.com/torvalds/linux/blob/master/Documentation/livepatch/callbacks.txt).
 
-`kpatch-macros.h` provides `KPATCH_LOAD_HOOK` and `KPATCH_UNLOAD_HOOK` macros
-to define such functions.  The signature of both hook functions is `void
-foo(void)`.  Their execution context is as follows:
+`kpatch-macros.h` defines the following macros that can be used to
+register such callbacks:
 
-* For patches to vmlinux or already loaded kernel modules, hook functions
-will be run by `stop_machine` as part of applying or removing a patch.
-(Therefore the hooks must not block or sleep.)
+* `KPATCH_PRE_PATCH_CALLBACK` - executed before patching
+* `KPATCH_POST_PATCH_CALLBACK` - executed after patching
+* `KPATCH_PRE_UNPATCH_CALLBACK` - executed before unpatching, complements the
+                                  post-patch callback.
+* `KPATCH_POST_UNPATCH_CALLBACK` - executed after unpatching, complements the
+                                   pre-patch callback.
 
-* For patches to kernel modules which haven't been loaded yet, a
-module-notifier will execute load hooks when the associated module is loaded
-into the `MODULE_STATE_COMING` state.  The load hook is called before any
-module_init code.
-
-Example: a kpatch fix for CVE-2016-5389 utilized the `KPATCH_LOAD_HOOK` and
-`KPATCH_UNLOAD_HOOK` macros to modify variable `sysctl_tcp_challenge_ack_limit`
-in-place:
+A pre-patch callback routine has the following signature:
 
 ```
+static int callback(patch_object *obj) { }
+```
+
+and any non-zero return status indicates failure to the kpatch core.  For more
+information on pre-patch callback failure, see the **Pre-patch return status**
+section below.
+
+Post-patch, pre-unpatch, and post-unpatch callback routines all share the
+following signature:
+
+```
+static void callback(patch_object *obj) { }
+```
+
+Generally pre-patch callbacks are paired with post-unpatch callbacks, meaning
+that anything the former allocates or sets up should be torn down by the former
+callback.  Likewise for post-patch and pre-unpatch callbacks.
+
+#### Pre-patch return status
+
+If kpatch is currently patching already-loaded objects (vmlinux always by
+definition as well as any currently loaded kernel modules), a non-zero pre-patch
+callback status results in the kpatch core reverting the current
+patch-in-progress.  The kpatch-module is rejected, completely reverted, and
+unloaded.
+
+If kpatch is patching a newly loaded kernel module, then a failing pre-patch
+callback will only result in a WARN message.  This is non-intuitive and a
+deviation from livepatch callback behavior, but the result of a limitation of
+kpatch and linux module notifiers.
+
+In both cases, if a pre-patch callback fails, none of its other callbacks will
+be executed.
+
+#### Callback context
+
+* For patches to vmlinux or already loaded kernel modules, callback functions
+will be run by `stop_machine` as part of applying or removing a patch.
+(Therefore the callbacks must not block or sleep.)
+
+* For patches to kernel modules which haven't been loaded yet, a
+module-notifier will execute callbacks when the associated module is loaded
+into the `MODULE_STATE_COMING` state.  The pre and post-patch callbacks
+are called before any module_init code.
+
+Example: a kpatch fix for CVE-2016-5389 could utilize the
+`KPATCH_PRE_PATCH_CALLBACK` and `KPATCH_POST_UNPATCH_CALLBACK` macros to modify
+variable `sysctl_tcp_challenge_ack_limit` in-place:
+
+```
++#include "kpatch-macros.h"
++
 +static bool kpatch_write = false;
-+void kpatch_load_tcp_send_challenge_ack(void)
++static int kpatch_pre_patch_tcp_send_challenge_ack(patch_object *obj)
 +{
 +	if (sysctl_tcp_challenge_ack_limit == 100) {
 +		sysctl_tcp_challenge_ack_limit = 1000;
 +		kpatch_write = true;
 +	}
++	return 0;
 +}
-+void kpatch_unload_tcp_send_challenge_ack(void)
+static void kpatch_post_unpatch_tcp_send_challenge_ack(patch_object *obj)
 +{
 +	if (kpatch_write && sysctl_tcp_challenge_ack_limit == 1000)
 +		sysctl_tcp_challenge_ack_limit = 100;
 +}
-+#include "kpatch-macros.h"
-+KPATCH_LOAD_HOOK(kpatch_load_tcp_send_challenge_ack);
-+KPATCH_UNLOAD_HOOK(kpatch_unload_tcp_send_challenge_ack);
++KPATCH_PRE_PATCH_CALLBACK(kpatch_pre_patch_tcp_send_challenge_ack);
++KPATCH_POST_UNPATCH_CALLBACK(kpatch_post_unpatch_tcp_send_challenge_ack);
 ```
 
 Don't forget to protect access to the data as needed.
 
-Also be careful when upgrading.  If patch A has a load hook which writes to X,
-and then you load patch B which is a superset of A, in some cases you may want
-to prevent patch B from writing to X, if A is already loaded.
+Also be careful when upgrading.  If patch A has a pre/post-patch callback which
+writes to X, and then you load patch B which is a superset of A, in some cases
+you may want to prevent patch B from writing to X, if A is already loaded.
 
 
 ### Use a shadow variable
@@ -339,7 +385,7 @@ Init code changes
 
 Any code which runs in an `__init` function or during module or device
 initialization is problematic, as it may have already run before the patch was
-applied.  The patch may require a load hook function which detects whether such
+applied.  The patch may require a pre-patch callback which detects whether such
 init code has run, and which rewrites or changes the original initialization to
 force it into the desired state.  Some changes involving hardware init are
 inherently incompatible with live patching.

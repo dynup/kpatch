@@ -60,18 +60,17 @@ struct kpatch_dynrela {
 	struct list_head list;
 };
 
-struct kpatch_hook {
-	struct list_head list;
-	void (*hook)(void);
-};
-
 struct kpatch_object {
 	struct list_head list;
 	const char *name;
 	struct list_head funcs;
 	struct list_head dynrelas;
-	struct list_head hooks_load;
-	struct list_head hooks_unload;
+
+	int (*pre_patch_callback)(struct kpatch_object *);
+	void (*post_patch_callback)(struct kpatch_object *);
+	void (*pre_unpatch_callback)(struct kpatch_object *);
+	void (*post_unpatch_callback)(struct kpatch_object *);
+	bool callbacks_enabled;
 
 	/* private */
 	struct module *mod;
