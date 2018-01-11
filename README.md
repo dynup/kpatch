@@ -80,7 +80,7 @@ sudo yum install https://dl.fedoraproject.org/pub/epel/7/x86_64/c/ccache-3.2.7-3
 ccache --max-size=5G
 
 # optional, for kpatch-test
-sudo dnf install patchutils
+sudo yum install patchutils
 ```
 
 #### CentOS 7
@@ -113,7 +113,7 @@ sudo yum install ccache
 ccache --max-size=5G
 
 # optional, for kpatch-test
-sudo dnf install patchutils
+sudo yum install patchutils
 ```
 
 #### Oracle Linux 7
@@ -149,7 +149,7 @@ sudo yum install ccache
 ccache --max-size=5G
 
 # optional, for kpatch-test
-sudo dnf install patchutils
+sudo yum install patchutils
 ```
 
 #### Ubuntu 14.04
