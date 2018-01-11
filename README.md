@@ -113,7 +113,7 @@ sudo yum install ccache
 ccache --max-size=5G
 
 # optional, for kpatch-test
-sudo dnf install patchutils
+sudo yum install patchutils
 ```
 
 #### Oracle Linux 7
