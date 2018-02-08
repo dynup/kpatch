@@ -316,7 +316,7 @@ load_module () {
 	echo "loading patch module: $module"
 	local i=0
 	while true; do
-		out="$(insmod "$module" 2>&1)"
+		out="$(LC_ALL=C insmod "$module" 2>&1)"
 		[[ -z "$out" ]] && break
 		echo "$out" 1>&2
 		[[ ! "$out" =~ "Device or resource busy" ]] &&
