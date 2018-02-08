@@ -29,6 +29,11 @@ VERSION="0.5.0"
 POST_ENABLE_WAIT=5	# seconds
 POST_SIGNAL_WAIT=60	# seconds
 
+# How many times to try loading the patch if activeness safety check fails.
+MAX_LOAD_ATTEMPTS=5
+# How long to wait before retry, in seconds.
+RETRY_INTERVAL=2
+
 usage_cmd() {
 	printf '   %-20s\n      %s\n' "$1" "$2" >&2
 }
@@ -316,7 +321,7 @@ load_module () {
 	echo "loading patch module: $module"
 	local i=0
 	while true; do
-		out="$(insmod "$module" 2>&1)"
+		out="$(LC_ALL=C insmod "$module" 2>&1)"
 		[[ -z "$out" ]] && break
 		echo "$out" 1>&2
 		[[ ! "$out" =~ "Device or resource busy" ]] &&
@@ -325,12 +330,12 @@ load_module () {
 		# "Device or resource busy" means the activeness safety check
 		# failed.  Retry in a few seconds.
 		i=$((i+1))
-		if [[ $i = 5 ]]; then
+		if [[ $i = $MAX_LOAD_ATTEMPTS ]]; then
 			die "failed to load module $module"
 			break
 		else
 			warn "retrying..."
-			sleep 2
+			sleep $RETRY_INTERVAL
 		fi
 	done
 
