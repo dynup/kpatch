@@ -1168,17 +1168,6 @@ static void kpatch_replace_sections_syms(struct kpatch_elf *kelf)
 			}
 
 #ifdef __powerpc__
-			/*
-			 * With -mcmodel=large, R_PPC64_REL24 is only used for
-			 * functions.  Assuming the function is bundled in a
-			 * section, the section symbol should have been
-			 * replaced with a text symbol already.  Otherwise,
-			 * bail out.  If we hit this situation, more core is
-			 * needed here to calculate the value of 'add_off'.
-			 */
-			if (rela->type == R_PPC64_REL24)
-				ERROR("Unexpected relocation type R_PPC64_REL24 for %s\n", rela->sym->name);
-
 			add_off = 0;
 #else
 			if (rela->type == R_X86_64_PC32) {
