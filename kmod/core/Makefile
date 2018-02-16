@@ -1,6 +1,6 @@
 # make rules
 KPATCH_BUILD ?= /lib/modules/$(shell uname -r)/build
-KERNELRELEASE := $(lastword $(subst /, , $(dir $(KPATCH_BUILD))))
+KERNELRELEASE := $(lastword $(subst /, , $(dir $(patsubst %/,%,$(KPATCH_BUILD)))))
 THISDIR := $(abspath $(dir $(lastword $(MAKEFILE_LIST))))
 
 ifeq ($(wildcard $(KPATCH_BUILD)),)
