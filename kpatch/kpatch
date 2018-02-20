@@ -44,8 +44,8 @@ usage () {
 	echo "usage: kpatch <command> [<args>]" >&2
 	echo >&2
 	echo "Valid commands:" >&2
-	usage_cmd "install [-k|--kernel-version=<kernel version>] <module>" "install patch module to the initrd to be loaded at boot"
-	usage_cmd "uninstall [-k|--kernel-version=<kernel version>] <module>" "uninstall patch module from the initrd"
+	usage_cmd "install [-k|--kernel-version=<kernel version>] <module>" "install patch module to be loaded at boot"
+	usage_cmd "uninstall [-k|--kernel-version=<kernel version>] <module>" "uninstall patch module"
 	echo >&2
 	usage_cmd "load --all" "load all installed patch modules into the running kernel"
 	usage_cmd "load <module>" "load patch module into the running kernel"
