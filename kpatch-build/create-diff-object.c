@@ -2190,7 +2190,7 @@ static struct sym_compare_type *kpatch_elf_locals(struct kpatch_elf *kelf)
 }
 
 static void kpatch_create_patches_sections(struct kpatch_elf *kelf,
-					   struct lookup_table *table, char *hint,
+					   struct lookup_table *table,
 					   char *objname)
 {
 	int nr, index, objname_offset;
@@ -2226,8 +2226,8 @@ static void kpatch_create_patches_sections(struct kpatch_elf *kelf,
 			if (sym->bind == STB_LOCAL) {
 				if (lookup_local_symbol(table, sym->name,
 				                        &result))
-					ERROR("lookup_local_symbol %s (%s)",
-					      sym->name, hint);
+					ERROR("lookup_local_symbol %s",
+					      sym->name);
 			} else {
 				if(lookup_global_symbol(table, sym->name,
 				                        &result))
@@ -2304,7 +2304,7 @@ static int kpatch_is_core_module_symbol(char *name)
 
 static void kpatch_create_intermediate_sections(struct kpatch_elf *kelf,
 						struct lookup_table *table,
-						char *hint, char *objname,
+						char *objname,
 						char *pmod_name)
 {
 	int nr, index;
@@ -2408,8 +2408,8 @@ static void kpatch_create_intermediate_sections(struct kpatch_elf *kelf,
 				ret = lookup_local_symbol(table,
 					rela->sym->name, &result);
 				if (ret)
-					ERROR("lookup_local_symbol %s:%s needed for %s",
-			               hint, rela->sym->name, sec->base->name);
+					ERROR("lookup_local_symbol %s needed for %s",
+					      rela->sym->name, sec->base->name);
 
 			}
 			else if (vmlinux) {
@@ -2913,8 +2913,8 @@ int main(int argc, char *argv[])
 
 	/* create strings, patches, and dynrelas sections */
 	kpatch_create_strings_elements(kelf_out);
-	kpatch_create_patches_sections(kelf_out, lookup, hint, objname);
-	kpatch_create_intermediate_sections(kelf_out, lookup, hint, objname, pmod_name);
+	kpatch_create_patches_sections(kelf_out, lookup, objname);
+	kpatch_create_intermediate_sections(kelf_out, lookup, objname, pmod_name);
 	kpatch_create_kpatch_arch_section(kelf_out, objname);
 	kpatch_create_hooks_objname_rela(kelf_out, objname);
 	kpatch_build_strings_section_data(kelf_out);
