@@ -620,7 +620,7 @@ else
 		echo "Downloading and unpacking the kernel source for $ARCHVERSION"
 		# Download source deb pkg
 		(dget -u "$url/${pkgname}/${dscname}" 2>&1) | logger || die "dget: Could not fetch/unpack $url/${pkgname}/${dscname}"
-		mv "${pkgname}-$KVER" "$SRCDIR" || die
+		mv "${pkgname}-${pkgver%%-*}" "$SRCDIR" || die
 		cp "/boot/config-${ARCHVERSION}" "$SRCDIR/.config" || die
 		if [[ "$ARCHVERSION" == *-* ]]; then
 			echo "-${ARCHVERSION#*-}" > "$SRCDIR/localversion" || die
