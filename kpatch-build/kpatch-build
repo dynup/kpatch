@@ -104,15 +104,16 @@ remove_patches() {
 		patch="${PATCH_LIST[$idx]}"
 		patch -p1 -R -d "$SRCDIR" < "$patch" &> /dev/null
 	done
+
+	# If $SRCDIR was a git repo, make sure git actually sees that
+	# we've reverted our patch(es).
+	[[ -d "$SRCDIR/.git" ]] && (cd "$SRCDIR" && git update-index -q --refresh)
 }
 
 cleanup() {
 	rm -f "$SRCDIR/.scmversion"
 
 	remove_patches
-	# If $SRCDIR was a git repo, make sure git actually sees that
-	# we've reverted our patch(es).
-	[[ -d "$SRCDIR/.git" ]] && (cd "$SRCDIR" && git update-index -q --refresh)
 
 	# restore original .config and vmlinux if they were removed with mrproper
 	[[ -e "$TEMPDIR/.config" ]] && mv -f "$TEMPDIR/.config" "$SRCDIR/"
