@@ -137,7 +137,7 @@ static int is_bundleable(struct symbol *sym)
  */
 static int is_gcc6_localentry_bundled_sym(struct symbol *sym)
 {
-	return (PPC64_LOCAL_ENTRY_OFFSET(sym->sym.st_other) &&
+	return ((PPC64_LOCAL_ENTRY_OFFSET(sym->sym.st_other) != 0) &&
 		sym->sym.st_value == 8);
 }
 #else
