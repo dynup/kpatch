@@ -1114,12 +1114,6 @@ static void kpatch_replace_sections_syms(struct kpatch_elf *kelf)
 			if (rela->sym->sec && rela->sym->sec->sym) {
 				rela->sym = rela->sym->sec->sym;
 
-				/*
-				 * ppc64le: a GCC 6+ bundled function is at
-				 * offset 8 in its section.
-				 */
-				rela->addend -= rela->sym->sym.st_value;
-
 				continue;
 			}
 
@@ -2514,6 +2508,9 @@ static void kpatch_create_intermediate_sections(struct kpatch_elf *kelf,
 					offsetof(struct kpatch_symbol, objname);
 
 			/* Fill in krelas[index] */
+			if (is_gcc6_localentry_bundled_sym(rela->sym) &&
+			    rela->addend == rela->sym->sym.st_value)
+				rela->addend -= rela->sym->sym.st_value;
 			krelas[index].addend = rela->addend;
 			krelas[index].type = rela->type;
 			krelas[index].external = external;
