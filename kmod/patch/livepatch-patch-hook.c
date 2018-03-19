@@ -47,7 +47,8 @@
 #define HAVE_SYMPOS
 #endif
 
-#if LINUX_VERSION_CODE >= KERNEL_VERSION(4, 12, 0) ||			\
+#if (LINUX_VERSION_CODE >= KERNEL_VERSION(4, 12, 0) &&			\
+     LINUX_VERSION_CODE <= KERNEL_VERSION(4, 15, 0)) ||			\
     defined(RHEL_RELEASE_CODE)
 #define HAVE_IMMEDIATE
 #endif
