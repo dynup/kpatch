@@ -2328,6 +2328,55 @@ static int kpatch_is_core_module_symbol(char *name)
 		!strcmp(name, "kpatch_shadow_get"));
 }
 
+/*
+ * If the patched code refers to a symbol, for example, calls a function
+ * or stores a pointer to a function somewhere, the address of that symbol
+ * must be resolved somehow before the patch is applied. The symbol may be
+ * present in the original code too, so the patch may refer either to that
+ * version of the symbol (dynrela is used for that) or to its patched
+ * version directly (with a normal relocation).
+ *
+ * Dynrelas may be needed for the symbols not present in this object file
+ * (rela->sym->sec is NULL), because it is unknown if the patched versions
+ * of these symbols exist and where they are.
+ *
+ * The patched code can usually refer to a symbol from this object file
+ * directly. If it is a function, this may also improve performance because
+ * it will not be needed to call the original function first, find the
+ * patched one and then use Ftrace to pass control to it.
+ *
+ * There is an exception though, at least on x86. It is safer to use
+ * a dynrela if the patched code stores a pointer to a function somewhere
+ * (relocation of type R_X86_64_32S). The function could be used as
+ * a callback and some kinds of callbacks are called asynchronously. If
+ * the patch module sets such callback and is unloaded shortly after,
+ * the kernel could try to call the function via an invalid pointer and
+ * would crash. With dynrela, the kernel would call the original function
+ * in that case.
+ *
+ * Nested functions used as callbacks are a special case. They are not
+ * supposed to be visible outside of the function that defines them.
+ * Their names may differ in the original and the patched kernels which
+ * makes it difficult to use dynrelas. Fortunately, nested functions are
+ * rare and are unlikely to be used as asynchronous callbacks, so the
+ * patched code can refer to them directly. It seems, one can only
+ * distinguish such functions by their names containing a dot. Other
+ * kinds of functions with such names (e.g. optimized copies of functions)
+ * are unlikely to be used as callbacks.
+ */
+static int function_ptr_rela(const struct rela *rela)
+{
+	return (rela->sym->type == STT_FUNC && rela->type == R_X86_64_32S);
+}
+
+static int may_need_dynrela(const struct rela *rela)
+{
+	if (!rela->sym->sec)
+		return 1;
+
+	return (function_ptr_rela(rela) && !strchr(rela->sym->name, '.'));
+}
+
 static void kpatch_create_intermediate_sections(struct kpatch_elf *kelf,
 						struct lookup_table *table,
 						char *objname,
@@ -2386,8 +2435,9 @@ static void kpatch_create_intermediate_sections(struct kpatch_elf *kelf,
 		    !strcmp(sec->name, ".rela.kpatch.dynrelas"))
 			continue;
 		list_for_each_entry_safe(rela, safe, &sec->relas, list) {
-			if (rela->sym->sec)
+			if (!may_need_dynrela(rela))
 				continue;
+
 			/*
 			 * Allow references to core module symbols to remain as
 			 * normal relas, since the core module may not be
@@ -2576,7 +2626,15 @@ static void kpatch_create_intermediate_sections(struct kpatch_elf *kelf,
 			rela2->offset = index * sizeof(*krelas) + \
 				offsetof(struct kpatch_relocation, ksym);
 
-			rela->sym->strip = 1;
+			/*
+			 * Mark the referred to symbol for removal but
+			 * only if it is not from this object file.
+			 * The symbols from this object file may be needed
+			 * later (for example, they may have relocations
+			 * of their own which should be processed).
+			 */
+			if (!rela->sym->sec)
+				rela->sym->strip = 1;
 			list_del(&rela->list);
 			free(rela);
 
