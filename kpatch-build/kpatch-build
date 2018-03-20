@@ -343,6 +343,7 @@ find_kobj() {
 			[[ "$KOBJFILE" = *.ko ]] && return
 			case "$KOBJFILE" in
 				*/built-in.o|\
+				*/built-in.a|\
 				arch/x86/lib/lib.a|\
 				arch/x86/kernel/head*.o|\
 				arch/x86/kernel/ebda.o|\

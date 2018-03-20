@@ -30,6 +30,7 @@ do
 	case $i in
 		*.mod.o|\
 		*built-in.o|\
+		*built-in.a|\
 		vmlinux.o|\
 		.tmp_kallsyms1.o|\
 		.tmp_kallsyms2.o|\
