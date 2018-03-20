@@ -1,0 +1,40 @@
+EXT_ORIG        ?= ORIG.o
+EXT_PATCHED     ?= PATCHED.o
+EXT_FAIL        ?= PATCHED.FAIL.o
+EXT_TEST        ?= test
+EXT_OUTPUT      ?= OUTPUT.o
+EXT_TEST_OUTPUT ?= test.out
+TNAME            = $(@:.$(EXT_OUTPUT)=)
+
+ifndef VERBOSE
+MUTE:=>/dev/null 2>&1
+endif
+
+SRC_PATH ?= $(realpath ../../../)
+CDO      ?= $(SRC_PATH)/kpatch-build/create-diff-object
+
+TENV = PARA_STRUCT_SIZE=16 EX_STRUCT_SIZE=12 BUG_STRUCT_SIZE=12 ALT_STRUCT_SIZE=13
+
+TARGETS      = $(patsubst %.$(EXT_ORIG),%.$(EXT_OUTPUT),$(wildcard *.$(EXT_ORIG)))
+TEST_TARGETS = $(patsubst %.$(EXT_TEST),%.$(EXT_TEST_OUTPUT),$(wildcard *.$(EXT_TEST)))
+
+all: $(TARGETS) $(TEST_TARGETS)
+
+clean:
+	rm -f $(TARGETS) $(TEST_TARGETS)
+
+%.$(EXT_TEST_OUTPUT): %.$(EXT_OUTPUT) %.$(EXT_TEST)
+	bash $(@:.$(EXT_TEST_OUTPUT)=.$(EXT_TEST)) $<
+# Don't rely on script creating this
+	@touch $@
+
+%.$(EXT_OUTPUT): %.$(EXT_ORIG) %.$(EXT_PATCHED) $(CDO)
+	$(TENV) $(CDO) $(TNAME).$(EXT_ORIG) $(TNAME).$(EXT_PATCHED) \
+		$(TNAME).$(EXT_ORIG) $@ /dev/null test_$(TNAME) $(MUTE)
+
+%.$(EXT_OUTPUT): %.$(EXT_ORIG) %.$(EXT_FAIL) $(CDO)
+	! $(TENV) $(CDO) $(TNAME).$(EXT_ORIG) $(TNAME).$(EXT_FAIL) \
+		$(TNAME).$(EXT_ORIG) $@ /dev/null test_$(TNAME) $(MUTE)
+# Expecting to fail, thus create output file manually so we won't rerun the
+# test without clean
+	@touch $@
