@@ -20,7 +20,7 @@ install_rpms() {
 	$sudo dnf install -y $* || $sudo dnf install -y $*
 }
 
-install_rpms gcc elfutils elfutils-devel rpmdevtools pesign openssl numactl-devel wget patchutils
+install_rpms gcc elfutils elfutils-devel pesign openssl numactl-devel wget patchutils
 
 $sudo dnf builddep -y kernel || $sudo dnf builddep -y kernel
 
