@@ -1372,6 +1372,14 @@ static void kpatch_include_standard_elements(struct kpatch_elf *kelf)
 			list_for_each_entry(rela, &sec->relas, list)
 				kpatch_include_symbol(rela->sym, 0);
 		}
+
+		/* include .rela.rodata section for vmx_vcpu_run */
+		if (!strcmp(sec->name, ".rela.rodata"))
+		{
+			sec->include = 1;
+			list_for_each_entry(rela, &sec->relas, list)
+				kpatch_include_symbol(rela->sym, 0);
+		}
 	}
 
 	/* include the NULL symbol */
@@ -1557,7 +1565,7 @@ static void kpatch_migrate_included_elements(struct kpatch_elf *kelf, struct kpa
 		if (sym->sec && !sym->sec->include)
 			/* break link to non-included section */
 			sym->sec = NULL;
-			
+
 	}
 
 	*kelfout = out;
