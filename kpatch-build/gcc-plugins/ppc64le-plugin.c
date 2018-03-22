@@ -72,7 +72,7 @@ int plugin_init(struct plugin_name_args *plugin_info,
 {
 	const char * const plugin_name = plugin_info->base_name;
 
-	PASS_INFO(ppc64le_plugin, "dwarf2", 1, PASS_POS_INSERT_BEFORE);
+	PASS_INFO(ppc64le_plugin, "vregs", 1, PASS_POS_INSERT_AFTER);
 
 	if (!plugin_default_version_check(version, &gcc_version))
                 error(1, 0, PLUGIN_NAME ": incompatible gcc/plugin versions");
