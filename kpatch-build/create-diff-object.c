@@ -3413,10 +3413,10 @@ int main(int argc, char *argv[])
 
 	kpatch_include_standard_elements(kelf_patched);
 	num_changed = kpatch_include_changed_functions(kelf_patched);
-	kpatch_include_debug_sections(kelf_patched);
 	callbacks_exist = kpatch_include_callback_elements(kelf_patched);
 	kpatch_include_force_elements(kelf_patched);
 	new_globals_exist = kpatch_include_new_globals(kelf_patched);
+	kpatch_include_debug_sections(kelf_patched);
 
 	kpatch_process_special_sections(kelf_patched);
 
