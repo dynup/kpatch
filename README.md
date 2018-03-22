@@ -40,7 +40,7 @@ sudo dnf install gcc kernel-devel-${UNAME%.*} elfutils elfutils-devel
 Install the dependencies for the "kpatch-build" command:
 
 ```bash
-sudo dnf install rpmdevtools pesign yum-utils openssl wget numactl-devel
+sudo dnf install pesign yum-utils openssl wget numactl-devel
 sudo dnf builddep kernel-${UNAME%.*}
 sudo dnf debuginfo-install kernel-${UNAME%.*}
 
@@ -68,7 +68,7 @@ Install the dependencies for the "kpatch-build" command:
 
 ```bash
 sudo yum-config-manager --enable rhel-7-server-optional-rpms
-sudo yum install rpmdevtools pesign yum-utils zlib-devel \
+sudo yum install pesign yum-utils zlib-devel \
   binutils-devel newt-devel python-devel perl-ExtUtils-Embed \
   audit-libs-devel numactl-devel pciutils-devel bison ncurses-devel
 
@@ -98,7 +98,7 @@ sudo yum install gcc kernel-devel-${UNAME%.*} elfutils elfutils-devel
 Install the dependencies for the "kpatch-build" command:
 
 ```bash
-sudo yum install rpmdevtools pesign yum-utils zlib-devel \
+sudo yum install pesign yum-utils zlib-devel \
   binutils-devel newt-devel python-devel perl-ExtUtils-Embed \
   audit-libs audit-libs-devel numactl-devel pciutils-devel bison
 
@@ -131,7 +131,7 @@ sudo yum install gcc kernel-devel-${UNAME%.*} elfutils elfutils-devel
 Install the dependencies for the "kpatch-build" command:
 
 ```bash
-sudo yum install rpmdevtools pesign yum-utils zlib-devel \
+sudo yum install pesign yum-utils zlib-devel \
   binutils-devel newt-devel python-devel perl-ExtUtils-Embed \
   audit-libs numactl-devel pciutils-devel bison
 

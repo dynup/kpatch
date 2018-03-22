@@ -563,7 +563,6 @@ else
 	if [[ "$DISTRO" = fedora ]] || [[ "$DISTRO" = rhel ]] || [[ "$DISTRO" = ol ]] || [[ "$DISTRO" = centos ]]; then
 
 		echo "Fedora/Red Hat distribution detected"
-		rpm -q --quiet rpmdevtools || die "rpmdevtools not installed"
 
 		clean_cache
 
