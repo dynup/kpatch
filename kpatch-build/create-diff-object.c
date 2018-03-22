@@ -1305,50 +1305,85 @@ static void kpatch_verify_patchability(struct kpatch_elf *kelf)
 		DIFF_FATAL("%d unsupported section change(s)", errs);
 }
 
-#define inc_printf(fmt, ...) \
-	log_debug("%*s" fmt, recurselevel, "", ##__VA_ARGS__);
+static void kpatch_include_symbol(struct symbol *sym);
 
-static void kpatch_include_symbol(struct symbol *sym, int recurselevel)
+static void kpatch_include_section(struct section *sec)
 {
 	struct rela *rela;
-	struct section *sec;
 
-	inc_printf("start include_symbol(%s)\n", sym->name);
-	sym->include = 1;
-	inc_printf("symbol %s is included\n", sym->name);
-	/*
-	 * Check if sym is a non-local symbol (sym->sec is NULL) or
-	 * if an unchanged local symbol.  This a base case for the
-	 * inclusion recursion.
-	 */
-	if (!sym->sec || sym->sec->include ||
-	    (sym->type != STT_SECTION && sym->status == SAME))
-		goto out;
-	sec = sym->sec;
+	/* Include the section and its section symbol */
+	if (sec->include)
+		return;
 	sec->include = 1;
-	inc_printf("section %s is included\n", sec->name);
-	if (sec->secsym && sec->secsym != sym) {
+	if (sec->secsym)
 		sec->secsym->include = 1;
-		inc_printf("section symbol %s is included\n", sec->secsym->name);
-	}
+
+	/*
+	 * Include the section's rela section and then recursively include the
+	 * symbols needed by its relas.
+	 */
 	if (!sec->rela)
-		goto out;
+		return;
 	sec->rela->include = 1;
-	inc_printf("section %s is included\n", sec->rela->name);
 	list_for_each_entry(rela, &sec->rela->relas, list)
-		kpatch_include_symbol(rela->sym, recurselevel+1);
-out:
-	inc_printf("end include_symbol(%s)\n", sym->name);
-	return;
+		kpatch_include_symbol(rela->sym);
+}
+
+static void kpatch_include_symbol(struct symbol *sym)
+{
+	/*
+	 * This function is called recursively from kpatch_include_section().
+	 * Make sure we don't get into an endless loop.
+	 */
+	if (sym->include)
+		return;
+
+	/*
+	 * The symbol gets included even if its section isn't needed, as it
+	 * might be needed: either permanently for a rela, or temporarily for
+	 * the later creation of a dynrela.
+	 */
+	sym->include = 1;
+
+	/*
+	 * For a function/object symbol, if it has a section, we only need to
+	 * include the section if it has changed.  Otherwise the symbol will be
+	 * used by relas/dynrelas to link to the real symbol externally.
+	 *
+	 * For section symbols, we always include the section because
+	 * references to them can't otherwise be resolved externally.
+	 */
+	if (sym->sec && (sym->type == STT_SECTION || sym->status != SAME))
+		kpatch_include_section(sym->sec);
 }
 
 static void kpatch_include_standard_elements(struct kpatch_elf *kelf)
 {
 	struct section *sec;
-	struct rela *rela;
 
 	list_for_each_entry(sec, &kelf->sections, list) {
-		/* include these sections even if they haven't changed */
+		/*
+		 * Include the following sections even if they haven't changed.
+		 *
+		 * Notes about some of the more interesting sections:
+		 *
+		 * - With -fdata-sections, .rodata is only used for:
+		 *
+		 *     switch jump tables;
+		 *     KASAN data (with KASAN enabled, which is rare); and
+		 *     an ugly hack in vmx_vcpu_run().
+		 *
+		 *   Those data are all local to the functions which use them.
+		 *   So it's safe to include .rodata.
+		 *
+		 * - On ppc64le, the .toc section is used for all data
+		 *   accesses.
+		 *
+		 * Note that if any of these sections have rela sections, they
+		 * will also be included in their entirety.  That may result in
+		 * some extra (unused) dynrelas getting created, which should
+		 * be harmless.
+		 */
 		if (!strcmp(sec->name, ".shstrtab") ||
 		    !strcmp(sec->name, ".strtab") ||
 		    !strcmp(sec->name, ".symtab") ||
@@ -1356,21 +1391,7 @@ static void kpatch_include_standard_elements(struct kpatch_elf *kelf)
 		    !strcmp(sec->name, ".rodata") ||
 		    (!strncmp(sec->name, ".rodata.", 8) &&
 		     strstr(sec->name, ".str1."))) {
-			sec->include = 1;
-			if (sec->secsym)
-				sec->secsym->include = 1;
-		}
-
-		/*
-		 * On ppc64le, the .rela.toc section refers to symbols which
-		 * are needed for function symbol relocations.  Include all the
-		 * symbols.
-		 */
-		if (!strcmp(sec->name, ".rela.toc"))
-		{
-			sec->include = 1;
-			list_for_each_entry(rela, &sec->relas, list)
-				kpatch_include_symbol(rela->sym, 0);
+			kpatch_include_section(sec);
 		}
 	}
 
@@ -1399,7 +1420,7 @@ static int kpatch_include_hook_elements(struct kpatch_elf *kelf)
 			                         struct rela, list);
 				sym = rela->sym;
 				log_normal("found hook: %s\n",sym->name);
-				kpatch_include_symbol(sym, 0);
+				kpatch_include_symbol(sym);
 				/* strip the hook symbol */
 				sym->include = 0;
 				sym->sec->sym = NULL;
@@ -1461,7 +1482,7 @@ static int kpatch_include_new_globals(struct kpatch_elf *kelf)
 	list_for_each_entry(sym, &kelf->symbols, list) {
 		if (sym->bind == STB_GLOBAL && sym->sec &&
 		    sym->status == NEW) {
-			kpatch_include_symbol(sym, 0);
+			kpatch_include_symbol(sym);
 			nr++;
 		}
 	}
@@ -1474,13 +1495,11 @@ static int kpatch_include_changed_functions(struct kpatch_elf *kelf)
 	struct symbol *sym;
 	int changed_nr = 0;
 
-	log_debug("\n=== Inclusion Tree ===\n");
-
 	list_for_each_entry(sym, &kelf->symbols, list) {
 		if (sym->status == CHANGED &&
 		    sym->type == STT_FUNC) {
 			changed_nr++;
-			kpatch_include_symbol(sym, 0);
+			kpatch_include_symbol(sym);
 		}
 
 		if (sym->type == STT_FILE)
@@ -1557,7 +1576,7 @@ static void kpatch_migrate_included_elements(struct kpatch_elf *kelf, struct kpa
 		if (sym->sec && !sym->sec->include)
 			/* break link to non-included section */
 			sym->sec = NULL;
-			
+
 	}
 
 	*kelfout = out;
