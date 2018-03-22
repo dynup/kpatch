@@ -399,8 +399,8 @@ void lookup_close(struct lookup_table *table)
 	free(table);
 }
 
-bool lookup_local_symbol(struct lookup_table *table, char *name,
-			 struct lookup_result *result)
+static bool lookup_local_symbol(struct lookup_table *table, char *name,
+				struct lookup_result *result)
 {
 	struct object_symbol *sym;
 	unsigned long sympos = 0;
@@ -434,14 +434,51 @@ bool lookup_local_symbol(struct lookup_table *table, char *name,
 			result->addr		= sym->addr;
 			result->size		= sym->size;
 			result->sympos		= sympos;
+			result->global		= false;
+			result->exported	= false;
 		}
 	}
 
 	return !!result->objname;
 }
 
-bool lookup_global_symbol(struct lookup_table *table, char *name,
-			  struct lookup_result *result)
+static bool lookup_exported_symbol(struct lookup_table *table, char *name,
+				   struct lookup_result *result)
+{
+	struct export_symbol *sym;
+	int i;
+
+	if (result)
+		memset(result, 0, sizeof(*result));
+
+	for_each_exp_symbol(i, sym, table) {
+		if (!strcmp(sym->name, name)) {
+
+			if (!result)
+				return true;
+
+			if (result->objname)
+				ERROR("duplicate exported symbol found for %s", name);
+
+			result->objname		= sym->objname;
+			result->addr		= 0; /* determined at runtime */
+			result->size		= 0; /* not used for exported symbols */
+			result->sympos		= 0; /* always 0 for exported symbols */
+			result->global		= true;
+			result->exported	= true;
+		}
+	}
+
+	return result && result->objname;
+}
+
+bool is_exported(struct lookup_table *table, char *name)
+{
+	return lookup_exported_symbol(table, name, NULL);
+}
+
+static bool lookup_global_symbol(struct lookup_table *table, char *name,
+				 struct lookup_result *result)
 {
 	struct object_symbol *sym;
 	int i;
@@ -458,47 +495,22 @@ bool lookup_global_symbol(struct lookup_table *table, char *name,
 			result->addr		= sym->addr;
 			result->size		= sym->size;
 			result->sympos		= 0; /* always 0 for global symbols */
+			result->global		= true;
+			result->exported	= is_exported(table, name);
 		}
 	}
 
 	return !!result->objname;
 }
 
-bool lookup_is_exported_symbol(struct lookup_table *table, char *name)
+bool lookup_symbol(struct lookup_table *table, char *name,
+		   struct lookup_result *result)
 {
-	struct export_symbol *sym, *match = NULL;
-	int i;
+	if (lookup_local_symbol(table, name, result))
+		return true;
 
-	for_each_exp_symbol(i, sym, table) {
-		if (!strcmp(sym->name, name)) {
-			if (match)
-				ERROR("duplicate exported symbol found for %s", name);
-			match = sym;
-		}
-	}
+	if (lookup_global_symbol(table, name, result))
+		return true;
 
-	return !!match;
-}
-
-/*
- * lookup_exported_symbol_objname - find the object/module an exported
- * symbol belongs to.
- */
-char *lookup_exported_symbol_objname(struct lookup_table *table, char *name)
-{
-	struct export_symbol *sym, *match = NULL;
-	int i;
-
-	for_each_exp_symbol(i, sym, table) {
-		if (!strcmp(sym->name, name)) {
-			if (match)
-				ERROR("duplicate exported symbol found for %s", name);
-			match = sym;
-		}
-	}
-
-	if (match)
-		return match->objname;
-
-	return NULL;
+	return lookup_exported_symbol(table, name, result);
 }

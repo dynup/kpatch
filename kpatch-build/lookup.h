@@ -10,6 +10,7 @@ struct lookup_result {
 	unsigned long addr;
 	unsigned long size;
 	unsigned long sympos;
+	bool global, exported;
 };
 
 struct sym_compare_type {
@@ -21,11 +22,7 @@ struct lookup_table *lookup_open(char *symtab_path, char *objname,
 				 char *symvers_path, char *hint,
 				 struct sym_compare_type *locals);
 void lookup_close(struct lookup_table *table);
-bool lookup_local_symbol(struct lookup_table *table, char *name,
-			 struct lookup_result *result);
-bool lookup_global_symbol(struct lookup_table *table, char *name,
-			  struct lookup_result *result);
-bool lookup_is_exported_symbol(struct lookup_table *table, char *name);
-char *lookup_exported_symbol_objname(struct lookup_table *table, char *name);
+bool lookup_symbol(struct lookup_table *table, char *name,
+		   struct lookup_result *result);
 
 #endif /* _LOOKUP_H_ */
