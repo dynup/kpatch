@@ -56,7 +56,6 @@ struct lookup_table {
 	struct object_symbol *obj_syms;
 	struct export_symbol *exp_syms;
 	struct object_symbol *local_syms;
-	int vmlinux;
 };
 
 #define for_each_obj_symbol(ndx, iter, table) \
@@ -68,13 +67,20 @@ struct lookup_table {
 #define for_each_exp_symbol(ndx, iter, table) \
 	for (ndx = 0, iter = table->exp_syms; ndx < table->exp_nr; ndx++, iter++)
 
-static int discarded_sym(struct lookup_table *table,
-			 struct sym_compare_type *sym)
+static int maybe_discarded_sym(const char *name)
 {
-	if (table->vmlinux && sym->name &&
-	    (!strncmp(sym->name, "__exitcall_", 11) ||
-	     !strncmp(sym->name, "__brk_reservation_fn_", 21) ||
-	     !strncmp(sym->name, "__func_stack_frame_non_standard_", 32)))
+	if (!name)
+		return 0;
+
+	/*
+	 * Sometimes these symbols are discarded during linking, and sometimes
+	 * they're not, depending on whether the parent object is vmlinux or a
+	 * module, and also depending on the kernel version.  For simplicity,
+	 * we just always skip them when comparing object symbol tables.
+	 */
+	if (!strncmp(name, "__exitcall_", 11) ||
+	    !strncmp(name, "__brk_reservation_fn_", 21) ||
+	    !strncmp(name, "__func_stack_frame_non_standard_", 32))
 		return 1;
 
 	return 0;
@@ -114,7 +120,7 @@ static int locals_match(struct lookup_table *table, int idx,
 		 * Symbols which get discarded at link time are missing from
 		 * the lookup table, so skip them.
 		 */
-		if (discarded_sym(table, child))
+		if (maybe_discarded_sym(child->name))
 			continue;
 
 		found = 0;
@@ -125,6 +131,8 @@ static int locals_match(struct lookup_table *table, int idx,
 			if (sym->bind != STB_LOCAL)
 				continue;
 			if (sym->type != STT_FUNC && sym->type != STT_OBJECT)
+				continue;
+			if (maybe_discarded_sym(sym->name))
 				continue;
 
 			if (!strcmp(child->name, sym->name)) {
@@ -315,8 +323,6 @@ struct lookup_table *lookup_open(char *obj_path, char *symvers_path,
 	if (!table)
 		ERROR("malloc table");
 	memset(table, 0, sizeof(*table));
-
-	table->vmlinux = !strncmp(basename(obj_path), "vmlinux", 7);
 
 	obj_read(table, obj_path);
 	symvers_read(table, symvers_path);
