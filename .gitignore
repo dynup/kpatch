@@ -9,6 +9,7 @@
 *.so
 .tmp_versions
 Module.symvers
+kmod/core/.cache.mk
 kpatch-build/lookup
 kpatch-build/create-diff-object
 kpatch-build/create-klp-module
