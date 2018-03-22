@@ -1,0 +1,12 @@
+diff -Nupr src.orig/fs/proc/meminfo.c src/fs/proc/meminfo.c
+--- src.orig/fs/proc/meminfo.c	2017-11-17 15:59:24.724211972 -0500
++++ src/fs/proc/meminfo.c	2017-11-17 15:59:24.721211972 -0500
+@@ -132,7 +132,7 @@ static int meminfo_proc_show(struct seq_
+ 	seq_printf(m, "VmallocTotal:   %8lu kB\n",
+ 		   (unsigned long)VMALLOC_TOTAL >> 10);
+ 	show_val_kb(m, "VmallocUsed:    ", 0ul);
+-	show_val_kb(m, "VmallocChunk:   ", 0ul);
++	show_val_kb(m, "VMALLOCCHUNK:   ", 0ul);
+ 
+ #ifdef CONFIG_MEMORY_FAILURE
+ 	seq_printf(m, "HardwareCorrupted: %5lu kB\n",

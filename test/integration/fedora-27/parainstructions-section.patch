@@ -1,0 +1,11 @@
+diff -Nupr src.orig/fs/proc/generic.c src/fs/proc/generic.c
+--- src.orig/fs/proc/generic.c	2017-11-17 16:08:17.202211972 -0500
++++ src/fs/proc/generic.c	2017-11-17 16:08:46.585211972 -0500
+@@ -191,6 +191,7 @@ int proc_alloc_inum(unsigned int *inum)
+ {
+ 	int i;
+ 
++	printk("kpatch-test: testing change to .parainstructions section\n");
+ 	i = ida_simple_get(&proc_inum_ida, 0, UINT_MAX - PROC_DYNAMIC_FIRST + 1,
+ 			   GFP_KERNEL);
+ 	if (i < 0)
