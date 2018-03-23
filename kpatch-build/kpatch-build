@@ -716,10 +716,10 @@ CROSS_COMPILE="$TOOLSDIR/kpatch-gcc " \
 
 # source.c:(.section+0xFF): undefined reference to `symbol'
 grep "undefined reference" "$LOGFILE" | sed -r "s/^.*\`(.*)'$/\1/" \
-	>${TEMPDIR}/undefined_references
+	>"${TEMPDIR}"/undefined_references
 
 # WARNING: "symbol" [path/to/module.ko] undefined!
-grep "undefined!" "$LOGFILE" | cut -d\" -f2 >>${TEMPDIR}/undefined_references
+grep "undefined!" "$LOGFILE" | cut -d\" -f2 >>"${TEMPDIR}"/undefined_references
 
 if [[ ! -e "$TEMPDIR/changed_objs" ]]; then
 	die "no changed objects found"
@@ -861,10 +861,10 @@ fi
 
 readelf --wide --symbols "$TEMPDIR/patch/$MODNAME.ko" 2>/dev/null | \
 	awk '($4=="FUNC" || $4=="OBJECT") && ($5=="GLOBAL" || $5=="WEAK") && $7!="UND" {print $NF}' \
-	>${TEMPDIR}/new_symbols
+	>"${TEMPDIR}"/new_symbols
 
 if "$KPATCH_MODULE"; then
-	cat >>${TEMPDIR}/new_symbols <<-EOF
+	cat >>"${TEMPDIR}"/new_symbols <<-EOF
 		kpatch_shadow_free
 		kpatch_shadow_alloc
 		kpatch_register
@@ -876,8 +876,8 @@ fi
 
 # Compare undefined_references and new_symbols files and print only the first
 # column containing lines unique to first file.
-UNDEFINED=$(comm -23 <(sort -u ${TEMPDIR}/undefined_references) \
-	<(sort -u ${TEMPDIR}/new_symbols) | tr '\n' ' ')
+UNDEFINED=$(comm -23 <(sort -u "${TEMPDIR}"/undefined_references) \
+	<(sort -u "${TEMPDIR}"/new_symbols) | tr '\n' ' ')
 [[ ! -z "$UNDEFINED" ]] && die "Undefined symbols: $UNDEFINED"
 
 cp -f "$TEMPDIR/patch/$MODNAME.ko" "$BASE" || die

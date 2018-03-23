@@ -330,7 +330,7 @@ load_module () {
 		# "Device or resource busy" means the activeness safety check
 		# failed.  Retry in a few seconds.
 		i=$((i+1))
-		if [[ $i = $MAX_LOAD_ATTEMPTS ]]; then
+		if [[ $i -eq $MAX_LOAD_ATTEMPTS ]]; then
 			die "failed to load module $module"
 			break
 		else
@@ -368,7 +368,7 @@ disable_patch () {
 			# "Device or resource busy" means the activeness safety check
 			# failed.  Retry in a few seconds.
 			i=$((i+1))
-			if [[ $i = $MAX_LOAD_ATTEMPTS ]]; then
+			if [[ $i -eq $MAX_LOAD_ATTEMPTS ]]; then
 				die "failed to disable module $modname"
 			else
 				warn "retrying..."
