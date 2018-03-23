@@ -71,7 +71,7 @@
  *  done, the scaffold structs are no longer needed.
  */
 
-struct klp_patch *lpatch;
+static struct klp_patch *lpatch;
 
 static LIST_HEAD(patch_objects);
 static int patch_objects_nr;
