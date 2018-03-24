@@ -139,7 +139,7 @@ static int (*kpatch_set_memory_ro)(unsigned long addr, int numpages);
 
 #define MAX_STACK_TRACE_DEPTH   64
 static unsigned long stack_entries[MAX_STACK_TRACE_DEPTH];
-struct stack_trace trace = {
+static struct stack_trace trace = {
 	.max_entries	= ARRAY_SIZE(stack_entries),
 	.entries	= &stack_entries[0],
 };
