@@ -20,6 +20,7 @@
 #ifndef _KPATCH_ELF_H_
 #define _KPATCH_ELF_H_
 
+#include <stdbool.h>
 #include <gelf.h>
 #include "list.h"
 #include "log.h"
@@ -90,6 +91,7 @@ struct rela {
 	int addend;
 	int offset;
 	char *string;
+	bool need_dynrela;
 };
 
 struct string {

@@ -2347,6 +2347,75 @@ static int kpatch_is_core_module_symbol(char *name)
 		!strcmp(name, "kpatch_shadow_get"));
 }
 
+static struct rela *toc_rela(const struct rela *rela)
+{
+	if (rela->type != R_PPC64_TOC16_HA &&
+	    rela->type != R_PPC64_TOC16_LO_DS)
+		return (struct rela *)rela;
+
+	/* Will return NULL for .toc constant entries */
+	return find_rela_by_offset(rela->sym->sec->rela, rela->addend);
+}
+
+/*
+ * If the patched code refers to a symbol, for example, calls a function
+ * or stores a pointer to a function somewhere, the address of that symbol
+ * must be resolved somehow before the patch is applied. The symbol may be
+ * present in the original code too, so the patch may refer either to that
+ * version of the symbol (dynrela is used for that) or to its patched
+ * version directly (with a normal relocation).
+ *
+ * Dynrelas may be needed for the symbols not present in this object file
+ * (rela->sym->sec is NULL), because it is unknown if the patched versions
+ * of these symbols exist and where they are.
+ *
+ * The patched code can usually refer to a symbol from this object file
+ * directly. If it is a function, this may also improve performance because
+ * it will not be needed to call the original function first, find the
+ * patched one and then use Ftrace to pass control to it.
+ *
+ * There is an exception though, at least on x86. It is safer to use
+ * a dynrela if the patched code stores a pointer to a function somewhere
+ * (relocation of type R_X86_64_32S). The function could be used as
+ * a callback and some kinds of callbacks are called asynchronously. If
+ * the patch module sets such callback and is unloaded shortly after,
+ * the kernel could try to call the function via an invalid pointer and
+ * would crash. With dynrela, the kernel would call the original function
+ * in that case.
+ */
+static int function_ptr_rela(const struct rela *rela)
+{
+	const struct rela *rela_toc = toc_rela(rela);
+
+	return (rela_toc && rela_toc->sym->type == STT_FUNC &&
+		/* skip switch table on PowerPC */
+		rela_toc->addend == rela_toc->sym->sym.st_value &&
+		(rela->type == R_X86_64_32S ||
+		rela->type == R_PPC64_TOC16_HA ||
+		rela->type == R_PPC64_TOC16_LO_DS));
+}
+
+static int may_need_dynrela(const struct rela *rela)
+{
+	if (!rela->sym->sec)
+		return 1;
+	/*
+	 * Nested functions used as callbacks are a special case.
+	 * They are not supposed to be visible outside of the
+	 * function that defines them.  Their names may differ in
+	 * the original and the patched kernels which makes it
+	 * difficult to use dynrelas.  Fortunately, nested functions
+	 * are rare and are unlikely to be used as asynchronous
+	 * callbacks, so the patched code can refer to them directly.
+	 * It seems, one can only distinguish such functions by their
+	 * names containing a dot.  Other kinds of functions with
+	 * such names (e.g. optimized copies of functions) are
+	 * unlikely to be used as callbacks.
+	 */
+	return (function_ptr_rela(rela) &&
+		!strchr(toc_rela(rela)->sym->name, '.'));
+}
+
 static void kpatch_create_intermediate_sections(struct kpatch_elf *kelf,
 						struct lookup_table *table,
 						char *objname,
@@ -2371,8 +2440,28 @@ static void kpatch_create_intermediate_sections(struct kpatch_elf *kelf,
 			continue;
 		if (!strcmp(sec->name, ".rela.kpatch.funcs"))
 			continue;
-		list_for_each_entry(rela, &sec->relas, list)
+		list_for_each_entry(rela, &sec->relas, list) {
 			nr++; /* upper bound on number of kpatch relas and symbols */
+			/*
+			 * Relocation section '.rela.toc' at offset 0xcc6b0 contains 46 entries:
+			 * ...
+			 * 0000000000000138  0000002a00000026 R_PPC64_ADDR64      0000000000000000 .text.deferred_put_nlk_sk + 8
+			 *
+			 * Relocation section '.rela.text.netlink_release' at offset 0xcadf0 contains 44 entries:
+			 * ...
+			 * 0000000000000398  0000007300000032 R_PPC64_TOC16_HA    0000000000000000 .toc + 138
+			 * 00000000000003a0  0000007300000040 R_PPC64_TOC16_LO_DS 0000000000000000 .toc + 138
+			 *
+			 * On PowerPC, may_need_dynrela() should be using rela's reference in .rela.toc for
+			 * the rela like in the example, where the sym name is .toc + offset. In such case,
+			 * the checks are performed on both rela and its reference in .rela.toc. Where the
+			 * rela is checked for rela->type and its corresponding rela in .rela.toc for function
+			 * pointer/switch label. If rela->need_dynrela needs to be set, it's referenced rela
+			 * in (.rela.toc)->need_dynrela is set, as they represent the function sym.
+			 */
+			if (may_need_dynrela(rela))
+				toc_rela(rela)->need_dynrela = 1;
+		}
 	}
 
 	/* create .kpatch.relocations text/rela section pair */
@@ -2405,8 +2494,9 @@ static void kpatch_create_intermediate_sections(struct kpatch_elf *kelf,
 		    !strcmp(sec->name, ".rela.kpatch.dynrelas"))
 			continue;
 		list_for_each_entry_safe(rela, safe, &sec->relas, list) {
-			if (rela->sym->sec)
+			if (!rela->need_dynrela)
 				continue;
+
 			/*
 			 * Allow references to core module symbols to remain as
 			 * normal relas, since the core module may not be
@@ -2595,7 +2685,15 @@ static void kpatch_create_intermediate_sections(struct kpatch_elf *kelf,
 			rela2->offset = index * sizeof(*krelas) + \
 				offsetof(struct kpatch_relocation, ksym);
 
-			rela->sym->strip = 1;
+			/*
+			 * Mark the referred to symbol for removal but
+			 * only if it is not from this object file.
+			 * The symbols from this object file may be needed
+			 * later (for example, they may have relocations
+			 * of their own which should be processed).
+			 */
+			if (!rela->sym->sec)
+				rela->sym->strip = 1;
 			list_del(&rela->list);
 			free(rela);
 
