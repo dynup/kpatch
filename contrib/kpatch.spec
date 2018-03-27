@@ -79,6 +79,7 @@ rm -rf %{buildroot}
 %{_sbindir}/kpatch
 %{_mandir}/man1/kpatch.1*
 %{_usr}/lib/systemd/system/*
+%{_sysconfdir}/init/kpatch.conf
 
 %files %{KVER}
 %defattr(-,root,root,-)
