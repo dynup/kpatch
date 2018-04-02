@@ -79,6 +79,7 @@ struct patch_object {
 	struct list_head list;
 	struct list_head funcs;
 	struct list_head relocs;
+	struct klp_callbacks callbacks;
 	const char *name;
 	int funcs_nr, relocs_nr;
 };
@@ -210,6 +211,82 @@ static void patch_free_livepatch(struct klp_patch *patch)
 	}
 }
 
+extern struct kpatch_pre_patch_callback __kpatch_callbacks_pre_patch[], __kpatch_callbacks_pre_patch_end[];
+extern struct kpatch_post_patch_callback __kpatch_callbacks_post_patch[], __kpatch_callbacks_post_patch_end[];
+extern struct kpatch_pre_unpatch_callback __kpatch_callbacks_pre_unpatch[], __kpatch_callbacks_pre_unpatch_end[];
+extern struct kpatch_post_unpatch_callback __kpatch_callbacks_post_unpatch[], __kpatch_callbacks_post_unpatch_end[];
+
+static int add_callbacks_to_patch_objects(void)
+{
+	struct kpatch_pre_patch_callback *p_pre_patch_callback;
+	struct kpatch_post_patch_callback *p_post_patch_callback;
+	struct kpatch_pre_unpatch_callback *p_pre_unpatch_callback;
+	struct kpatch_post_unpatch_callback *p_post_unpatch_callback;
+	struct patch_object *object;
+
+	for (p_pre_patch_callback = __kpatch_callbacks_pre_patch;
+	     p_pre_patch_callback < __kpatch_callbacks_pre_patch_end;
+	     p_pre_patch_callback++) {
+		object = patch_find_object_by_name(p_pre_patch_callback->objname);
+		if (!object)
+			return -ENOMEM;
+		if (object->callbacks.pre_patch) {
+			pr_err("extra pre-patch callback for object: %s\n",
+				object->name ? object->name : "vmlinux");
+			return -EINVAL;
+		}
+		object->callbacks.pre_patch = (int (*)(struct klp_object *))
+					       p_pre_patch_callback->callback;
+	}
+
+	for (p_post_patch_callback = __kpatch_callbacks_post_patch;
+	     p_post_patch_callback < __kpatch_callbacks_post_patch_end;
+	     p_post_patch_callback++) {
+		object = patch_find_object_by_name(p_post_patch_callback->objname);
+		if (!object)
+			return -ENOMEM;
+		if (object->callbacks.post_patch) {
+			pr_err("extra post-patch callback for object: %s\n",
+				object->name ? object->name : "vmlinux");
+			return -EINVAL;
+		}
+		object->callbacks.post_patch = (void (*)(struct klp_object *))
+						p_post_patch_callback->callback;
+	}
+
+	for (p_pre_unpatch_callback = __kpatch_callbacks_pre_unpatch;
+	     p_pre_unpatch_callback < __kpatch_callbacks_pre_unpatch_end;
+	     p_pre_unpatch_callback++) {
+		object = patch_find_object_by_name(p_pre_unpatch_callback->objname);
+		if (!object)
+			return -ENOMEM;
+		if (object->callbacks.pre_unpatch) {
+			pr_err("extra pre-unpatch callback for object: %s\n",
+				object->name ? object->name : "vmlinux");
+			return -EINVAL;
+		}
+		object->callbacks.pre_unpatch = (void (*)(struct klp_object *))
+						p_pre_unpatch_callback->callback;
+	}
+
+	for (p_post_unpatch_callback = __kpatch_callbacks_post_unpatch;
+	     p_post_unpatch_callback < __kpatch_callbacks_post_unpatch_end;
+	     p_post_unpatch_callback++) {
+		object = patch_find_object_by_name(p_post_unpatch_callback->objname);
+		if (!object)
+			return -ENOMEM;
+		if (object->callbacks.post_unpatch) {
+			pr_err("extra post-unpatch callback for object: %s\n",
+				object->name ? object->name : "vmlinux");
+			return -EINVAL;
+		}
+		object->callbacks.post_unpatch = (void (*)(struct klp_object *))
+						p_post_unpatch_callback->callback;
+	}
+
+	return 0;
+}
+
 extern struct kpatch_patch_func __kpatch_funcs[], __kpatch_funcs_end[];
 #ifndef HAVE_ELF_RELOCS
 extern struct kpatch_patch_dynrela __kpatch_dynrelas[], __kpatch_dynrelas_end[];
@@ -247,6 +324,10 @@ static int __init patch_init(void)
 			goto out;
 	}
 #endif
+
+	ret = add_callbacks_to_patch_objects();
+	if (ret)
+		goto out;
 
 	/* past this point, only possible return code is -ENOMEM */
 	ret = -ENOMEM;
@@ -310,6 +391,8 @@ static int __init patch_init(void)
 			j++;
 		}
 #endif /* HAVE_ELF_RELOCS */
+
+		lobject->callbacks = object->callbacks;
 
 		i++;
 	}
