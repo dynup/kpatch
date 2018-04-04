@@ -147,6 +147,16 @@ static int is_gcc6_localentry_bundled_sym(struct symbol *sym)
 }
 #endif
 
+static struct rela *toc_rela(const struct rela *rela)
+{
+	if (rela->type != R_PPC64_TOC16_HA &&
+	    rela->type != R_PPC64_TOC16_LO_DS)
+		return (struct rela *)rela;
+
+	/* Will return NULL for .toc constant entries */
+	return find_rela_by_offset(rela->sym->sec->rela, rela->addend);
+}
+
 /*
  * When compiling with -ffunction-sections and -fdata-sections, almost every
  * symbol gets its own dedicated section.  We call such symbols "bundled"
@@ -854,7 +864,7 @@ static char *kpatch_section_function_name(struct section *sec)
 static struct symbol *kpatch_find_static_twin(struct section *sec,
 					      struct symbol *sym)
 {
-	struct rela *rela;
+	struct rela *rela, *rela_toc;
 
 	if (!sec->twin)
 		return NULL;
@@ -862,13 +872,17 @@ static struct symbol *kpatch_find_static_twin(struct section *sec,
 	/* find the patched object's corresponding variable */
 	list_for_each_entry(rela, &sec->twin->relas, list) {
 
-		if (rela->sym->twin)
+		rela_toc = toc_rela(rela);
+		if (!rela_toc)
+			continue; /* skip toc constants */
+
+		if (rela_toc->sym->twin)
 			continue;
 
-		if (kpatch_mangled_strcmp(rela->sym->name, sym->name))
+		if (kpatch_mangled_strcmp(rela_toc->sym->name, sym->name))
 			continue;
 
-		return rela->sym;
+		return rela_toc->sym;
 	}
 
 	return NULL;
@@ -957,12 +971,16 @@ static void kpatch_correlate_static_local_variables(struct kpatch_elf *base,
 	list_for_each_entry(sec, &base->sections, list) {
 
 		if (!is_rela_section(sec) ||
-		    is_debug_section(sec))
+		    is_debug_section(sec) ||
+		    !strcmp(sec->name, ".rela.toc"))
 			continue;
 
 		list_for_each_entry(rela, &sec->relas, list) {
 
-			sym = rela->sym;
+			if (!toc_rela(rela))
+				continue; /* skip toc constants */
+			sym = toc_rela(rela)->sym;
+
 			if (!kpatch_is_normal_static_local(sym))
 				continue;
 
@@ -2363,16 +2381,6 @@ static int kpatch_is_core_module_symbol(char *name)
 	return (!strcmp(name, "kpatch_shadow_alloc") ||
 		!strcmp(name, "kpatch_shadow_free") ||
 		!strcmp(name, "kpatch_shadow_get"));
-}
-
-static struct rela *toc_rela(const struct rela *rela)
-{
-	if (rela->type != R_PPC64_TOC16_HA &&
-	    rela->type != R_PPC64_TOC16_LO_DS)
-		return (struct rela *)rela;
-
-	/* Will return NULL for .toc constant entries */
-	return find_rela_by_offset(rela->sym->sec->rela, rela->addend);
 }
 
 /*
