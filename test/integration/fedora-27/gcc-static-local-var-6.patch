@@ -1,0 +1,14 @@
+diff --git a/net/ipv6/netfilter.c b/net/ipv6/netfilter.c
+index 9bf2604..026ac6c 100644
+--- a/net/ipv6/netfilter.c
++++ b/net/ipv6/netfilter.c
+@@ -122,6 +124,9 @@ static int nf_ip6_route(struct net *net, struct dst_entry **dst,
+	struct dst_entry *result;
+	int err;
+
++	if (!jiffies)
++		printk("kpatch nf_ip6_route foo\n");
++
+	result = ip6_route_output(net, sk, &fl->u.ip6);
+	err = result->error;
+	if (err)
