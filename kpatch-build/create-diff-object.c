@@ -252,129 +252,80 @@ static int kpatch_mangled_strcmp(char *s1, char *s2)
 
 static int rela_equal(struct rela *rela1, struct rela *rela2)
 {
-#ifdef __powerpc__
-	struct section *toc_relasec1, *toc_relasec2;
-	struct rela *r_toc_relasec1, *r_toc_relasec2;
+	struct rela *r_rela1, *r_rela2;
 	unsigned long toc_data1, toc_data2;
-#endif
 
 	if (rela1->type != rela2->type ||
 	    rela1->offset != rela2->offset)
 		return 0;
 
-	if (rela1->string)
-		return rela2->string && !strcmp(rela1->string, rela2->string);
-
-#ifdef __powerpc__
-/*
- * Relocation section '.rela.toc' at offset 0x91f0 contains 122 entries:
- *     Offset             Info             Type               Symbol's Value  Symbol's Name + Addend
- *     [...]
- *     0000000000000090  0000001c00000026 R_PPC64_ADDR64         0000000000000000 .rodata.__dev_remove_pack.str1.8 + 0
- *     0000000000000098  0000001a00000026 R_PPC64_ADDR64         0000000000000000 .rodata.__dev_getfirstbyhwtype.str1.8 + 0
- *     00000000000000a0  0000001a00000026 R_PPC64_ADDR64         0000000000000000 .rodata.__dev_getfirstbyhwtype.str1.8 + 10
- *     00000000000000a8  000000cb00000026 R_PPC64_ADDR64         0000000000000000 dev_base_lock + 0
- *
- * Relocation section '.rela.text.netdev_master_upper_dev_get' at offset 0xe38 contains 10 entries:
- *     Offset             Info             Type               Symbol's Value  Symbol's Name + Addend
- *     [...]
- *     00000000000000a0  0000004e00000032 R_PPC64_TOC16_HA       0000000000000000 .toc + 98
- *     00000000000000a8  0000004e00000040 R_PPC64_TOC16_LO_DS    0000000000000000 .toc + 98
- *     00000000000000ac  0000004e00000032 R_PPC64_TOC16_HA       0000000000000000 .toc + a0
- *     00000000000000b0  0000004e00000040 R_PPC64_TOC16_LO_DS    0000000000000000 .toc + a0
- *     00000000000000b4  000000b90000000a R_PPC64_REL24          0000000000000000 printk + 0
- *     00000000000000bc  000000a10000000a R_PPC64_REL24          0000000000000000 dump_stack + 0
- *
- * With -mcmodel=large on ppc64le, GCC might generate entries in the .toc
- * section for relocation symbol references.   The .toc offsets may change
- * between the original and patched .o, so comparing ".toc + offset" isn't
- * right.  Compare the .toc-based symbols by reading the corresponding relas
- * from the .toc section.
- */
-	if (!strcmp(rela1->sym->name, ".toc") &&
-	    !strcmp(rela2->sym->name, ".toc")) {
-
-		toc_relasec1 = rela1->sym->sec->rela;
-		if (!toc_relasec1)
-			ERROR("cannot find .rela.toc");
-
-		r_toc_relasec1 = find_rela_by_offset(toc_relasec1, rela1->addend);
-		if (!r_toc_relasec1) {
-			/*
-			 * .toc section entries are mostly place holder for relocation entries, specified
-			 * in .rela.toc section. Sometimes, .toc section may have constants as entries.
-			 * These constants are not reference to any symbols, but plain instructions mostly
-			 * due to some arithmetics in the functions referring them.
-			 *
-			 * They are referred by the functions like normal .toc entries, these entries can
-			 * not be resolved to any symbols.
-			 *
-			 * Disassembly of section .toc:
-			 *
-			 * 0000000000000000 <.toc>:
-			 *         ...
-			 *                        148: R_PPC64_ADDR64     .data.capacity_margin
-			 *  150:   0b d7 a3 70     andi.   r3,r5,55051
-			 *  154:   3d 0a d7 a3     lhz     r30,2621(r23)
-			 *                        158: R_PPC64_ADDR64     sched_max_numa_distance
-			 *
-			 * Relocation section '.rela.toc' at offset 0xadac0 contains 160 entries:
-			 *     Offset             Info             Type               Symbol's Value  Symbol's Name + Addend
-			 *     ...
-			 * 0000000000000148  0000009100000026 R_PPC64_ADDR64         0000000000000000 .data.capacity_margin + 0
-			 * 0000000000000158  000001a500000026 R_PPC64_ADDR64         0000000000000000 sched_max_numa_distance + 0
-			 *
-			 * Relocation section '.rela.text.select_task_rq_fair' at offset 0x90e98 contains 37 entries:
-			 *     Offset             Info             Type               Symbol's Value  Symbol's Name + Addend
-			 *     ...
-			 * 0000000000000498  000000c90000000a R_PPC64_REL24          0000000000000000 __update_load_avg_blocked_se.isra.0 + 0
-			 * 00000000000004a0  0000008800000032 R_PPC64_TOC16_HA       0000000000000000 .toc + 148
-			 * 00000000000004ac  0000008800000040 R_PPC64_TOC16_LO_DS    0000000000000000 .toc + 148
-			 * 0000000000000514  0000008800000032 R_PPC64_TOC16_HA       0000000000000000 .toc + 150
-			 * 000000000000051c  0000008800000040 R_PPC64_TOC16_LO_DS    0000000000000000 .toc + 150
-			 * 00000000000005e0  000001870000000a R_PPC64_REL24          0000000000000000 __bitmap_intersects + 0
-			 */
-			memcpy(&toc_data1, rela1->sym->sec->data->d_buf + rela1->addend, sizeof(toc_data1));
-			if (!toc_data1)
-				ERROR(".toc entry not found %s + %x", rela1->sym->name, rela1->addend);
-		}
-
-		toc_relasec2 = rela2->sym->sec->rela;
-		if (!toc_relasec2)
-			ERROR("cannot find .rela.toc");
-
-		r_toc_relasec2 = find_rela_by_offset(toc_relasec2, rela2->addend);
-		if (!r_toc_relasec2) {
-			memcpy(&toc_data2, rela2->sym->sec->data->d_buf + rela2->addend, sizeof(toc_data2));
-			if (!toc_data2)
-				ERROR(".toc entry not found %s + %x", rela2->sym->name, rela2->addend);
-		}
-
-		if (!r_toc_relasec1 && !r_toc_relasec2)
-			return toc_data1 == toc_data2;
-
-		if (r_toc_relasec1->string)
-			return r_toc_relasec2->string &&
-				!strcmp(r_toc_relasec1->string, r_toc_relasec2->string);
-
-		if ((r_toc_relasec1->addend != r_toc_relasec2->addend))
-			return 0;
-
-		if (is_special_static(r_toc_relasec1->sym))
-			return !kpatch_mangled_strcmp(r_toc_relasec1->sym->name,
-					r_toc_relasec2->sym->name);
-
-		return !strcmp(r_toc_relasec1->sym->name, r_toc_relasec2->sym->name);
+	/*
+	 * With -mcmodel=large on ppc64le, GCC might generate entries in the .toc
+	 * section for relocation symbol references.   The .toc offsets may change
+	 * between the original and patched .o, so comparing ".toc + offset" isn't
+	 * right.  Compare the .toc-based symbols by reading the corresponding relas
+	 * from the .toc section.
+	 */
+	r_rela1 = toc_rela(rela1);
+	if (!r_rela1) {
+		/*
+		 * .toc section entries are mostly place holder for relocation entries, specified
+		 * in .rela.toc section. Sometimes, .toc section may have constants as entries.
+		 * These constants are not reference to any symbols, but plain instructions mostly
+		 * due to some arithmetics in the functions referring them.
+		 *
+		 * They are referred by the functions like normal .toc entries, these entries can
+		 * not be resolved to any symbols.
+		 *
+		 * Disassembly of section .toc:
+		 *
+		 * 0000000000000000 <.toc>:
+		 *         ...
+		 *                        148: R_PPC64_ADDR64     .data.capacity_margin
+		 *  150:   0b d7 a3 70     andi.   r3,r5,55051
+		 *  154:   3d 0a d7 a3     lhz     r30,2621(r23)
+		 *                        158: R_PPC64_ADDR64     sched_max_numa_distance
+		 *
+		 * Relocation section '.rela.toc' at offset 0xadac0 contains 160 entries:
+		 *     Offset             Info             Type               Symbol's Value  Symbol's Name + Addend
+		 *     ...
+		 * 0000000000000148  0000009100000026 R_PPC64_ADDR64         0000000000000000 .data.capacity_margin + 0
+		 * 0000000000000158  000001a500000026 R_PPC64_ADDR64         0000000000000000 sched_max_numa_distance + 0
+		 *
+		 * Relocation section '.rela.text.select_task_rq_fair' at offset 0x90e98 contains 37 entries:
+		 *     Offset             Info             Type               Symbol's Value  Symbol's Name + Addend
+		 *     ...
+		 * 00000000000004a0  0000008800000032 R_PPC64_TOC16_HA       0000000000000000 .toc + 148
+		 * 00000000000004ac  0000008800000040 R_PPC64_TOC16_LO_DS    0000000000000000 .toc + 148
+		 * 0000000000000514  0000008800000032 R_PPC64_TOC16_HA       0000000000000000 .toc + 150
+		 * 000000000000051c  0000008800000040 R_PPC64_TOC16_LO_DS    0000000000000000 .toc + 150
+		 */
+		memcpy(&toc_data1, rela1->sym->sec->data->d_buf + rela1->addend, sizeof(toc_data1));
+		if (!toc_data1)
+			ERROR(".toc entry not found %s + %x", rela1->sym->name, rela1->addend);
 	}
-#endif
-	if (rela1->addend != rela2->addend)
+
+	r_rela2 = toc_rela(rela2);
+	if (!r_rela2) {
+		memcpy(&toc_data2, rela2->sym->sec->data->d_buf + rela2->addend, sizeof(toc_data2));
+		if (!toc_data2)
+			ERROR(".toc entry not found %s + %x", rela2->sym->name, rela2->addend);
+	}
+
+	if (!r_rela1 && !r_rela2)
+		return toc_data1 == toc_data2;
+
+	 if (r_rela1->string)
+		 return r_rela2->string && !strcmp(r_rela1->string, r_rela2->string);
+
+	if (r_rela1->addend != r_rela2->addend)
 		return 0;
 
-	if (is_special_static(rela1->sym))
-		return !kpatch_mangled_strcmp(rela1->sym->name,
-					      rela2->sym->name);
+	if (is_special_static(r_rela1->sym))
+		return !kpatch_mangled_strcmp(r_rela1->sym->name,
+					      r_rela2->sym->name);
 
-	return !strcmp(rela1->sym->name, rela2->sym->name);
+	return !strcmp(r_rela1->sym->name, r_rela2->sym->name);
 }
 
 static void kpatch_compare_correlated_rela_section(struct section *sec)
