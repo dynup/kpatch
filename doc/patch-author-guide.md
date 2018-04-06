@@ -193,7 +193,10 @@ static void kpatch_post_unpatch_tcp_send_challenge_ack(patch_object *obj)
 +KPATCH_POST_UNPATCH_CALLBACK(kpatch_post_unpatch_tcp_send_challenge_ack);
 ```
 
-Don't forget to protect access to the data as needed.
+Don't forget to protect access to the data as needed. Please note that mutexes
+and other sleeping locks can't be used from stop_machine context, so you will
+have to check if any locks protecting the data are already held and if so
+return an error from your callback function.
 
 Also be careful when upgrading.  If patch A has a pre/post-patch callback which
 writes to X, and then you load patch B which is a superset of A, in some cases
