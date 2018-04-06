@@ -1,14 +1,6 @@
 diff -Nupr src.orig/mm/mmap.c src/mm/mmap.c
 --- src.orig/mm/mmap.c	2017-11-17 15:58:51.131211972 -0500
 +++ src/mm/mmap.c	2017-11-17 15:59:09.094211972 -0500
-@@ -1599,6 +1599,7 @@ static inline int accountable_mapping(st
- 	return (vm_flags & (VM_NORESERVE | VM_SHARED | VM_WRITE)) == VM_WRITE;
- }
- 
-+#include "kpatch-macros.h"
- unsigned long mmap_region(struct file *file, unsigned long addr,
- 		unsigned long len, vm_flags_t vm_flags, unsigned long pgoff,
- 		struct list_head *uf)
 @@ -1609,6 +1610,9 @@ unsigned long mmap_region(struct file *f
  	struct rb_node **rb_link, *rb_parent;
  	unsigned long charged = 0;
