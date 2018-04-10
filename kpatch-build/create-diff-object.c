@@ -1923,6 +1923,27 @@ static void kpatch_regenerate_special_section(struct kpatch_elf *kelf,
 	sec->base->data->d_size = dest_offset;
 }
 
+static void kpatch_check_relocations(struct kpatch_elf *kelf)
+{
+	struct rela *rela;
+	struct section *sec;
+	Elf_Data *sdata;
+
+	list_for_each_entry(sec, &kelf->sections, list) {
+		if (!is_rela_section(sec))
+			continue;
+		list_for_each_entry(rela, &sec->relas, list) {
+			if (rela->sym->sec) {
+				sdata = rela->sym->sec->data;
+				if (rela->addend > sdata->d_size) {
+					ERROR("out-of-range relocation %s+%x in %s", rela->sym->sec->name,
+							rela->addend, sec->name);
+				}
+			}
+		}
+	}
+}
+
 static void kpatch_include_debug_sections(struct kpatch_elf *kelf)
 {
 	struct section *sec;
@@ -3082,6 +3103,7 @@ int main(int argc, char *argv[])
 		sec->sh.sh_info = sec->base->index;
 		kpatch_rebuild_rela_section_data(sec);
 	}
+	kpatch_check_relocations(kelf_out);
 
 	kpatch_create_shstrtab(kelf_out);
 	kpatch_create_strtab(kelf_out);
