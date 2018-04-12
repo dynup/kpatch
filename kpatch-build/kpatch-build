@@ -602,7 +602,6 @@ else
 			# url may be changed for a different mirror
 			url="http://archive.ubuntu.com/ubuntu/pool/main/l"
 			sublevel="SUBLEVEL = 0"
-			UBUNTU_KERNEL=1
 
 		elif [[ "$DISTRO" = debian ]]; then
 
@@ -820,7 +819,7 @@ fi
 
 echo "Building patch module: $MODNAME.ko"
 
-if [[ ! -z "$UBUNTU_KERNEL" ]]; then
+if [[ -z "$USERSRCDIR" ]] && [[ "$DISTRO" = ubuntu ]]; then
 	# UBUNTU: add UTS_UBUNTU_RELEASE_ABI to utsrelease.h after regenerating it
 	UBUNTU_ABI="${ARCHVERSION#*-}"
 	UBUNTU_ABI="${UBUNTU_ABI%-*}"
