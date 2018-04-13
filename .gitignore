@@ -7,6 +7,10 @@
 *.swp
 *.d
 *.so
+*.test.out
+!*.ORIG.o
+!*.PATCHED.o
+!*.PATCHED.FAIL.o
 .tmp_versions
 Module.symvers
 kmod/core/.cache.mk

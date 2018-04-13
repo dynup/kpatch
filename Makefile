@@ -6,7 +6,10 @@ INSTALL_DIRS = $(SUBDIRS:%=install-%)
 UNINSTALL_DIRS = $(SUBDIRS:%=uninstall-%)
 CLEAN_DIRS   = $(SUBDIRS:%=clean-%)
 
-.PHONY: all install uninstall clean check
+UNITTEST_DIR = test/unit
+CLEAN_DIRS  += clean-$(UNITTEST_DIR)
+
+.PHONY: all install uninstall clean check unit
 .PHONY: $(SUBDIRS) $(BUILD_DIRS) $(INSTALL_DIRS) $(CLEAN_DIRS)
 
 
@@ -25,6 +28,9 @@ $(UNINSTALL_DIRS):
 clean: $(CLEAN_DIRS)
 $(CLEAN_DIRS):
 	$(MAKE) -C $(@:clean-%=%) clean
+
+unit: $(UNITTEST_DIR)/Makefile build-kpatch-build
+	$(MAKE) -C $(UNITTEST_DIR)
 
 check:
 	shellcheck kpatch/kpatch kpatch-build/kpatch-build kpatch-build/kpatch-gcc
