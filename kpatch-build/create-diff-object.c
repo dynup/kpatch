@@ -1162,8 +1162,8 @@ static void kpatch_replace_sections_syms(struct kpatch_elf *kelf)
 
 				if (!is_text_section(sym->sec) &&
 				    rela->type == R_X86_64_32S &&
-				    rela->addend == sym->sec->sh.sh_size &&
-				    end == sym->sec->sh.sh_size) {
+				    rela->addend == (int)sym->sec->sh.sh_size &&
+				    end == (int)sym->sec->sh.sh_size) {
 
 					/*
 					 * A special case where gcc needs a
@@ -1773,7 +1773,8 @@ static struct special_section special_sections[] = {
 	{},
 };
 
-static int should_keep_rela_group(struct section *sec, int start, int size)
+static int should_keep_rela_group(struct section *sec, unsigned int start,
+		unsigned int size)
 {
 	struct rela *rela;
 	int found = 0;
@@ -1824,7 +1825,7 @@ static void kpatch_regenerate_special_section(struct kpatch_elf *kelf,
 {
 	struct rela *rela, *safe;
 	char *src, *dest;
-	int group_size, src_offset, dest_offset, include;
+	unsigned int group_size, src_offset, dest_offset, include;
 
 	LIST_HEAD(newrelas);
 
@@ -2387,7 +2388,7 @@ static int function_ptr_rela(const struct rela *rela)
 
 	return (rela_toc && rela_toc->sym->type == STT_FUNC &&
 		/* skip switch table on PowerPC */
-		rela_toc->addend == rela_toc->sym->sym.st_value &&
+		rela_toc->addend == (int)rela_toc->sym->sym.st_value &&
 		(rela->type == R_X86_64_32S ||
 		rela->type == R_PPC64_TOC16_HA ||
 		rela->type == R_PPC64_TOC16_LO_DS));
@@ -2648,7 +2649,7 @@ static void kpatch_create_intermediate_sections(struct kpatch_elf *kelf,
 
 			/* Fill in krelas[index] */
 			if (is_gcc6_localentry_bundled_sym(rela->sym) &&
-			    rela->addend == rela->sym->sym.st_value)
+			    rela->addend == (int)rela->sym->sym.st_value)
 				rela->addend -= rela->sym->sym.st_value;
 			krelas[index].addend = rela->addend;
 			krelas[index].type = rela->type;

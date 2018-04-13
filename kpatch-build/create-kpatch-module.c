@@ -126,7 +126,7 @@ static void create_dynamic_rela_sections(struct kpatch_elf *kelf, struct section
 
 static void remove_intermediate_sections(struct kpatch_elf *kelf)
 {
-	int i;
+	size_t i;
 	char *intermediate_sections[] = {
 		".kpatch.symbols",
 		".rela.kpatch.symbols",
