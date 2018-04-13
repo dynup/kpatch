@@ -263,7 +263,7 @@ void kpatch_create_symbol_list(struct kpatch_elf *kelf)
 {
 	struct section *symtab;
 	struct symbol *sym;
-	int symbols_nr, index = 0;
+	unsigned int symbols_nr, index = 0;
 
 	symtab = find_section_by_name(&kelf->sections, ".symtab");
 	if (!symtab)
@@ -452,7 +452,7 @@ int is_local_sym(struct symbol *sym)
 
 void print_strtab(char *buf, size_t size)
 {
-	int i;
+	size_t i;
 
 	for (i = 0; i < size; i++) {
 		if (buf[i] == 0)
@@ -697,7 +697,7 @@ void kpatch_reindex_elements(struct kpatch_elf *kelf)
 {
 	struct section *sec;
 	struct symbol *sym;
-	int index;
+	unsigned int index;
 
 	index = 1; /* elf write function handles NULL section 0 */
 	list_for_each_entry(sec, &kelf->sections, list)

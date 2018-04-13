@@ -316,7 +316,7 @@ static void create_klp_arch_sections(struct kpatch_elf *kelf, char *strings)
  */
 static void remove_arch_sections(struct kpatch_elf *kelf)
 {
-	int i;
+	size_t i;
 	char *arch_sections[] = {
 		".parainstructions",
 		".rela.parainstructions",
@@ -331,7 +331,7 @@ static void remove_arch_sections(struct kpatch_elf *kelf)
 
 static void remove_intermediate_sections(struct kpatch_elf *kelf)
 {
-	int i;
+	size_t i;
 	char *intermediate_sections[] = {
 		".kpatch.symbols",
 		".rela.kpatch.symbols",
