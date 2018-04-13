@@ -18,6 +18,12 @@ TENV = PARA_STRUCT_SIZE=16 EX_STRUCT_SIZE=12 BUG_STRUCT_SIZE=12 ALT_STRUCT_SIZE=
 TARGETS      = $(patsubst %.$(EXT_ORIG),%.$(EXT_OUTPUT),$(wildcard *.$(EXT_ORIG)))
 TEST_TARGETS = $(patsubst %.$(EXT_TEST),%.$(EXT_TEST_OUTPUT),$(wildcard *.$(EXT_TEST)))
 
+define check_stripped =
+	$(if $(shell readelf --debug-dump $(1)),
+		$(error $(1) is not properly stripped, use 'strip --strip-debug --keep-file-symbols $(1)' to fix this),
+	)
+endef
+
 all: $(TARGETS) $(TEST_TARGETS)
 
 clean:
@@ -29,10 +35,14 @@ clean:
 	@touch $@
 
 %.$(EXT_OUTPUT): %.$(EXT_ORIG) %.$(EXT_PATCHED) $(CDO)
+	$(call check_stripped,$(TNAME).$(EXT_ORIG))
+	$(call check_stripped,$(TNAME).$(EXT_PATCHED))
 	$(TENV) $(CDO) $(TNAME).$(EXT_ORIG) $(TNAME).$(EXT_PATCHED) \
 		$(TNAME).$(EXT_ORIG) $@ /dev/null test_$(TNAME) $(MUTE)
 
 %.$(EXT_OUTPUT): %.$(EXT_ORIG) %.$(EXT_FAIL) $(CDO)
+	$(call check_stripped,$(TNAME).$(EXT_ORIG))
+	$(call check_stripped,$(TNAME).$(EXT_FAIL))
 	! $(TENV) $(CDO) $(TNAME).$(EXT_ORIG) $(TNAME).$(EXT_FAIL) \
 		$(TNAME).$(EXT_ORIG) $@ /dev/null test_$(TNAME) $(MUTE)
 # Expecting to fail, thus create output file manually so we won't rerun the
