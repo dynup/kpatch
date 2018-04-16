@@ -193,10 +193,51 @@ static void kpatch_post_unpatch_tcp_send_challenge_ack(patch_object *obj)
 +KPATCH_POST_UNPATCH_CALLBACK(kpatch_post_unpatch_tcp_send_challenge_ack);
 ```
 
-Don't forget to protect access to the data as needed. Please note that mutexes
-and other sleeping locks can't be used from stop_machine context, so you will
-have to check if any locks protecting the data are already held and if so
-return an error from your callback function.
+Don't forget to protect access to the data as needed. Please note that
+spinlocks and mutexes / sleeping locks can't be used from stop_machine
+context. Also note the pre-patch callback return code will be ignored by the
+kernel's module notifier, so it does not affect the target module or livepatch
+module status. This means:
+
+* Pre-patch callbacks to loaded objects (vmlinux, loaded kernel modules) are
+  run from stop_machine(), so they may only inspect lock state (i.e.
+  spin_is_locked(), mutex_is_locked()) and optionally return -EBUSY to prevent
+  patching.
+
+* Post-patch, pre-unpatch, and post-unpatch callbacks to loaded objects are
+  also run from stop_machine(), so the same locking context applies.  No
+  return status is supported.
+
+* Deferred pre-patch callbacks to newly loading objects do not run from
+  stop_machine(), so they may spin or schedule, i.e. spin_lock(),
+  mutex_lock()).  Return status is ignored.
+
+* Post-patch, pre-unpatch, and post-unpatch callbacks to unloading objects are
+  also *not* run from stop_machine(), so they may spin or sleep.  No return
+  status is supported.
+
+Unfortunately there is no simple, all-case-inclusive kpatch callback
+implementation that handles data structures and mutual exclusion.
+
+A few workarounds:
+
+1. If a given lock/mutex is held and released by the same set of functions
+(that is, functions that take a lock/mutex always release it before
+returning), a trivial change to those functions can re-purpose kpatch's
+activeness safety check to avoid patching when the lock/mutex may be held.
+This assumes that all lock/mutex holders can be patched.
+
+2. If it can be assured that all patch targets will be loaded before the
+kpatch patch module, pre-patch callbacks may return -EBUSY if the lock/mutex
+is held to block the patching.
+
+3. Finally, if a kpatch is disabled or removed and while all patch targets are
+still loaded, then all unpatch callbacks will run from stop_machine() -- the
+unpatching cannot be stopped at this point and the callbacks cannot spin or
+sleep.
+
+    With that in mind, it is probably easiest to omit unpatching callbacks
+at this point.
 
 Also be careful when upgrading.  If patch A has a pre/post-patch callback which
 writes to X, and then you load patch B which is a superset of A, in some cases
