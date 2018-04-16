@@ -1,0 +1,9 @@
+language: c
+before_install:
+  - sudo apt-get -qq update
+  - sudo apt-get install -y libelf-dev linux-headers-$(uname -r) shellcheck
+
+script:
+  - make
+  - make unit
+  - make check
