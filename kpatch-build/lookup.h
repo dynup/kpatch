@@ -6,7 +6,7 @@ struct lookup_table;
 struct lookup_result {
 	unsigned long addr;
 	unsigned long size;
-	unsigned long pos;
+	unsigned long sympos;
 };
 
 struct sym_compare_type {

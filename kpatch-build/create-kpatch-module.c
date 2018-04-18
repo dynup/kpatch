@@ -97,7 +97,7 @@ static void create_dynamic_rela_sections(struct kpatch_elf *kelf, struct section
 		dynrelas[index].addend = krelas[index].addend;
 		dynrelas[index].type = krelas[index].type;
 		dynrelas[index].external = krelas[index].external;
-		dynrelas[index].sympos = ksym->pos;
+		dynrelas[index].sympos = ksym->sympos;
 
 		/* dest */
 		ALLOC_LINK(rela, &dynsec->rela->relas);

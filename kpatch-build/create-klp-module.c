@@ -67,7 +67,7 @@ static struct symbol *find_or_add_ksym_to_symbols(struct kpatch_elf *kelf,
 
 	objname = strings + rela->addend;
 
-	snprintf(pos, 32, "%lu", ksym->pos);
+	snprintf(pos, 32, "%lu", ksym->sympos);
 	/* .klp.sym.objname.name,pos */
 	snprintf(buf, 256, KLP_SYM_PREFIX "%s.%s,%s", objname, name, pos);
 

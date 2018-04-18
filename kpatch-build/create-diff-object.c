@@ -2771,7 +2771,7 @@ static void kpatch_create_patches_sections(struct kpatch_elf *kelf,
 		funcs[index].old_addr = result.addr;
 		funcs[index].old_size = result.size;
 		funcs[index].new_size = sym->sym.st_size;
-		funcs[index].sympos = result.pos;
+		funcs[index].sympos = result.sympos;
 
 		/*
 		 * Add a relocation that will populate the
@@ -3104,7 +3104,7 @@ static void kpatch_create_intermediate_sections(struct kpatch_elf *kelf,
 			else
 				/* for modules, src is discovered at runtime */
 				ksyms[index].src = 0;
-			ksyms[index].pos = result.pos;
+			ksyms[index].sympos = result.sympos;
 			ksyms[index].type = rela->sym->type;
 			ksyms[index].bind = rela->sym->bind;
 
