@@ -7,7 +7,8 @@ EXT_TEST_OUTPUT ?= test.out
 TNAME            = $(@:.$(EXT_OUTPUT)=)
 
 ifndef VERBOSE
-MUTE:=>/dev/null 2>&1
+MUTE_PASS := >/dev/null
+MUTE_FAIL := >/dev/null 2>&1
 endif
 
 SRC_PATH ?= $(realpath ../../../)
@@ -49,13 +50,13 @@ clean:
 	$(call check_all,$(TNAME).$(EXT_ORIG))
 	$(call check_all,$(TNAME).$(EXT_PATCHED))
 	$(TENV) $(CDO) $(TNAME).$(EXT_ORIG) $(TNAME).$(EXT_PATCHED) \
-		$(TNAME).$(EXT_ORIG) $@ /dev/null test_$(TNAME) $(MUTE)
+		$(TNAME).$(EXT_ORIG) $@ /dev/null test_$(TNAME) $(MUTE_PASS)
 
 %.$(EXT_OUTPUT): %.$(EXT_ORIG) %.$(EXT_FAIL) $(CDO)
 	$(call check_all,$(TNAME).$(EXT_ORIG))
 	$(call check_all,$(TNAME).$(EXT_FAIL))
 	! $(TENV) $(CDO) $(TNAME).$(EXT_ORIG) $(TNAME).$(EXT_FAIL) \
-		$(TNAME).$(EXT_ORIG) $@ /dev/null test_$(TNAME) $(MUTE)
+		$(TNAME).$(EXT_ORIG) $@ /dev/null test_$(TNAME) $(MUTE_FAIL)
 # Expecting to fail, thus create output file manually so we won't rerun the
 # test without clean
 	@touch $@
