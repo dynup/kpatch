@@ -4,7 +4,7 @@
 struct lookup_table;
 
 struct lookup_result {
-	unsigned long value;
+	unsigned long addr;
 	unsigned long size;
 	unsigned long pos;
 };

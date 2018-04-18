@@ -2755,7 +2755,7 @@ static void kpatch_create_patches_sections(struct kpatch_elf *kelf,
 		}
 
 		log_debug("lookup for %s @ 0x%016lx len %lu\n",
-			  sym->name, result.value, result.size);
+			  sym->name, result.addr, result.size);
 
 		/*
 		 * Convert global symbols to local so other objects in the
@@ -2768,7 +2768,7 @@ static void kpatch_create_patches_sections(struct kpatch_elf *kelf,
 				   GELF_ST_INFO(sym->bind, sym->type);
 
 		/* add entry in text section */
-		funcs[index].old_addr = result.value;
+		funcs[index].old_addr = result.addr;
 		funcs[index].old_size = result.size;
 		funcs[index].new_size = sym->sym.st_size;
 		funcs[index].sympos = result.pos;
@@ -3096,11 +3096,11 @@ static void kpatch_create_intermediate_sections(struct kpatch_elf *kelf,
 				}
 			}
 			log_debug("lookup for %s @ 0x%016lx len %lu\n",
-			          rela->sym->name, result.value, result.size);
+			          rela->sym->name, result.addr, result.size);
 
 			/* Fill in ksyms[index] */
 			if (vmlinux)
-				ksyms[index].src = result.value;
+				ksyms[index].src = result.addr;
 			else
 				/* for modules, src is discovered at runtime */
 				ksyms[index].src = 0;
