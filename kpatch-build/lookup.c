@@ -492,44 +492,4 @@ char *lookup_exported_symbol_objname(struct lookup_table *table, char *name)
 		return match->objname;
 
 	return NULL;
- }
-
-#if 0 /* for local testing */
-static void find_this(struct lookup_table *table, char *sym, char *hint)
-{
-	struct lookup_result result;
-
-	if (hint)
-		lookup_local_symbol(table, sym, hint, &result);
-	else
-		lookup_global_symbol(table, sym, &result);
-
-	printf("%s %s w/ %s hint at 0x%016lx len %lu pos %lu\n",
-	       hint ? "local" : "global", sym, hint ? hint : "no",
-	       result.value, result.size, result.pos);
 }
-
-int main(int argc, char **argv)
-{
-	struct lookup_table *vmlinux;
-
-	if (argc != 2)
-		return 1;
-
-	vmlinux = lookup_open(argv[1]);
-
-	printf("printk is%s exported\n",
-		lookup_is_exported_symbol(vmlinux, "__fentry__") ? "" : " not");
-	printf("meminfo_proc_show is%s exported\n",
-		lookup_is_exported_symbol(vmlinux, "meminfo_proc_show") ? "" : " not");
-
-	find_this(vmlinux, "printk", NULL);
-	find_this(vmlinux, "pages_to_scan_show", "ksm.c");
-	find_this(vmlinux, "pages_to_scan_show", "huge_memory.c");
-	find_this(vmlinux, "pages_to_scan_show", NULL); /* should fail */
-
-	lookup_close(vmlinux);
-
-	return 0;
-}
-#endif
