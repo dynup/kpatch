@@ -2719,9 +2719,12 @@ static void kpatch_create_patches_sections(struct kpatch_elf *kelf,
 
 	/* count patched functions */
 	nr = 0;
-	list_for_each_entry(sym, &kelf->symbols, list)
-		if (sym->type == STT_FUNC && sym->status == CHANGED && !sym->parent)
-			nr++;
+	list_for_each_entry(sym, &kelf->symbols, list) {
+		if (sym->type != STT_FUNC || sym->status != CHANGED ||
+		    sym->parent)
+			continue;
+		nr++;
+	}
 
 	/* create text/rela section pair */
 	sec = create_section_pair(kelf, ".kpatch.funcs", sizeof(*funcs), nr);
@@ -2739,72 +2742,70 @@ static void kpatch_create_patches_sections(struct kpatch_elf *kelf,
 	/* populate sections */
 	index = 0;
 	list_for_each_entry(sym, &kelf->symbols, list) {
-		if (sym->type == STT_FUNC && sym->status == CHANGED && !sym->parent) {
-			if (sym->bind == STB_LOCAL) {
-				if (lookup_local_symbol(table, sym->name,
-				                        &result))
-					ERROR("lookup_local_symbol %s",
-					      sym->name);
-			} else {
-				if(lookup_global_symbol(table, sym->name,
-				                        &result))
-					ERROR("lookup_global_symbol %s",
-					      sym->name);
-			}
-			log_debug("lookup for %s @ 0x%016lx len %lu\n",
-			          sym->name, result.value, result.size);
+		if (sym->type != STT_FUNC || sym->status != CHANGED ||
+		    sym->parent)
+			continue;
 
-			/*
-			 * Convert global symbols to local so other objects in
-			 * the patch module (like the patch callback object's init
-			 * code) won't link to this function and call it before
-			 * its relocations have been applied.
-			 */
-			sym->bind = STB_LOCAL;
-			sym->sym.st_info = (unsigned char)
-					   GELF_ST_INFO(sym->bind, sym->type);
-
-			/* add entry in text section */
-			funcs[index].old_addr = result.value;
-			funcs[index].old_size = result.size;
-			funcs[index].new_size = sym->sym.st_size;
-			funcs[index].sympos = result.pos;
-
-			/*
-			 * Add a relocation that will populate
-			 * the funcs[index].new_addr field at
-			 * module load time.
-			 */
-			ALLOC_LINK(rela, &relasec->relas);
-			rela->sym = sym;
-			rela->type = ABSOLUTE_RELA_TYPE;
-			rela->addend = 0;
-			rela->offset = (unsigned int)(index * sizeof(*funcs));
-
-			/*
-			 * Add a relocation that will populate
-			 * the funcs[index].name field.
-			 */
-			ALLOC_LINK(rela, &relasec->relas);
-			rela->sym = strsym;
-			rela->type = ABSOLUTE_RELA_TYPE;
-			rela->addend = offset_of_string(&kelf->strings, sym->name);
-			rela->offset = (unsigned int)(index * sizeof(*funcs) +
-			               offsetof(struct kpatch_patch_func, name));
-
-			/*
-			 * Add a relocation that will populate
-			 * the funcs[index].objname field.
-			 */
-			ALLOC_LINK(rela, &relasec->relas);
-			rela->sym = strsym;
-			rela->type = ABSOLUTE_RELA_TYPE;
-			rela->addend = objname_offset;
-			rela->offset = (unsigned int)(index * sizeof(*funcs) +
-			               offsetof(struct kpatch_patch_func,objname));
-
-			index++;
+		if (sym->bind == STB_LOCAL) {
+			if (lookup_local_symbol(table, sym->name, &result))
+				ERROR("lookup_local_symbol %s", sym->name);
+		} else {
+			if (lookup_global_symbol(table, sym->name, &result))
+				ERROR("lookup_global_symbol %s", sym->name);
 		}
+
+		log_debug("lookup for %s @ 0x%016lx len %lu\n",
+			  sym->name, result.value, result.size);
+
+		/*
+		 * Convert global symbols to local so other objects in the
+		 * patch module (like the patch callback object's init code)
+		 * won't link to this function and call it before its
+		 * relocations have been applied.
+		 */
+		sym->bind = STB_LOCAL;
+		sym->sym.st_info = (unsigned char)
+				   GELF_ST_INFO(sym->bind, sym->type);
+
+		/* add entry in text section */
+		funcs[index].old_addr = result.value;
+		funcs[index].old_size = result.size;
+		funcs[index].new_size = sym->sym.st_size;
+		funcs[index].sympos = result.pos;
+
+		/*
+		 * Add a relocation that will populate the
+		 * funcs[index].new_addr field at module load time.
+		 */
+		ALLOC_LINK(rela, &relasec->relas);
+		rela->sym = sym;
+		rela->type = ABSOLUTE_RELA_TYPE;
+		rela->addend = 0;
+		rela->offset = (unsigned int)(index * sizeof(*funcs));
+
+		/*
+		 * Add a relocation that will populate the funcs[index].name
+		 * field.
+		 */
+		ALLOC_LINK(rela, &relasec->relas);
+		rela->sym = strsym;
+		rela->type = ABSOLUTE_RELA_TYPE;
+		rela->addend = offset_of_string(&kelf->strings, sym->name);
+		rela->offset = (unsigned int)(index * sizeof(*funcs) +
+			       offsetof(struct kpatch_patch_func, name));
+
+		/*
+		 * Add a relocation that will populate the funcs[index].objname
+		 * field.
+		 */
+		ALLOC_LINK(rela, &relasec->relas);
+		rela->sym = strsym;
+		rela->type = ABSOLUTE_RELA_TYPE;
+		rela->addend = objname_offset;
+		rela->offset = (unsigned int)(index * sizeof(*funcs) +
+			       offsetof(struct kpatch_patch_func,objname));
+
+		index++;
 	}
 
 	/* sanity check, index should equal nr */
