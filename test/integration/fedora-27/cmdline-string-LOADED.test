@@ -1,3 +1,0 @@
-#!/bin/bash
-
-grep kpatch=1 /proc/cmdline
