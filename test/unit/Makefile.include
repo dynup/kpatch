@@ -39,7 +39,7 @@ endef
 all: $(TARGETS) $(TEST_TARGETS)
 
 clean:
-	rm -f $(TARGETS) $(TEST_TARGETS)
+	rm -f *.$(EXT_TEST_OUTPUT) *.$(EXT_OUTPUT)
 
 %.$(EXT_TEST_OUTPUT): %.$(EXT_OUTPUT) %.$(EXT_TEST)
 	bash $(@:.$(EXT_TEST_OUTPUT)=.$(EXT_TEST)) $<
