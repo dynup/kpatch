@@ -58,6 +58,7 @@
 	!defined(CONFIG_HAVE_FENTRY) || \
 	!defined(CONFIG_MODULES) || \
 	!defined(CONFIG_SYSFS) || \
+	!defined(CONFIG_STACKTRACE) || \
 	!defined(CONFIG_KALLSYMS_ALL)
 #error "CONFIG_FUNCTION_TRACER, CONFIG_HAVE_FENTRY, CONFIG_MODULES, CONFIG_SYSFS, CONFIG_KALLSYMS_ALL kernel config options are required"
 #endif
