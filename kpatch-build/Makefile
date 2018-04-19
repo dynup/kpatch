@@ -35,7 +35,7 @@ $(PLUGIN): gcc-plugins/ppc64le-plugin.c
 
 install: all
 	$(INSTALL) -d $(LIBEXECDIR)
-	$(INSTALL) $(TARGETS) kpatch-gcc $(PLUGIN) $(LIBEXECDIR)
+	$(INSTALL) $(TARGETS) kpatch-gcc $(LIBEXECDIR)
 	$(INSTALL) -d $(BINDIR)
 	$(INSTALL) kpatch-build $(BINDIR)
 
