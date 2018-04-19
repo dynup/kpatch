@@ -1,0 +1,9 @@
+#!/bin/bash
+
+bind=$(nm $1 |awk '/__kmalloc/ {print $2}')
+[[ $bind = 't' ]] || exit 1
+
+num_funcs=$(nm $1 | grep -i " t " | wc -l)
+[[ $num_funcs = 1 ]] || exit 1
+
+exit 0
