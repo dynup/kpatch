@@ -7,3 +7,4 @@ script:
   - make
   - make unit
   - make check
+  - sudo make install
