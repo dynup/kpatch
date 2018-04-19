@@ -76,7 +76,7 @@ sudo yum-builddep kernel-${UNAME%.*}
 sudo debuginfo-install kernel-${UNAME%.*}
 
 # optional, but highly recommended
-sudo yum install https://dl.fedoraproject.org/pub/epel/7/x86_64/c/ccache-3.2.7-3.el7.x86_64.rpm
+sudo yum install https://dl.fedoraproject.org/pub/epel/7/x86_64/Packages/c/ccache-3.3.4-1.el7.x86_64.rpm
 ccache --max-size=5G
 
 # optional, for kpatch-test
