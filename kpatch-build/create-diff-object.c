@@ -428,7 +428,7 @@ out:
  * 1) immediate move of the line number to %esi
  * 2) (optional) string section rela
  * 3) (optional) __warned.xxxxx static local rela
- * 4) warn_slowpath_* or __might_sleep or ___might_sleep rela
+ * 4) warn_slowpath_* or __might_sleep or some other similar rela
  */
 static int kpatch_line_macro_change_only(struct section *sec)
 {
@@ -466,15 +466,16 @@ static int kpatch_line_macro_change_only(struct section *sec)
 			    length))
 			continue;
 
-		/* verify it's a mov immediate to %esi */
+		/* verify it's a mov immediate to %edx or %esi */
 		insn_get_opcode(&insn1);
 		insn_get_opcode(&insn2);
-		if (insn1.opcode.value != 0xbe || insn2.opcode.value != 0xbe)
+		if (!(insn1.opcode.value == 0xba && insn2.opcode.value == 0xba) &&
+		    !(insn1.opcode.value == 0xbe && insn2.opcode.value == 0xbe))
 			return 0;
 
 		/*
 		 * Verify zero or more string relas followed by a
-		 * warn_slowpath_* or __might_sleep or ___might_sleep rela.
+		 * warn_slowpath_* or another similar rela.
 		 */
 		found = 0;
 		list_for_each_entry(rela, &sec->rela->relas, list) {
@@ -485,8 +486,12 @@ static int kpatch_line_macro_change_only(struct section *sec)
 			if (!strncmp(rela->sym->name, "__warned.", 9))
 				continue;
 			if (!strncmp(rela->sym->name, "warn_slowpath_", 14) ||
+			   (!strcmp(rela->sym->name, "__warn_printk")) ||
 			   (!strcmp(rela->sym->name, "__might_sleep")) ||
-			   (!strcmp(rela->sym->name, "___might_sleep"))) {
+			   (!strcmp(rela->sym->name, "___might_sleep")) ||
+			   (!strcmp(rela->sym->name, "__might_fault")) ||
+			   (!strcmp(rela->sym->name, "printk")) ||
+			   (!strcmp(rela->sym->name, "lockdep_rcu_suspicious"))) {
 				found = 1;
 				break;
 			}
