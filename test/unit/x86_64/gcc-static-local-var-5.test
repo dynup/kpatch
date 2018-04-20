@@ -1,7 +1,4 @@
 #!/bin/bash
+source $KPATCH_TEST_LIBRARY
 
-num_funcs=$(nm $1 | grep -i " t " | wc -l)
-
-[[ $num_funcs = 5 ]] || exit 1
-
-exit 0
+assert_num_funcs 5
