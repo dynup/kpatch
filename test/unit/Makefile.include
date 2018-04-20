@@ -9,6 +9,7 @@ TNAME            = $(@:.$(EXT_OUTPUT)=)
 ifndef VERBOSE
 MUTE_PASS := >/dev/null
 MUTE_FAIL := >/dev/null 2>&1
+.SILENT: $(TARGETS) $(TEST_TARGETS)
 endif
 
 SRC_PATH        ?= $(realpath ../../../)
@@ -44,17 +45,20 @@ clean:
 	rm -f *.$(EXT_TEST_OUTPUT) *.$(EXT_OUTPUT)
 
 %.$(EXT_TEST_OUTPUT): %.$(EXT_OUTPUT) %.$(EXT_TEST) $(TEST_LIBRARY)
+	@echo "TEST $(@:.$(EXT_TEST_OUTPUT)=)"
 	$(TEST_ENV) bash $(@:.$(EXT_TEST_OUTPUT)=.$(EXT_TEST)) $<
 # Don't rely on script creating this
 	@touch $@
 
 %.$(EXT_OUTPUT): %.$(EXT_ORIG) %.$(EXT_PATCHED) $(CDO)
+	@echo "BUILD $(TNAME)"
 	$(call check_all,$(TNAME).$(EXT_ORIG))
 	$(call check_all,$(TNAME).$(EXT_PATCHED))
 	$(CDO_ENV) $(CDO) $(TNAME).$(EXT_ORIG) $(TNAME).$(EXT_PATCHED) \
 		$(TNAME).$(EXT_ORIG) $@ /dev/null test_$(TNAME) $(MUTE_PASS)
 
 %.$(EXT_OUTPUT): %.$(EXT_ORIG) %.$(EXT_FAIL) $(CDO)
+	@echo "BUILD $(TNAME)-FAIL"
 	$(call check_all,$(TNAME).$(EXT_ORIG))
 	$(call check_all,$(TNAME).$(EXT_FAIL))
 	! $(CDO_ENV) $(CDO) $(TNAME).$(EXT_ORIG) $(TNAME).$(EXT_FAIL) \
