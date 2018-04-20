@@ -26,7 +26,7 @@
 INSTALLDIR=/var/lib/kpatch
 SCRIPTDIR="$(readlink -f "$(dirname "$(type -p "$0")")")"
 VERSION="0.5.0"
-POST_ENABLE_WAIT=5	# seconds
+POST_ENABLE_WAIT=15	# seconds
 POST_SIGNAL_WAIT=60	# seconds
 
 # How many times to try loading the patch if activeness safety check fails.
