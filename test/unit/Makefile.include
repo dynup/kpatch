@@ -9,12 +9,15 @@ TNAME            = $(@:.$(EXT_OUTPUT)=)
 ifndef VERBOSE
 MUTE_PASS := >/dev/null
 MUTE_FAIL := >/dev/null 2>&1
+.SILENT: $(TARGETS) $(TEST_TARGETS)
 endif
 
-SRC_PATH ?= $(realpath ../../../)
-CDO      ?= $(SRC_PATH)/kpatch-build/create-diff-object
+SRC_PATH        ?= $(realpath ../../../)
+CDO             ?= $(SRC_PATH)/kpatch-build/create-diff-object
+TEST_LIBRARY    ?= $(SRC_PATH)/test/test-functions.sh
 
-TENV = PARA_STRUCT_SIZE=16 EX_STRUCT_SIZE=12 BUG_STRUCT_SIZE=12 ALT_STRUCT_SIZE=13
+CDO_ENV  = PARA_STRUCT_SIZE=16 EX_STRUCT_SIZE=12 BUG_STRUCT_SIZE=12 ALT_STRUCT_SIZE=13
+TEST_ENV = KPATCH_TEST_LIBRARY=$(TEST_LIBRARY)
 
 TARGETS      = $(patsubst %.$(EXT_ORIG),%.$(EXT_OUTPUT),$(wildcard *.$(EXT_ORIG)))
 TEST_TARGETS = $(patsubst %.$(EXT_TEST),%.$(EXT_TEST_OUTPUT),$(wildcard *.$(EXT_TEST)))
@@ -39,23 +42,26 @@ endef
 all: $(TARGETS) $(TEST_TARGETS)
 
 clean:
-	rm -f $(TARGETS) $(TEST_TARGETS)
+	rm -f *.$(EXT_TEST_OUTPUT) *.$(EXT_OUTPUT)
 
-%.$(EXT_TEST_OUTPUT): %.$(EXT_OUTPUT) %.$(EXT_TEST)
-	bash $(@:.$(EXT_TEST_OUTPUT)=.$(EXT_TEST)) $<
+%.$(EXT_TEST_OUTPUT): %.$(EXT_OUTPUT) %.$(EXT_TEST) $(TEST_LIBRARY)
+	@echo "TEST $(@:.$(EXT_TEST_OUTPUT)=)"
+	$(TEST_ENV) bash $(@:.$(EXT_TEST_OUTPUT)=.$(EXT_TEST)) $<
 # Don't rely on script creating this
 	@touch $@
 
 %.$(EXT_OUTPUT): %.$(EXT_ORIG) %.$(EXT_PATCHED) $(CDO)
+	@echo "BUILD $(TNAME)"
 	$(call check_all,$(TNAME).$(EXT_ORIG))
 	$(call check_all,$(TNAME).$(EXT_PATCHED))
-	$(TENV) $(CDO) $(TNAME).$(EXT_ORIG) $(TNAME).$(EXT_PATCHED) \
+	$(CDO_ENV) $(CDO) $(TNAME).$(EXT_ORIG) $(TNAME).$(EXT_PATCHED) \
 		$(TNAME).$(EXT_ORIG) $@ /dev/null test_$(TNAME) $(MUTE_PASS)
 
 %.$(EXT_OUTPUT): %.$(EXT_ORIG) %.$(EXT_FAIL) $(CDO)
+	@echo "BUILD $(TNAME)-FAIL"
 	$(call check_all,$(TNAME).$(EXT_ORIG))
 	$(call check_all,$(TNAME).$(EXT_FAIL))
-	! $(TENV) $(CDO) $(TNAME).$(EXT_ORIG) $(TNAME).$(EXT_FAIL) \
+	! $(CDO_ENV) $(CDO) $(TNAME).$(EXT_ORIG) $(TNAME).$(EXT_FAIL) \
 		$(TNAME).$(EXT_ORIG) $@ /dev/null test_$(TNAME) $(MUTE_FAIL)
 # Expecting to fail, thus create output file manually so we won't rerun the
 # test without clean
