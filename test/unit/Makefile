@@ -1,7 +1,11 @@
-ARCH=$(shell uname -m)
+ARCH    = $(shell uname -m)
+OBJDIR ?= objs/$(ARCH)
 
-all: Makefile.include $(ARCH)/Makefile
-	$(MAKE) -C $(ARCH)
+.PHONY: all clean
 
-clean: Makefile.include $(ARCH)/Makefile
-	$(MAKE) -C $(ARCH) clean
+all: Makefile.include
+	git submodule update --init --rebase
+	$(MAKE) -C $(OBJDIR)
+
+clean: Makefile.include
+	$(MAKE) -C $(OBJDIR) clean

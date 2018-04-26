@@ -1,3 +1,0 @@
-*.ORIG.o filter=lfs diff=lfs merge=lfs -text
-*.PATCHED.o filter=lfs diff=lfs merge=lfs -text
-*.PATCHED.FAIL.o filter=lfs diff=lfs merge=lfs -text
