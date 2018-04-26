@@ -1,9 +1,0 @@
-#!/bin/bash
-source $KPATCH_TEST_LIBRARY
-
-assert_num_funcs 1
-
-bind=$(nm $1 |awk '/__kmalloc/ {print $2}')
-[[ $bind = 't' ]] || exit 1
-
-exit 0

@@ -1,4 +1,0 @@
-#!/bin/bash
-source $KPATCH_TEST_LIBRARY
-
-assert_num_funcs 1
