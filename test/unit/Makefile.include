@@ -16,7 +16,6 @@ SRC_PATH        ?= $(realpath ../../../../)
 CDO             ?= $(SRC_PATH)/kpatch-build/create-diff-object
 TEST_LIBRARY    ?= $(SRC_PATH)/test/test-functions.sh
 
-CDO_ENV  = PARA_STRUCT_SIZE=16 EX_STRUCT_SIZE=12 BUG_STRUCT_SIZE=12 ALT_STRUCT_SIZE=13
 TEST_ENV = KPATCH_TEST_LIBRARY=$(TEST_LIBRARY)
 
 TARGETS      = $(patsubst %.$(EXT_ORIG),%.$(EXT_OUTPUT),$(wildcard *.$(EXT_ORIG)))
