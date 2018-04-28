@@ -564,7 +564,7 @@ if [ -n "${BUILDEDKERNELDIR}" ]; then
 		echo "${BUILDEDKERNELDIR}/builded-${KVER}-${KREL}.x86_64.tar.xz will be created"
 	fi
 fi
-if [ -n "${BUILDEDKERNELDIR}" && ! -f "${BUILDEDKERNELDIR}/builded-${KVER}-${KREL}.x86_64.tar.xz" || ! -n "${BUILDEDKERNELDIR}" ]; then
+if [ -n "${BUILDEDKERNELDIR}" ] && [ ! -f "${BUILDEDKERNELDIR}/builded-${KVER}-${KREL}.x86_64.tar.xz" ] || [ ! -n "${BUILDEDKERNELDIR}" ]; then
 	if [[ -n "$USERSRCDIR" ]]; then
 		echo "Using source directory at $USERSRCDIR"
 
