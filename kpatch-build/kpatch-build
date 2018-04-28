@@ -722,7 +722,7 @@ if [ -n "${BUILDEDKERNELDIR}" ]; then
 		CROSS_COMPILE="$TOOLSDIR/kpatch-gcc " make "-j$CPUS" $TARGETS 2>&1 | logger || die
 
 		echo "Archive builded kernel"
-		XZ_OPT="-1v -T8" tar -C /tmp/$KVER-$KREL.x86_64 -cJf ${BUILDEDKERNELDIR}/builded-${KVER}-${KREL}.x86_64.tar.xz .
+		XZ_OPT="-1v -T8" tar -C /tmp/${KVER}-${KREL}.x86_64 -cJf ${BUILDEDKERNELDIR}/builded-${KVER}-${KREL}.x86_64.tar.xz .
 	fi
 else
 	echo "Building original kernel"
