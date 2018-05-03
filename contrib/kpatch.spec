@@ -1,7 +1,7 @@
 Name: kpatch
 Summary: Dynamic kernel patching
 Version: 0.6.0
-License: GPLv2 
+License: GPLv2
 Group: System Environment/Kernel
 URL: http://github.com/dynup/kpatch
 Release: 1%{?dist}
@@ -14,7 +14,7 @@ BuildRoot: %(mktemp -ud %{_tmppath}/%{name}-%{version}-%{release}-XXXXXX)
 # needed for the kernel specific module
 %define KVER %(uname -r)
 
-%description 
+%description
 kpatch is a Linux dynamic kernel patching tool which allows you to patch a
 running kernel without rebooting or restarting any processes.  It enables
 sysadmins to apply critical security patches to the kernel immediately, without
@@ -60,10 +60,10 @@ sacrificing security or stability.
 
 
 %prep
-%setup -q 
+%setup -q
 
 %build
-make %{_smp_mflags} 
+make %{_smp_mflags}
 
 %install
 rm -rf %{buildroot}
@@ -93,6 +93,46 @@ rm -rf %{buildroot}
 %{_mandir}/man1/kpatch-build.1*
 
 %changelog
+* Mon Apr 22 2018 Josh Poimboeuf <jpoimboe@redhat.com> - 0.6.0
+- Support and converted to livepatch-style hooks.
+- Lots of misc bugfixes and cleanups
+- Manpage, README.md fixups
+- More PPC64 work
+- "Undefined reference" build failure rework
+- Livepatch disable retries
+- New unit testing framework
+
+* Thu Dec 21 2017 Josh Poimboeuf <jpoimboe@redhat.com> - 0.5.0
+- Basic ppc64le support
+- kpatch: load automatically signals stalled processes after a timeout
+- kpatch: list shows stalled processes
+- kpatch: signal signals stalled processes
+- kpatch-build: multiple source patches can be combined into a single binary patch module
+- kpatch-build: -n|--name option for giving a custom name to the patch module
+- kpatch-build: additional -d options for more verbose debug modes
+- The module prefix is now either livepatch- or kpatch- depending on the underlying patching technology
+
+* Mon Mar 13 2017 Josh Poimboeuf <jpoimboe@redhat.com> - 0.4.0
+- The tools underlying kpatch-build have been made more modular, in preparation for making create-diff-object more generally useful to other use cases (kernel livepatch, Xen live patching, user space patching).
+- Support for all new upstream kernels up to 4.10.
+- KASLR support.
+- Many other bug fixes and improvements.
+
+* Thu Oct 11 2016 Jessica Yu - 0.3.4
+- bump version to 0.3.4
+
+* Fri Aug 19 2016 Josh Poimboeuf <jpoimboe@redhat.com> - 0.3.3
+- bump version to 0.3.3
+
+* Thu Feb 18 2016 Josh Poimboeuf <jpoimboe@redhat.com> - 0.3.2
+- bump version to 0.3.2
+
+* Thu Nov 19 2015 Josh Poimboeuf <jpoimboe@redhat.com> - 0.3.1
+- Get kernel version from vmlinux if the kernel source tree is used
+
+* Wed Nov 18 2015 Josh Poimboeuf <jpoimboe@redhat.com> - 0.3.0
+- kpatch-build: fix gcc_version_check: both "GNU" and "GCC" are possible
+
 * Wed Dec 3 2014 Josh Poimboeuf <jpoimboe@redhat.com> - 0.2.2-1
 - rebased to current version
 
