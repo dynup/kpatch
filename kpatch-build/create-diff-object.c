@@ -509,6 +509,72 @@ static int kpatch_line_macro_change_only(struct section *sec)
 
 	return 1;
 }
+#elif __powerpc__
+#define PPC_INSTR_LEN 4
+#define PPC_RA_OFFSET 16
+
+static int kpatch_line_macro_change_only(struct section *sec)
+{
+	unsigned long start1, start2, size, offset;
+	unsigned int instr1, instr2;
+	struct rela *rela;
+	int lineonly = 0, found;
+
+	if (sec->status != CHANGED ||
+	    is_rela_section(sec) ||
+	    !is_text_section(sec) ||
+	    sec->sh.sh_size != sec->twin->sh.sh_size ||
+	    !sec->rela ||
+	    sec->rela->status != SAME)
+		return 0;
+
+	start1 = (unsigned long)sec->twin->data->d_buf;
+	start2 = (unsigned long)sec->data->d_buf;
+	size = sec->sh.sh_size;
+	for (offset = 0; offset < size; offset += PPC_INSTR_LEN) {
+		if (!memcmp((void *)start1 + offset, (void *)start2 + offset,
+			    PPC_INSTR_LEN))
+			continue;
+
+		instr1 = *(unsigned int *)(start1 + offset) >> PPC_RA_OFFSET;
+		instr2 = *(unsigned int *)(start2 + offset) >> PPC_RA_OFFSET;
+
+		/* verify it's a load immediate to r5 */
+		if (!(instr1 == 0x38a0 && instr2 == 0x38a0))
+			return 0;
+
+		found = 0;
+		list_for_each_entry(rela, &sec->rela->relas, list) {
+			if (rela->offset < offset + PPC_INSTR_LEN)
+				continue;
+			if (toc_rela(rela) && toc_rela(rela)->string)
+				continue;
+			if (!strncmp(rela->sym->name, "__warned.", 9))
+				continue;
+			if (!strncmp(rela->sym->name, "warn_slowpath_", 14) ||
+			   (!strcmp(rela->sym->name, "__warn_printk")) ||
+			   (!strcmp(rela->sym->name, "__might_sleep")) ||
+			   (!strcmp(rela->sym->name, "___might_sleep")) ||
+			   (!strcmp(rela->sym->name, "__might_fault")) ||
+			   (!strcmp(rela->sym->name, "printk")) ||
+			   (!strcmp(rela->sym->name, "lockdep_rcu_suspicious"))) {
+				found = 1;
+				break;
+			}
+			return 0;
+		}
+		if (!found)
+			return 0;
+
+		lineonly = 1;
+	}
+
+	if (!lineonly)
+		ERROR("no instruction changes detected for changed section %s",
+		      sec->name);
+
+	return 1;
+}
 #else
 static int kpatch_line_macro_change_only(struct section *sec)
 {
