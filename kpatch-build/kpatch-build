@@ -773,16 +773,26 @@ for i in $FILES; do
 	mkdir -p "output/$(dirname "$i")"
 	cd "$SRCDIR" || die
 	find_kobj "$i"
-	if [[ "$KOBJFILE" = vmlinux ]]; then
-		KOBJFILE="$VMLINUX"
-	else
-		KOBJFILE="$TEMPDIR/module/$KOBJFILE"
-	fi
 	cd "$TEMPDIR" || die
 	if [[ -e "orig/$i" ]]; then
-		# create-diff-object orig.o patched.o kernel-object output.o Module.symvers patch-mod-name
-		"$TOOLSDIR"/create-diff-object "orig/$i" "patched/$i" "$KOBJFILE" \
-			"output/$i" "$SRCDIR/Module.symvers" "${MODNAME//-/_}" 2>&1 | logger 1
+		if [[ "$KOBJFILE" = vmlinux ]]; then
+			KOBJFILE_NAME=vmlinux
+			KOBJFILE_PATH="$VMLINUX"
+			SYMTAB="${TEMPDIR}/${KOBJFILE_NAME}.symtab"
+		else
+			KOBJFILE_NAME=$(basename "${KOBJFILE%.ko}")
+			KOBJFILE_NAME="${KOBJFILE_NAME/-/_}"
+			KOBJFILE_PATH="${TEMPDIR}/module/$KOBJFILE"
+			SYMTAB="${KOBJFILE_PATH}.symtab"
+		fi
+
+		eu-readelf -s "$KOBJFILE_PATH" > "$SYMTAB"
+
+		# create-diff-object orig.o patched.o parent-name parent-symtab
+		#		     Module.symvers patch-mod-name output.o
+		"$TOOLSDIR"/create-diff-object "orig/$i" "patched/$i" "$KOBJFILE_NAME" \
+			"$SYMTAB" "$SRCDIR/Module.symvers" "${MODNAME//-/_}" \
+			"output/$i" 2>&1 | logger 1
 		check_pipe_status create-diff-object
 		# create-diff-object returns 3 if no functional change is found
 		[[ "$rc" -eq 0 ]] || [[ "$rc" -eq 3 ]] || ERROR="$((ERROR + 1))"
@@ -808,7 +818,7 @@ fi
 echo -n "Patched objects:"
 for i in $(echo "${objnames[@]}" | tr ' ' '\n' | sort -u | tr '\n' ' ')
 do
-	echo -n " $(basename "$i")"
+	echo -n " $i"
 done
 echo
 
