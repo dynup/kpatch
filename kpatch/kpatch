@@ -533,7 +533,7 @@ case "$1" in
 	echo "Installed patch modules:"
 	for kdir in "$INSTALLDIR"/*; do
 		[[ -e "$kdir" ]] || continue
-		for module in "$kdir"/*; do
+		for module in "$kdir"/*.ko; do
 			[[ -e "$module" ]] || continue
 			mod_name "$module"
 			echo "$MODNAME ($(basename "$kdir"))"
