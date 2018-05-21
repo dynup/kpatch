@@ -292,6 +292,27 @@ static void create_klp_arch_sections(struct kpatch_elf *kelf, char *strings)
 		 * single .klp.arch.vmlinux..parainstructions section
 		 */
 		old_size = sec->data->d_size;
+
+		/*
+		 * Due to a quirk in how .parainstructions gets linked, the
+		 * section size doesn't encompass the last 4 bytes of the last
+		 * entry.  Align the old size properly before merging.
+		 */
+		if (!strcmp(base->name, ".parainstructions")) {
+			char *str;
+			static int align_mask = 0;
+
+			if (!align_mask) {
+				str = getenv("PARA_STRUCT_SIZE");
+				if (!str)
+					ERROR("PARA_STRUCT_SIZE not set");
+
+				align_mask = atoi(str) - 1;
+			}
+
+			old_size = (old_size + align_mask) & ~align_mask;
+		}
+
 		new_size = old_size + base->data->d_size;
 		sec->data->d_buf = realloc(sec->data->d_buf, new_size);
 		sec->data->d_size = new_size;
