@@ -49,7 +49,8 @@
 
 #if (LINUX_VERSION_CODE >= KERNEL_VERSION(4, 12, 0) &&			\
      LINUX_VERSION_CODE <= KERNEL_VERSION(4, 15, 0)) ||			\
-    defined(RHEL_RELEASE_CODE)
+     (defined(RHEL_RELEASE_CODE) &&					\
+      RHEL_RELEASE_CODE <= RHEL_RELEASE_VERSION(7, 5))
 #define HAVE_IMMEDIATE
 #endif
 
