@@ -128,7 +128,8 @@ struct rela *find_rela_by_offset(struct section *relasec, unsigned int offset);
 		ERROR("malloc"); \
 	memset((_new), 0, sizeof(*(_new))); \
 	INIT_LIST_HEAD(&(_new)->list); \
-	list_add_tail(&(_new)->list, (_list)); \
+	if (_list) \
+		list_add_tail(&(_new)->list, (_list)); \
 }
 
 int offset_of_string(struct list_head *list, char *name);
