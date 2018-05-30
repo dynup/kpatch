@@ -43,7 +43,7 @@ struct object_symbol {
 	unsigned long value;
 	unsigned long size;
 	char *name;
-	int type, bind, skip;
+	int type, bind;
 };
 
 struct export_symbol {
@@ -174,86 +174,6 @@ static void find_local_syms(struct lookup_table *table, char *hint,
 		ERROR("find_local_syms for %s: found_none", hint);
 }
 
-static void obj_read(struct lookup_table *table, char *path)
-{
-	Elf *elf;
-	int fd, i, len;
-	Elf_Scn *scn;
-	GElf_Shdr sh;
-	GElf_Sym sym;
-	Elf_Data *data;
-	char *name;
-	struct object_symbol *mysym;
-	size_t shstrndx;
-
-	if ((fd = open(path, O_RDONLY, 0)) < 0)
-		ERROR("open");
-
-	elf_version(EV_CURRENT);
-
-	elf = elf_begin(fd, ELF_C_READ_MMAP, NULL);
-	if (!elf) {
-		printf("%s\n", elf_errmsg(-1));
-		ERROR("elf_begin");
-	}
-
-	if (elf_getshdrstrndx(elf, &shstrndx))
-		ERROR("elf_getshdrstrndx");
-
-	scn = NULL;
-	while ((scn = elf_nextscn(elf, scn))) {
-		if (!gelf_getshdr(scn, &sh))
-			ERROR("gelf_getshdr");
-
-		name = elf_strptr(elf, shstrndx, sh.sh_name);
-		if (!name)
-			ERROR("elf_strptr scn");
-
-		if (!strcmp(name, ".symtab"))
-			break;
-	}
-
-	if (!scn)
-		ERROR(".symtab section not found");
-
-	data = elf_getdata(scn, NULL);
-	if (!data)
-		ERROR("elf_getdata");
-
-	len = sh.sh_size / sh.sh_entsize;
-
-	table->obj_syms = malloc(len * sizeof(*table->obj_syms));
-	if (!table->obj_syms)
-		ERROR("malloc table.obj_syms");
-	memset(table->obj_syms, 0, len * sizeof(*table->obj_syms));
-	table->obj_nr = len;
-
-	for_each_obj_symbol(i, mysym, table) {
-		if (!gelf_getsym(data, i, &sym))
-			ERROR("gelf_getsym");
-
-		if (sym.st_shndx == SHN_UNDEF) {
-			mysym->skip = 1;
-			continue;
-		}
-
-		name = elf_strptr(elf, sh.sh_link, sym.st_name);
-		if(!name)
-			ERROR("elf_strptr sym");
-
-		mysym->value = sym.st_value;
-		mysym->size = sym.st_size;
-		mysym->type = GELF_ST_TYPE(sym.st_info);
-		mysym->bind = GELF_ST_BIND(sym.st_info);
-		mysym->name = strdup(name);
-		if (!mysym->name)
-			ERROR("strdup");
-	}
-
-	close(fd);
-	elf_end(elf);
-}
-
 /* Strip the path and replace '-' with '_' */
 static char *make_modname(char *modname)
 {
@@ -272,6 +192,72 @@ static char *make_modname(char *modname)
 	return basename(modname);
 }
 
+static void symtab_read(struct lookup_table *table, char *path)
+{
+	FILE *file;
+	long unsigned int value, size;
+	unsigned int i = 0;
+	char line[256], name[256], type[16], bind[16];
+
+	if ((file = fopen(path, "r")) == NULL)
+		ERROR("fopen");
+
+	while (fgets(line, 256, file)) {
+		if (sscanf(line, "%*s %lx %lu %s %s %*s %*s %s\n",
+					&value, &size, type, bind, name) == 5 &&
+				strcmp(bind, "SECTION")) {
+			table->obj_nr++;
+		}
+	}
+
+	table->obj_syms = malloc(table->obj_nr * sizeof(*table->obj_syms));
+	if (!table->obj_syms)
+		ERROR("malloc table.obj_syms");
+	memset(table->obj_syms, 0, table->obj_nr * sizeof(*table->obj_syms));
+
+	rewind(file);
+
+	while (fgets(line, 256, file)) {
+		if (sscanf(line, "%*s %lx %lu %s %s %*s %*s %s\n",
+					&value, &size, type, bind, name) != 5 ||
+				!strcmp(bind, "SECTION")) {
+			continue;
+		}
+		table->obj_syms[i].value = value;
+		table->obj_syms[i].size = size;
+		table->obj_syms[i].name = strdup(name);
+
+		if (!strcmp(bind, "LOCAL")) {
+			table->obj_syms[i].bind = STB_LOCAL;
+		} else if (!strcmp(bind, "GLOBAL")) {
+			table->obj_syms[i].bind = STB_GLOBAL;
+		} else if (!strcmp(bind, "WEAK")) {
+			table->obj_syms[i].bind = STB_WEAK;
+		} else {
+			ERROR("unknown symbol bind %s", bind);
+		}
+
+		if (!strcmp(type, "NOTYPE")) {
+			table->obj_syms[i].type = STT_NOTYPE;
+		} else if (!strcmp(type, "OBJECT")) {
+			table->obj_syms[i].type = STT_OBJECT;
+		} else if (!strcmp(type, "FUNC")) {
+			table->obj_syms[i].type = STT_FUNC;
+		} else if (!strcmp(type, "FILE")) {
+			table->obj_syms[i].type = STT_FILE;
+		} else {
+			ERROR("unknown symbol type %s", type);
+		}
+
+		table->obj_syms[i].name = strdup(name);
+		if (!table->obj_syms[i].name)
+			ERROR("strdup");
+		i++;
+	}
+
+	fclose(file);
+}
+
 static void symvers_read(struct lookup_table *table, char *path)
 {
 	FILE *file;
@@ -279,7 +265,7 @@ static void symvers_read(struct lookup_table *table, char *path)
 	char name[256], mod[256], export[256];
 	char *objname, *symname;
 
-	if ((file = fopen(path, "r")) < 0)
+	if ((file = fopen(path, "r")) == NULL)
 		ERROR("fopen");
 
 	while (fscanf(file, "%x %s %s %s\n",
@@ -314,7 +300,7 @@ static void symvers_read(struct lookup_table *table, char *path)
 	fclose(file);
 }
 
-struct lookup_table *lookup_open(char *obj_path, char *symvers_path,
+struct lookup_table *lookup_open(char *symtab_path, char *symvers_path,
 				 char *hint, struct sym_compare_type *locals)
 {
 	struct lookup_table *table;
@@ -324,7 +310,7 @@ struct lookup_table *lookup_open(char *obj_path, char *symvers_path,
 		ERROR("malloc table");
 	memset(table, 0, sizeof(*table));
 
-	obj_read(table, obj_path);
+	symtab_read(table, symtab_path);
 	symvers_read(table, symvers_path);
 	find_local_syms(table, hint, locals);
 
@@ -350,9 +336,6 @@ int lookup_local_symbol(struct lookup_table *table, char *name,
 
 	memset(result, 0, sizeof(*result));
 	for_each_obj_symbol(i, sym, table) {
-		if (sym->skip)
-			continue;
-
 		if (sym->bind == STB_LOCAL && !strcmp(sym->name, name))
 			pos++;
 
@@ -390,7 +373,7 @@ int lookup_global_symbol(struct lookup_table *table, char *name,
 
 	memset(result, 0, sizeof(*result));
 	for_each_obj_symbol(i, sym, table) {
-		if (!sym->skip && (sym->bind == STB_GLOBAL || sym->bind == STB_WEAK) &&
+		if ((sym->bind == STB_GLOBAL || sym->bind == STB_WEAK) &&
 		    !strcmp(sym->name, name)) {
 			result->value = sym->value;
 			result->size = sym->size;
