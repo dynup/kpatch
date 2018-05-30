@@ -2467,8 +2467,17 @@ static int function_ptr_rela(const struct rela *rela)
 
 static int may_need_dynrela(const struct rela *rela)
 {
+	/*
+	 * References to .TOC. are treated specially by the module loader and
+	 * should never be converted to dynrelas.
+	 */
+	if (rela->type == R_PPC64_REL16_HA || rela->type == R_PPC64_REL16_LO ||
+	    rela->type == R_PPC64_REL64)
+		return 0;
+
 	if (!rela->sym->sec)
 		return 1;
+
 	/*
 	 * Nested functions used as callbacks are a special case.
 	 * They are not supposed to be visible outside of the
