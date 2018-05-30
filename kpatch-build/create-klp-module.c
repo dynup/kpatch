@@ -81,7 +81,7 @@ static struct symbol *find_or_add_ksym_to_symbols(struct kpatch_elf *kelf,
 			return sym;
 	}
 
-	ALLOC_LINK(sym, &kelf->symbols);
+	ALLOC_LINK(sym, NULL);
 	sym->name = strdup(buf);
 	if (!sym->name)
 		ERROR("strdup");
@@ -93,6 +93,25 @@ static struct symbol *find_or_add_ksym_to_symbols(struct kpatch_elf *kelf,
 	 */
 	sym->sym.st_shndx = SHN_LIVEPATCH;
 	sym->sym.st_info = GELF_ST_INFO(sym->bind, sym->type);
+	/*
+	 * Figure out where to put the new symbol:
+	 *   a) locals need to be grouped together, before globals
+	 *   b) globals can be tacked into the end of the list
+	 */
+	if (is_local_sym(sym)) {
+		struct list_head *head;
+		struct symbol *s;
+
+		head = &kelf->symbols;
+		list_for_each_entry(s, &kelf->symbols, list) {
+			if (!is_local_sym(s))
+				break;
+			head = &s->list;
+		}
+		list_add_tail(&sym->list, head);
+	} else {
+		list_add_tail(&sym->list, &kelf->symbols);
+	}
 
 	return sym;
 }
