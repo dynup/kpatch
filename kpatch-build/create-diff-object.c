@@ -825,6 +825,7 @@ static void kpatch_rename_mangled_functions(struct kpatch_elf *base,
 
 		if (!strstr(sym->name, ".isra.") &&
 		    !strstr(sym->name, ".constprop.") &&
+		    !strstr(sym->name, ".cold.") &&
 		    !strstr(sym->name, ".part."))
 			continue;
 
