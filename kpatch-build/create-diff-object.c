@@ -90,7 +90,9 @@ static int is_bundleable(struct symbol *sym)
 
 	if (sym->type == STT_FUNC &&
 	    !strncmp(sym->sec->name, ".text.unlikely.",15) &&
-	    !strcmp(sym->sec->name + 15, sym->name))
+	    (!strcmp(sym->sec->name + 15, sym->name) ||
+			 (strstr(sym->name, ".cold.") &&
+			  !strncmp(sym->sec->name + 15, sym->name, strlen(sym->sec->name) - 15))))
 		return 1;
 
 	if (sym->type == STT_OBJECT &&
@@ -823,6 +825,7 @@ static void kpatch_rename_mangled_functions(struct kpatch_elf *base,
 
 		if (!strstr(sym->name, ".isra.") &&
 		    !strstr(sym->name, ".constprop.") &&
+		    !strstr(sym->name, ".cold.") &&
 		    !strstr(sym->name, ".part."))
 			continue;
 
