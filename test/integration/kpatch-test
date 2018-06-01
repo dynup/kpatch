@@ -133,7 +133,8 @@ unload_all() {
 build_module() {
 	file=$1
 	prefix=$(basename ${file%%.patch})
-	module=kpatch-$prefix.ko
+	modname="test-$prefix"
+	module="${modname}.ko"
 
 	if [[ $prefix =~ -FAIL ]]; then
 		shouldfail=1
@@ -150,7 +151,7 @@ build_module() {
 
 	log "build: $prefix"
 
-	if ! $KPATCHBUILD $file >> $LOG 2>&1; then
+	if ! $KPATCHBUILD -n $modname $file >> $LOG 2>&1; then
 		[[ $shouldfail -eq 0 ]] && error "$prefix: build failed"
 	else
 		[[ $shouldfail -eq 1 ]] && error "$prefix: build succeeded when it should have failed"
@@ -160,7 +161,8 @@ build_module() {
 run_load_test() {
 	file=$1
 	prefix=$(basename ${file%%.patch})
-	module=kpatch-$prefix.ko
+	modname="test-$prefix"
+	module="${modname}.ko"
 	testprog="$(dirname $1)/$prefix-LOADED.test"
 
 	[[ $prefix =~ -FAIL ]] && return
@@ -217,7 +219,7 @@ run_custom_test() {
 
 build_combined_module() {
 
-	if [[ $SKIPBUILD -eq 1 ]] && [[ -e kpatch-COMBINED.ko ]]; then
+	if [[ $SKIPBUILD -eq 1 ]] && [[ -e test-COMBINED.ko ]]; then
 		log "skipping build: combined"
 		return
 	fi
@@ -235,14 +237,14 @@ build_combined_module() {
 
 	log "build: combined module"
 
-	if ! $KPATCHBUILD -n kpatch-COMBINED "${COMBINED_LIST[@]}" >> $LOG 2>&1; then
+	if ! $KPATCHBUILD -n test-COMBINED "${COMBINED_LIST[@]}" >> $LOG 2>&1; then
 		error "combined build failed"
 	fi
 }
 
 run_combined_test() {
-	if [[ ! -e kpatch-COMBINED.ko ]]; then
-		log "can't find kpatch-COMBINED.ko, skipping"
+	if [[ ! -e test-COMBINED.ko ]]; then
+		log "can't find test-COMBINED.ko, skipping"
 		return
 	fi
 
@@ -258,7 +260,7 @@ run_combined_test() {
 		fi
 	done
 
-	if ! $KPATCH load kpatch-COMBINED.ko >> $LOG 2>&1; then
+	if ! $KPATCH load test-COMBINED.ko >> $LOG 2>&1; then
 		error "combined: kpatch load failed"
 		return
 	fi
@@ -270,7 +272,7 @@ run_combined_test() {
 		fi
 	done
 
-	if ! $KPATCH unload kpatch-COMBINED.ko >> $LOG 2>&1; then
+	if ! $KPATCH unload test-COMBINED.ko >> $LOG 2>&1; then
 		error "combined: kpatch unload failed"
 		return
 	fi
