@@ -488,6 +488,7 @@ if [[ -n "$SRCRPM" ]]; then
 	rpmname="$(basename "$SRCRPM")"
 	ARCHVERSION="${rpmname%.src.rpm}.$(uname -m)"
 	ARCHVERSION="${ARCHVERSION#kernel-}"
+	ARCHVERSION="${ARCHVERSION#alt-}"
 fi
 
 # ensure cachedir and tempdir are setup properly and cleaned
@@ -517,6 +518,7 @@ KVER="${ARCHVERSION%%-*}"
 if [[ "$ARCHVERSION" =~ - ]]; then
 	KREL="${ARCHVERSION##*-}"
 	KREL="${KREL%.*}"
+	[[ "$KREL" =~ .el7a. ]] && ALT="-alt"
 fi
 
 [[ -z "$TARGETS" ]] && TARGETS="vmlinux modules"
@@ -572,15 +574,15 @@ else
 				wget -P "$TEMPDIR" "http://kojipkgs.fedoraproject.org/packages/kernel/$KVER/$KREL/src/kernel-$KVER-$KREL.src.rpm" 2>&1 | logger || die
 			else
 				rpm -q --quiet yum-utils || die "yum-utils not installed"
-				yumdownloader --source --destdir "$TEMPDIR" "kernel-$ARCHVERSION" 2>&1 | logger || die
+				yumdownloader --source --destdir "$TEMPDIR" "kernel$ALT-$ARCHVERSION" 2>&1 | logger || die
 			fi
-			SRCRPM="$TEMPDIR/kernel-$KVER-$KREL.src.rpm"
+			SRCRPM="$TEMPDIR/kernel$ALT-$KVER-$KREL.src.rpm"
 		fi
 
 		echo "Unpacking kernel source"
 
 		rpm -D "_topdir $RPMTOPDIR" -ivh "$SRCRPM" 2>&1 | logger || die
-		rpmbuild -D "_topdir $RPMTOPDIR" -bp "--target=$(uname -m)" "$RPMTOPDIR"/SPECS/kernel.spec 2>&1 | logger ||
+		rpmbuild -D "_topdir $RPMTOPDIR" -bp "--target=$(uname -m)" "$RPMTOPDIR"/SPECS/kernel$ALT.spec 2>&1 | logger ||
 			die "rpmbuild -bp failed.  you may need to run 'yum-builddep kernel' first."
 
 		mv "$RPMTOPDIR"/BUILD/kernel-*/linux-"${ARCHVERSION%.*}"*"${ARCHVERSION##*.}" "$SRCDIR" 2>&1 | logger || die
