@@ -595,6 +595,8 @@ else
 
 		echo "$ARCHVERSION" > "$VERSIONFILE" || die
 
+		[[ -z "$CONFIGFILE" ]] && CONFIGFILE="$SRCDIR/configs/kernel$ALT-$KVER-$ARCH.config"
+
 	elif [[ "$DISTRO" = ubuntu ]] || [[ "$DISTRO" = debian ]]; then
 
 		echo "Debian/Ubuntu distribution detected"
@@ -623,7 +625,7 @@ else
 		# Download source deb pkg
 		(dget -u "$url/${pkgname}/${dscname}" 2>&1) | logger || die "dget: Could not fetch/unpack $url/${pkgname}/${dscname}"
 		mv "${pkgname}-$KVER" "$SRCDIR" || die
-		cp "/boot/config-${ARCHVERSION}" "$SRCDIR/.config" || die
+		[[ -z "$CONFIGFILE" ]] && CONFIGFILE="/boot/config-${ARCHVERSION}"
 		if [[ "$ARCHVERSION" == *-* ]]; then
 			echo "-${ARCHVERSION#*-}" > "$SRCDIR/localversion" || die
 		fi
