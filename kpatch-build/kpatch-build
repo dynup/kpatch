@@ -115,8 +115,7 @@ cleanup() {
 
 	remove_patches
 
-	# restore original .config and vmlinux if they were removed with mrproper
-	[[ -e "$TEMPDIR/.config" ]] && mv -f "$TEMPDIR/.config" "$SRCDIR/"
+	# restore original vmlinux if it was overwritten by sourcedir build
 	[[ -e "$TEMPDIR/vmlinux" ]] && mv -f "$TEMPDIR/vmlinux" "$SRCDIR/"
 
 	[[ "$DEBUG" -eq 0 ]] && rm -rf "$TEMPDIR"
@@ -555,7 +554,7 @@ fi
 if [[ -n "$USERSRCDIR" ]]; then
 	echo "Using source directory at $USERSRCDIR"
 
-	# save vmlinux before it gets removed with mrproper
+	# save original vmlinux before it gets overwritten by sourcedir build
 	[[ "$VMLINUX" -ef "$SRCDIR"/vmlinux ]] && cp -f "$VMLINUX" "$TEMPDIR/vmlinux" && VMLINUX="$TEMPDIR/vmlinux"
 
 elif [[ -e "$SRCDIR"/.config ]] && [[ -e "$VERSIONFILE" ]] && [[ "$(cat "$VERSIONFILE")" = "$ARCHVERSION" ]]; then
@@ -595,6 +594,10 @@ else
 
 		echo "$ARCHVERSION" > "$VERSIONFILE" || die
 
+		[[ -z "$CONFIGFILE" ]] && CONFIGFILE="$SRCDIR/configs/kernel$ALT-$KVER-$ARCH.config"
+
+		(cd "$SRCDIR" && make mrproper 2>&1 | logger) || die
+
 	elif [[ "$DISTRO" = ubuntu ]] || [[ "$DISTRO" = debian ]]; then
 
 		echo "Debian/Ubuntu distribution detected"
@@ -623,7 +626,7 @@ else
 		# Download source deb pkg
 		(dget -u "$url/${pkgname}/${dscname}" 2>&1) | logger || die "dget: Could not fetch/unpack $url/${pkgname}/${dscname}"
 		mv "${pkgname}-$KVER" "$SRCDIR" || die
-		cp "/boot/config-${ARCHVERSION}" "$SRCDIR/.config" || die
+		[[ -z "$CONFIGFILE" ]] && CONFIGFILE="/boot/config-${ARCHVERSION}"
 		if [[ "$ARCHVERSION" == *-* ]]; then
 			echo "-${ARCHVERSION#*-}" > "$SRCDIR/localversion" || die
 		fi
@@ -637,10 +640,9 @@ else
 	fi
 fi
 
-# save .config before it gets removed with mrproper
 [[ -z "$CONFIGFILE" ]] && CONFIGFILE="$SRCDIR"/.config
 [[ ! -e "$CONFIGFILE" ]] && die "can't find config file"
-[[ "$CONFIGFILE" -ef "$SRCDIR"/.config ]] && cp -f "$CONFIGFILE" "$TEMPDIR" && CONFIGFILE="$TEMPDIR"/.config
+[[ ! "$CONFIGFILE" -ef "$SRCDIR"/.config ]] && cp -f "$CONFIGFILE" "$SRCDIR/.config"
 
 # Build variables - Set some defaults, then adjust features
 # according to .config and kernel version
@@ -697,8 +699,6 @@ fi
 
 echo "Building original kernel"
 ./scripts/setlocalversion --save-scmversion || die
-make mrproper 2>&1 | logger || die
-cp -f "$CONFIGFILE" "$SRCDIR/.config"
 unset KPATCH_GCC_TEMPDIR
 # $TARGETS used as list, no quotes.
 # shellcheck disable=SC2086
