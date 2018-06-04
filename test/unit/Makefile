@@ -8,4 +8,4 @@ all: Makefile.include
 	$(MAKE) -C $(OBJDIR)
 
 clean: Makefile.include
-	$(MAKE) -C $(OBJDIR) clean
+	if [ -d $(OBJDIR) ]; then $(MAKE) -C $(OBJDIR) clean; fi
