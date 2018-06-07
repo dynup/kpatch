@@ -375,7 +375,7 @@ static int __init patch_init(void)
 		goto out;
 	lpatch->mod = THIS_MODULE;
 	lpatch->objs = lobjects;
-#if defined(__powerpc__) && defined(HAVE_IMMEDIATE)
+#if defined(__powerpc64__) && defined(HAVE_IMMEDIATE)
 	lpatch->immediate = true;
 #endif
 

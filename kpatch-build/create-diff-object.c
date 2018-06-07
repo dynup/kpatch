@@ -59,7 +59,7 @@
 	error(2, 0, "unreconcilable difference"); \
 })
 
-#ifdef __powerpc__
+#ifdef __powerpc64__
 #define ABSOLUTE_RELA_TYPE R_PPC64_ADDR64
 #else
 #define ABSOLUTE_RELA_TYPE R_X86_64_64
@@ -113,7 +113,7 @@ static int is_bundleable(struct symbol *sym)
 	return 0;
 }
 
-#ifdef __powerpc__
+#ifdef __powerpc64__
 /* Symbol st_others value for powerpc */
 #define STO_PPC64_LOCAL_BIT     5
 #define STO_PPC64_LOCAL_MASK    (7 << STO_PPC64_LOCAL_BIT)
@@ -511,7 +511,7 @@ static int kpatch_line_macro_change_only(struct section *sec)
 
 	return 1;
 }
-#elif __powerpc__
+#elif __powerpc64__
 #define PPC_INSTR_LEN 4
 #define PPC_RA_OFFSET 16
 
@@ -1204,7 +1204,7 @@ static void kpatch_replace_sections_syms(struct kpatch_elf *kelf)
 				continue;
 			}
 
-#ifdef __powerpc__
+#ifdef __powerpc64__
 			add_off = 0;
 #else
 			if (rela->type == R_X86_64_PC32) {
@@ -1727,7 +1727,7 @@ static int smp_locks_group_size(struct kpatch_elf *kelf, int offset)
 	return 4;
 }
 #endif
-#ifdef __powerpc__
+#ifdef __powerpc64__
 static int fixup_entry_group_size(struct kpatch_elf *kelf, int offset)
 {
 	static int size = 0;
@@ -1826,7 +1826,7 @@ static struct special_section special_sections[] = {
 		.group_size	= altinstructions_group_size,
 	},
 #endif
-#ifdef __powerpc__
+#ifdef __powerpc64__
 	{
 		.name		= "__ftr_fixup",
 		.group_size	= fixup_entry_group_size,
@@ -2636,7 +2636,7 @@ static void kpatch_create_intermediate_sections(struct kpatch_elf *kelf,
 				 * a global symbol.  Use a normal rela for
 				 * exported symbols and a dynrela otherwise.
 				 */
-#ifdef __powerpc__
+#ifdef __powerpc64__
 				/*
 				 * An exported symbol might be local to an
 				 * object file and any access to the function
@@ -2835,7 +2835,7 @@ static void kpatch_create_callbacks_objname_rela(struct kpatch_elf *kelf, char *
 	}
 }
 
-#ifdef __powerpc__
+#ifdef __powerpc64__
 void kpatch_create_mcount_sections(struct kpatch_elf *kelf) { }
 #else
 /*
