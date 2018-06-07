@@ -1998,6 +1998,94 @@ static void kpatch_regenerate_special_section(struct kpatch_elf *kelf,
 	sec->base->data->d_size = dest_offset;
 }
 
+#define ORC_IP_PTR_SIZE 4
+
+/*
+ * This function is similar to kpatch_regenerate_special_section(), but
+ * customized for the ORC-related sections.  ORC is more special than the other
+ * special sections because each ORC entry is split into .orc_unwind (struct
+ * orc_entry) and .orc_unwind_ip.
+ */
+static void kpatch_regenerate_orc_sections(struct kpatch_elf *kelf)
+{
+	struct rela *rela, *safe;
+	char *src, *dest, *str;
+	unsigned int src_idx = 0, dest_idx = 0, orc_entry_size;
+	struct section *orc_sec, *ip_sec;
+
+
+	str = getenv("ORC_STRUCT_SIZE");
+	if (!str)
+		return;
+	orc_entry_size = atoi(str);
+
+	LIST_HEAD(newrelas);
+
+	orc_sec = find_section_by_name(&kelf->sections, ".orc_unwind");
+	ip_sec  = find_section_by_name(&kelf->sections, ".orc_unwind_ip");
+
+	if (!orc_sec || !ip_sec)
+		return;
+
+	if (orc_sec->sh.sh_size % orc_entry_size != 0)
+		ERROR("bad .orc_unwind size");
+
+	if (ip_sec->sh.sh_size !=
+	    (orc_sec->sh.sh_size / orc_entry_size) * ORC_IP_PTR_SIZE)
+		ERROR(".orc_unwind/.orc_unwind_ip size mismatch");
+
+	src = orc_sec->data->d_buf;
+	dest = malloc(orc_sec->sh.sh_size);
+	if (!dest)
+		ERROR("malloc");
+
+	list_for_each_entry_safe(rela, safe, &ip_sec->rela->relas, list) {
+
+		if (rela->sym->type != STT_FUNC || !rela->sym->sec->include)
+			goto next;
+
+		/* copy orc entry */
+		memcpy(dest + (dest_idx * orc_entry_size),
+		       src + (src_idx * orc_entry_size),
+		       orc_entry_size);
+
+		/* move ip rela */
+		list_del(&rela->list);
+		list_add_tail(&rela->list, &newrelas);
+		rela->offset = dest_idx * ORC_IP_PTR_SIZE;
+		rela->sym->include = 1;
+
+		dest_idx++;
+next:
+		src_idx++;
+	}
+
+	if (!dest_idx) {
+		/* no changed or global functions referenced */
+		orc_sec->status = ip_sec->status = ip_sec->rela->status = SAME;
+		orc_sec->include = ip_sec->include = ip_sec->rela->include = 0;
+		free(dest);
+		return;
+	}
+
+	/* overwrite with new relas list */
+	list_replace(&newrelas, &ip_sec->rela->relas);
+
+	/* include the sections */
+	orc_sec->include = ip_sec->include = ip_sec->rela->include = 1;
+
+	/*
+	 * Update data buf/size.
+	 *
+	 * The ip section can keep its old (zeroed data), though its size has
+	 * possibly decreased.  The ip rela section's data buf and size will be
+	 * regenerated in kpatch_rebuild_rela_section_data().
+	 */
+	orc_sec->data->d_buf = dest;
+	orc_sec->data->d_size = dest_idx * orc_entry_size;
+	ip_sec->data->d_size = dest_idx * ORC_IP_PTR_SIZE;
+}
+
 static void kpatch_check_relocations(struct kpatch_elf *kelf)
 {
 	struct rela *rela;
@@ -2278,6 +2366,8 @@ static void kpatch_process_special_sections(struct kpatch_elf *kelf)
 			sec->rela->include = 0;
 		}
 	}
+
+	kpatch_regenerate_orc_sections(kelf);
 }
 
 static struct sym_compare_type *kpatch_elf_locals(struct kpatch_elf *kelf)
