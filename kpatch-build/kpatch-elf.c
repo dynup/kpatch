@@ -322,7 +322,7 @@ static void kpatch_find_func_profiling_calls(struct kpatch_elf *kelf)
 	list_for_each_entry(sym, &kelf->symbols, list) {
 		if (sym->type != STT_FUNC || !sym->sec || !sym->sec->rela)
 			continue;
-#ifdef __powerpc__
+#ifdef __powerpc64__
 		list_for_each_entry(rela, &sym->sec->rela->relas, list) {
 			if (!strcmp(rela->sym->name, "_mcount")) {
 				sym->has_func_profiling = 1;
