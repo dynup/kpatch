@@ -3082,8 +3082,10 @@ int main(int argc, char *argv[])
 			break;
 		}
 	}
-	if (!hint)
-		ERROR("FILE symbol not found in base. Stripped?\n");
+	if (!hint) {
+		log_normal("WARNING: FILE symbol not found in base. Stripped object file or assembly source?\n");
+		return 3; /* NO_CHANGE */
+	}
 
 	/* create symbol lookup table */
 	base_locals = kpatch_elf_locals(kelf_base);
