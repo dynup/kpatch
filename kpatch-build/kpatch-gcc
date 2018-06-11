@@ -41,6 +41,7 @@ if [[ "$TOOLCHAINCMD" = "gcc" ]] ; then
 				arch/x86/entry/vdso/*|\
 				drivers/firmware/efi/libstub/*|\
 				arch/powerpc/kernel/prom_init.o|\
+				lib/*|\
 				.*.o|\
 				*/.lib_exports.o)
 					break
