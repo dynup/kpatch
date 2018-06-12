@@ -1328,7 +1328,7 @@ static void kpatch_check_func_profiling_calls(struct kpatch_elf *kelf)
 	int errs = 0;
 
 	list_for_each_entry(sym, &kelf->symbols, list) {
-		if (sym->type != STT_FUNC || sym->status != CHANGED)
+		if (sym->type != STT_FUNC || sym->status != CHANGED || sym->parent)
 			continue;
 		if (!sym->twin->has_func_profiling) {
 			log_normal("function %s has no fentry/mcount call, unable to patch\n",
@@ -1608,7 +1608,7 @@ static void kpatch_print_changes(struct kpatch_elf *kelf)
 	struct symbol *sym;
 
 	list_for_each_entry(sym, &kelf->symbols, list) {
-		if (!sym->include || !sym->sec || sym->type != STT_FUNC)
+		if (!sym->include || !sym->sec || sym->type != STT_FUNC || sym->parent)
 			continue;
 		if (sym->status == NEW)
 			log_normal("new function: %s\n", sym->name);
@@ -2454,7 +2454,7 @@ static void kpatch_create_patches_sections(struct kpatch_elf *kelf,
 	/* count patched functions */
 	nr = 0;
 	list_for_each_entry(sym, &kelf->symbols, list)
-		if (sym->type == STT_FUNC && sym->status == CHANGED)
+		if (sym->type == STT_FUNC && sym->status == CHANGED && !sym->parent)
 			nr++;
 
 	/* create text/rela section pair */
@@ -2473,7 +2473,7 @@ static void kpatch_create_patches_sections(struct kpatch_elf *kelf,
 	/* populate sections */
 	index = 0;
 	list_for_each_entry(sym, &kelf->symbols, list) {
-		if (sym->type == STT_FUNC && sym->status == CHANGED) {
+		if (sym->type == STT_FUNC && sym->status == CHANGED && !sym->parent) {
 			if (sym->bind == STB_LOCAL) {
 				if (lookup_local_symbol(table, sym->name,
 				                        &result))
@@ -2584,6 +2584,7 @@ static int function_ptr_rela(const struct rela *rela)
 	const struct rela *rela_toc = toc_rela(rela);
 
 	return (rela_toc && rela_toc->sym->type == STT_FUNC &&
+		!rela_toc->sym->parent &&
 		/* skip switch table on PowerPC */
 		rela_toc->addend == (int)rela_toc->sym->sym.st_value &&
 		(rela->type == R_X86_64_32S ||
