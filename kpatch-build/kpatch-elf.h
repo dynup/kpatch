@@ -70,6 +70,8 @@ struct section {
 struct symbol {
 	struct list_head list;
 	struct symbol *twin;
+	struct symbol *parent;
+	struct symbol *child;
 	struct section *sec;
 	GElf_Sym sym;
 	char *name;
