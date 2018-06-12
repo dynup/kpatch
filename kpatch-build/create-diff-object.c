@@ -644,8 +644,14 @@ static void kpatch_compare_sections(struct list_head *seclist)
 			if (sec->base->sym && sec->base->sym->status != CHANGED)
 				sec->base->sym->status = sec->status;
 		} else {
-			if (sec->sym && sec->sym->status != CHANGED)
-				sec->sym->status = sec->status;
+			struct symbol *sym = sec->sym;
+
+			if (sym && sym->status != CHANGED)
+				sym->status = sec->status;
+
+			if (sym && sym->child && sym->status == SAME &&
+			    sym->child->sec->status == CHANGED)
+				sym->status = CHANGED;
 		}
 	}
 }
