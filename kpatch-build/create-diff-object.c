@@ -52,11 +52,12 @@
 #include "kpatch-patch.h"
 #include "kpatch-elf.h"
 #include "kpatch-intermediate.h"
+#include "kpatch.h"
 
 #define DIFF_FATAL(format, ...) \
 ({ \
 	fprintf(stderr, "ERROR: %s: " format "\n", childobj, ##__VA_ARGS__); \
-	error(2, 0, "unreconcilable difference"); \
+	error(EXIT_STATUS_DIFF_FATAL, 0, "unreconcilable difference"); \
 })
 
 #ifdef __powerpc__
@@ -3084,7 +3085,7 @@ int main(int argc, char *argv[])
 	}
 	if (!hint) {
 		log_normal("WARNING: FILE symbol not found in base. Stripped object file or assembly source?\n");
-		return 3; /* NO_CHANGE */
+		return EXIT_STATUS_NO_CHANGE;
 	}
 
 	/* create symbol lookup table */
@@ -3132,7 +3133,7 @@ int main(int argc, char *argv[])
 			log_debug("no changed functions were found, but callbacks exist\n");
 		else {
 			log_debug("no changed functions were found\n");
-			return 3; /* 1 is ERROR, 2 is DIFF_FATAL */
+			return EXIT_STATUS_NO_CHANGE;
 		}
 	}
 
@@ -3192,5 +3193,5 @@ int main(int argc, char *argv[])
 	kpatch_elf_teardown(kelf_out);
 	kpatch_elf_free(kelf_out);
 
-	return 0;
+	return EXIT_STATUS_SUCCESS;
 }
