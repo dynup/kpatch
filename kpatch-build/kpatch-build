@@ -262,8 +262,10 @@ find_special_section_data() {
 	[[ "$CONFIG_PARAVIRT" -eq 0 ]] && AWK_OPTIONS="-vskip_p=1"
 	[[ "$CONFIG_UNWINDER_ORC" -eq 0 ]] && AWK_OPTIONS="$AWK_OPTIONS -vskip_o=1"
 
+	# If $AWK_OPTIONS are blank gawk would treat "" as a blank script
+	# shellcheck disable=SC2086
 	SPECIAL_VARS="$(readelf -wi "$VMLINUX" |
-		gawk --non-decimal-data "$AWK_OPTIONS" '
+		gawk --non-decimal-data $AWK_OPTIONS '
 		BEGIN { a = b = p = e = o = 0 }
 
 		# Set state if name matches
