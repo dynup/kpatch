@@ -146,7 +146,7 @@ check_pipe_status() {
 
 # $1 >= $2
 version_gte() {
-	[  "$1" = "$(echo -e "$1\n$2" | sort -rV | head -n1)" ]
+	[  "$1" = "$(echo -e "$1\\n$2" | sort -rV | head -n1)" ]
 }
 
 is_rhel() {
@@ -310,7 +310,7 @@ find_parent_obj() {
 	pdir="${absdir#$pwddir/}"
 	file="$(basename "$1")"
 	grepname="${1%.o}"
-	grepname="$grepname\.o"
+	grepname="$grepname\\.o"
 	if [[ "$DEEP_FIND" -eq 1 ]]; then
 		num=0
 		if [[ -n "$last_deep_find" ]]; then
@@ -729,7 +729,7 @@ CROSS_COMPILE="$TOOLSDIR/kpatch-gcc " \
 	make "-j$CPUS" $TARGETS 2>&1 | logger || die
 
 # source.c:(.section+0xFF): undefined reference to `symbol'
-grep "undefined reference" "$LOGFILE" | sed -r "s/^.*\`(.*)'$/\1/" \
+grep "undefined reference" "$LOGFILE" | sed -r "s/^.*\`(.*)'$/\\1/" \
 	>"${TEMPDIR}"/undefined_references
 
 # WARNING: "symbol" [path/to/module.ko] undefined!
