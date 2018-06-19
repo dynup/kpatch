@@ -171,7 +171,7 @@ static void find_local_syms(struct lookup_table *table, char *hint,
 	}
 
 	if (!table->local_syms)
-		ERROR("find_local_syms for %s: found_none", hint);
+		ERROR("find_local_syms for %s: couldn't find in vmlinux symbol table", hint);
 }
 
 /* Strip the path and replace '-' with '_' */
