@@ -256,7 +256,7 @@ static int kpatch_mangled_strcmp(char *s1, char *s2)
 static int rela_equal(struct rela *rela1, struct rela *rela2)
 {
 	struct rela *rela_toc1, *rela_toc2;
-	unsigned long toc_data1, toc_data2;
+	unsigned long toc_data1 = 0, toc_data2 = 0; /* = 0 to prevent gcc warning */
 
 	if (rela1->type != rela2->type ||
 	    rela1->offset != rela2->offset)
