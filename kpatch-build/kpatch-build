@@ -525,8 +525,8 @@ KVER="${ARCHVERSION%%-*}"
 if [[ "$ARCHVERSION" =~ - ]]; then
 	KREL="${ARCHVERSION##*-}"
 	KREL="${KREL%.*}"
-	[[ "$KREL" =~ .el7a. ]] && ALT="-alt"
 fi
+[[ "$ARCHVERSION" =~ .el7a. ]] && ALT="-alt"
 
 [[ -z "$TARGETS" ]] && TARGETS="vmlinux modules"
 
