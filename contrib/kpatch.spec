@@ -1,6 +1,6 @@
 Name: kpatch
 Summary: Dynamic kernel patching
-Version: 0.6.0
+Version: 0.6.1
 License: GPLv2
 Group: System Environment/Kernel
 URL: http://github.com/dynup/kpatch
@@ -93,6 +93,10 @@ rm -rf %{buildroot}
 %{_mandir}/man1/kpatch-build.1*
 
 %changelog
+* Tue May 29 2018 Joe Lawrence <joe.lawrence@redhat.com> - 0.6.1
+- Increase the transition timeout, helpful for large CPU count systems
+- Miscellaneous unit testing, ppc64, etc. fixes
+
 * Mon Apr 22 2018 Josh Poimboeuf <jpoimboe@redhat.com> - 0.6.0
 - Support and converted to livepatch-style hooks.
 - Lots of misc bugfixes and cleanups
