@@ -44,6 +44,9 @@ sudo dnf install pesign yum-utils openssl wget numactl-devel
 sudo dnf builddep kernel-${UNAME%.*}
 sudo dnf debuginfo-install kernel-${UNAME%.*}
 
+# required on ppc64le
+sudo dnf install gcc-plugin-devel
+
 # optional, but highly recommended
 sudo dnf install ccache
 ccache --max-size=5G
@@ -74,6 +77,9 @@ sudo yum install pesign yum-utils zlib-devel \
 
 sudo yum-builddep kernel-${UNAME%.*}
 sudo debuginfo-install kernel-${UNAME%.*}
+
+# required on ppc64le
+sudo yum install gcc-plugin-devel
 
 # optional, but highly recommended
 sudo yum install https://dl.fedoraproject.org/pub/epel/7/x86_64/Packages/c/ccache-3.3.4-1.el7.x86_64.rpm
@@ -152,7 +158,7 @@ ccache --max-size=5G
 sudo yum install patchutils
 ```
 
-#### Ubuntu 14.04
+#### Ubuntu
 
 *NOTE: You'll need about 15GB of free disk space for the kpatch-build cache in
 `~/.kpatch` and for ccache.*
@@ -168,6 +174,10 @@ Install the dependencies for the "kpatch-build" command:
 ```bash
 apt-get install dpkg-dev devscripts
 apt-get build-dep linux
+
+# required on ppc64le
+# e.g., on Ubuntu 18.04 for gcc-7.3
+apt-get install gcc-7-plugin-dev
 
 # optional, but highly recommended
 apt-get install ccache
@@ -231,6 +241,10 @@ Install the dependencies for the "kpatch-build" command:
 
     apt-get install dpkg-dev
     apt-get build-dep linux
+
+    # required on ppc64le
+    # e.g., on stretch for gcc-6.3
+    apt-get install gcc-6-plugin-dev
 
     # optional, but highly recommended
     apt-get install ccache
