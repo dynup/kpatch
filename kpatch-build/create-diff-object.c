@@ -375,8 +375,9 @@ static void kpatch_compare_correlated_section(struct section *sec)
 	/* Compare section headers (must match or fatal) */
 	if (sec1->sh.sh_type != sec2->sh.sh_type ||
 	    sec1->sh.sh_flags != sec2->sh.sh_flags ||
-	    sec1->sh.sh_addralign != sec2->sh.sh_addralign ||
-	    sec1->sh.sh_entsize != sec2->sh.sh_entsize)
+	    sec1->sh.sh_entsize != sec2->sh.sh_entsize ||
+	    (sec1->sh.sh_addralign != sec2->sh.sh_addralign &&
+	     !is_text_section(sec1)))
 		DIFF_FATAL("%s section header details differ", sec1->name);
 
 	/* Short circuit for mcount sections, we rebuild regardless */
