@@ -125,7 +125,7 @@ cleanup() {
 }
 
 clean_cache() {
-	rm -rf "${CACHEDIR:?}/*"
+	rm -rf "${CACHEDIR:?}"/*
 	mkdir -p "$TEMPDIR" || die "Couldn't create $TEMPDIR"
 }
 
