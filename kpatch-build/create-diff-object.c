@@ -68,6 +68,12 @@
 
 char *childobj;
 
+enum subsection {
+	SUBSECTION_NORMAL,
+	SUBSECTION_HOT,
+	SUBSECTION_UNLIKELY
+};
+
 enum loglevel loglevel = NORMAL;
 
 /*******************
@@ -94,6 +100,11 @@ static int is_bundleable(struct symbol *sym)
 	    (!strcmp(sym->sec->name + 15, sym->name) ||
 			 (strstr(sym->name, ".cold.") &&
 			  !strncmp(sym->sec->name + 15, sym->name, strlen(sym->sec->name) - 15))))
+		return 1;
+
+	if (sym->type == STT_FUNC &&
+	    !strncmp(sym->sec->name, ".text.hot.",10) &&
+	    !strcmp(sym->sec->name + 10, sym->name))
 		return 1;
 
 	if (sym->type == STT_OBJECT &&
@@ -179,6 +190,38 @@ static void kpatch_bundle_symbols(struct kpatch_elf *kelf)
 			}
 
 			sym->sec->sym = sym;
+		}
+	}
+}
+
+/*
+ * During optimization gcc may move unlikely execution branches into *.cold
+ * subfunctions. kpatch_detect_child_functions detects such subfunctions and
+ * crossreferences them with their parent functions through parent/child
+ * pointers.
+ */
+static void kpatch_detect_child_functions(struct kpatch_elf *kelf)
+{
+	struct symbol *sym;
+
+	list_for_each_entry(sym, &kelf->symbols, list) {
+		char *coldstr;
+
+		coldstr = strstr(sym->name, ".cold.");
+		if (coldstr != NULL) {
+			char *pname;
+
+			pname = strndup(sym->name, coldstr - sym->name);
+			if (!pname)
+				ERROR("strndup");
+
+			sym->parent = find_symbol_by_name(&kelf->symbols, pname);
+			free(pname);
+
+			if (!sym->parent)
+				ERROR("failed to find parent function for %s", sym->name);
+
+			sym->parent->child = sym;
 		}
 	}
 }
@@ -613,10 +656,32 @@ static void kpatch_compare_sections(struct list_head *seclist)
 			if (sec->base->sym && sec->base->sym->status != CHANGED)
 				sec->base->sym->status = sec->status;
 		} else {
-			if (sec->sym && sec->sym->status != CHANGED)
-				sec->sym->status = sec->status;
+			struct symbol *sym = sec->sym;
+
+			if (sym && sym->status != CHANGED)
+				sym->status = sec->status;
+
+			if (sym && sym->child && sym->status == SAME &&
+			    sym->child->sec->status == CHANGED)
+				sym->status = CHANGED;
 		}
 	}
+}
+
+static enum subsection kpatch_subsection_type(struct section *sec)
+{
+	if (!strncmp(sec->name, ".text.unlikely.", 15))
+		return SUBSECTION_UNLIKELY;
+
+	if (!strncmp(sec->name, ".text.hot.", 10))
+		return SUBSECTION_HOT;
+
+	return SUBSECTION_NORMAL;
+}
+
+static int kpatch_subsection_changed(struct section *sec1, struct section *sec2)
+{
+	return kpatch_subsection_type(sec1) != kpatch_subsection_type(sec2);
 }
 
 static void kpatch_compare_correlated_symbol(struct symbol *sym)
@@ -631,10 +696,12 @@ static void kpatch_compare_correlated_symbol(struct symbol *sym)
 	/*
 	 * If two symbols are correlated but their sections are not, then the
 	 * symbol has changed sections.  This is only allowed if the symbol is
-	 * moving out of an ignored section.
+	 * moving out of an ignored section, or moving between normal/hot/unlikely
+	 * subsections.
 	 */
 	if (sym1->sec && sym2->sec && sym1->sec->twin != sym2->sec) {
-		if (sym2->sec->twin && sym2->sec->twin->ignore)
+		if ((sym2->sec->twin && sym2->sec->twin->ignore) ||
+		    kpatch_subsection_changed(sym1->sec, sym2->sec))
 			sym->status = CHANGED;
 		else
 			DIFF_FATAL("symbol changed sections: %s", sym1->name);
@@ -1297,7 +1364,7 @@ static void kpatch_check_func_profiling_calls(struct kpatch_elf *kelf)
 	int errs = 0;
 
 	list_for_each_entry(sym, &kelf->symbols, list) {
-		if (sym->type != STT_FUNC || sym->status != CHANGED)
+		if (sym->type != STT_FUNC || sym->status != CHANGED || sym->parent)
 			continue;
 		if (!sym->twin->has_func_profiling) {
 			log_normal("function %s has no fentry/mcount call, unable to patch\n",
@@ -1577,7 +1644,7 @@ static void kpatch_print_changes(struct kpatch_elf *kelf)
 	struct symbol *sym;
 
 	list_for_each_entry(sym, &kelf->symbols, list) {
-		if (!sym->include || !sym->sec || sym->type != STT_FUNC)
+		if (!sym->include || !sym->sec || sym->type != STT_FUNC || sym->parent)
 			continue;
 		if (sym->status == NEW)
 			log_normal("new function: %s\n", sym->name);
@@ -2230,6 +2297,10 @@ static void kpatch_mark_ignored_functions_same(struct kpatch_elf *kelf)
 			log_normal("NOTICE: no change detected in function %s, unnecessary KPATCH_IGNORE_FUNCTION()?\n", rela->sym->name);
 		rela->sym->status = SAME;
 		rela->sym->sec->status = SAME;
+
+		if (rela->sym->child)
+			rela->sym->child->status = SAME;
+
 		if (rela->sym->sec->secsym)
 			rela->sym->sec->secsym->status = SAME;
 		if (rela->sym->sec->rela)
@@ -2423,7 +2494,7 @@ static void kpatch_create_patches_sections(struct kpatch_elf *kelf,
 	/* count patched functions */
 	nr = 0;
 	list_for_each_entry(sym, &kelf->symbols, list)
-		if (sym->type == STT_FUNC && sym->status == CHANGED)
+		if (sym->type == STT_FUNC && sym->status == CHANGED && !sym->parent)
 			nr++;
 
 	/* create text/rela section pair */
@@ -2442,7 +2513,7 @@ static void kpatch_create_patches_sections(struct kpatch_elf *kelf,
 	/* populate sections */
 	index = 0;
 	list_for_each_entry(sym, &kelf->symbols, list) {
-		if (sym->type == STT_FUNC && sym->status == CHANGED) {
+		if (sym->type == STT_FUNC && sym->status == CHANGED && !sym->parent) {
 			if (sym->bind == STB_LOCAL) {
 				if (lookup_local_symbol(table, sym->name,
 				                        &result))
@@ -2553,6 +2624,7 @@ static int function_ptr_rela(const struct rela *rela)
 	const struct rela *rela_toc = toc_rela(rela);
 
 	return (rela_toc && rela_toc->sym->type == STT_FUNC &&
+		!rela_toc->sym->parent &&
 		/* skip switch table on PowerPC */
 		rela_toc->addend == (int)rela_toc->sym->sym.st_value &&
 		(rela->type == R_X86_64_32S ||
@@ -3163,6 +3235,9 @@ int main(int argc, char *argv[])
 
 	kpatch_bundle_symbols(kelf_base);
 	kpatch_bundle_symbols(kelf_patched);
+
+	kpatch_detect_child_functions(kelf_base);
+	kpatch_detect_child_functions(kelf_patched);
 
 	kpatch_compare_elf_headers(kelf_base->elf, kelf_patched->elf);
 	kpatch_check_program_headers(kelf_base->elf);
