@@ -172,7 +172,7 @@ apt-get install make gcc libelf-dev
 Install the dependencies for the "kpatch-build" command:
 
 ```bash
-apt-get install dpkg-dev devscripts
+apt-get install dpkg-dev devscripts elfutils
 apt-get build-dep linux
 
 # required on ppc64le

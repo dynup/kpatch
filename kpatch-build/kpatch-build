@@ -623,7 +623,7 @@ else
 			sublevel="SUBLEVEL ="
 		fi
 
-		pkgname="$(dpkg-query -W -f='${Source}' "linux-image-$ARCHVERSION")"
+		pkgname="$(dpkg-query -W -f='${Source}' "linux-image-$ARCHVERSION" | sed s/-signed//)"
 		pkgver="$(dpkg-query -W -f='${Version}' "linux-image-$ARCHVERSION")"
 		dscname="${pkgname}_${pkgver}.dsc"
 
