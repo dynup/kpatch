@@ -332,7 +332,7 @@ static void kpatch_find_func_profiling_calls(struct kpatch_elf *kelf)
 #else
 		rela = list_first_entry(&sym->sec->rela->relas, struct rela,
 					list);
-		if (rela->type != R_X86_64_NONE ||
+		if ((rela->type != R_X86_64_NONE && rela->type != R_X86_64_PC32) ||
 		    strcmp(rela->sym->name, "__fentry__"))
 			continue;
 
