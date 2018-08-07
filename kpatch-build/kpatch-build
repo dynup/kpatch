@@ -580,7 +580,7 @@ else
 			if [[ "$DISTRO" = fedora ]]; then
 				wget -P "$TEMPDIR" "http://kojipkgs.fedoraproject.org/packages/kernel/$KVER/$KREL/src/kernel-$KVER-$KREL.src.rpm" 2>&1 | logger || die
 			else
-				rpm -q --quiet yum-utils || die "yum-utils not installed"
+				which yumdownloader &>/dev/null || die "yumdownloader (yum-utils or dnf-utils) not installed"
 				yumdownloader --source --destdir "$TEMPDIR" "kernel$ALT-$KVER-$KREL" 2>&1 | logger || die
 			fi
 			SRCRPM="$TEMPDIR/kernel$ALT-$KVER-$KREL.src.rpm"
@@ -592,7 +592,7 @@ else
 		rpmbuild -D "_topdir $RPMTOPDIR" -bp "--target=$(uname -m)" "$RPMTOPDIR"/SPECS/kernel$ALT.spec 2>&1 | logger ||
 			die "rpmbuild -bp failed.  you may need to run 'yum-builddep kernel' first."
 
-		mv "$RPMTOPDIR"/BUILD/kernel-*/linux-"${ARCHVERSION%.*}"*"${ARCHVERSION##*.}" "$SRCDIR" 2>&1 | logger || die
+		mv "$RPMTOPDIR"/BUILD/kernel-*/linux-* "$SRCDIR" 2>&1 | logger || die
 		rm -rf "$RPMTOPDIR"
 		rm -rf "$SRCDIR/.git"
 
