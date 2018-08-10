@@ -51,7 +51,7 @@ unset CCACHE_HASHDIR
 KPATCHBUILD="$ROOTDIR"/kpatch-build/kpatch-build
 ERROR=0
 LOG=test.log
-rm -f $LOG
+rm -f *.log
 
 PATCHDIR="${PATCHDIR:-$PWD}"
 declare -a PATCH_LIST
@@ -152,7 +152,10 @@ build_module() {
 	log "build: $prefix"
 
 	if ! $KPATCHBUILD -n $modname $file >> $LOG 2>&1; then
-		[[ $shouldfail -eq 0 ]] && error "$prefix: build failed"
+		if [[ $shouldfail -eq 0 ]]; then
+			error "$prefix: build failed"
+			cp $HOME/.kpatch/build.log $prefix.log
+		fi
 	else
 		[[ $shouldfail -eq 1 ]] && error "$prefix: build succeeded when it should have failed"
 	fi
@@ -239,6 +242,7 @@ build_combined_module() {
 
 	if ! $KPATCHBUILD -n test-COMBINED "${COMBINED_LIST[@]}" >> $LOG 2>&1; then
 		error "combined build failed"
+		cp $HOME/.kpatch/build.log combined.log
 	fi
 }
 
