@@ -49,6 +49,7 @@ LOGFILE="$CACHEDIR/build.log"
 DEBUG=0
 SKIPCLEANUP=0
 SKIPGCCCHECK=0
+SAVEARCHIVE=0
 ARCH_KCFLAGS=""
 declare -a PATCH_LIST
 APPLIED_PATCHES=0
@@ -392,12 +393,14 @@ usage() {
 	echo "		-d, --debug        Enable 'xtrace' and keep scratch files" >&2
 	echo "		                   in <CACHEDIR>/tmp" >&2
 	echo "		                   (can be specified multiple times)" >&2
+	echo "		--save-cache       save archive of kpatch cache" >&2
+	echo "		--restore-cache    restore kpatch cache archive before building" >&2
 	echo "		--skip-cleanup     Skip post-build cleanup" >&2
 	echo "		--skip-gcc-check   Skip gcc version matching check" >&2
 	echo "		                   (not recommended)" >&2
 }
 
-options="$(getopt -o ha:r:s:c:v:j:t:n:o:d -l "help,archversion:,sourcerpm:,sourcedir:,config:,vmlinux:,jobs:,target:,name:,output:,debug,skip-gcc-check,skip-cleanup" -- "$@")" || die "getopt failed"
+options="$(getopt -o ha:r:s:c:v:j:t:n:o:d -l "help,archversion:,sourcerpm:,sourcedir:,config:,vmlinux:,jobs:,target:,name:,output:,debug,save-cache,restore-cache:,skip-gcc-check,skip-cleanup" -- "$@")" || die "getopt failed"
 
 eval set -- "$options"
 
@@ -455,6 +458,14 @@ while [[ $# -gt 0 ]]; do
 			echo "DEBUG mode enabled"
 		fi
 		;;
+	--save-cache)
+		SAVEARCHIVE=1
+		;;
+	--restore-cache)
+		[[ -z "$2" ]] && die "--restore-cache requires archive filename"
+		RESTOREARCHIVE="$2"
+		shift
+		;;
 	--skip-cleanup)
 		echo "Skipping cleanup"
 		SKIPCLEANUP=1
@@ -472,10 +483,23 @@ while [[ $# -gt 0 ]]; do
 	shift
 done
 
-if [[ ${#PATCH_LIST[@]} -eq 0 ]]; then
-	warn "no patch file(s) specified"
-	usage
-	exit 1
+if [[ $SAVEARCHIVE -ne 0 ]] ; then
+	if [[ -n "$RESTOREARCHIVE" ]] ; then
+		warn "--save-cache is incompatible with --restore-cache"
+		exit 1
+	fi
+
+	if [[ ${#PATCH_LIST[@]} -ne 0 ]]; then
+		warn "--save-cache is incompatible with input .patch files"
+		exit 1
+	fi
+else
+	# patch(es) required unless building a kpatch cache for archiving
+	if [[ ${#PATCH_LIST[@]} -eq 0 ]]; then
+		warn "no patch file(s) specified"
+		usage
+		exit 1
+	fi
 fi
 
 if [[ $DEBUG -eq 1 ]] || [[ $DEBUG -ge 3 ]]; then
@@ -564,6 +588,10 @@ if [[ -n "$USERSRCDIR" ]]; then
 
 	# save original vmlinux before it gets overwritten by sourcedir build
 	[[ "$VMLINUX" -ef "$SRCDIR"/vmlinux ]] && cp -f "$VMLINUX" "$TEMPDIR/vmlinux" && VMLINUX="$TEMPDIR/vmlinux"
+
+elif [[ -n "$RESTOREARCHIVE" ]]; then
+	echo "Restoring kpatch archive $RESTOREARCHIVE ..."
+	tar -C "$CACHEDIR" -zxf "$RESTOREARCHIVE"
 
 elif [[ -e "$SRCDIR"/.config ]] && [[ -e "$VERSIONFILE" ]] && [[ "$(cat "$VERSIONFILE")" = "$ARCHVERSION" ]]; then
 	echo "Using cache at $SRCDIR"
@@ -690,10 +718,12 @@ fi
 # unsupported kernel option checking: CONFIG_DEBUG_INFO_SPLIT
 grep -q "CONFIG_DEBUG_INFO_SPLIT=y" "$CONFIGFILE" && die "kernel option 'CONFIG_DEBUG_INFO_SPLIT' not supported"
 
-echo "Testing patch file(s)"
 cd "$SRCDIR" || die
-apply_patches
-remove_patches
+if [[ $SAVEARCHIVE -eq 0 ]]; then
+	echo "Testing patch file(s)"
+	apply_patches
+	remove_patches
+fi
 
 cp -LR "$DATADIR/patch" "$TEMPDIR" || die
 
@@ -710,8 +740,21 @@ if [[ $DEBUG -ge 4 ]]; then
 	export KPATCH_GCC_DEBUG=1
 fi
 
-echo "Building original kernel"
-./scripts/setlocalversion --save-scmversion || die
+if [[ -z "$RESTOREARCHIVE" ]]; then
+	echo "Building original kernel"
+	./scripts/setlocalversion --save-scmversion || die
+	unset KPATCH_GCC_TEMPDIR
+	# $TARGETS used as list, no quotes.
+	# shellcheck disable=SC2086
+	CROSS_COMPILE="$TOOLSDIR/kpatch-gcc " make "-j$CPUS" $TARGETS 2>&1 | logger || die
+fi
+
+if [[ $SAVEARCHIVE -ne 0 ]]; then
+	echo "Original kernel build in $CACHEDIR is complete, creating archive ..."
+	tar -C "$CACHEDIR" -zcf "${BASE}/kpatch-archive-${KVER}-${KREL}.tar.gz" .
+	echo "kpatch-archive-${KVER}-${KREL}.tar.gz saved."
+	exit 0
+fi
 unset KPATCH_GCC_TEMPDIR
 # $TARGETS used as list, no quotes.
 # shellcheck disable=SC2086
