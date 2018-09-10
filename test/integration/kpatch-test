@@ -28,8 +28,6 @@
 #
 # - foo.patch: patch that should build successfully
 #
-# - foo-SLOW.patch: patch that should be skipped in the quick test
-#
 # - bar-FAIL.patch: patch that should fail to build
 #
 # - foo-LOADED.test: executable which tests whether the foo.patch module is
@@ -106,7 +104,6 @@ else
 		prefix=${file%%.patch}
 		[[ -e "$prefix-FAIL.test" ]]   && TEST_LIST+=("$prefix-FAIL.test")
 		[[ -e "$prefix-LOADED.test" ]] && TEST_LIST+=("$prefix-LOADED.test")
-		[[ -e "$prefix-SLOW.test" ]]   && TEST_LIST+=("$prefix-SLOW.test")
 	done
 fi
 
@@ -230,7 +227,6 @@ build_combined_module() {
 	declare -a COMBINED_LIST
 	for file in "${PATCH_LIST[@]}"; do
 		[[ $file =~ -FAIL ]] && log "combine: skipping $file" && continue
-		[[ $file =~ -SLOW ]] && log "combine: skipping $file" && continue
 		COMBINED_LIST+=($file)
 	done
 	if [[ ${#COMBINED_LIST[@]} -le 1 ]]; then
@@ -258,7 +254,6 @@ run_combined_test() {
 
 	for testprog in "${TEST_LIST[@]}"; do
 		[[ $testprog != *-LOADED.test ]] && continue
-		[[ $testprog =~ -SLOW ]] && continue
 		if $testprog >> $LOG 2>&1; then
 			error "combined: $testprog succeeded before kpatch load"
 			return
@@ -272,7 +267,6 @@ run_combined_test() {
 
 	for testprog in "${TEST_LIST[@]}"; do
 		[[ $testprog != *-LOADED.test ]] && continue
-		[[ $testprog =~ -SLOW ]] && continue
 		if ! $testprog >> $LOG 2>&1; then
 			error "combined: $testprog failed after kpatch load"
 		fi
@@ -285,7 +279,6 @@ run_combined_test() {
 
 	for testprog in "${TEST_LIST[@]}"; do
 		[[ $testprog != *-LOADED.test ]] && continue
-		[[ $testprog =~ -SLOW ]] && continue
 		if $testprog >> $LOG 2>&1; then
 			error "combined: $testprog succeeded after kpatch unload"
 			return
