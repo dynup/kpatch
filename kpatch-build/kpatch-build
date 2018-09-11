@@ -237,7 +237,7 @@ find_special_section_data_ppc64le() {
 		e == 1 && !/DW_AT_byte_size/ { e = 0; next }
 
 		# Now that we know the size, stop parsing for it
-		f == 1 {printf("export FIXUP_STRUCT_SIZE=%d\n", $4); a = 2}
+		f == 1 {printf("export FIXUP_STRUCT_SIZE=%d\n", $4); f = 2}
 		b == 1 {printf("export BUG_STRUCT_SIZE=%d\n", $4); b = 2}
 		e == 1 {printf("export EX_STRUCT_SIZE=%d\n", $4); e = 2}
 
