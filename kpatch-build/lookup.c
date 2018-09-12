@@ -206,7 +206,7 @@ static void symtab_read(struct lookup_table *table, char *path)
 		if (sscanf(line, "%*s %lx %lu %s %s %*s %s %s\n",
 			   &value, &size, type, bind, ndx, name) != 6 ||
 		    !strcmp(ndx, "UNDEF") ||
-		    !strcmp(bind, "SECTION"))
+		    !strcmp(type, "SECTION"))
 			continue;
 
 		table->obj_nr++;
@@ -223,7 +223,7 @@ static void symtab_read(struct lookup_table *table, char *path)
 		if (sscanf(line, "%*s %lx %lu %s %s %*s %s %s\n",
 			   &value, &size, type, bind, ndx, name) != 6 ||
 		    !strcmp(ndx, "UNDEF") ||
-		    !strcmp(bind, "SECTION"))
+		    !strcmp(type, "SECTION"))
 			continue;
 
 		table->obj_syms[i].value = value;
