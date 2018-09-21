@@ -28,8 +28,6 @@
 #
 # - foo.patch: patch that should build successfully
 #
-# - foo-SLOW.patch: patch that should be skipped in the quick test
-#
 # - bar-FAIL.patch: patch that should fail to build
 #
 # - foo-LOADED.test: executable which tests whether the foo.patch module is
@@ -51,7 +49,7 @@ unset CCACHE_HASHDIR
 KPATCHBUILD="$ROOTDIR"/kpatch-build/kpatch-build
 ERROR=0
 LOG=test.log
-rm -f $LOG
+rm -f *.log
 
 PATCHDIR="${PATCHDIR:-$PWD}"
 declare -a PATCH_LIST
@@ -63,7 +61,7 @@ usage() {
 	echo "		-h, --help	Show this help message" >&2
 	echo "		-c, --cached	Don't rebuild patch modules" >&2
 	echo "		-d, --directory	Patch directory" >&2
-	echo "		-q, --quick	Just combine all patches into one module for testing" >&2
+	echo "		-q, --quick	Test combined patch and -FAIL patches only" >&2
 }
 
 options=$(getopt -o hcd:q -l "help,cached,directory,quick" -- "$@") || exit 1
@@ -106,7 +104,6 @@ else
 		prefix=${file%%.patch}
 		[[ -e "$prefix-FAIL.test" ]]   && TEST_LIST+=("$prefix-FAIL.test")
 		[[ -e "$prefix-LOADED.test" ]] && TEST_LIST+=("$prefix-LOADED.test")
-		[[ -e "$prefix-SLOW.test" ]]   && TEST_LIST+=("$prefix-SLOW.test")
 	done
 fi
 
@@ -152,7 +149,10 @@ build_module() {
 	log "build: $prefix"
 
 	if ! $KPATCHBUILD -n $modname $file >> $LOG 2>&1; then
-		[[ $shouldfail -eq 0 ]] && error "$prefix: build failed"
+		if [[ $shouldfail -eq 0 ]]; then
+			error "$prefix: build failed"
+			cp $HOME/.kpatch/build.log $prefix.log
+		fi
 	else
 		[[ $shouldfail -eq 1 ]] && error "$prefix: build succeeded when it should have failed"
 	fi
@@ -227,7 +227,6 @@ build_combined_module() {
 	declare -a COMBINED_LIST
 	for file in "${PATCH_LIST[@]}"; do
 		[[ $file =~ -FAIL ]] && log "combine: skipping $file" && continue
-		[[ $file =~ -SLOW ]] && log "combine: skipping $file" && continue
 		COMBINED_LIST+=($file)
 	done
 	if [[ ${#COMBINED_LIST[@]} -le 1 ]]; then
@@ -239,6 +238,7 @@ build_combined_module() {
 
 	if ! $KPATCHBUILD -n test-COMBINED "${COMBINED_LIST[@]}" >> $LOG 2>&1; then
 		error "combined build failed"
+		cp $HOME/.kpatch/build.log combined.log
 	fi
 }
 
@@ -290,11 +290,11 @@ run_combined_test() {
 echo "clearing printk buffer"
 sudo dmesg -C
 
-if [[ $QUICK != 1 ]]; then
-	for file in "${PATCH_LIST[@]}"; do
+for file in "${PATCH_LIST[@]}"; do
+	if [[ $QUICK != 1 || $file =~ -FAIL ]]; then
 		build_module $file
-	done
-fi
+	fi
+done
 
 build_combined_module
 
