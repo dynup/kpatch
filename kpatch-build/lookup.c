@@ -197,16 +197,24 @@ static void symtab_read(struct lookup_table *table, char *path)
 	FILE *file;
 	long unsigned int value, size;
 	unsigned int i = 0;
+	int matched;
 	char line[256], name[256], type[16], bind[16], ndx[16];
 
 	if ((file = fopen(path, "r")) == NULL)
 		ERROR("fopen");
 
 	while (fgets(line, 256, file)) {
-		if (sscanf(line, "%*s %lx %lu %s %s %*s %s %s\n",
-			   &value, &size, type, bind, ndx, name) != 6 ||
+		matched = sscanf(line, "%*s %lx %lu %s %s %*s %s %s\n",
+				 &value, &size, type, bind, ndx, name);
+
+		if (matched == 5) {
+			name[0] = '\0';
+			matched++;
+		}
+
+		if (matched != 6 ||
 		    !strcmp(ndx, "UNDEF") ||
-		    !strcmp(bind, "SECTION"))
+		    !strcmp(type, "SECTION"))
 			continue;
 
 		table->obj_nr++;
@@ -220,10 +228,17 @@ static void symtab_read(struct lookup_table *table, char *path)
 	rewind(file);
 
 	while (fgets(line, 256, file)) {
-		if (sscanf(line, "%*s %lx %lu %s %s %*s %s %s\n",
-			   &value, &size, type, bind, ndx, name) != 6 ||
+		matched = sscanf(line, "%*s %lx %lu %s %s %*s %s %s\n",
+				 &value, &size, type, bind, ndx, name);
+
+		if (matched == 5) {
+			name[0] = '\0';
+			matched++;
+		}
+
+		if (matched != 6 ||
 		    !strcmp(ndx, "UNDEF") ||
-		    !strcmp(bind, "SECTION"))
+		    !strcmp(type, "SECTION"))
 			continue;
 
 		table->obj_syms[i].value = value;
