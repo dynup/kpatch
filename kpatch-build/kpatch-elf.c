@@ -76,6 +76,11 @@ int is_debug_section(struct section *sec)
 	       !strncmp(name, ".eh_frame", 9);
 }
 
+int is_group_section(struct section *sec)
+{
+	return (sec->sh.sh_type == SHT_GROUP);
+}
+
 struct section *find_section_by_index(struct list_head *list, unsigned int index)
 {
 	struct section *sec;
@@ -695,13 +700,27 @@ void kpatch_remove_and_free_section(struct kpatch_elf *kelf, char *secname)
 
 void kpatch_reindex_elements(struct kpatch_elf *kelf)
 {
-	struct section *sec;
+	struct section *symtab, *sec;
 	struct symbol *sym;
 	unsigned int index;
 
 	index = 1; /* elf write function handles NULL section 0 */
-	list_for_each_entry(sec, &kelf->sections, list)
+	list_for_each_entry(sec, &kelf->sections, list) {
+
+		/*
+		 * Group sections will need to update their sh_info fields
+		 * with new symbol table indexes, so stash their 'identifying
+		 * entry' symbol pointer for use when rebuilding the section.
+		 */
+		if (is_group_section(sec)) {
+			sec->link_sym = find_symbol_by_index(&kelf->symbols, sec->sh.sh_info);
+			if (!sec->link_sym)
+				ERROR("could not find sh_info symbol index(%d)\n",
+				      sec->sh.sh_info);
+		}
+
 		sec->index = index++;
+	}
 
 	index = 0;
 	list_for_each_entry(sym, &kelf->symbols, list) {
@@ -711,6 +730,20 @@ void kpatch_reindex_elements(struct kpatch_elf *kelf)
 		else if (sym->sym.st_shndx != SHN_ABS &&
 			 sym->sym.st_shndx != SHN_LIVEPATCH)
 			sym->sym.st_shndx = SHN_UNDEF;
+	}
+
+	/* Rebuild group and (new) rela sections. */
+	symtab = find_section_by_name(&kelf->sections, ".symtab");
+	list_for_each_entry(sec, &kelf->sections, list) {
+		if (is_rela_section(sec)) {
+			sec->sh.sh_link = symtab->index;
+			sec->sh.sh_info = sec->base->index;
+			kpatch_rebuild_rela_section_data(sec);
+		}
+		else if (is_group_section(sec)) {
+			sec->sh.sh_link = symtab->index;
+			sec->sh.sh_info = sec->link_sym->index;
+		}
 	}
 }
 

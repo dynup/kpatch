@@ -48,6 +48,7 @@ struct section {
 	struct list_head list;
 	struct section *twin;
 	GElf_Shdr sh;
+	struct symbol *link_sym;
 	Elf_Data *data;
 	char *name;
 	unsigned int index;
@@ -116,6 +117,7 @@ char *status_str(enum status status);
 int is_rela_section(struct section *sec);
 int is_text_section(struct section *sec);
 int is_debug_section(struct section *sec);
+int is_group_section(struct section *sec);
 
 struct section *find_section_by_index(struct list_head *list, unsigned int index);
 struct section *find_section_by_name(struct list_head *list, const char *name);

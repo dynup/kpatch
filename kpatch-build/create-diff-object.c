@@ -3225,7 +3225,6 @@ int main(int argc, char *argv[])
 	struct arguments arguments;
 	int num_changed, callbacks_exist, new_globals_exist;
 	struct lookup_table *lookup;
-	struct section *sec, *symtab;
 	struct symbol *sym;
 	char *hint = NULL, *orig_obj, *patched_obj, *parent_name;
 	char *parent_symtab, *mod_symvers, *patch_name, *output_obj;
@@ -3353,18 +3352,6 @@ int main(int argc, char *argv[])
 	kpatch_strip_unneeded_syms(kelf_out, lookup);
 	kpatch_reindex_elements(kelf_out);
 
-	/*
-	 * Update rela section headers and rebuild the rela section data
-	 * buffers from the relas lists.
-	 */
-	symtab = find_section_by_name(&kelf_out->sections, ".symtab");
-	list_for_each_entry(sec, &kelf_out->sections, list) {
-		if (!is_rela_section(sec))
-			continue;
-		sec->sh.sh_link = symtab->index;
-		sec->sh.sh_info = sec->base->index;
-		kpatch_rebuild_rela_section_data(sec);
-	}
 	kpatch_check_relocations(kelf_out);
 
 	kpatch_create_shstrtab(kelf_out);

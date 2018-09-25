@@ -185,7 +185,6 @@ static struct argp argp = { options, parse_opt, args_doc, 0 };
 int main(int argc, char *argv[])
 {
 	struct kpatch_elf *kelf;
-	struct section *symtab, *sec;
 	struct section *ksymsec, *krelasec, *strsec;
 	struct arguments arguments;
 	int ksyms_nr, krelas_nr;
@@ -229,15 +228,6 @@ int main(int argc, char *argv[])
 	remove_intermediate_sections(kelf);
 
 	kpatch_reindex_elements(kelf);
-
-	symtab = find_section_by_name(&kelf->sections, ".symtab");
-	list_for_each_entry(sec, &kelf->sections, list) {
-		if (!is_rela_section(sec))
-			continue;
-		sec->sh.sh_link = symtab->index;
-		sec->sh.sh_info = sec->base->index;
-		kpatch_rebuild_rela_section_data(sec);
-	}
 
 	kpatch_create_shstrtab(kelf);
 	kpatch_create_strtab(kelf);
