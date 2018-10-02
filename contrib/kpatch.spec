@@ -1,6 +1,6 @@
 Name: kpatch
 Summary: Dynamic kernel patching
-Version: 0.6.1
+Version: 0.6.2
 License: GPLv2
 Group: System Environment/Kernel
 URL: http://github.com/dynup/kpatch
@@ -93,6 +93,20 @@ rm -rf %{buildroot}
 %{_mandir}/man1/kpatch-build.1*
 
 %changelog
+* Tue Oct 2 2018 Joe Lawrence <joe.lawrence@redhat.com> - 0.6.2
+- ppc64le: relax .text section addralign value check
+- gcc8: unit-tests
+- gcc8: support parent/child symbol relations
+- gcc8: handle functions changing subsection
+- gcc8: consider ".text.hot" sections bundleable
+- kpatch-build: bugfix for less aggressive clean build-cache
+- ubuntu: remove "-signed" substring from the kernel source package name
+- ubuntu: explicitly note elfutils dependency
+- upstream 4.18: unit-tests
+- upstream 4.18: KCFLAGS -mcount-record support support
+- RHEL-8: don't care who provides yumdownloader
+- RHEL-8: account for quirky SRPM / release name conventions
+
 * Tue May 29 2018 Joe Lawrence <joe.lawrence@redhat.com> - 0.6.1
 - Increase the transition timeout, helpful for large CPU count systems
 - Miscellaneous unit testing, ppc64, etc. fixes
