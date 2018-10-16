@@ -3272,14 +3272,7 @@ int main(int argc, char *argv[])
 		return EXIT_STATUS_NO_CHANGE;
 	}
 
-	/* create symbol lookup table */
 	base_locals = kpatch_elf_locals(kelf_base);
-	lookup = lookup_open(parent_symtab, mod_symvers, hint, base_locals);
-	for (sym_comp = base_locals; sym_comp->name; sym_comp++) {
-		free(sym_comp->name);
-	}
-	free(base_locals);
-	free(hint);
 
 	kpatch_mark_grouped_sections(kelf_patched);
 	kpatch_replace_sections_syms(kelf_base);
@@ -3335,6 +3328,14 @@ int main(int argc, char *argv[])
 	 * kpatch_patched.
 	 */
 	kpatch_elf_teardown(kelf_patched);
+
+	/* create symbol lookup table */
+	lookup = lookup_open(parent_symtab, mod_symvers, hint, base_locals);
+	for (sym_comp = base_locals; sym_comp->name; sym_comp++) {
+		free(sym_comp->name);
+	}
+	free(base_locals);
+	free(hint);
 
 	/* create strings, patches, and dynrelas sections */
 	kpatch_create_strings_elements(kelf_out);
