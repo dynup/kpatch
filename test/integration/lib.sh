@@ -92,3 +92,40 @@ kpatch_dependencies()
 
 	eval "kpatch_${ID}_dependencies" || { echo "Unsupported distro: ${ID}"; exit 1; }
 }
+
+kpatch_separate_partition_cache()
+{
+	local partition=${1}
+	local mountpoint=${2}
+	local reformat=${3}
+	local owner=${USER}
+
+	if [[ "${reformat}" == "y" ]]; then
+		sudo mkfs.xfs -f "${partition}"
+	fi
+
+	sudo mkdir -p "${mountpoint}"
+	sudo mount "${partition}" "${mountpoint}"
+	sudo chown "${owner}":"${owner}" "${mountpoint}"
+
+	rm -rf "${mountpoint}/.ccache"
+	rm -rf "${mountpoint}/.kpatch"
+	mkdir "${mountpoint}/.ccache"
+	mkdir "${mountpoint}/.kpatch"
+
+	rm -rf "${HOME}/.ccache"
+	rm -rf "${HOME}/.kpatch"
+
+	ln -sv "${mountpoint}/.ccache" "${HOME}/.ccache"
+	ln -sv "${mountpoint}/.kpatch" "${HOME}/.kpatch"
+}
+
+kpatch_separate_disk_cache()
+{
+	local device=${1}
+	local mountpoint=${2}
+	local partition="${device}1"
+
+	echo -e "o\\nn\\np\\n1\\n\\n\\nw\\n" | sudo fdisk "${device}"
+	kpatch_separate_partition_cache "${partition}" "${mountpoint}" y
+}
