@@ -250,6 +250,7 @@ static int is_special_static(struct symbol *sym)
 		"__warned.",
 		"descriptor.",
 		"__func__.",
+		"__FUNCTION__.",
 		"_rs.",
 		"CSWTCH.",
 		NULL,
