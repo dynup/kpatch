@@ -129,3 +129,78 @@ kpatch_separate_disk_cache()
 	echo -e "o\\nn\\np\\n1\\n\\n\\nw\\n" | sudo fdisk "${device}"
 	kpatch_separate_partition_cache "${partition}" "${mountpoint}" y
 }
+
+kpatch_install_vagrant_centos()
+{
+	local image_path=${1}
+
+	sudo yum group install -y "Development Tools"
+	sudo yum -y install qemu-kvm libvirt virt-install bridge-utils libvirt-devel libxslt-devel libxml2-devel libvirt-devel libguestfs-tools-c libvirt-client
+
+	echo "net.ipv4.ip_forward = 1" | sudo tee /etc/sysctl.d/99-ipforward.conf
+	sudo sysctl -p /etc/sysctl.d/99-ipforward.conf
+
+	sudo systemctl enable libvirtd
+	sudo systemctl start libvirtd || exit 1
+
+	if [[ -n "${image_path}" ]]; then
+		mkdir -p "${image_path}/libvirt/images"
+		virsh pool-define-as --target "${image_path}/libvirt/images" default dir || exit 1
+		virsh pool-start default || exit 1
+	fi
+
+	sudo yum install -y https://releases.hashicorp.com/vagrant/2.1.2/vagrant_2.1.2_x86_64.rpm || exit 1
+
+	vagrant plugin install vagrant-libvirt
+}
+
+kpatch_install_vagrant_rhel()
+{
+	local image_path=${1}
+
+	kpatch_install_vagrant_centos "${image_path}"
+
+	sudo systemctl enable nfs
+	sudo systemctl start nfs || exit 1
+
+}
+
+kpatch_install_vagrant_fedora()
+{
+	local image_path=${1}
+
+	echo "net.ipv4.ip_forward = 1" | sudo tee /etc/sysctl.d/99-ipforward.conf
+	sudo sysctl -p /etc/sysctl.d/99-ipforward.conf
+
+	sudo dnf install -y libvirt virt-install libvirt-client nfs-utils vagrant vagrant-libvirt
+
+	echo "[nfsd]" | sudo tee -a /etc/nfs.conf
+	echo "udp=y" | sudo tee -a /etc/nfs.conf
+	echo "vers3=y" | sudo tee -a /etc/nfs.conf
+	sudo systemctl restart nfs
+
+	sudo systemctl enable libvirtd
+	sudo systemctl start libvirtd || exit 1
+
+	if [[ -n "${image_path}" ]]; then
+		mkdir -p "${image_path}/libvirt/images"
+		virsh pool-define-as --target "${image_path}/libvirt/images" default dir || exit 1
+		virsh pool-start default || exit 1
+	fi
+}
+
+kpatch_install_vagrant()
+{
+	local image_path=${1}
+
+	# shellcheck disable=SC1091
+	source /etc/os-release
+
+	eval "kpatch_install_vagrant_${ID} ${image_path}" || { echo "Unsupported distro: ${ID}"; exit 1; }
+}
+
+kpatch_check_install_vagrant()
+{
+	local image_path=${1}
+	[ "$(which vagrant)" == "" ] && kpatch_install_vagrant "${image_path}"
+}
