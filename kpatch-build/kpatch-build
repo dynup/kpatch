@@ -580,7 +580,7 @@ else
 			if [[ "$DISTRO" = fedora ]]; then
 				wget -P "$TEMPDIR" "http://kojipkgs.fedoraproject.org/packages/kernel/$KVER/$KREL/src/kernel-$KVER-$KREL.src.rpm" 2>&1 | logger || die
 			else
-				which yumdownloader &>/dev/null || die "yumdownloader (yum-utils or dnf-utils) not installed"
+				command -v yumdownloader &>/dev/null || die "yumdownloader (yum-utils or dnf-utils) not installed"
 				yumdownloader --source --destdir "$TEMPDIR" "kernel$ALT-$KVER-$KREL" 2>&1 | logger || die
 			fi
 			SRCRPM="$TEMPDIR/kernel$ALT-$KVER-$KREL.src.rpm"
