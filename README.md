@@ -648,9 +648,27 @@ sys_nanosleep(), etc?**
 
 **Q. Can you patch out-of-tree modules?**
 
-- Yes, though it's currently a bit of a manual process.  See this
-  [message](https://www.redhat.com/archives/kpatch/2015-June/msg00004.html) on
-  the kpatch mailing list for more information.
+Yes! There's a few requirements, and the feature is still in its infancy.
+
+1. You need to use the `--out-of-tree` flag to specify the version of the
+module that's currently running on the machine.
+2. `--sourcedir` has to be passed with a directory containing the same
+version of code as the running module, all set up and ready to build with a
+`make` command. For example, some modules need `autogen.sh` and
+`./configure` to have been run with the appropriate flags to match the
+currently-running module.
+3. If the `Module.symvers` file for the out-of-tree module doesn't appear
+in the root of the provided source directory, a symlink needs to be created
+in that directory that points to its actual location.
+4. Usually you'll need to pass the `-t` flag as well, to specify the proper
+`make` target names.
+5. This has only been tested for a single out-of-tree module per patch, and
+not for out-of-tree modules with dependencies on other out-of-tree modules
+built separately.
+
+***Sample invocation***
+
+`kpatch-build -s ~/test/ -t default -e /lib/modules/$(uname -r)/extra/test.ko test.patch`
 
 
 Get involved
