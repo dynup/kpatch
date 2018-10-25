@@ -473,11 +473,10 @@ Limitations
   supported.  kpatch-build will return an error if the patch attempts
   to do so.
 
-- Patches which modify statically allocated data are not supported.
-  kpatch-build will detect that and return an error.  (In the future
-  we will add a facility to support it.  It will probably require the
-  user to write code which runs at patch module loading time which manually
-  updates the data.)
+- Patches which modify statically allocated data are not directly supported.
+  kpatch-build will detect that and return an error.  This limitation can be
+  overcome by using callbacks or shadow variables, as described in the
+  [Patch Author Guide](doc/patch-author-guide.md).
 
 - Patches which change the way a function interacts with dynamically
   allocated data might be safe, or might not.  It isn't possible for
