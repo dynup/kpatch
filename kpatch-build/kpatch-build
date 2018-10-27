@@ -687,8 +687,10 @@ else
 	CONFIG_UNWINDER_ORC=0
 fi
 
-# unsupported kernel option checking: CONFIG_DEBUG_INFO_SPLIT
+# unsupported kernel option checking
 grep -q "CONFIG_DEBUG_INFO_SPLIT=y" "$CONFIGFILE" && die "kernel option 'CONFIG_DEBUG_INFO_SPLIT' not supported"
+grep -q "CONFIG_GCC_PLUGIN_LATENT_ENTROPY=y" "$CONFIGFILE" && die "kernel option 'CONFIG_GCC_PLUGIN_LATENT_ENTROPY' not supported"
+grep -q "CONFIG_GCC_PLUGIN_RANDSTRUCT=y" "$CONFIGFILE" && die "kernel option 'CONFIG_GCC_PLUGIN_RANDSTRUCT' not supported"
 
 echo "Testing patch file(s)"
 cd "$SRCDIR" || die
