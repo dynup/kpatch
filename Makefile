@@ -14,6 +14,7 @@ CLEAN_DIRS  += clean-$(UNITTEST_DIR)
 .PHONY: $(SUBDIRS) $(BUILD_DIRS) $(INSTALL_DIRS) $(CLEAN_DIRS)
 .PHONY: integration integration-slow integration-quick
 .PHONY: vagrant-integration-slow vagrant-integration-quick vagrant-integration
+.PHONY: vagrant-install
 
 
 all: $(BUILD_DIRS)
@@ -42,6 +43,15 @@ integration-slow: $(INTEGRATION_DIR)/Makefile build-kpatch-build build-kpatch bu
 
 integration-quick: $(INTEGRATION_DIR)/Makefile build-kpatch-build build-kpatch build-kmod
 	$(MAKE) -C $(INTEGRATION_DIR) quick
+
+vagrant-install: $(INTEGRATION_DIR)/lib.sh
+ifneq ($(shell id -u), 0)
+	@echo "WARNING: This target is intended for use on freshly-installed machines/vms only." && \
+	echo "Do not proceed unless you read $(INTEGRATION_DIR)/lib.sh and realise what this target does." && \
+	echo "Press ctrl-c to abort, return to proceed." && \
+	read
+endif
+	source $(INTEGRATION_DIR)/lib.sh && kpatch_check_install_vagrant
 
 vagrant-integration: vagrant-integration-quick
 

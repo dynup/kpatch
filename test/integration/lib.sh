@@ -203,6 +203,7 @@ kpatch_check_install_vagrant()
 {
 	local image_path=${1}
 	[ "$(which vagrant)" == "" ] && kpatch_install_vagrant "${image_path}"
+	return 0
 }
 
 kpatch_write_vagrantfile_template()
