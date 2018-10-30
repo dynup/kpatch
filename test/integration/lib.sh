@@ -204,3 +204,47 @@ kpatch_check_install_vagrant()
 	local image_path=${1}
 	[ "$(which vagrant)" == "" ] && kpatch_install_vagrant "${image_path}"
 }
+
+kpatch_write_vagrantfile_template()
+{
+	local target_distro=${1}
+
+	local box_prefix="kpatch"
+	if [ "${target_distro}" == "centos7" ]; then
+		box_prefix="generic"
+	fi
+
+	cat >Vagrantfile <<EOF
+Vagrant.configure("2") do |config|
+	config.vm.provider :libvirt do |libvirt|
+		libvirt.storage :file, :size => '40G'
+		libvirt.cpus = $(getconf _NPROCESSORS_ONLN)
+		libvirt.memory = $(awk '/MemTotal/ {printf("%d\n", ($2*0.8)/1024)}' /proc/meminfo)
+		libvirt.graphics_type = "none"
+		libvirt.disk_bus = 'virtio'
+		libvirt.disk_device = 'vda'
+	end
+	config.vm.box = "${box_prefix}/${target_distro}"
+	config.vm.synced_folder ".", "/vagrant", type: "nfs"
+EOF
+}
+
+kpatch_write_vagrantfile_centos_provision()
+{
+	cat >>Vagrantfile <<EOF
+	config.vm.provision "shell", inline: "yum install -y git"
+EOF
+}
+
+kpatch_write_vagrantfile()
+{
+	local target_distro=${1}
+
+	kpatch_write_vagrantfile_template "${target_distro}"
+
+	if echo "${target_distro}" | grep -qE "^centos"; then
+		kpatch_write_vagrantfile_centos_provision
+	fi
+
+	echo 'end' >>Vagrantfile
+}
