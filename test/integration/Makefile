@@ -18,6 +18,14 @@ quick: clean
 cached:
 	./kpatch-test -d $(PATCH_DIR) --cached $(PATCHES)
 
+vagrant: vagrant_quick
+
+vagrant-quick:
+	./test-vagrant
+
+vagrant-slow:
+	./test-vagrant --slow
+
 clean:
 	rm -f *.ko *.log COMBINED.patch
 

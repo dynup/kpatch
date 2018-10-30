@@ -1,0 +1,52 @@
+#!/bin/bash
+
+KPATCH_SLOW=0
+LOGDIR="/vagrant/logs"
+
+usage()
+{
+  echo "usage: $(basename "${0}") [options]" >&2
+  echo "-h, --help This message" >&2
+  echo "-s, --slow Run all of the tests" >&2
+}
+
+options="$(getopt -o s -l "slow" -- "$@")" || "getopt failed"
+
+eval set -- "${options}"
+
+while [[ $# -gt 0 ]]; do
+  case "$1" in
+    -s|--slow)
+      KPATCH_SLOW=1
+      ;;
+    -h|--help)
+      usage
+      exit 0
+      ;;
+  esac
+  shift
+done
+
+git clone https://github.com/dynup/kpatch.git || exit 1
+
+cd kpatch || exit 1
+
+# shellcheck disable=SC1091
+source test/integration/lib.sh
+
+kpatch_dependencies
+kpatch_separate_disk_cache /dev/vdb /mnt/build
+kpatch_set_ccache_max_size 10G
+
+if [ ${KPATCH_SLOW} -eq 1 ]; then
+  make integration-slow 2>&1
+else
+  make integration-quick 2>&1
+fi
+
+rc=${PIPESTATUS[0]}
+rm -rf "${LOGDIR}"
+mkdir -p "${LOGDIR}"
+cp ./test/integration/*.log "${LOGDIR}"
+
+exit "${rc}"

@@ -248,3 +248,53 @@ kpatch_write_vagrantfile()
 
 	echo 'end' >>Vagrantfile
 }
+
+kpatch_integration_tests_vagrant_distro()
+{
+	local target_distro=${1}
+	local test_script=${2}
+	local slowtest=${3}
+
+	local testdir
+	local workdir
+	local logdir
+
+	testdir="$(pwd)"
+	workdir="${target_distro}.vagrant"
+	rm -rf "${workdir}"
+	mkdir -p "${workdir}"
+	cd "${workdir}" || exit 1
+
+	kpatch_write_vagrantfile "${target_distro}"
+
+	vagrant up || { vagrant destroy -f; exit 1; }
+
+	local test_cmd="bash /vagrant/runtest.sh"
+	if [ "${slowtest}" == "1" ]; then
+		test_cmd="${test_cmd} --slow"
+	fi
+
+	cp "${test_script}" ./runtest.sh
+	vagrant ssh -c "${test_cmd}"
+	local rc=$?
+
+	if [ $rc -eq 0 ]; then
+		echo "${target_distro} PASS"
+	else
+		echo "${target_distro} FAIL"
+	fi
+
+	logdir="${testdir}/${target_distro}_log"
+	rm -rf "${logdir}"
+	mkdir -p "${logdir}"
+	cp logs/* "${logdir}"
+
+	vagrant destroy -f
+
+	cd "${testdir}" || exit 1
+	if [ $rc -eq 0 ]; then
+		rm -rf "${workdir}"
+	fi
+
+	return "${rc}"
+}
