@@ -651,7 +651,11 @@ static int kpatch_find_external_symbol(const char *objname, const char *name,
 	sym = find_symbol(name, NULL, NULL, true, true);
 	preempt_enable();
 	if (sym) {
+#ifdef CONFIG_HAVE_ARCH_PREL32_RELOCATIONS
+		*addr = (unsigned long)offset_to_ptr(&sym->value_offset);
+#else
 		*addr = sym->value;
+#endif
 		return 0;
 	}
 
