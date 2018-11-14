@@ -29,8 +29,8 @@
 # - Either uses a specified kernel source directory or downloads the kernel
 #   source package for the currently running kernel
 # - Unpacks and prepares the source package for building if necessary
-# - Builds the base kernel (vmlinux)
-# - Builds the patched kernel and monitors changed objects
+# - Builds the base kernel or module
+# - Builds the patched kernel/module and monitors changed objects
 # - Builds the patched objects with gcc flags -f[function|data]-sections
 # - Runs kpatch tools to create and link the patch kernel module
 
@@ -52,6 +52,7 @@ SKIPGCCCHECK=0
 ARCH_KCFLAGS=""
 declare -a PATCH_LIST
 APPLIED_PATCHES=0
+OOT_MODULE=
 
 warn() {
 	echo "ERROR: $1" >&2
@@ -187,7 +188,7 @@ find_core_symvers() {
 }
 
 gcc_version_from_file() {
-	readelf -p .comment "$1" | grep -o 'GCC:.*'
+	readelf -p .comment "$1" | grep -o 'GCC:.*' | head -n 1
 }
 
 gcc_version_check() {
@@ -199,7 +200,11 @@ gcc_version_check() {
 	echo 'void main(void) {}' > "$c"
 	out="$(gcc -c -pg -ffunction-sections -o "$o" "$c" 2>&1)"
 	gccver="$(gcc_version_from_file "$o")"
-	kgccver="$(gcc_version_from_file "$VMLINUX")"
+	if [[ -n "$OOT_MODULE" ]]; then
+		kgccver="$(gcc_version_from_file "$OOT_MODULE")"
+	else
+		kgccver="$(gcc_version_from_file "$VMLINUX")"
+	fi
 	rm -f "$c" "$o"
 
 	if [[ -n "$out" ]]; then
@@ -392,12 +397,14 @@ usage() {
 	echo "		-d, --debug        Enable 'xtrace' and keep scratch files" >&2
 	echo "		                   in <CACHEDIR>/tmp" >&2
 	echo "		                   (can be specified multiple times)" >&2
+	echo "		-e, --oot-module   Enable patching out-of-tree module," >&2
+	echo "		                   specify current version of module" >&2
 	echo "		--skip-cleanup     Skip post-build cleanup" >&2
 	echo "		--skip-gcc-check   Skip gcc version matching check" >&2
 	echo "		                   (not recommended)" >&2
 }
 
-options="$(getopt -o ha:r:s:c:v:j:t:n:o:d -l "help,archversion:,sourcerpm:,sourcedir:,config:,vmlinux:,jobs:,target:,name:,output:,debug,skip-gcc-check,skip-cleanup" -- "$@")" || die "getopt failed"
+options="$(getopt -o ha:r:s:c:v:j:t:n:o:de: -l "help,archversion:,sourcerpm:,sourcedir:,config:,vmlinux:,jobs:,target:,name:,output:,oot-module:,debug,skip-gcc-check,skip-cleanup" -- "$@")" || die "getopt failed"
 
 eval set -- "$options"
 
@@ -455,6 +462,11 @@ while [[ $# -gt 0 ]]; do
 			echo "DEBUG mode enabled"
 		fi
 		;;
+	-e|--oot-module)
+		[[ ! -f "$2" ]] && die "out-of-tree module '$2' not found"
+		OOT_MODULE="$(readlink -f "$2")"
+		shift
+		;;
 	--skip-cleanup)
 		echo "Skipping cleanup"
 		SKIPCLEANUP=1
@@ -483,8 +495,7 @@ if [[ $DEBUG -eq 1 ]] || [[ $DEBUG -ge 3 ]]; then
 fi
 
 if [[ -n "$ARCHVERSION" ]] && [[ -n "$VMLINUX" ]]; then
-	warn "--archversion is incompatible with --vmlinux"
-	exit 1
+	die "--archversion is incompatible with --vmlinux"
 fi
 
 if [[ -n "$SRCRPM" ]]; then
@@ -496,6 +507,11 @@ if [[ -n "$SRCRPM" ]]; then
 	ARCHVERSION="${rpmname%.src.rpm}.$(uname -m)"
 	ARCHVERSION="${ARCHVERSION#kernel-}"
 	ARCHVERSION="${ARCHVERSION#alt-}"
+fi
+
+if [[ -n "$OOT_MODULE" ]] &&  [[ -z "$USERSRCDIR" ]]; then
+	warn "--oot-module requires --sourcedir"
+	exit 1
 fi
 
 # ensure cachedir and tempdir are setup properly and cleaned
@@ -510,11 +526,15 @@ if [[ -n "$USERSRCDIR" ]]; then
 	fi
 	SRCDIR="$USERSRCDIR"
 
-	[[ -z "$VMLINUX" ]] && VMLINUX="$SRCDIR"/vmlinux
-	[[ ! -e "$VMLINUX" ]] && die "can't find vmlinux"
+	if [[ -z "$OOT_MODULE" ]]; then
+		[[ -z "$VMLINUX" ]] && VMLINUX="$SRCDIR"/vmlinux
+		[[ ! -e "$VMLINUX" ]] && die "can't find vmlinux"
 
-	# Extract the target kernel version from vmlinux in this case.
-	ARCHVERSION="$(strings "$VMLINUX" | grep -m 1 -e "^Linux version" | awk '{ print($3); }')"
+		# Extract the target kernel version from vmlinux in this case.
+		ARCHVERSION="$(strings "$VMLINUX" | grep -m 1 -e "^Linux version" | awk '{ print($3); }')"
+	else
+		ARCHVERSION="$(modinfo -F vermagic "$OOT_MODULE" | awk '{print $1}')"
+	fi
 fi
 
 [[ -z "$ARCHVERSION" ]] && ARCHVERSION="$(uname -r)"
@@ -563,7 +583,15 @@ if [[ -n "$USERSRCDIR" ]]; then
 	echo "Using source directory at $USERSRCDIR"
 
 	# save original vmlinux before it gets overwritten by sourcedir build
-	[[ "$VMLINUX" -ef "$SRCDIR"/vmlinux ]] && cp -f "$VMLINUX" "$TEMPDIR/vmlinux" && VMLINUX="$TEMPDIR/vmlinux"
+	if [[ -z "$OOT_MODULE" ]] && [[ "$VMLINUX" -ef "$SRCDIR"/vmlinux ]]; then
+		cp -f "$VMLINUX" "$TEMPDIR/vmlinux"
+		VMLINUX="$TEMPDIR/vmlinux"
+	fi
+
+	# For external modules, use the running kernel's config
+	if [[ -n "$OOT_MODULE" ]] && [[ -z "$CONFIGFILE" ]]; then
+		CONFIGFILE="/boot/config-${ARCHVERSION}"
+	fi
 
 elif [[ -e "$SRCDIR"/.config ]] && [[ -e "$VERSIONFILE" ]] && [[ "$(cat "$VERSIONFILE")" = "$ARCHVERSION" ]]; then
 	echo "Using cache at $SRCDIR"
@@ -710,18 +738,20 @@ if [[ $DEBUG -ge 4 ]]; then
 	export KPATCH_GCC_DEBUG=1
 fi
 
-echo "Building original kernel"
-./scripts/setlocalversion --save-scmversion || die
+echo "Building original source"
+[[ -n "$OOT_MODULE" ]] || ./scripts/setlocalversion --save-scmversion || die
 unset KPATCH_GCC_TEMPDIR
 # $TARGETS used as list, no quotes.
 # shellcheck disable=SC2086
 CROSS_COMPILE="$TOOLSDIR/kpatch-gcc " make "-j$CPUS" $TARGETS 2>&1 | logger || die
 
-echo "Building patched kernel"
+echo "Building patched source"
 apply_patches
 mkdir -p "$TEMPDIR/orig" "$TEMPDIR/patched"
 KPATCH_GCC_TEMPDIR="$TEMPDIR"
 export KPATCH_GCC_TEMPDIR
+KPATCH_GCC_SRCDIR="$SRCDIR"
+export KPATCH_GCC_SRCDIR
 # $TARGETS used as list, no quotes.
 # shellcheck disable=SC2086
 CROSS_COMPILE="$TOOLSDIR/kpatch-gcc " \
@@ -739,7 +769,7 @@ if [[ ! -e "$TEMPDIR/changed_objs" ]]; then
 	die "no changed objects found"
 fi
 
-grep -q vmlinux "$SRCDIR/Module.symvers" || die "truncated $SRCDIR/Module.symvers file"
+[[ -n "$OOT_MODULE" ]] || grep -q vmlinux "$SRCDIR/Module.symvers" || die "truncated $SRCDIR/Module.symvers file"
 
 # Read as words, no quotes.
 # shellcheck disable=SC2013
@@ -792,15 +822,25 @@ for i in $FILES; do
 	find_kobj "$i"
 	cd "$TEMPDIR" || die
 	if [[ -e "orig/$i" ]]; then
-		if [[ "$KOBJFILE" = vmlinux ]]; then
+		if [[ "$(basename "$KOBJFILE")" = vmlinux ]]; then
 			KOBJFILE_NAME=vmlinux
 			KOBJFILE_PATH="$VMLINUX"
 			SYMTAB="${TEMPDIR}/${KOBJFILE_NAME}.symtab"
+			SYMVERS_FILE="$SRCDIR/Module.symvers"
+		elif [[ "$(basename "$KOBJFILE")" = "$(basename "$OOT_MODULE")" ]]; then
+			KOBJFILE_NAME="$(basename --suffix=.ko "$OOT_MODULE")"
+			KOBJFILE_PATH="$OOT_MODULE"
+			SYMTAB="${TEMPDIR}/module/${KOBJFILE_NAME}.symtab"
+			SYMVERS_FILE="$TEMPDIR/Module.symvers"
+			BUILDDIR="/lib/modules/$ARCHVERSION/build/"
+			cp "$SRCDIR/Module.symvers" "$SYMVERS_FILE"
+			awk '{ print $1 "\t" $2 "\t" $3 "\t" $4}' "${BUILDDIR}/Module.symvers" >> "$SYMVERS_FILE"
 		else
 			KOBJFILE_NAME=$(basename "${KOBJFILE%.ko}")
 			KOBJFILE_NAME="${KOBJFILE_NAME/-/_}"
 			KOBJFILE_PATH="${TEMPDIR}/module/$KOBJFILE"
 			SYMTAB="${KOBJFILE_PATH}.symtab"
+			SYMVERS_FILE="$SRCDIR/Module.symvers"
 		fi
 
 		eu-readelf -s "$KOBJFILE_PATH" > "$SYMTAB"
@@ -808,7 +848,7 @@ for i in $FILES; do
 		# create-diff-object orig.o patched.o parent-name parent-symtab
 		#		     Module.symvers patch-mod-name output.o
 		"$TOOLSDIR"/create-diff-object "orig/$i" "patched/$i" "$KOBJFILE_NAME" \
-			"$SYMTAB" "$SRCDIR/Module.symvers" "${MODNAME//-/_}" \
+			"$SYMTAB" "$SYMVERS_FILE" "${MODNAME//-/_}" \
 			"output/$i" 2>&1 | logger 1
 		check_pipe_status create-diff-object
 		# create-diff-object returns 3 if no functional change is found
@@ -870,8 +910,12 @@ else
 fi
 
 cd "$TEMPDIR/patch" || die
-
-KPATCH_BUILD="$SRCDIR" KPATCH_NAME="$MODNAME" \
+if [[ -z "$OOT_MODULE" ]]; then
+	KPATCH_BUILD="$SRCDIR"
+else
+	KPATCH_BUILD="/lib/modules/$ARCHVERSION/build"
+fi
+KPATCH_BUILD="$KPATCH_BUILD" KPATCH_NAME="$MODNAME" \
 KBUILD_EXTRA_SYMBOLS="$KBUILD_EXTRA_SYMBOLS" \
 KPATCH_LDFLAGS="$KPATCH_LDFLAGS" \
 	make 2>&1 | logger || die
