@@ -1,0 +1,42 @@
+#!/bin/bash
+
+SCRIPTDIR=$(readlink -f "$(dirname "$(type -p "${0}")")")
+ROOTDIR=$(readlink -f "${SCRIPTDIR}/../..")
+SLOWTEST=0
+
+# shellcheck disable=SC1090
+source "${ROOTDIR}/test/integration/lib.sh"
+
+usage()
+{
+	echo "usage: $(basename "${0}") [options]" >&2
+	echo "-h, --help This message" >&2
+	echo "-s, --slow Run all of the tests" >&2
+}
+
+options="$(getopt -o hs -l "help,slow" -- "$@")" || "getopt failed"
+
+eval set -- "${options}"
+
+while [[ $# -gt 0 ]]; do
+	case "$1" in
+		-s|--slow)
+			SLOWTEST=1
+			;;
+		-h|--help)
+			usage
+			exit 0
+		;;
+	esac
+	shift
+done
+
+declare -a distros=("fedora27" "ubuntu1604" "centos7")
+
+ret=0
+for distro in "${distros[@]}"; do
+	kpatch_integration_tests_vagrant_distro "${distro}" "${ROOTDIR}/test/integration/vm-integration-run" "${SLOWTEST}"
+	rc=$?
+	ret=$((ret + rc))
+done
+exit ${ret}
