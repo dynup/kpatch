@@ -649,7 +649,7 @@ sys_nanosleep(), etc?**
 
 Yes! There's a few requirements, and the feature is still in its infancy.
 
-1. You need to use the `--out-of-tree` flag to specify the version of the
+1. You need to use the `--oot-module` (`-e`) flag to specify the version of the
 module that's currently running on the machine.
 2. `--sourcedir` has to be passed with a directory containing the same
 version of code as the running module, all set up and ready to build with a
