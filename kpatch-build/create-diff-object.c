@@ -2246,6 +2246,7 @@ static void kpatch_mark_ignored_sections(struct kpatch_elf *kelf)
 		 * from the section data comparison, but this is a simpler way.
 		 */
 		strsec->include = 1;
+		strsec->secsym->include = 1;
 		name = strsec->data->d_buf + rela->addend;
 		ignoresec = find_section_by_name(&kelf->sections, name);
 		if (!ignoresec)
