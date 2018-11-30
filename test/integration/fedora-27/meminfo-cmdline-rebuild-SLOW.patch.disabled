@@ -1,3 +1,5 @@
+Disabled due to https://github.com/dynup/kpatch/issues/767
+---
 Index: src/fs/proc/cmdline.c
 ===================================================================
 --- src.orig/fs/proc/cmdline.c
