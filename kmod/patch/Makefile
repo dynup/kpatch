@@ -12,13 +12,14 @@ endif
 
 obj-m += $(KPATCH_NAME).o
 ldflags-y += -T $(src)/kpatch.lds
+extra-y := kpatch.lds
 
-$(KPATCH_NAME)-objs += patch-hook.o kpatch.lds output.o
+$(KPATCH_NAME)-objs += patch-hook.o output.o
 
 all: $(KPATCH_NAME).ko
 
 $(KPATCH_NAME).ko:
-	$(KPATCH_MAKE) $(KPATCH_NAME).ko
+	$(KPATCH_MAKE)
 
 patch-hook.o: patch-hook.c kpatch-patch-hook.c livepatch-patch-hook.c
 	$(KPATCH_MAKE) patch-hook.o
