@@ -206,7 +206,7 @@ run_load_test() {
 
 run_custom_test() {
 	testprog=$1
-	prefix=$(basename ${file%%.test})
+	prefix=$(basename ${testprog%%.test})
 
 	[[ $testprog = *-LOADED.test ]] && return
 
@@ -310,8 +310,10 @@ run_combined_test
 
 if [[ $QUICK != 1 ]]; then
 	for testprog in "${TEST_LIST[@]}"; do
-		unload_all
-		run_custom_test $testprog
+		if [[ ! $testprog =~ -FAIL ]]; then
+			unload_all
+			run_custom_test $testprog
+		fi
 	done
 fi
 
