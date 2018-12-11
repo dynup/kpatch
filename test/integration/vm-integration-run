@@ -38,6 +38,11 @@ kpatch_dependencies
 kpatch_separate_disk_cache /dev/vdb /mnt/build
 kpatch_set_ccache_max_size 10G
 
+if [[ -d "${HOME}/src" && -f "${HOME}/src/version" ]]; then
+  cp "${HOME}/src/version" "${HOME}/.kpatch/"
+  mv "${HOME}/src" "${HOME}/.kpatch/"
+fi
+
 if [ ${KPATCH_SLOW} -eq 1 ]; then
   make integration-slow 2>&1
 else
