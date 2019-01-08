@@ -1,3 +1,10 @@
+Disabled:
+kpatch-build currently fails with "invalid ancestor" error. This happens
+with at least drivers/gpu/drm/i2c/adv7511.o and drivers/hwmon/htu21.o
+files. The problem is their .ko counterparts are never built for some
+reason, This looks like a kernel bug since in both cases there are files
+with same name but in different paths that have .ko module built.
+---
 diff -Nupr src.orig/fs/proc/cmdline.c src/fs/proc/cmdline.c
 --- src.orig/fs/proc/cmdline.c	2016-12-15 19:55:39.084000000 +0000
 +++ src/fs/proc/cmdline.c	2016-12-15 19:57:13.988000000 +0000
