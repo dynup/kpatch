@@ -1,3 +1,5 @@
+Disabled due to CSWTITCH issue from https://github.com/dynup/kpatch/issues/876
+---
 diff -Nupr src.orig/fs/proc/cmdline.c src/fs/proc/cmdline.c
 --- src.orig/fs/proc/cmdline.c	2017-09-22 15:27:21.698056175 -0400
 +++ src/fs/proc/cmdline.c	2017-09-22 15:27:37.842123028 -0400
