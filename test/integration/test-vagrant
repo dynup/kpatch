@@ -31,7 +31,7 @@ while [[ $# -gt 0 ]]; do
 	shift
 done
 
-declare -a distros=("fedora27" "ubuntu1604" "centos7")
+declare -a distros=("fedora27" "centos7")
 
 ret=0
 for distro in "${distros[@]}"; do
