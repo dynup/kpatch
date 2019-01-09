@@ -13,11 +13,11 @@ die() {
 
 ko_to_test() {
 	tmp=${1%.ko}-LOADED.test
-	echo ${tmp#kpatch-}
+	echo ${tmp#test-}
 }
 
 # make sure any modules added here are disjoint
-declare -a modules=(kpatch-cmdline-string.ko kpatch-meminfo-string.ko)
+declare -a modules=(test-cmdline-string.ko test-meminfo-string.ko)
 
 for mod in "${modules[@]}"; do
 	testprog=$(ko_to_test $mod)
