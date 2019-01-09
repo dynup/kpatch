@@ -1,6 +1,6 @@
 #!/bin/bash
 
-if $(nm kpatch-gcc-static-local-var-4.ko | grep -q free_ioctx); then
+if $(nm test-gcc-static-local-var-4.ko | grep -q free_ioctx); then
 	exit 1
 else
 	exit 0
