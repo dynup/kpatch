@@ -33,7 +33,8 @@ for mod in "${modules[@]}"; do
 	$SCRIPTDIR/$testprog || die "$SCRIPTDIR/$testprog failed after loading modules"
 done
 
-for mod in "${modules[@]}"; do
+for ((idx=${#modules[@]}-1 ; idx>=0 ; idx--)); do
+	mod=${modules[idx]}
 	$KPATCH unload $mod
 done
 
