@@ -320,7 +320,10 @@ fi
 
 unload_all
 
-dmesg |grep -q "Call Trace" && error "kernel error detected in printk buffer"
+if dmesg | grep -q "Call Trace"; then
+	dmesg > dmesg.log
+	error "kernel error detected in printk buffer"
+fi
 
 if [[ $ERROR -gt 0 ]]; then
 	log "$ERROR errors encountered"
