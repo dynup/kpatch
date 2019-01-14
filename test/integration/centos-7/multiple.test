@@ -4,6 +4,10 @@ SCRIPTDIR="$(readlink -f $(dirname $(type -p $0)))"
 ROOTDIR="$(readlink -f $SCRIPTDIR/../../..)"
 KPATCH="sudo $ROOTDIR/kpatch/kpatch"
 
+MODULE_PREFIX="test-"
+MODULE_POSTFIX=".ko"
+TEST_POSTFIX="-LOADED.test"
+
 set -o errexit
 
 die() {
@@ -12,12 +16,17 @@ die() {
 }
 
 ko_to_test() {
-	tmp=${1%.ko}-LOADED.test
-	echo ${tmp#test-}
+	tmp=${1%${MODULE_POSTFIX}}${TEST_POSTFIX}
+	echo ${tmp#${MODULE_PREFIX}}
 }
 
 # make sure any modules added here are disjoint
-declare -a modules=(test-cmdline-string.ko test-meminfo-string.ko)
+declare -a modules
+
+for file in "${SCRIPTDIR}"/*"${TEST_POSTFIX}"; do
+	name=$(basename ${file})
+	modules+=(${MODULE_PREFIX}${name%${TEST_POSTFIX}}${MODULE_POSTFIX})
+done
 
 for mod in "${modules[@]}"; do
 	testprog=$(ko_to_test $mod)
