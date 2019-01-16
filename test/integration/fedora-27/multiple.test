@@ -22,10 +22,20 @@ ko_to_test() {
 
 # make sure any modules added here are disjoint
 declare -a modules
+declare -a blacklist=(meminfo-cmdline-rebuild-SLOW-LOADED.test)
 
 for file in "${SCRIPTDIR}"/*"${TEST_POSTFIX}"; do
 	name=$(basename ${file})
-	modules+=(${MODULE_PREFIX}${name%${TEST_POSTFIX}}${MODULE_POSTFIX})
+	skip=0
+	for bname in "${blacklist[@]}"; do
+		if [ "${bname}" == "${name}" ]; then
+			skip=1
+			break
+		fi
+	done
+	if [ ${skip} -eq 0 ]; then
+		modules+=(${MODULE_PREFIX}${name%${TEST_POSTFIX}}${MODULE_POSTFIX})
+	fi
 done
 
 for mod in "${modules[@]}"; do
