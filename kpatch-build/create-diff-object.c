@@ -3332,7 +3332,7 @@ int main(int argc, char *argv[])
 
 	/* create symbol lookup table */
 	lookup = lookup_open(parent_symtab, mod_symvers, hint, base_locals);
-	for (sym_comp = base_locals; sym_comp->name; sym_comp++) {
+	for (sym_comp = base_locals; sym_comp && sym_comp->name; sym_comp++) {
 		free(sym_comp->name);
 	}
 	free(base_locals);
