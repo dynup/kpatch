@@ -1,6 +1,9 @@
 ensure that __cmpxchg_double_slab.isra.45 and
 __cmpxchg_double_slab.isra.45.part.46 aren't correlated.
 
+Disabled: __flush_cpu_slab() is present in vmlinux.symtab but is optimized
+out during kpatch builds
+
 diff -Nupr src.orig/mm/slub.c src/mm/slub.c
 --- src.orig/mm/slub.c	2016-12-15 19:55:38.988000000 +0000
 +++ src/mm/slub.c	2016-12-15 19:56:39.068000000 +0000

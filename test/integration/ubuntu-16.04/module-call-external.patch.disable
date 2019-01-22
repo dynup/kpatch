@@ -1,3 +1,8 @@
+Disabled:
+Original build includes "kzalloc" in af_netlink.c's symbol list, this
+does not happen during kpatch build so create-diff-object fails with
+find_local_syms.
+---
 diff -Nupr src.orig/fs/nfsd/export.c src/fs/nfsd/export.c
 --- src.orig/fs/nfsd/export.c	2016-12-15 19:55:39.012000000 +0000
 +++ src/fs/nfsd/export.c	2016-12-15 19:57:31.068000000 +0000

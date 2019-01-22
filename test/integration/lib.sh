@@ -211,9 +211,6 @@ kpatch_write_vagrantfile_template()
 	local target_distro=${1}
 
 	local box_prefix="kpatch"
-	if [ "${target_distro}" == "centos7" ]; then
-		box_prefix="generic"
-	fi
 
 	cat >Vagrantfile <<EOF
 Vagrant.configure("2") do |config|

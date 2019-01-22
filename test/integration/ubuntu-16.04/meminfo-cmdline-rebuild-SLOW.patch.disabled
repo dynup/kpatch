@@ -1,6 +1,13 @@
+Disabled:
+kpatch-build currently fails with "invalid ancestor" error. This happens
+with at least drivers/gpu/drm/i2c/adv7511.o and drivers/hwmon/htu21.o
+files. The problem is their .ko counterparts are never built for some
+reason, This looks like a kernel bug since in both cases there are files
+with same name but in different paths that have .ko module built.
+---
 diff -Nupr src.orig/fs/proc/cmdline.c src/fs/proc/cmdline.c
---- src.orig/fs/proc/cmdline.c	2017-09-22 15:27:21.698056175 -0400
-+++ src/fs/proc/cmdline.c	2017-09-22 15:27:37.842123028 -0400
+--- src.orig/fs/proc/cmdline.c	2016-12-15 19:55:39.084000000 +0000
++++ src/fs/proc/cmdline.c	2016-12-15 19:57:13.988000000 +0000
 @@ -5,7 +5,7 @@
  
  static int cmdline_proc_show(struct seq_file *m, void *v)
@@ -11,8 +18,8 @@ diff -Nupr src.orig/fs/proc/cmdline.c src/fs/proc/cmdline.c
  }
  
 diff -Nupr src.orig/fs/proc/meminfo.c src/fs/proc/meminfo.c
---- src.orig/fs/proc/meminfo.c	2017-09-22 15:27:21.699056179 -0400
-+++ src/fs/proc/meminfo.c	2017-09-22 15:27:37.843123032 -0400
+--- src.orig/fs/proc/meminfo.c	2016-12-15 19:55:39.084000000 +0000
++++ src/fs/proc/meminfo.c	2016-12-15 19:57:13.988000000 +0000
 @@ -99,7 +99,7 @@ static int meminfo_proc_show(struct seq_
  		"Committed_AS:   %8lu kB\n"
  		"VmallocTotal:   %8lu kB\n"
@@ -23,8 +30,8 @@ diff -Nupr src.orig/fs/proc/meminfo.c src/fs/proc/meminfo.c
  		"HardwareCorrupted: %5lu kB\n"
  #endif
 diff -Nupr src.orig/include/linux/kernel.h src/include/linux/kernel.h
---- src.orig/include/linux/kernel.h	2017-09-22 15:27:20.379050713 -0400
-+++ src/include/linux/kernel.h	2017-09-22 15:27:37.843123032 -0400
+--- src.orig/include/linux/kernel.h	2016-12-15 19:55:56.996000000 +0000
++++ src/include/linux/kernel.h	2016-12-15 19:57:13.992000000 +0000
 @@ -2,6 +2,7 @@
  #define _LINUX_KERNEL_H
  

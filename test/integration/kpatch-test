@@ -206,7 +206,7 @@ run_load_test() {
 
 run_custom_test() {
 	testprog=$1
-	prefix=$(basename ${file%%.test})
+	prefix=$(basename ${testprog%%.test})
 
 	[[ $testprog = *-LOADED.test ]] && return
 
@@ -310,15 +310,20 @@ run_combined_test
 
 if [[ $QUICK != 1 ]]; then
 	for testprog in "${TEST_LIST[@]}"; do
-		unload_all
-		run_custom_test $testprog
+		if [[ ! $testprog =~ -FAIL ]]; then
+			unload_all
+			run_custom_test $testprog
+		fi
 	done
 fi
 
 
 unload_all
 
-dmesg |grep -q "Call Trace" && error "kernel error detected in printk buffer"
+if dmesg | grep -q "Call Trace"; then
+	dmesg > dmesg.log
+	error "kernel error detected in printk buffer"
+fi
 
 if [[ $ERROR -gt 0 ]]; then
 	log "$ERROR errors encountered"

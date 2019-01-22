@@ -1,7 +1,8 @@
-diff -Nupr src.orig/fs/proc/array.c src/fs/proc/array.c
---- src.orig/fs/proc/array.c	2017-11-17 15:58:41.136211972 -0500
-+++ src/fs/proc/array.c	2017-11-17 15:59:36.184211972 -0500
-@@ -354,12 +354,19 @@ static inline void task_seccomp(struct s
+Index: src/fs/proc/array.c
+===================================================================
+--- src.orig/fs/proc/array.c
++++ src/fs/proc/array.c
+@@ -363,12 +363,19 @@ static inline void task_seccomp(struct s
  	seq_putc(m, '\n');
  }
  
@@ -21,9 +22,10 @@ diff -Nupr src.orig/fs/proc/array.c src/fs/proc/array.c
  }
  
  static void task_cpus_allowed(struct seq_file *m, struct task_struct *task)
-diff -Nupr src.orig/kernel/exit.c src/kernel/exit.c
---- src.orig/kernel/exit.c	2017-11-17 15:58:51.659211972 -0500
-+++ src/kernel/exit.c	2017-11-17 15:59:36.184211972 -0500
+Index: src/kernel/exit.c
+===================================================================
+--- src.orig/kernel/exit.c
++++ src/kernel/exit.c
 @@ -760,6 +760,7 @@ static void check_stack_usage(void)
  static inline void check_stack_usage(void) {}
  #endif
@@ -41,10 +43,11 @@ diff -Nupr src.orig/kernel/exit.c src/kernel/exit.c
  	/*
  	 * Flush inherited counters to the parent - before the parent
  	 * gets woken up by child-exit notifications.
-diff -Nupr src.orig/kernel/fork.c src/kernel/fork.c
---- src.orig/kernel/fork.c	2017-11-17 15:58:51.541211972 -0500
-+++ src/kernel/fork.c	2017-11-17 15:59:36.184211972 -0500
-@@ -2003,6 +2003,7 @@ struct task_struct *fork_idle(int cpu)
+Index: src/kernel/fork.c
+===================================================================
+--- src.orig/kernel/fork.c
++++ src/kernel/fork.c
+@@ -2062,6 +2062,7 @@ struct task_struct *fork_idle(int cpu)
   * It copies the process, and if successful kick-starts
   * it and waits for it to finish using the VM if required.
   */
@@ -52,17 +55,24 @@ diff -Nupr src.orig/kernel/fork.c src/kernel/fork.c
  long _do_fork(unsigned long clone_flags,
  	      unsigned long stack_start,
  	      unsigned long stack_size,
-@@ -2042,6 +2043,13 @@ long _do_fork(unsigned long clone_flags,
- 	if (!IS_ERR(p)) {
- 		struct completion vfork;
- 		struct pid *pid;
-+		int *newpid;
-+		static int ctr = 0;
+@@ -2074,6 +2075,8 @@ long _do_fork(unsigned long clone_flags,
+ 	struct task_struct *p;
+ 	int trace = 0;
+ 	long nr;
++	int *newpid;
++	static int ctr = 0;
+ 
+ 	/*
+ 	 * Determine whether and which event to report to ptracer.  When
+@@ -2100,6 +2103,11 @@ long _do_fork(unsigned long clone_flags,
+ 	if (IS_ERR(p))
+ 		return PTR_ERR(p);
+ 
++	newpid = kpatch_shadow_alloc(p, "newpid", sizeof(*newpid),
++				     GFP_KERNEL);
++	if (newpid)
++		*newpid = ctr++;
 +
-+		newpid = kpatch_shadow_alloc(p, "newpid", sizeof(*newpid),
-+					     GFP_KERNEL);
-+		if (newpid)
-+			*newpid = ctr++;
- 
- 		trace_sched_process_fork(current, p);
- 
+ 	/*
+ 	 * Do this prior waking up the new thread - the thread pointer
+ 	 * might get invalid after that point, if the thread exits quickly.
