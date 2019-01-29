@@ -1882,16 +1882,6 @@ static struct special_section special_sections[] = {
 		.name		= "__bug_table",
 		.group_size	= bug_table_group_size,
 	},
-#ifdef __x86_64__
-	{
-		.name		= ".smp_locks",
-		.group_size	= smp_locks_group_size,
-	},
-	{
-		.name		= ".parainstructions",
-		.group_size	= parainstructions_group_size,
-	},
-#endif
 	{
 		.name		= ".fixup",
 		.group_size	= fixup_group_size,
@@ -1901,6 +1891,14 @@ static struct special_section special_sections[] = {
 		.group_size	= ex_table_group_size,
 	},
 #ifdef __x86_64__
+	{
+		.name		= ".smp_locks",
+		.group_size	= smp_locks_group_size,
+	},
+	{
+		.name		= ".parainstructions",
+		.group_size	= parainstructions_group_size,
+	},
 	{
 		.name		= ".altinstructions",
 		.group_size	= altinstructions_group_size,
