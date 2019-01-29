@@ -1773,6 +1773,21 @@ static int ex_table_group_size(struct kpatch_elf *kelf, int offset)
 	return size;
 }
 
+static int jump_table_group_size(struct kpatch_elf *kelf, int offset)
+{
+	static int size = 0;
+	char *str;
+
+	if (!size) {
+		str = getenv("JUMP_STRUCT_SIZE");
+		if (!str)
+			ERROR("JUMP_STRUCT_SIZE not set");
+		size = atoi(str);
+	}
+
+	return size;
+}
+
 #ifdef __x86_64__
 static int parainstructions_group_size(struct kpatch_elf *kelf, int offset)
 {
@@ -1897,6 +1912,10 @@ static struct special_section special_sections[] = {
 		.name		= "__ex_table", /* must come after .fixup */
 		.group_size	= ex_table_group_size,
 	},
+	{
+		.name		= "__jump_table",
+		.group_size	= jump_table_group_size,
+	},
 #ifdef __x86_64__
 	{
 		.name		= ".smp_locks",
@@ -1994,6 +2013,7 @@ static void kpatch_regenerate_special_section(struct kpatch_elf *kelf,
 	struct rela *rela, *safe;
 	char *src, *dest;
 	unsigned int group_size, src_offset, dest_offset, include;
+	int jump_table = !strcmp(special->name, "__jump_table");
 
 	LIST_HEAD(newrelas);
 
@@ -2036,6 +2056,42 @@ static void kpatch_regenerate_special_section(struct kpatch_elf *kelf,
 
 		if (special->unsupported)
 			DIFF_FATAL("unsupported reference to special section %s", sec->base->name);
+
+		/*
+		 * Jump labels (aka static keys or static branches) aren't
+		 * actually supported for the time being.  Warn on all
+		 * non-tracepoint jump labels when they occur in a replacement
+		 * function.  An inert tracepoint is harmless enough, but a
+		 * broken static key can cause unexpected behavior.
+		 *
+		 * Here we hard-code knowledge about the contents of the
+		 * jump_label struct.  It has three fields: code, target, and
+		 * key.
+		 */
+		if (jump_table) {
+			struct rela *code, *key;
+			int i = 0;
+
+			list_for_each_entry(rela, &sec->relas, list) {
+				if (rela->offset >= src_offset &&
+				    rela->offset < src_offset + group_size) {
+					if (i == 0)
+						code = rela;
+					else if (i == 2)
+						key = rela;
+					i++;
+				}
+			}
+
+			if (i != 3)
+				ERROR("BUG: __jump_table has an unexpected format");
+
+			if (strncmp(key->sym->name, "__tracepoint_", 13))
+				ERROR("Found a jump label at %s()+0x%x, using key %s.  Jump labels aren't currently supported.  Use static_key_enabled() instead.",
+				      code->sym->name, code->addend, key->sym->name);
+
+			continue;
+		}
 
 		/*
 		 * Copy all relas in the group.  It's possible that the relas
