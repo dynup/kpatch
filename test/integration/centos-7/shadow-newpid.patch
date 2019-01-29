@@ -63,7 +63,7 @@ Index: src/kernel/fork.c
 +		int *newpid;
 +		static int ctr = 0;
 +
-+		newpid = klp_shadow_alloc(p, 0, sizeof(*newpid),
++		newpid = klp_shadow_get_or_alloc(p, 0, sizeof(*newpid),
 +					     GFP_KERNEL, NULL, NULL);
 +		if (newpid)
 +			*newpid = ctr++;
