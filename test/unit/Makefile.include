@@ -6,6 +6,7 @@ EXT_OUTPUT      ?= OUTPUT.o
 EXT_TEST_OUTPUT ?= test.out
 EXT_SYMTAB      ?= symtab
 EXT_SYMVERS     ?= symvers
+EXT_ENV         ?= env
 TNAME            = $(@:.$(EXT_OUTPUT)=)
 
 ifndef VERBOSE
@@ -54,7 +55,7 @@ clean:
 	@echo "BUILD $(TNAME)"
 	$(call check_all,$(TNAME).$(EXT_ORIG))
 	$(call check_all,$(TNAME).$(EXT_PATCHED))
-	$(CDO_ENV) $(CDO) $(TNAME).$(EXT_ORIG) $(TNAME).$(EXT_PATCHED) \
+	$(CDO_ENV) $(file < $(TNAME).$(EXT_ENV)) $(CDO) $(TNAME).$(EXT_ORIG) $(TNAME).$(EXT_PATCHED) \
 		vmlinux $(TNAME).$(EXT_SYMTAB) $(SYMVERS_FILE) \
 		test_$(TNAME) $@ $(MUTE_PASS)
 
@@ -62,7 +63,7 @@ clean:
 	@echo "BUILD $(TNAME)-FAIL"
 	$(call check_all,$(TNAME).$(EXT_ORIG))
 	$(call check_all,$(TNAME).$(EXT_FAIL))
-	! $(CDO_ENV) $(CDO) $(TNAME).$(EXT_ORIG) $(TNAME).$(EXT_FAIL) \
+	! $(CDO_ENV) $(file < $(TNAME).$(EXT_ENV)) $(CDO) $(TNAME).$(EXT_ORIG) $(TNAME).$(EXT_FAIL) \
 		vmlinux $(TNAME).$(EXT_SYMTAB) $(SYMVERS_FILE) \
 		test_$(TNAME) $@ $(MUTE_FAIL)
 # Expecting to fail, thus create output file manually so we won't rerun the
