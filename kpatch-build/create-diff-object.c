@@ -1771,6 +1771,21 @@ static int ex_table_group_size(struct kpatch_elf *kelf, int offset)
 	return size;
 }
 
+static int jump_table_group_size(struct kpatch_elf *kelf, int offset)
+{
+	static int size = 0;
+	char *str;
+
+	if (!size) {
+		str = getenv("JUMP_STRUCT_SIZE");
+		if (!str)
+			ERROR("JUMP_STRUCT_SIZE not set");
+		size = atoi(str);
+	}
+
+	return size;
+}
+
 #ifdef __x86_64__
 static int parainstructions_group_size(struct kpatch_elf *kelf, int offset)
 {
@@ -1882,6 +1897,18 @@ static struct special_section special_sections[] = {
 		.name		= "__bug_table",
 		.group_size	= bug_table_group_size,
 	},
+	{
+		.name		= ".fixup",
+		.group_size	= fixup_group_size,
+	},
+	{
+		.name		= "__ex_table", /* must come after .fixup */
+		.group_size	= ex_table_group_size,
+	},
+	{
+		.name		= "__jump_table",
+		.group_size	= jump_table_group_size,
+	},
 #ifdef __x86_64__
 	{
 		.name		= ".smp_locks",
@@ -1891,16 +1918,6 @@ static struct special_section special_sections[] = {
 		.name		= ".parainstructions",
 		.group_size	= parainstructions_group_size,
 	},
-#endif
-	{
-		.name		= ".fixup",
-		.group_size	= fixup_group_size,
-	},
-	{
-		.name		= "__ex_table", /* must come after .fixup */
-		.group_size	= ex_table_group_size,
-	},
-#ifdef __x86_64__
 	{
 		.name		= ".altinstructions",
 		.group_size	= altinstructions_group_size,
@@ -2433,12 +2450,11 @@ static void kpatch_process_special_sections(struct kpatch_elf *kelf)
 	 * The following special sections aren't supported, so make sure we
 	 * don't ever try to include them.  Otherwise the kernel will see the
 	 * jump table during module loading and get confused.  Generally it
-	 * should be safe to exclude them, it just means that you can't modify
-	 * jump labels and enable tracepoints in a patched function.
+	 * should be safe to exclude them, it just means that tracepoints won't
+	 * work in a patched function.
 	 */
 	list_for_each_entry(sec, &kelf->sections, list) {
-		if (strcmp(sec->name, "__jump_table") &&
-		    strcmp(sec->name, "__tracepoints") &&
+		if (strcmp(sec->name, "__tracepoints") &&
 		    strcmp(sec->name, "__tracepoints_ptrs") &&
 		    strcmp(sec->name, "__tracepoints_strings"))
 			continue;
