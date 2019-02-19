@@ -33,7 +33,7 @@ define check_stripped =
 endef
 
 define check_all =
-	$(call check_stripped,$(1))
+	$(if $(findstring NOSTRIP,$(1)), , $(call check_stripped,$(1)))
 endef
 
 
