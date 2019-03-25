@@ -649,7 +649,7 @@ sys_nanosleep(), etc?**
 
 Yes! There's a few requirements, and the feature is still in its infancy.
 
-1. You need to use the `--out-of-tree` flag to specify the version of the
+1. You need to use the `--oot-module` flag to specify the version of the
 module that's currently running on the machine.
 2. `--sourcedir` has to be passed with a directory containing the same
 version of code as the running module, all set up and ready to build with a
@@ -659,15 +659,15 @@ currently-running module.
 3. If the `Module.symvers` file for the out-of-tree module doesn't appear
 in the root of the provided source directory, a symlink needs to be created
 in that directory that points to its actual location.
-4. Usually you'll need to pass the `-t` flag as well, to specify the proper
-`make` target names.
+4. Usually you'll need to pass the `--target` flag as well, to specify the
+proper `make` target names.
 5. This has only been tested for a single out-of-tree module per patch, and
 not for out-of-tree modules with dependencies on other out-of-tree modules
 built separately.
 
 ***Sample invocation***
 
-`kpatch-build -s ~/test/ -t default -e /lib/modules/$(uname -r)/extra/test.ko test.patch`
+`kpatch-build --sourcedir ~/test/ --target default --oot-module /lib/modules/$(uname -r)/extra/test.ko test.patch`
 
 
 Get involved

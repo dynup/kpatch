@@ -24,7 +24,7 @@ if [[ "$TOOLCHAINCMD" = "gcc" ]] ; then
 
 			[[ "$obj" = */.tmp_*.o ]] && obj="${obj/.tmp_/}"
 			relobj=${obj//$KPATCH_GCC_SRCDIR\//}
-			case "$obj" in
+			case "$relobj" in
 				*.mod.o|\
 				*built-in.o|\
 				*built-in.a|\
