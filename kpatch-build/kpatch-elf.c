@@ -814,6 +814,9 @@ void kpatch_write_output_elf(struct kpatch_elf *kelf, Elf *elf, char *outfile)
 		printf("%s\n",elf_errmsg(-1));
 		ERROR("elf_update");
 	}
+
+	elf_end(elfout);
+	close(fd);
 }
 
 /*
