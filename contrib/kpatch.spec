@@ -1,6 +1,6 @@
 Name: kpatch
 Summary: Dynamic kernel patching
-Version: 0.6.2
+Version: 0.6.3
 License: GPLv2
 Group: System Environment/Kernel
 URL: http://github.com/dynup/kpatch
@@ -93,6 +93,17 @@ rm -rf %{buildroot}
 %{_mandir}/man1/kpatch-build.1*
 
 %changelog
+* Fri Apr 12 2019 Joe Lawrence <joe.lawrence@redhat.com> - 0.6.3
+- Lots of integration test work
+- Better support for building out-of-tree modules
+- Updated manpage options, drop deprecated distro specific mentions
+- README.md updates for shadow variables, out-of-tree modules
+- Fix core module compilation with CONFIG_HAVE_ARCH_PREL32_RELOCATIONS
+- kpatch-build detects and abort on unsupported options
+  GCC_PLUGIN_LATENT_ENTROPY, GCC_PLUGIN_RANDSTRUCT
+- Fix patch linking with 4.20+
+- Other minor shellcheck and kpatch-build fixups
+
 * Tue Oct 2 2018 Joe Lawrence <joe.lawrence@redhat.com> - 0.6.2
 - ppc64le: relax .text section addralign value check
 - gcc8: unit-tests
