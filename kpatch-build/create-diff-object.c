@@ -3378,6 +3378,7 @@ int main(int argc, char *argv[])
 	kpatch_dump_kelf(kelf_out);
 	kpatch_write_output_elf(kelf_out, kelf_patched->elf, output_obj);
 
+	lookup_close(lookup);
 	kpatch_elf_free(kelf_patched);
 	kpatch_elf_teardown(kelf_out);
 	kpatch_elf_free(kelf_out);
