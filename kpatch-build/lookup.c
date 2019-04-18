@@ -178,19 +178,23 @@ static void find_local_syms(struct lookup_table *table, char *hint,
 /* Strip the path and replace '-' with '_' */
 static char *make_modname(char *modname)
 {
-	char *cur;
+	char *cur, *name;
 
 	if (!modname)
 		return NULL;
 
-	cur = modname;
+	name = strdup(basename(modname));
+	if (!name)
+		perror("strdup");
+
+	cur = name; /* use cur as tmp */
 	while (*cur != '\0') {
 		if (*cur == '-')
 			*cur = '_';
 		cur++;
 	}
 
-	return basename(modname);
+	return name;
 }
 
 static void symtab_read(struct lookup_table *table, char *path)
@@ -305,11 +309,7 @@ static void symvers_read(struct lookup_table *table, char *path)
 		if (!symname)
 			perror("strdup");
 
-		objname = strdup(mod);
-		if (!objname)
-			perror("strdup");
-		/* Modifies objname in-place */
-		objname = make_modname(objname);
+		objname = make_modname(mod);
 
 		table->exp_syms[i].name = symname;
 		table->exp_syms[i].objname = objname;
@@ -338,7 +338,18 @@ struct lookup_table *lookup_open(char *symtab_path, char *symvers_path,
 
 void lookup_close(struct lookup_table *table)
 {
+	int i;
+	struct object_symbol *obj_sym;
+	struct export_symbol *exp_sym;
+
+	for_each_obj_symbol(i, obj_sym, table)
+		free(obj_sym->name);
 	free(table->obj_syms);
+
+	for_each_exp_symbol(i, exp_sym, table) {
+		free(exp_sym->name);
+		free(exp_sym->objname);
+	}
 	free(table->exp_syms);
 	free(table);
 }
