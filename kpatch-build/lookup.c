@@ -248,7 +248,6 @@ static void symtab_read(struct lookup_table *table, char *path)
 
 		table->obj_syms[i].value = value;
 		table->obj_syms[i].size = size;
-		table->obj_syms[i].name = strdup(name);
 
 		if (!strcmp(bind, "LOCAL")) {
 			table->obj_syms[i].bind = STB_LOCAL;
