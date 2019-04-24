@@ -57,9 +57,7 @@ static struct symbol *find_or_add_ksym_to_symbols(struct kpatch_elf *kelf,
 	if (!rela)
 		ERROR("name of ksym not found?");
 
-	name = strdup(strings + rela->addend);
-	if (!name)
-		ERROR("strdup");
+	name = strings + rela->addend;
 
 	/* Get objname of ksym */
 	rela = find_rela_by_offset(ksymsec->rela,
@@ -67,9 +65,7 @@ static struct symbol *find_or_add_ksym_to_symbols(struct kpatch_elf *kelf,
 	if (!rela)
 		ERROR("objname of ksym not found?");
 
-	objname = strdup(strings + rela->addend);
-	if (!objname)
-		ERROR("strdup");
+	objname = strings + rela->addend;
 
 	snprintf(pos, 32, "%lu", ksym->pos);
 	/* .klp.sym.objname.name,pos */
@@ -202,9 +198,7 @@ static void create_klp_relasecs_and_syms(struct kpatch_elf *kelf, struct section
 		if (!rela)
 			ERROR("find_rela_by_offset");
 
-		objname = strdup(strings + rela->addend);
-		if (!objname)
-			ERROR("strdup");
+		objname = strings + rela->addend;
 
 		/* Get the .kpatch.symbol entry for the rela src */
 		rela = find_rela_by_offset(krelasec->rela,
@@ -282,9 +276,7 @@ static void create_klp_arch_sections(struct kpatch_elf *kelf, char *strings)
 		if (!rela)
 			ERROR("find_rela_by_offset");
 
-		objname = strdup(strings + rela->addend);
-		if (!objname)
-			ERROR("strdup");
+		objname = strings + rela->addend;
 
 		/* Example: .klp.arch.vmlinux..parainstructions */
 		snprintf(buf, 256, "%s%s.%s", KLP_ARCH_PREFIX, objname, base->name);
