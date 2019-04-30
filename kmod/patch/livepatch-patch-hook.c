@@ -460,6 +460,7 @@ out:
 static void __exit patch_exit(void)
 {
 	WARN_ON(klp_unregister_patch(lpatch));
+	patch_free_livepatch(lpatch);
 }
 
 module_init(patch_init);
