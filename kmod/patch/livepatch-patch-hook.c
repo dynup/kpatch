@@ -64,6 +64,10 @@
 # define HAVE_CALLBACKS
 #endif
 
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(5, 1, 0)
+# define HAVE_SIMPLE_ENABLE
+#endif
+
 /*
  * There are quite a few similar structures at play in this file:
  * - livepatch.h structs prefixed with klp_*
@@ -437,15 +441,19 @@ static int __init patch_init(void)
 	 */
 	patch_free_scaffold();
 
+#ifndef HAVE_SIMPLE_ENABLE
 	ret = klp_register_patch(lpatch);
 	if (ret) {
 		patch_free_livepatch(lpatch);
 		return ret;
 	}
+#endif
 
 	ret = klp_enable_patch(lpatch);
 	if (ret) {
+#ifndef HAVE_SIMPLE_ENABLE
 		WARN_ON(klp_unregister_patch(lpatch));
+#endif
 		patch_free_livepatch(lpatch);
 		return ret;
 	}
@@ -459,7 +467,9 @@ out:
 
 static void __exit patch_exit(void)
 {
+#ifndef HAVE_SIMPLE_ENABLE
 	WARN_ON(klp_unregister_patch(lpatch));
+#endif
 	patch_free_livepatch(lpatch);
 }
 
