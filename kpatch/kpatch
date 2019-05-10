@@ -469,7 +469,7 @@ case "$1" in
 	echo "installing $PATCH ($KVER)"
 	mkdir -p "$INSTALLDIR/$KVER" || die "failed to create install directory"
 	cp -f "$PATCH" "$INSTALLDIR/$KVER" || die "failed to install module $PATCH"
-	systemctl enable kpatch.service
+	command -v systemctl > /dev/null 2>&1 && systemctl enable kpatch.service
 	;;
 
 "uninstall")
