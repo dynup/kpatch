@@ -2748,7 +2748,8 @@ static void kpatch_create_intermediate_sections(struct kpatch_elf *kelf,
 		if (!is_rela_section(sec))
 			continue;
 		if (!strcmp(sec->name, ".rela.kpatch.funcs") ||
-		    !strcmp(sec->name, ".rela.kpatch.dynrelas"))
+		    !strcmp(sec->name, ".rela.kpatch.relocations") ||
+		    !strcmp(sec->name, ".rela.kpatch.symbols"))
 			continue;
 		list_for_each_entry_safe(rela, safe, &sec->relas, list) {
 			if (!rela->need_dynrela)
