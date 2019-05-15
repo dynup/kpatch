@@ -13,7 +13,7 @@ fi
 
 declare -a args=("$@")
 
-if [[ "$TOOLCHAINCMD" = "gcc" ]] ; then
+if [[ "$TOOLCHAINCMD" =~ "gcc" ]] ; then
 	while [ "$#" -gt 0 ]; do
 		if [ "$1" = "-o" ]; then
 			obj="$2"
