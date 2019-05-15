@@ -765,7 +765,7 @@ void kpatch_write_output_elf(struct kpatch_elf *kelf, Elf *elf, char *outfile)
 	if (!elfout)
 		ERROR("elf_begin");
 
-	if (!gelf_newehdr(elfout, gelf_getclass(kelf->elf)))
+	if (!gelf_newehdr(elfout, gelf_getclass(elf)))
 		ERROR("gelf_newehdr");
 
 	if (!gelf_getehdr(elfout, &ehout))
