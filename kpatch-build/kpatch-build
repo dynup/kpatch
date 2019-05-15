@@ -950,7 +950,7 @@ fi
 # column containing lines unique to first file.
 UNDEFINED=$(comm -23 <(sort -u "${TEMPDIR}"/undefined_references) \
 	<(sort -u "${TEMPDIR}"/new_symbols) | tr '\n' ' ')
-[[ ! -z "$UNDEFINED" ]] && die "Undefined symbols: $UNDEFINED"
+[[ -n "$UNDEFINED" ]] && die "Undefined symbols: $UNDEFINED"
 
 cp -f "$TEMPDIR/patch/$MODNAME.ko" "$BASE" || die
 

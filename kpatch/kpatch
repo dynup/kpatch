@@ -157,7 +157,7 @@ verify_module_checksum () {
 	checksum="$(readelf -p .kpatch.checksum "$1" 2>&1 | grep '\[.*\]' | awk '{print $3}')"
 
 	# Fail checksum match only if both exist and diverge
-	if [[ ! -z "$checksum" ]] && [[ -e "$SYSFS/${modname}/checksum" ]] ; then
+	if [[ -n "$checksum" ]] && [[ -e "$SYSFS/${modname}/checksum" ]] ; then
 		sysfs_checksum="$(cat "$SYSFS/${modname}/checksum")"
 		[[ "$checksum" == "$sysfs_checksum" ]] || return 1
 	fi
