@@ -1,12 +1,12 @@
-diff -Nupr src.orig/fs/readdir.c src/fs/readdir.c
---- src.orig/fs/readdir.c	2017-09-22 15:27:21.658056010 -0400
-+++ src/fs/readdir.c	2017-09-22 15:27:26.378075555 -0400
-@@ -166,6 +166,8 @@ static int filldir(void * __buf, const c
+diff --git a/fs/readdir.c b/fs/readdir.c
+index febd02dfbe2d..064db7bd70d0 100644
+--- a/fs/readdir.c
++++ b/fs/readdir.c
+@@ -176,6 +176,7 @@ static int filldir(void * __buf, const char * name, int namlen, loff_t offset,
  			goto efault;
  	}
  	dirent = buf->current_dir;
-+	if (dirent->d_ino == 12345678)
-+		printk("kpatch-test: testing .fixup section changes\n");
++	asm("nop");
  	if (__put_user(d_ino, &dirent->d_ino))
  		goto efault;
  	if (__put_user(reclen, &dirent->d_reclen))
