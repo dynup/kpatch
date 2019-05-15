@@ -2424,7 +2424,7 @@ static void kpatch_process_special_sections(struct kpatch_elf *kelf)
 			sec->rela->include = 1;
 			/* include all symbols referenced by relas */
 			list_for_each_entry(rela, &sec->rela->relas, list)
-				rela->sym->include = 1;
+				kpatch_include_symbol(rela->sym);
 		}
 	}
 
@@ -3304,10 +3304,11 @@ int main(int argc, char *argv[])
 	kpatch_include_force_elements(kelf_patched);
 	new_globals_exist = kpatch_include_new_globals(kelf_patched);
 
+	kpatch_process_special_sections(kelf_patched);
+
 	kpatch_print_changes(kelf_patched);
 	kpatch_dump_kelf(kelf_patched);
 
-	kpatch_process_special_sections(kelf_patched);
 	kpatch_verify_patchability(kelf_patched);
 
 	if (!num_changed && !new_globals_exist) {
