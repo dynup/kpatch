@@ -218,7 +218,7 @@ static void symtab_read(struct lookup_table *table, char *path)
 		}
 
 		if (matched != 6 ||
-		    !strcmp(ndx, "UNDEF") ||
+		    !strcmp(ndx, "UND") ||
 		    !strcmp(type, "SECTION"))
 			continue;
 
@@ -242,7 +242,7 @@ static void symtab_read(struct lookup_table *table, char *path)
 		}
 
 		if (matched != 6 ||
-		    !strcmp(ndx, "UNDEF") ||
+		    !strcmp(ndx, "UND") ||
 		    !strcmp(type, "SECTION"))
 			continue;
 
