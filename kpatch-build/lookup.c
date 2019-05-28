@@ -200,17 +200,17 @@ static char *make_modname(char *modname)
 static void symtab_read(struct lookup_table *table, char *path)
 {
 	FILE *file;
-	long unsigned int value, size;
+	long unsigned int value;
 	unsigned int i = 0;
 	int matched;
-	char line[256], name[256], type[16], bind[16], ndx[16];
+	char line[256], name[256], size[16], type[16], bind[16], ndx[16];
 
 	if ((file = fopen(path, "r")) == NULL)
 		ERROR("fopen");
 
 	while (fgets(line, 256, file)) {
-		matched = sscanf(line, "%*s %lx %lu %s %s %*s %s %s\n",
-				 &value, &size, type, bind, ndx, name);
+		matched = sscanf(line, "%*s %lx %s %s %s %*s %s %s\n",
+				 &value, size, type, bind, ndx, name);
 
 		if (matched == 5) {
 			name[0] = '\0';
@@ -218,7 +218,7 @@ static void symtab_read(struct lookup_table *table, char *path)
 		}
 
 		if (matched != 6 ||
-		    !strcmp(ndx, "UNDEF") ||
+		    !strcmp(ndx, "UND") ||
 		    !strcmp(type, "SECTION"))
 			continue;
 
@@ -233,8 +233,8 @@ static void symtab_read(struct lookup_table *table, char *path)
 	rewind(file);
 
 	while (fgets(line, 256, file)) {
-		matched = sscanf(line, "%*s %lx %lu %s %s %*s %s %s\n",
-				 &value, &size, type, bind, ndx, name);
+		matched = sscanf(line, "%*s %lx %s %s %s %*s %s %s\n",
+				 &value, size, type, bind, ndx, name);
 
 		if (matched == 5) {
 			name[0] = '\0';
@@ -242,12 +242,12 @@ static void symtab_read(struct lookup_table *table, char *path)
 		}
 
 		if (matched != 6 ||
-		    !strcmp(ndx, "UNDEF") ||
+		    !strcmp(ndx, "UND") ||
 		    !strcmp(type, "SECTION"))
 			continue;
 
 		table->obj_syms[i].value = value;
-		table->obj_syms[i].size = size;
+		table->obj_syms[i].size = strtoul(size, NULL, 0);
 
 		if (!strcmp(bind, "LOCAL")) {
 			table->obj_syms[i].bind = STB_LOCAL;

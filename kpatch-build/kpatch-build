@@ -845,7 +845,7 @@ for i in $FILES; do
 			SYMVERS_FILE="$SRCDIR/Module.symvers"
 		fi
 
-		eu-readelf -s "$KOBJFILE_PATH" > "$SYMTAB"
+		readelf -s --wide "$KOBJFILE_PATH" > "$SYMTAB"
 
 		# create-diff-object orig.o patched.o parent-name parent-symtab
 		#		     Module.symvers patch-mod-name output.o
