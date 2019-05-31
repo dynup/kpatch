@@ -43,7 +43,7 @@ clean:
 	rm -f *.$(EXT_TEST_OUTPUT) *.$(EXT_OUTPUT)
 
 %.$(EXT_SYMTAB):
-	eu-readelf -s $(patsubst %.$(EXT_SYMTAB),%.$(EXT_ORIG),$(@)) >$@
+	readelf -s --wide $(patsubst %.$(EXT_SYMTAB),%.$(EXT_ORIG),$(@)) >$@
 
 %.$(EXT_TEST_OUTPUT): %.$(EXT_OUTPUT) %.$(EXT_TEST) $(TEST_LIBRARY)
 	@echo "TEST $(@:.$(EXT_TEST_OUTPUT)=)"
