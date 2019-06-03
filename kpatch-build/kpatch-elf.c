@@ -647,6 +647,7 @@ struct section *create_section_pair(struct kpatch_elf *kelf, char *name,
 	relasec->data = malloc(sizeof(*relasec->data));
 	if (!relasec->data)
 		ERROR("malloc");
+	relasec->data->d_type = ELF_T_RELA;
 
 	/* set section header */
 	relasec->sh.sh_type = SHT_RELA;
