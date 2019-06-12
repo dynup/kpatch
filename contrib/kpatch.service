@@ -6,7 +6,6 @@ ConditionKernelCommandLine=!kpatch.enable=0
 Type=oneshot
 RemainAfterExit=yes
 ExecStart=PREFIX/sbin/kpatch load --all
-ExecStop=PREFIX/sbin/kpatch unload --all
 
 [Install]
 WantedBy=multi-user.target
