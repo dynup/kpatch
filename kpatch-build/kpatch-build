@@ -846,6 +846,9 @@ for i in $FILES; do
 		fi
 
 		readelf -s --wide "$KOBJFILE_PATH" > "$SYMTAB"
+		if [[ "$ARCH" = "ppc64le" ]]; then
+			sed -ri 's/\s+\[<localentry>: 8\]//' "$SYMTAB"
+		fi
 
 		# create-diff-object orig.o patched.o parent-name parent-symtab
 		#		     Module.symvers patch-mod-name output.o

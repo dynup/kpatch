@@ -209,18 +209,8 @@ static void symtab_read(struct lookup_table *table, char *path)
 		ERROR("fopen");
 
 	while (fgets(line, 256, file)) {
-		if (strstr(line, "[<localentry>: 8]")) {
-			/*
-			 * 23: 0000000000000008    96 FUNC    LOCAL  DEFAULT [<localentry>: 8]     4 cmdline_proc_show
-			 * On Power, local func syms Ndx is preceded with "[<localentry>: 8]"
-			 * denoting local entry point offset of the function.
-			 */
-			matched = sscanf(line, "%*s %lx %s %s %s %*s [<localentry>: 8] %s %s\n",
-					 &value, size, type, bind, ndx, name);
-		} else {
-			matched = sscanf(line, "%*s %lx %s %s %s %*s %s %s\n",
-					 &value, size, type, bind, ndx, name);
-		}
+		matched = sscanf(line, "%*s %lx %s %s %s %*s %s %s\n",
+				 &value, size, type, bind, ndx, name);
 
 		if (matched == 5) {
 			name[0] = '\0';
@@ -243,13 +233,8 @@ static void symtab_read(struct lookup_table *table, char *path)
 	rewind(file);
 
 	while (fgets(line, 256, file)) {
-		if (strstr(line, "[<localentry>: 8]")) {
-			matched = sscanf(line, "%*s %lx %s %s %s %*s [<localentry>: 8] %s %s\n",
-					 &value, size, type, bind, ndx, name);
-		} else {
-			matched = sscanf(line, "%*s %lx %s %s %s %*s %s %s\n",
-					 &value, size, type, bind, ndx, name);
-		}
+		matched = sscanf(line, "%*s %lx %s %s %s %*s %s %s\n",
+				 &value, size, type, bind, ndx, name);
 
 		if (matched == 5) {
 			name[0] = '\0';
