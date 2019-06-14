@@ -1,0 +1,23 @@
+diff --git a/net/ipv6/netfilter.c b/net/ipv6/netfilter.c
+index a9d587a..23336ed 100644
+--- a/net/ipv6/netfilter.c
++++ b/net/ipv6/netfilter.c
+@@ -106,6 +106,8 @@ static int nf_ip6_reroute(struct sk_buff *skb,
+	return 0;
+ }
+
++#include "kpatch-macros.h"
++
+ static int nf_ip6_route(struct net *net, struct dst_entry **dst,
+			struct flowi *fl, bool strict)
+ {
+@@ -119,6 +121,9 @@ static int nf_ip6_route(struct net *net, struct dst_entry **dst,
+	struct dst_entry *result;
+	int err;
+
++	if (!jiffies)
++		printk("kpatch nf_ip6_route foo\n");
++
+	result = ip6_route_output(net, sk, &fl->u.ip6);
+	err = result->error;
+	if (err)

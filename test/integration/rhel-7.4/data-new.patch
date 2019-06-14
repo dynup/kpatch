@@ -1,0 +1,28 @@
+diff -Nupr src.orig/fs/proc/meminfo.c src/fs/proc/meminfo.c
+--- src.orig/fs/proc/meminfo.c	2017-09-22 15:27:21.699056179 -0400
++++ src/fs/proc/meminfo.c	2017-09-22 15:27:24.102066130 -0400
+@@ -20,6 +20,8 @@ void __attribute__((weak)) arch_report_m
+ {
+ }
+ 
++static int foo = 5;
++
+ static int meminfo_proc_show(struct seq_file *m, void *v)
+ {
+ 	struct sysinfo i;
+@@ -106,6 +108,7 @@ static int meminfo_proc_show(struct seq_
+ #ifdef CONFIG_TRANSPARENT_HUGEPAGE
+ 		"AnonHugePages:  %8lu kB\n"
+ #endif
++		"kpatch: %d"
+ 		,
+ 		K(i.totalram),
+ 		K(i.freeram),
+@@ -167,6 +170,7 @@ static int meminfo_proc_show(struct seq_
+ 		,K(global_page_state(NR_ANON_TRANSPARENT_HUGEPAGES) *
+ 		   HPAGE_PMD_NR)
+ #endif
++		,foo
+ 		);
+ 
+ 	hugetlb_report_meminfo(m);

@@ -1,0 +1,12 @@
+Index: kernel-rhel7/net/core/dev.c
+===================================================================
+--- kernel-rhel7.orig/net/core/dev.c
++++ kernel-rhel7/net/core/dev.c
+@@ -4199,6 +4199,7 @@ skip_classify:
+ 		case RX_HANDLER_PASS:
+ 			break;
+ 		default:
++			printk("BUG!\n");
+ 			BUG();
+ 		}
+ 	}
