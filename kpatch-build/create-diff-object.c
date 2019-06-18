@@ -1827,6 +1827,11 @@ static int fixup_lwsync_group_size(struct kpatch_elf *kelf, int offset)
 {
 	return 8;
 }
+
+static int fixup_barrier_nospec_group_size(struct kpatch_elf *kelf, int offset)
+{
+	return 8;
+}
 #endif
 
 /*
@@ -1920,6 +1925,10 @@ static struct special_section special_sections[] = {
 	{
 		.name		= "__lwsync_fixup",
 		.group_size	= fixup_lwsync_group_size,
+	},
+	{
+		.name		= "__barrier_nospec_fixup",
+		.group_size	= fixup_barrier_nospec_group_size,
 	},
 #endif
 	{},
