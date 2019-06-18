@@ -1825,7 +1825,7 @@ static int fixup_entry_group_size(struct kpatch_elf *kelf, int offset)
 
 static int fixup_lwsync_group_size(struct kpatch_elf *kelf, int offset)
 {
-	return 4;
+	return 8;
 }
 #endif
 
