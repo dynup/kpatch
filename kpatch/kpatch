@@ -314,30 +314,30 @@ load_module () {
 				die "error: cannot re-enable patch module $modname, cannot verify checksum match"
 			fi
 		else
-			die "error: module named $modname already loaded and enabled"
+			echo "module named $modname already loaded and enabled"
 		fi
+	else
+		echo "loading patch module: $module"
+		local i=0
+		while true; do
+			out="$(LC_ALL=C insmod "$module" 2>&1)"
+			[[ -z "$out" ]] && break
+			echo "$out" 1>&2
+			[[ ! "$out" =~ "Device or resource busy" ]] &&
+				die "failed to load module $module"
+
+			# "Device or resource busy" means the activeness safety check
+			# failed.  Retry in a few seconds.
+			i=$((i+1))
+			if [[ $i -eq $MAX_LOAD_ATTEMPTS ]]; then
+				die "failed to load module $module"
+				break
+			else
+				warn "retrying..."
+				sleep $RETRY_INTERVAL
+			fi
+		done
 	fi
-
-	echo "loading patch module: $module"
-	local i=0
-	while true; do
-		out="$(LC_ALL=C insmod "$module" 2>&1)"
-		[[ -z "$out" ]] && break
-		echo "$out" 1>&2
-		[[ ! "$out" =~ "Device or resource busy" ]] &&
-			die "failed to load module $module"
-
-		# "Device or resource busy" means the activeness safety check
-		# failed.  Retry in a few seconds.
-		i=$((i+1))
-		if [[ $i -eq $MAX_LOAD_ATTEMPTS ]]; then
-			die "failed to load module $module"
-			break
-		else
-			warn "retrying..."
-			sleep $RETRY_INTERVAL
-		fi
-	done
 
 	if ! wait_for_patch_transition "$modname" ; then
 		echo "module $modname did not complete its transition, unloading..."
