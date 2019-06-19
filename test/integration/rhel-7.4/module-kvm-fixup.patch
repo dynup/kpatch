@@ -1,0 +1,12 @@
+diff -Nupr src.orig/arch/x86/kvm/vmx.c src/arch/x86/kvm/vmx.c
+--- src.orig/arch/x86/kvm/vmx.c	2017-09-22 15:27:20.853052676 -0400
++++ src/arch/x86/kvm/vmx.c	2017-09-22 15:27:43.583146801 -0400
+@@ -10597,6 +10597,8 @@ static int vmx_check_intercept(struct kv
+ 			       struct x86_instruction_info *info,
+ 			       enum x86_intercept_stage stage)
+ {
++	if (!jiffies)
++		printk("kpatch vmx_check_intercept\n");
+ 	return X86EMUL_CONTINUE;
+ }
+ 

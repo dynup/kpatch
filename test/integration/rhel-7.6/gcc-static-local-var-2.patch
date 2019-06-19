@@ -1,0 +1,14 @@
+Index: kernel-rhel7/mm/mmap.c
+===================================================================
+--- kernel-rhel7.orig/mm/mmap.c
++++ kernel-rhel7/mm/mmap.c
+@@ -1715,6 +1715,9 @@ unsigned long mmap_region(struct file *f
+ 	struct rb_node **rb_link, *rb_parent;
+ 	unsigned long charged = 0;
+ 
++	if (!jiffies)
++		printk("kpatch mmap foo\n");
++
+ 	/* Check against address space limit. */
+ 	if (!may_expand_vm(mm, len >> PAGE_SHIFT)) {
+ 		unsigned long nr_pages;

@@ -1,0 +1,151 @@
+Index: kernel-rhel7/net/ipv4/fib_frontend.c
+===================================================================
+--- kernel-rhel7.orig/net/ipv4/fib_frontend.c
++++ kernel-rhel7/net/ipv4/fib_frontend.c
+@@ -685,6 +685,7 @@ errout:
+ 	return err;
+ }
+ 
++#include "kpatch-macros.h"
+ static int inet_rtm_newroute(struct sk_buff *skb, struct nlmsghdr *nlh)
+ {
+ 	struct net *net = sock_net(skb->sk);
+@@ -703,6 +704,7 @@ static int inet_rtm_newroute(struct sk_b
+ 	}
+ 
+ 	err = fib_table_insert(net, tb, &cfg);
++	KPATCH_PRINTK("[inet_rtm_newroute]: err is %d\n", err);
+ errout:
+ 	return err;
+ }
+Index: kernel-rhel7/net/ipv4/fib_semantics.c
+===================================================================
+--- kernel-rhel7.orig/net/ipv4/fib_semantics.c
++++ kernel-rhel7/net/ipv4/fib_semantics.c
+@@ -969,6 +969,7 @@ fib_convert_metrics(struct fib_info *fi,
+ 	return 0;
+ }
+ 
++#include "kpatch-macros.h"
+ struct fib_info *fib_create_info(struct fib_config *cfg)
+ {
+ 	int err;
+@@ -993,6 +994,7 @@ struct fib_info *fib_create_info(struct
+ #endif
+ 
+ 	err = -ENOBUFS;
++	KPATCH_PRINTK("[fib_create_info]: create error err is %d\n",err);
+ 	if (fib_info_cnt >= fib_info_hash_size) {
+ 		unsigned int new_size = fib_info_hash_size << 1;
+ 		struct hlist_head *new_info_hash;
+@@ -1013,6 +1015,7 @@ struct fib_info *fib_create_info(struct
+ 		if (!fib_info_hash_size)
+ 			goto failure;
+ 	}
++	KPATCH_PRINTK("[fib_create_info]: 2 create error err is %d\n",err);
+ 
+ 	fi = kzalloc(sizeof(*fi)+nhs*sizeof(struct fib_nh), GFP_KERNEL);
+ 	if (fi == NULL)
+@@ -1028,6 +1031,8 @@ struct fib_info *fib_create_info(struct
+ 		fi->fib_metrics = (struct dst_metrics *)&dst_default_metrics;
+ 	}
+ 	fib_info_cnt++;
++	KPATCH_PRINTK("[fib_create_info]: 3 create error err is %d\n",err);
++
+ 	fi->fib_net = net;
+ 	fi->fib_protocol = cfg->fc_protocol;
+ 	fi->fib_scope = cfg->fc_scope;
+@@ -1043,8 +1048,10 @@ struct fib_info *fib_create_info(struct
+ 		if (!nexthop_nh->nh_pcpu_rth_output)
+ 			goto failure;
+ 	} endfor_nexthops(fi)
++	KPATCH_PRINTK("[fib_create_info]: 4 create error err is %d\n",err);
+ 
+ 	err = fib_convert_metrics(fi, cfg);
++	KPATCH_PRINTK("[fib_create_info]: 5 create error err is %d\n",err);
+ 	if (err)
+ 		goto failure;
+ 
+@@ -1095,6 +1102,7 @@ struct fib_info *fib_create_info(struct
+ 		nh->nh_weight = 1;
+ #endif
+ 	}
++	KPATCH_PRINTK("[fib_create_info]: 6 create error err is %d\n",err);
+ 
+ 	if (fib_props[cfg->fc_type].error) {
+ 		if (cfg->fc_gw || cfg->fc_oif || cfg->fc_mp)
+@@ -1112,6 +1120,7 @@ struct fib_info *fib_create_info(struct
+ 			goto err_inval;
+ 		}
+ 	}
++	KPATCH_PRINTK("[fib_create_info]: 7 create error err is %d\n",err);
+ 
+ 	if (cfg->fc_scope > RT_SCOPE_HOST)
+ 		goto err_inval;
+@@ -1134,6 +1143,7 @@ struct fib_info *fib_create_info(struct
+ 				goto failure;
+ 		} endfor_nexthops(fi)
+ 	}
++	KPATCH_PRINTK("[fib_create_info]: 8 create error err is %d\n",err);
+ 
+ 	if (fi->fib_prefsrc) {
+ 		if (cfg->fc_type != RTN_LOCAL || !cfg->fc_dst ||
+@@ -1146,6 +1156,7 @@ struct fib_info *fib_create_info(struct
+ 		fib_info_update_nh_saddr(net, nexthop_nh);
+ 		fib_add_weight(fi, nexthop_nh);
+ 	} endfor_nexthops(fi)
++	KPATCH_PRINTK("[fib_create_info]: 9 create error err is %d\n",err);
+ 
+ 	fib_rebalance(fi);
+ 
+@@ -1157,6 +1168,7 @@ link_it:
+ 		ofi->fib_treeref++;
+ 		return ofi;
+ 	}
++	KPATCH_PRINTK("[fib_create_info]: 10 create error err is %d\n",err);
+ 
+ 	fi->fib_treeref++;
+ 	atomic_inc(&fi->fib_clntref);
+@@ -1180,6 +1192,7 @@ link_it:
+ 		hlist_add_head(&nexthop_nh->nh_hash, head);
+ 	} endfor_nexthops(fi)
+ 	spin_unlock_bh(&fib_info_lock);
++	KPATCH_PRINTK("[fib_create_info]: 11 create error err is %d\n",err);
+ 	return fi;
+ 
+ err_inval:
+@@ -1190,6 +1203,7 @@ failure:
+ 		fi->fib_dead = 1;
+ 		free_fib_info(fi);
+ 	}
++	KPATCH_PRINTK("[fib_create_info]: 12 create error err is %d\n",err);
+ 
+ 	return ERR_PTR(err);
+ }
+Index: kernel-rhel7/net/ipv4/fib_trie.c
+===================================================================
+--- kernel-rhel7.orig/net/ipv4/fib_trie.c
++++ kernel-rhel7/net/ipv4/fib_trie.c
+@@ -1105,6 +1105,7 @@ static int fib_insert_alias(struct trie
+ }
+ 
+ /* Caller must hold RTNL. */
++#include "kpatch-macros.h"
+ int fib_table_insert(struct net *net, struct fib_table *tb,
+ 		     struct fib_config *cfg)
+ {
+@@ -1130,11 +1131,14 @@ int fib_table_insert(struct net *net, st
+ 	if ((plen < KEYLENGTH) && (key << plen))
+ 		return -EINVAL;
+ 
++	KPATCH_PRINTK("[fib_table_insert]: start\n");
+ 	fi = fib_create_info(cfg);
+ 	if (IS_ERR(fi)) {
+ 		err = PTR_ERR(fi);
++		KPATCH_PRINTK("[fib_table_insert]: create error err is %d\n",err);
+ 		goto err;
+ 	}
++	KPATCH_PRINTK("[fib_table_insert]: cross\n");
+ 
+ 	l = fib_find_node(t, &tp, key);
+ 	fa = l ? fib_find_alias(&l->leaf, slen, tos, fi->fib_priority,

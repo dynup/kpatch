@@ -1,0 +1,25 @@
+Index: src/arch/x86/kvm/vmx.c
+===================================================================
+--- src.orig/arch/x86/kvm/vmx.c
++++ src/arch/x86/kvm/vmx.c
+@@ -11168,10 +11168,20 @@ static void vmx_leave_nested(struct kvm_
+  * It should only be called before L2 actually succeeded to run, and when
+  * vmcs01 is current (it doesn't leave_guest_mode() or switch vmcss).
+  */
++#include <linux/livepatch.h>
+ static void nested_vmx_entry_failure(struct kvm_vcpu *vcpu,
+ 			struct vmcs12 *vmcs12,
+ 			u32 reason, unsigned long qualification)
+ {
++	int *kpatch;
++
++	kpatch = klp_shadow_alloc(vcpu, 0, NULL, sizeof(*kpatch),
++				     GFP_KERNEL);
++	if (kpatch) {
++		klp_shadow_get(vcpu, 0);
++		klp_shadow_free(vcpu, 0);
++	}
++
+ 	load_vmcs12_host_state(vcpu, vmcs12);
+ 	vmcs12->vm_exit_reason = reason | VMX_EXIT_REASONS_FAILED_VMENTRY;
+ 	vmcs12->exit_qualification = qualification;

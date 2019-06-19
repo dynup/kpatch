@@ -1,0 +1,13 @@
+diff -Nupr src.orig/kernel/time/timekeeping.c src/kernel/time/timekeeping.c
+--- src.orig/kernel/time/timekeeping.c	2017-09-22 15:27:21.602055778 -0400
++++ src/kernel/time/timekeeping.c	2017-09-22 15:27:27.522080292 -0400
+@@ -877,6 +877,9 @@ void do_gettimeofday(struct timeval *tv)
+ {
+ 	struct timespec64 now;
+ 
++	if (!tv)
++		return;
++
+ 	getnstimeofday64(&now);
+ 	tv->tv_sec = now.tv_sec;
+ 	tv->tv_usec = now.tv_nsec/1000;
