@@ -48,6 +48,7 @@ struct section {
 	struct list_head list;
 	struct section *twin;
 	GElf_Shdr sh;
+	unsigned int size;
 	Elf_Data *data;
 	char *name;
 	unsigned int index;

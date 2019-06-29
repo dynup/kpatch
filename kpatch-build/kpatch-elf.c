@@ -165,7 +165,7 @@ void kpatch_create_rela_list(struct kpatch_elf *kelf, struct section *sec)
 	/* create reverse link from base section to this rela section */
 	sec->base->rela = sec;
 
-	rela_nr = sec->sh.sh_size / sec->sh.sh_entsize;
+	rela_nr = sec->size / sec->sh.sh_entsize;
 
 	log_debug("\n=== rela list for %s (%d entries) ===\n",
 		sec->base->name, rela_nr);
@@ -209,6 +209,33 @@ void kpatch_create_rela_list(struct kpatch_elf *kelf, struct section *sec)
 	}
 }
 
+#ifdef SHF_COMPRESSED
+void kpatch_get_section_size(Elf_Scn *scn, struct section *sec)
+{
+	GElf_Chdr ch;
+
+	if (!gelf_getshdr(scn, &sec->sh))
+		ERROR("gelf_getshdr");
+
+	sec->size = sec->sh.sh_size;
+
+	if ((sec->sh.sh_flags & SHF_COMPRESSED)) {
+		if (!gelf_getchdr(scn, &ch))
+			ERROR("gelf_getchdr");
+
+		sec->size = ch.ch_size;
+	}
+}
+#else
+void kpatch_get_section_size(Elf_Scn *scn, struct section *sec)
+{
+	if (!gelf_getshdr(scn, &sec->sh))
+		ERROR("gelf_getshdr");
+
+	sec->size = sec->sh.sh_size;
+}
+#endif
+
 void kpatch_create_section_list(struct kpatch_elf *kelf)
 {
 	Elf_Scn *scn = NULL;
@@ -236,8 +263,7 @@ void kpatch_create_section_list(struct kpatch_elf *kelf)
 		if (!scn)
 			ERROR("scn NULL");
 
-		if (!gelf_getshdr(scn, &sec->sh))
-			ERROR("gelf_getshdr");
+		kpatch_get_section_size(scn, sec);
 
 		sec->name = elf_strptr(kelf->elf, shstrndx, sec->sh.sh_name);
 		if (!sec->name)
@@ -269,7 +295,7 @@ void kpatch_create_symbol_list(struct kpatch_elf *kelf)
 	if (!symtab)
 		ERROR("missing symbol table");
 
-	symbols_nr = symtab->sh.sh_size / symtab->sh.sh_entsize;
+	symbols_nr = symtab->size / symtab->sh.sh_entsize;
 
 	log_debug("\n=== symbol list (%d entries) ===\n", symbols_nr);
 
@@ -497,6 +523,7 @@ void kpatch_create_shstrtab(struct kpatch_elf *kelf)
 
 	shstrtab->data->d_buf = buf;
 	shstrtab->data->d_size = size;
+	shstrtab->size = size;
 
 	if (loglevel <= DEBUG) {
 		printf("shstrtab: ");
@@ -550,6 +577,7 @@ void kpatch_create_strtab(struct kpatch_elf *kelf)
 
 	strtab->data->d_buf = buf;
 	strtab->data->d_size = size;
+	strtab->size = size;
 
 	if (loglevel <= DEBUG) {
 		printf("strtab: ");
@@ -596,6 +624,7 @@ void kpatch_create_symtab(struct kpatch_elf *kelf)
 
 	symtab->data->d_buf = buf;
 	symtab->data->d_size = size;
+	symtab->size = size;
 
 	/* update symtab section header */
 	symtab->sh.sh_link = find_section_by_name(&kelf->sections, ".strtab")->index;
@@ -629,6 +658,7 @@ struct section *create_section_pair(struct kpatch_elf *kelf, char *name,
 	memset(sec->data->d_buf, 0, size);
 	sec->data->d_size = size;
 	sec->data->d_type = ELF_T_BYTE;
+	sec->size = size;
 
 	/* set section header */
 	sec->sh.sh_type = SHT_PROGBITS;
@@ -734,6 +764,7 @@ void kpatch_rebuild_rela_section_data(struct section *sec)
 	/* d_type remains ELF_T_RELA */
 
 	sec->sh.sh_size = size;
+	sec->size = size;
 
 	list_for_each_entry(rela, &sec->relas, list) {
 		relas[index].r_offset = rela->offset;

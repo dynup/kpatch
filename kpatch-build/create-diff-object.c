@@ -441,8 +441,7 @@ static void kpatch_compare_correlated_section(struct section *sec)
 		goto out;
 	}
 
-	if (sec1->sh.sh_size != sec2->sh.sh_size ||
-	    sec1->data->d_size != sec2->data->d_size) {
+	if (sec1->size != sec2->size) {
 		sec->status = CHANGED;
 		goto out;
 	}
@@ -498,14 +497,14 @@ static int kpatch_line_macro_change_only(struct section *sec)
 	if (sec->status != CHANGED ||
 	    is_rela_section(sec) ||
 	    !is_text_section(sec) ||
-	    sec->sh.sh_size != sec->twin->sh.sh_size ||
+	    sec->size != sec->twin->size ||
 	    !sec->rela ||
 	    sec->rela->status != SAME)
 		return 0;
 
 	start1 = (unsigned long)sec->twin->data->d_buf;
 	start2 = (unsigned long)sec->data->d_buf;
-	size = sec->sh.sh_size;
+	size = sec->size;
 	for (offset = 0; offset < size; offset += length) {
 		insn_init(&insn1, (void *)(start1 + offset), 1);
 		insn_init(&insn2, (void *)(start2 + offset), 1);
@@ -581,14 +580,14 @@ static int kpatch_line_macro_change_only(struct section *sec)
 	if (sec->status != CHANGED ||
 	    is_rela_section(sec) ||
 	    !is_text_section(sec) ||
-	    sec->sh.sh_size != sec->twin->sh.sh_size ||
+	    sec->size != sec->twin->size ||
 	    !sec->rela ||
 	    sec->rela->status != SAME)
 		return 0;
 
 	start1 = (unsigned long)sec->twin->data->d_buf;
 	start2 = (unsigned long)sec->data->d_buf;
-	size = sec->sh.sh_size;
+	size = sec->size;
 	for (offset = 0; offset < size; offset += PPC_INSTR_LEN) {
 		if (!memcmp((void *)start1 + offset, (void *)start2 + offset,
 			    PPC_INSTR_LEN))
@@ -765,10 +764,10 @@ static void kpatch_correlate_sections(struct list_head *seclist1, struct list_he
 			 * Changed group sections are currently not supported.
 			 */
 			if (sec1->sh.sh_type == SHT_GROUP) {
-				if (sec1->data->d_size != sec2->data->d_size)
+				if (sec1->size != sec2->size)
 					continue;
 				if (memcmp(sec1->data->d_buf, sec2->data->d_buf,
-				           sec1->data->d_size))
+				           sec1->size))
 					continue;
 			}
 			sec1->twin = sec2;
@@ -869,7 +868,7 @@ static void kpatch_mark_grouped_sections(struct kpatch_elf *kelf)
 		if (groupsec->sh.sh_type != SHT_GROUP)
 			continue;
 		data = groupsec->data->d_buf;
-		end = groupsec->data->d_buf + groupsec->data->d_size;
+		end = groupsec->data->d_buf + groupsec->size;
 		data++; /* skip first flag word (e.g. GRP_COMDAT) */
 		while (data < end) {
 			sec = find_section_by_index(&kelf->sections, *data);
@@ -1233,7 +1232,7 @@ static void rela_insn(struct section *sec, struct rela *rela, struct insn *insn)
 	unsigned long insn_addr, start, end, rela_addr;
 
 	start = (unsigned long)sec->base->data->d_buf;
-	end = start + sec->base->sh.sh_size;
+	end = start + sec->base->size;
 	rela_addr = start + rela->offset;
 	for (insn_addr = start; insn_addr < end; insn_addr += insn->length) {
 		insn_init(insn, (void *)insn_addr, 1);
@@ -1316,8 +1315,8 @@ static void kpatch_replace_sections_syms(struct kpatch_elf *kelf)
 
 				if (!is_text_section(sym->sec) &&
 				    rela->type == R_X86_64_32S &&
-				    rela->addend == (int)sym->sec->sh.sh_size &&
-				    end == (int)sym->sec->sh.sh_size) {
+				    rela->addend == (int)sym->sec->size &&
+				    end == (int)sym->sec->size) {
 
 					/*
 					 * A special case where gcc needs a
@@ -1871,7 +1870,7 @@ static int fixup_group_size(struct kpatch_elf *kelf, int offset)
 		/* last group */
 		struct section *fixupsec;
 		fixupsec = find_section_by_name(&kelf->sections, ".fixup");
-		return fixupsec->sh.sh_size - offset;
+		return fixupsec->size - offset;
 	}
 
 	return rela->addend - offset;
@@ -1983,7 +1982,7 @@ static void kpatch_regenerate_special_section(struct kpatch_elf *kelf,
 
 	src = sec->base->data->d_buf;
 	/* alloc buffer for new base section */
-	dest = malloc(sec->base->sh.sh_size);
+	dest = malloc(sec->base->size);
 	if (!dest)
 		ERROR("malloc");
 
@@ -1998,7 +1997,7 @@ static void kpatch_regenerate_special_section(struct kpatch_elf *kelf,
 	group_size = 0;
 	src_offset = 0;
 	dest_offset = 0;
-	for ( ; src_offset < sec->base->sh.sh_size; src_offset += group_size) {
+	for ( ; src_offset < sec->base->size; src_offset += group_size) {
 
 		group_size = special->group_size(kelf, src_offset);
 
@@ -2010,8 +2009,8 @@ static void kpatch_regenerate_special_section(struct kpatch_elf *kelf,
 		 * contains the data but doesn't go past the end of the
 		 * section.
 		 */
-		if (src_offset + group_size > sec->base->sh.sh_size)
-			group_size = sec->base->sh.sh_size - src_offset;
+		if (src_offset + group_size > sec->base->size)
+			group_size = sec->base->size - src_offset;
 
 		include = should_keep_rela_group(sec, src_offset, group_size);
 
@@ -2074,6 +2073,7 @@ static void kpatch_regenerate_special_section(struct kpatch_elf *kelf,
 	 */
 	sec->base->data->d_buf = dest;
 	sec->base->data->d_size = dest_offset;
+	sec->base->size = dest_offset;
 }
 
 #define ORC_IP_PTR_SIZE 4
@@ -2105,15 +2105,15 @@ static void kpatch_regenerate_orc_sections(struct kpatch_elf *kelf)
 	if (!orc_sec || !ip_sec)
 		return;
 
-	if (orc_sec->sh.sh_size % orc_entry_size != 0)
+	if (orc_sec->size % orc_entry_size != 0)
 		ERROR("bad .orc_unwind size");
 
-	if (ip_sec->sh.sh_size !=
-	    (orc_sec->sh.sh_size / orc_entry_size) * ORC_IP_PTR_SIZE)
+	if (ip_sec->size !=
+	    (orc_sec->size / orc_entry_size) * ORC_IP_PTR_SIZE)
 		ERROR(".orc_unwind/.orc_unwind_ip size mismatch");
 
 	src = orc_sec->data->d_buf;
-	dest = malloc(orc_sec->sh.sh_size);
+	dest = malloc(orc_sec->size);
 	if (!dest)
 		ERROR("malloc");
 
@@ -2161,22 +2161,22 @@ next:
 	 */
 	orc_sec->data->d_buf = dest;
 	orc_sec->data->d_size = dest_idx * orc_entry_size;
+	orc_sec->size = orc_sec->data->d_size;
 	ip_sec->data->d_size = dest_idx * ORC_IP_PTR_SIZE;
+	ip_sec->size = ip_sec->data->d_size;
 }
 
 static void kpatch_check_relocations(struct kpatch_elf *kelf)
 {
 	struct rela *rela;
 	struct section *sec;
-	Elf_Data *sdata;
 
 	list_for_each_entry(sec, &kelf->sections, list) {
 		if (!is_rela_section(sec))
 			continue;
 		list_for_each_entry(rela, &sec->relas, list) {
 			if (rela->sym->sec) {
-				sdata = rela->sym->sec->data;
-				if (rela->addend > (int)sdata->d_size) {
+				if (rela->addend > (int)rela->sym->sec->size) {
 					ERROR("out-of-range relocation %s+%x in %s", rela->sym->sec->name,
 							rela->addend, sec->name);
 				}
@@ -2372,6 +2372,7 @@ static void kpatch_create_kpatch_arch_section(struct kpatch_elf *kelf, char *obj
 
 	karch_sec->data->d_size = index * sizeof(struct kpatch_arch);
 	karch_sec->sh.sh_size = karch_sec->data->d_size;
+	karch_sec->size = karch_sec->data->d_size;
 }
 
 static void kpatch_process_special_sections(struct kpatch_elf *kelf)
@@ -2962,9 +2963,11 @@ static void kpatch_create_intermediate_sections(struct kpatch_elf *kelf,
 	/* set size to actual number of ksyms/krelas */
 	ksym_sec->data->d_size = index * sizeof(struct kpatch_symbol);
 	ksym_sec->sh.sh_size = ksym_sec->data->d_size;
+	ksym_sec->size = ksym_sec->data->d_size;
 
 	krela_sec->data->d_size = index * sizeof(struct kpatch_relocation);
 	krela_sec->sh.sh_size = krela_sec->data->d_size;
+	krela_sec->size = krela_sec->data->d_size;
 }
 
 static void kpatch_create_callbacks_objname_rela(struct kpatch_elf *kelf, char *objname)
@@ -3063,8 +3066,8 @@ static void kpatch_create_mcount_sections(struct kpatch_elf *kelf)
 		 * Modify the first instruction of the function to "callq
 		 * __fentry__" so that ftrace will be happy.
 		 */
-		newdata = malloc(sym->sec->data->d_size);
-		memcpy(newdata, sym->sec->data->d_buf, sym->sec->data->d_size);
+		newdata = malloc(sym->sec->size);
+		memcpy(newdata, sym->sec->data->d_buf, sym->sec->size);
 		sym->sec->data->d_buf = newdata;
 		insn = newdata;
 
@@ -3170,6 +3173,7 @@ static void kpatch_build_strings_section_data(struct kpatch_elf *kelf)
 		ERROR("malloc");
 	sec->data->d_buf = strtab;
 	sec->data->d_size = size;
+	sec->size = size;
 
 	/* populate strings section data */
 	list_for_each_entry(string, &kelf->strings, list) {
