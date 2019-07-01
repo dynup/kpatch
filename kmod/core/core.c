@@ -83,6 +83,11 @@ struct kpatch_kallsyms_args {
 	unsigned long pos;
 };
 
+struct kpatch_apply_patch_args {
+	struct kpatch_module *kpmod;
+	bool replace;
+};
+
 /* this is a double loop, use goto instead of break */
 #define do_for_each_linked_func(kpmod, func) {				\
 	struct kpatch_object *_object;					\
@@ -350,10 +355,13 @@ static inline void post_unpatch_callback(struct kpatch_object *object)
 /* Called from stop_machine */
 static int kpatch_apply_patch(void *data)
 {
-	struct kpatch_module *kpmod = data;
+	struct kpatch_apply_patch_args *args = data;
+	struct kpatch_module *kpmod;
 	struct kpatch_func *func;
 	struct kpatch_object *object;
 	int ret;
+
+	kpmod = args->kpmod;
 
 	ret = kpatch_verify_activeness_safety(kpmod);
 	if (ret) {
@@ -980,6 +988,11 @@ int kpatch_register(struct kpatch_module *kpmod, bool replace)
 	struct kpatch_object *object, *object_err = NULL;
 	struct kpatch_func *func;
 
+	struct kpatch_apply_patch_args args = {
+		.kpmod = kpmod,
+		.replace = replace,
+	};
+
 	if (!kpmod->mod || list_empty(&kpmod->objects))
 		return -EINVAL;
 
@@ -1031,7 +1044,7 @@ int kpatch_register(struct kpatch_module *kpmod, bool replace)
 	 * Idle the CPUs, verify activeness safety, and atomically make the new
 	 * functions visible to the ftrace handler.
 	 */
-	ret = stop_machine(kpatch_apply_patch, kpmod, NULL);
+	ret = stop_machine(kpatch_apply_patch, &args, NULL);
 
 	/*
 	 * For the replace case, remove any obsolete funcs from the hash and
