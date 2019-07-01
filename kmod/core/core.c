@@ -358,8 +358,10 @@ static int kpatch_apply_patch(void *data)
 	struct kpatch_apply_patch_args *args = data;
 	struct kpatch_module *kpmod;
 	struct kpatch_func *func;
+	struct hlist_node *tmp;
 	struct kpatch_object *object;
 	int ret;
+	int i;
 
 	kpmod = args->kpmod;
 
@@ -402,6 +404,19 @@ static int kpatch_apply_patch(void *data)
 
 		ret = -EBUSY;
 		goto err;
+	}
+
+	/*
+	 * The new patch has been applied successfully. Remove the functions
+	 * provided by the replaced patches (if any) from hash, to make sure
+	 * they will not be executed anymore.
+	 */
+	if (args->replace) {
+		hash_for_each_safe(kpatch_func_hash, i, tmp, func, node) {
+			if (func->op != KPATCH_OP_UNPATCH)
+				continue;
+			hash_del_rcu(&func->node);
+		}
 	}
 
 	/* run any user-defined post-patch callbacks */
@@ -982,9 +997,33 @@ out:
 	return 0;
 }
 
+/*
+ * Remove the obsolete functions from the ftrace filter.
+ * Return 1 if one or more of such functions have 'force' flag set,
+ * 0 otherwise.
+ */
+static int kpatch_ftrace_remove_unpatched_funcs(void)
+{
+	struct kpatch_module *kpmod;
+	struct kpatch_func *func;
+	int force = 0;
+
+	list_for_each_entry(kpmod, &kpmod_list, list) {
+		do_for_each_linked_func(kpmod, func) {
+			if (func->op != KPATCH_OP_UNPATCH)
+				continue;
+			if (func->force)
+				force = 1;
+			WARN_ON(kpatch_ftrace_remove_func(func->old_addr));
+		} while_for_each_linked_func();
+	}
+
+	return force;
+}
+
 int kpatch_register(struct kpatch_module *kpmod, bool replace)
 {
-	int ret, i, force = 0;
+	int ret, i;
 	struct kpatch_object *object, *object_err = NULL;
 	struct kpatch_func *func;
 
@@ -1047,21 +1086,15 @@ int kpatch_register(struct kpatch_module *kpmod, bool replace)
 	ret = stop_machine(kpatch_apply_patch, &args, NULL);
 
 	/*
-	 * For the replace case, remove any obsolete funcs from the hash and
-	 * the ftrace filter, and disable the owning patch module so that it
-	 * can be removed.
+	 * For the replace case, remove any obsolete funcs from the ftrace
+	 * filter, and disable the owning patch module so that it can be
+	 * removed.
 	 */
 	if (!ret && replace) {
 		struct kpatch_module *kpmod2, *safe;
+		int force;
 
-		hash_for_each_rcu(kpatch_func_hash, i, func, node) {
-			if (func->op != KPATCH_OP_UNPATCH)
-				continue;
-			if (func->force)
-				force = 1;
-			hash_del_rcu(&func->node);
-			WARN_ON(kpatch_ftrace_remove_func(func->old_addr));
-		}
+		force = kpatch_ftrace_remove_unpatched_funcs();
 
 		list_for_each_entry_safe(kpmod2, safe, &kpmod_list, list) {
 			if (kpmod == kpmod2)
