@@ -1288,7 +1288,8 @@ static void kpatch_replace_sections_syms(struct kpatch_elf *kelf)
 #ifdef __powerpc64__
 			add_off = 0;
 #else
-			if (rela->type == R_X86_64_PC32) {
+			if (rela->type == R_X86_64_PC32 ||
+			    rela->type == R_X86_64_PLT32) {
 				struct insn insn;
 				rela_insn(sec, rela, &insn);
 				add_off = (long)insn.next_byte -
