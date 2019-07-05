@@ -249,7 +249,6 @@ static int is_special_static(struct symbol *sym)
 	static char *prefixes[] = {
 		"__key.",
 		"__warned.",
-		"descriptor.",
 		"__func__.",
 		"__FUNCTION__.",
 		"_rs.",
@@ -261,12 +260,13 @@ static int is_special_static(struct symbol *sym)
 	if (!sym)
 		return 0;
 
-	if (sym->type == STT_SECTION) {
-		/* __verbose section contains the descriptor variables */
-		if (!strcmp(sym->name, "__verbose"))
-			return 1;
+	/* pr_debug() uses static local variables in the __verbose section */
+	if ((sym->type == STT_OBJECT && !strcmp(sym->sec->name, "__verbose")) ||
+	    (sym->type == STT_SECTION && !strcmp(sym->name, "__verbose")))
+		return 1;
 
-		/* otherwise make sure section is bundled */
+	if (sym->type == STT_SECTION) {
+		/* make sure section is bundled */
 		if (!sym->sec->sym)
 			return 0;
 
@@ -1117,8 +1117,8 @@ static void kpatch_correlate_static_local_variables(struct kpatch_elf *base,
 			if (bundled != patched_bundled)
 				ERROR("bundle mismatch for symbol %s", sym->name);
 			if (!bundled && sym->sec->twin != patched_sym->sec)
-				ERROR("sections %s and %s aren't correlated",
-				      sym->sec->name, patched_sym->sec->name);
+				ERROR("sections %s and %s aren't correlated for symbol %s",
+				      sym->sec->name, patched_sym->sec->name, sym->name);
 
 			log_debug("renaming and correlating static local %s to %s\n",
 				  patched_sym->name, sym->name);
