@@ -700,6 +700,7 @@ static int kpatch_write_relocations(struct kpatch_module *kpmod,
 		case R_X86_64_NONE:
 			continue;
 		case R_X86_64_PC32:
+		case R_X86_64_PLT32:
 			loc = dynrela->dest;
 			val = (u32)(dynrela->src + dynrela->addend -
 				    dynrela->dest);
