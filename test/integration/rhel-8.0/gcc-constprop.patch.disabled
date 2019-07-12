@@ -1,0 +1,14 @@
+diff --git a/kernel/time/timekeeping.c b/kernel/time/timekeeping.c
+index 4786df9..c73a687 100644
+--- a/kernel/time/timekeeping.c
++++ b/kernel/time/timekeeping.c
+@@ -1211,6 +1211,9 @@ void do_gettimeofday(struct timeval *tv)
+ {
+ 	struct timespec64 now;
+ 
++	if (!tv)
++		return;
++
+ 	getnstimeofday64(&now);
+ 	tv->tv_sec = now.tv_sec;
+ 	tv->tv_usec = now.tv_nsec/1000;

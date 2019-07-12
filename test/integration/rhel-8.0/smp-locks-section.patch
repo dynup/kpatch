@@ -1,0 +1,14 @@
+diff --git a/drivers/tty/tty_buffer.c b/drivers/tty/tty_buffer.c
+index ae3ce33..37727fe 100644
+--- a/drivers/tty/tty_buffer.c
++++ b/drivers/tty/tty_buffer.c
+@@ -256,6 +256,9 @@ static int __tty_buffer_request_room(struct tty_port *port, size_t size,
+ 	struct tty_buffer *b, *n;
+ 	int left, change;
+ 
++	if (!size)
++		printk("kpatch-test: testing .smp_locks section changes\n");
++
+ 	b = buf->tail;
+ 	if (b->flags & TTYB_NORMAL)
+ 		left = 2 * b->size - b->used;

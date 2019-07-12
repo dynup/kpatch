@@ -1,0 +1,12 @@
+diff --git a/fs/proc/proc_sysctl.c b/fs/proc/proc_sysctl.c
+index 89921a0..199b1d7 100644
+--- a/fs/proc/proc_sysctl.c
++++ b/fs/proc/proc_sysctl.c
+@@ -48,6 +48,7 @@ void proc_sys_poll_notify(struct ctl_table_poll *poll)
+ 	if (!poll)
+ 		return;
+ 
++	printk("kpatch-test: testing gcc .isra function name mangling\n");
+ 	atomic_inc(&poll->event);
+ 	wake_up_interruptible(&poll->wait);
+ }

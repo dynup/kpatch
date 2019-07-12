@@ -1,0 +1,12 @@
+diff --git a/net/core/dev.c b/net/core/dev.c
+index b6f9647..b376a48 100644
+--- a/net/core/dev.c
++++ b/net/core/dev.c
+@@ -4858,6 +4858,7 @@ static int __netif_receive_skb_core(struct sk_buff *skb, bool pfmemalloc)
+ 		case RX_HANDLER_PASS:
+ 			break;
+ 		default:
++			printk("BUG!\n");
+ 			BUG();
+ 		}
+ 	}
