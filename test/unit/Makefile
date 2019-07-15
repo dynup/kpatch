@@ -4,7 +4,9 @@ OBJDIR ?= objs/$(ARCH)
 .PHONY: all clean
 
 all: Makefile.include
-	cd $(shell git rev-parse --show-toplevel) && git submodule update --init --rebase
+	@cd $(shell git rev-parse --show-toplevel) && \
+		git diff-index --quiet HEAD test/unit/objs || \
+		echo -e "\nWARNING: unit tests are out of date - run \"git submodule update\"\n"
 	$(MAKE) -C $(OBJDIR)
 
 clean: Makefile.include
