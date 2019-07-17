@@ -55,7 +55,7 @@ clean:
 	@echo "BUILD $(TNAME)"
 	$(call check_all,$(TNAME).$(EXT_ORIG))
 	$(call check_all,$(TNAME).$(EXT_PATCHED))
-	$(CDO_ENV) $(file < $(TNAME).$(EXT_ENV)) $(CDO) $(TNAME).$(EXT_ORIG) $(TNAME).$(EXT_PATCHED) \
+	$(CDO_ENV) $(shell cat $(TNAME).$(EXT_ENV) 2>/dev/null) $(CDO) $(TNAME).$(EXT_ORIG) $(TNAME).$(EXT_PATCHED) \
 		vmlinux $(TNAME).$(EXT_SYMTAB) $(SYMVERS_FILE) \
 		test_$(TNAME) $@ $(MUTE_PASS)
 
@@ -63,7 +63,7 @@ clean:
 	@echo "BUILD $(TNAME)-FAIL"
 	$(call check_all,$(TNAME).$(EXT_ORIG))
 	$(call check_all,$(TNAME).$(EXT_FAIL))
-	! $(CDO_ENV) $(file < $(TNAME).$(EXT_ENV)) $(CDO) $(TNAME).$(EXT_ORIG) $(TNAME).$(EXT_FAIL) \
+	! $(CDO_ENV) $(shell cat $(TNAME).$(EXT_ENV) 2>/dev/null) $(CDO) $(TNAME).$(EXT_ORIG) $(TNAME).$(EXT_FAIL) \
 		vmlinux $(TNAME).$(EXT_SYMTAB) $(SYMVERS_FILE) \
 		test_$(TNAME) $@ $(MUTE_FAIL)
 # Expecting to fail, thus create output file manually so we won't rerun the
