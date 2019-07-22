@@ -3253,6 +3253,60 @@ static void kpatch_build_strings_section_data(struct kpatch_elf *kelf)
 	}
 }
 
+/*
+ * Don't allow sibling calls from patched functions on ppc64le.  Before doing a
+ * sibling call, the patched function restores the stack to its caller's stack.
+ * The kernel-generated stub then writes the patch module's r2 (toc) value to
+ * the caller's stack, corrupting it, eventually causing a panic after it
+ * returns to the caller and the caller tries to use the livepatch module's toc
+ * value.
+ *
+ * In theory we could instead a) generate a custom stub, or b) modify the
+ * kernel livepatch_handler code to save/restore the stack r2 value, but this
+ * is easier for now.
+ */
+static void kpatch_no_sibling_calls_ppc64le(struct kpatch_elf *kelf)
+{
+#ifdef __powerpc64__
+	struct symbol *sym;
+	unsigned int insn;
+	unsigned long offset;
+
+	list_for_each_entry(sym, &kelf->symbols, list) {
+		if (sym->type != STT_FUNC || sym->status != CHANGED)
+			continue;
+
+		for (offset = 0; offset < sym->sec->data->d_size; offset += 4) {
+
+			insn = *(unsigned int *)(sym->sec->data->d_buf + offset);
+
+			/*
+			 * The instruction 0x48000000 can be assumed to be a
+			 * sibling call:
+			 *
+			 * Bits 0-5 (opcode) == 0x9: unconditional branch
+			 * Bit 30 (absolute) == 0: relative address
+			 * Bit 31 (link) == 0: doesn't set LR (not a call)
+			 *
+			 * Bits 6-29 (branch address) == zero, which means
+			 * it's either a branch to self (infinite loop), or
+			 * there's a REL24 relocation for the address which
+			 * will be written by the linker or the kernel.
+			 */
+			if (insn != 0x48000000)
+				continue;
+
+			/* Make sure it's not a branch-to-self: */
+			if (!find_rela_by_offset(sym->sec->rela, offset))
+				continue;
+
+			ERROR("Found an unsupported sibling call at %s()+0x%lx.  Add __attribute__((optimize(\"-fno-optimize-sibling-calls\"))) to %s() definition.",
+			      sym->name, sym->sym.st_value + offset, sym->name);
+		}
+	}
+#endif
+}
+
 struct arguments {
 	char *args[7];
 	int debug;
@@ -3413,6 +3467,8 @@ int main(int argc, char *argv[])
 	}
 	free(base_locals);
 	free(hint);
+
+	kpatch_no_sibling_calls_ppc64le(kelf_out);
 
 	/* create strings, patches, and dynrelas sections */
 	kpatch_create_strings_elements(kelf_out);
