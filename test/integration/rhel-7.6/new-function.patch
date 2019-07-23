@@ -15,7 +15,7 @@ Index: kernel-rhel7/drivers/tty/n_tty.c
  	return (b - buf) ? b - buf : retval;
  }
  
-+static ssize_t n_tty_write(struct tty_struct *tty, struct file *file,
++static ssize_t __attribute__((optimize("-fno-optimize-sibling-calls"))) n_tty_write(struct tty_struct *tty, struct file *file,
 +			   const unsigned char *buf, size_t nr)
 +{
 +	return kpatch_n_tty_write(tty, file, buf, nr);
