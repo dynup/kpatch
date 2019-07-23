@@ -36,6 +36,7 @@ define check_all =
 	$(if $(findstring NOSTRIP,$(1)), , $(call check_stripped,$(1)))
 endef
 
+.DELETE_ON_ERROR: %.$(EXT_OUTPUT)
 
 all: $(TARGETS) $(TEST_TARGETS)
 
