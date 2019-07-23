@@ -952,6 +952,7 @@ if ! "$KPATCH_MODULE"; then
 fi
 
 readelf --wide --symbols "$TEMPDIR/patch/$MODNAME.ko" 2>/dev/null | \
+	sed -r 's/\s+\[<localentry>: 8\]//' | \
 	awk '($4=="FUNC" || $4=="OBJECT") && ($5=="GLOBAL" || $5=="WEAK") && $7!="UND" {print $NF}' \
 	>"${TEMPDIR}"/new_symbols
 
