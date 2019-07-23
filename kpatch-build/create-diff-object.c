@@ -1282,6 +1282,15 @@ static void kpatch_replace_sections_syms(struct kpatch_elf *kelf)
 			if (rela->sym->sec && rela->sym->sec->sym) {
 				rela->sym = rela->sym->sec->sym;
 
+				/*
+				 * On ppc64le with GCC6+, the function symbol
+				 * starts 8 bytes past the beginning of the
+				 * section, because of localentry.  So even
+				 * though the symbol is bundled, we can't
+				 * assume it's at offset 0 in the section.
+				 */
+				rela->addend -= rela->sym->sym.st_value;
+
 				continue;
 			}
 
