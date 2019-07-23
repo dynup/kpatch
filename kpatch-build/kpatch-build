@@ -629,7 +629,7 @@ else
 		echo "Unpacking kernel source"
 
 		rpm -D "_topdir $RPMTOPDIR" -ivh "$SRCRPM" 2>&1 | logger || die
-		rpmbuild -D "_topdir $RPMTOPDIR" -bp "--target=$(uname -m)" "$RPMTOPDIR"/SPECS/kernel$ALT.spec 2>&1 | logger ||
+		rpmbuild -D "_topdir $RPMTOPDIR" -bp --nodeps "--target=$(uname -m)" "$RPMTOPDIR"/SPECS/kernel$ALT.spec 2>&1 | logger ||
 			die "rpmbuild -bp failed.  you may need to run 'yum-builddep kernel' first."
 
 		mv "$RPMTOPDIR"/BUILD/kernel-*/linux-* "$SRCDIR" 2>&1 | logger || die
