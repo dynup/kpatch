@@ -1,6 +1,6 @@
 Name: kpatch
 Summary: Dynamic kernel patching
-Version: 0.7.0
+Version: 0.7.1
 License: GPLv2
 Group: System Environment/Kernel
 URL: http://github.com/dynup/kpatch
@@ -93,6 +93,12 @@ rm -rf %{buildroot}
 %{_mandir}/man1/kpatch-build.1*
 
 %changelog
+* Wed Jul 24 2019 Josh Poimboeuf <jpoimboe@redhat.com> - 0.7.1
+- Fix several powerpc-specific bugs, including two which can result in kernel
+  panics
+- Use rpmbuild --nodeps for installing srpm on Fedora/RHEL
+- Fix inconsistent unit test failures for FAIL tests
+
 * Thu Jul 18 2019 Artem Savkov <asavkov@redhat.com> - 0.7.0
 - Multiple memory leak fixes in kpatch-build
 - livepatch-patch-hook compatability fixes for kernels 5.1+
