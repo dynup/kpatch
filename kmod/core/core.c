@@ -55,12 +55,11 @@
 #endif
 
 #if !defined(CONFIG_FUNCTION_TRACER) || \
-	!defined(CONFIG_HAVE_FENTRY) || \
 	!defined(CONFIG_MODULES) || \
 	!defined(CONFIG_SYSFS) || \
 	!defined(CONFIG_STACKTRACE) || \
 	!defined(CONFIG_KALLSYMS_ALL)
-#error "CONFIG_FUNCTION_TRACER, CONFIG_HAVE_FENTRY, CONFIG_MODULES, CONFIG_SYSFS, CONFIG_KALLSYMS_ALL kernel config options are required"
+#error "CONFIG_FUNCTION_TRACER, CONFIG_MODULES, CONFIG_SYSFS, CONFIG_KALLSYMS_ALL kernel config options are required"
 #endif
 
 #define KPATCH_HASH_BITS 8
@@ -137,6 +136,9 @@ static atomic_t kpatch_state;
 
 static int (*kpatch_set_memory_rw)(unsigned long addr, int numpages);
 static int (*kpatch_set_memory_ro)(unsigned long addr, int numpages);
+
+extern int static_relocate(struct module *mod, unsigned long type,
+			   void * loc, unsigned long value);
 
 #define MAX_STACK_TRACE_DEPTH   64
 static unsigned long stack_entries[MAX_STACK_TRACE_DEPTH];
@@ -280,7 +282,7 @@ static int kpatch_verify_activeness_safety(struct kpatch_module *kpmod)
 			goto out;
 		}
 
-                for (i = 0; i < trace.nr_entries; i++) {
+		for (i = 0; i < trace.nr_entries; i++) {
 			if (trace.entries[i] == ULONG_MAX)
 				break;
 			ret = kpatch_backtrace_address_verify(kpmod,
@@ -470,6 +472,10 @@ kpatch_ftrace_handler(unsigned long ip, unsigned long parent_ip,
 
 	preempt_disable_notrace();
 
+#ifdef CONFIG_ARM64
+	ip -= AARCH64_INSN_SIZE;
+#endif
+
 	if (likely(!in_nmi()))
 		func = kpatch_get_func(ip);
 	else {
@@ -501,8 +507,15 @@ kpatch_ftrace_handler(unsigned long ip, unsigned long parent_ip,
 		}
 	}
 done:
+
 	if (func)
+#ifdef CONFIG_X86
 		regs->ip = func->new_addr + MCOUNT_INSN_SIZE;
+#elif defined(CONFIG_ARM64)
+		regs->pc = func->new_addr;
+#else
+		pr_err("Not support this arch\n");
+#endif
 
 	preempt_enable_notrace();
 }
@@ -524,6 +537,9 @@ static int kpatch_ftrace_add_func(unsigned long ip)
 	if (kpatch_get_func(ip))
 		return 0;
 
+#ifdef CONFIG_ARM64
+	ip += AARCH64_INSN_SIZE;
+#endif
 	ret = ftrace_set_filter_ip(&kpatch_ftrace_ops, ip, 0, 0);
 	if (ret) {
 		pr_err("can't set ftrace filter at address 0x%lx\n", ip);
@@ -560,6 +576,9 @@ static int kpatch_ftrace_remove_func(unsigned long ip)
 	}
 	kpatch_num_patched--;
 
+#ifdef CONFIG_ARM64
+	ip += AARCH64_INSN_SIZE;
+#endif
 	ret = ftrace_set_filter_ip(&kpatch_ftrace_ops, ip, 1, 0);
 	if (ret) {
 		pr_err("can't remove ftrace filter at address 0x%lx\n", ip);
@@ -697,10 +716,10 @@ static int kpatch_write_relocations(struct kpatch_module *kpmod,
 		}
 
 		switch (dynrela->type) {
+#ifdef CONFIG_X86
 		case R_X86_64_NONE:
 			continue;
 		case R_X86_64_PC32:
-		case R_X86_64_PLT32:
 			loc = dynrela->dest;
 			val = (u32)(dynrela->src + dynrela->addend -
 				    dynrela->dest);
@@ -716,6 +735,7 @@ static int kpatch_write_relocations(struct kpatch_module *kpmod,
 			val = dynrela->src;
 			size = 8;
 			break;
+#endif
 		default:
 			pr_err("unsupported rela type %ld for source %s (0x%lx <- 0x%lx)\n",
 			       dynrela->type, dynrela->name, dynrela->dest,
@@ -747,9 +767,9 @@ static int kpatch_write_relocations(struct kpatch_module *kpmod,
      ( LINUX_VERSION_CODE >= KERNEL_VERSION(4, 4, 0) && \
       UTS_UBUNTU_RELEASE_ABI >= 7 ) \
     )
-               readonly = (loc < core + kpmod->mod->core_layout.ro_size);
+		readonly = (loc < core + kpmod->mod->core_layout.ro_size);
 #else
-               readonly = (loc < core + kpmod->mod->core_ro_size);
+		readonly = (loc < core + kpmod->mod->core_ro_size);
 #endif
 #endif
 
@@ -770,6 +790,47 @@ static int kpatch_write_relocations(struct kpatch_module *kpmod,
 		}
 	}
 
+	return 0;
+}
+
+static int kpatch_write_relocations_arm64(struct kpatch_module *kpmod,
+					struct kpatch_object *object)
+{
+	struct module *mod = kpmod->mod;
+	struct kpatch_dynrela *dynrela;
+	u64 loc, val;
+	int type, ret;
+
+	module_disable_ro(mod);
+	list_for_each_entry(dynrela, &object->dynrelas, list) {
+		if (dynrela->external)
+			ret = kpatch_find_external_symbol(kpmod->mod->name,
+							  dynrela->name,
+							  dynrela->sympos,
+							  &dynrela->src);
+		else
+			ret = kpatch_find_object_symbol(object->name,
+							dynrela->name,
+							dynrela->sympos,
+							&dynrela->src);
+		if (ret) {
+			pr_err("unable to find symbol '%s'\n", dynrela->name);
+			module_enable_ro(mod, true);
+			return ret;
+		}
+
+		loc = dynrela->dest;
+		val = dynrela->src + dynrela->addend;
+		type = dynrela->type;
+		ret = static_relocate(mod, type, (void *)loc, val);
+		if (ret) {
+			pr_err("write to 0x%llx failed for symbol %s\n",
+				loc, dynrela->name);
+			module_enable_ro(mod, true);
+			return ret;
+		}
+	}
+	module_enable_ro(mod, true);
 	return 0;
 }
 
@@ -831,7 +892,14 @@ static int kpatch_link_object(struct kpatch_module *kpmod,
 		object->mod = mod;
 	}
 
+#ifdef	CONFIG_X86
 	ret = kpatch_write_relocations(kpmod, object);
+#elif defined(CONFIG_ARM64)
+	ret = kpatch_write_relocations_arm64(kpmod, object);
+#else
+	pr_err("Not support this arch relocations\n");
+	ret = -EINVAL;
+#endif
 	if (ret)
 		goto err_put;
 
