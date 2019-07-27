@@ -313,6 +313,12 @@ Compile kpatch:
 
     make
 
+#### arm64
+
+To support arm64(aarch64), a new kernel should be built after the patch within
+*kernel-patch* directory is patched to your kernel.
+
+And it's required that gcc support *-fpatchable-function-entry* option.
 
 ### Install
 
