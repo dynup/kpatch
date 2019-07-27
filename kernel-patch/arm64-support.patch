@@ -1,0 +1,777 @@
+From 7b0a0af6c8f842ebf006f87b45069ba08fba6b62 Mon Sep 17 00:00:00 2001
+From: Lei Chen <lennychen@tencent.com>
+Date: Thu, 25 Jul 2019 17:19:34 +0800
+Subject: [PATCH 2/3] kpatch: kernel modifyication for supporting kpatch
+
+Signed-off-by: Lei Chen <lennychen@tencent.com>
+---
+ arch/arm64/Kconfig                    |   1 +
+ arch/arm64/Makefile                   |   5 +
+ arch/arm64/include/asm/ftrace.h       |  14 +++
+ arch/arm64/include/asm/module.h       |   3 +-
+ arch/arm64/kernel/Makefile            |   6 +-
+ arch/arm64/kernel/arm64ksyms.c        |   2 +
+ arch/arm64/kernel/entry-ftrace.S      | 152 ++++++++++++++++++++++++----
+ arch/arm64/kernel/ftrace.c            | 117 +++++++++++++++++-----
+ arch/arm64/kernel/module-plts.c       |   3 +-
+ arch/arm64/kernel/module.c            | 180 +++++++++++++++++++++++++++++++++-
+ drivers/firmware/efi/libstub/Makefile |   4 +-
+ include/asm-generic/vmlinux.lds.h     |   1 +
+ include/linux/compiler_types.h        |   2 +
+ kernel/module.c                       |   9 +-
+ mm/kasan/Makefile                     |   2 +-
+ 15 files changed, 447 insertions(+), 54 deletions(-)
+
+diff --git a/arch/arm64/Kconfig b/arch/arm64/Kconfig
+index c30cd78..b5349b8 100644
+--- a/arch/arm64/Kconfig
++++ b/arch/arm64/Kconfig
+@@ -88,6 +88,7 @@ config ARM64
+ 	select HAVE_DMA_API_DEBUG
+ 	select HAVE_DMA_CONTIGUOUS
+ 	select HAVE_DYNAMIC_FTRACE
++	select HAVE_DYNAMIC_FTRACE_WITH_REGS
+ 	select HAVE_EFFICIENT_UNALIGNED_ACCESS
+ 	select HAVE_FTRACE_MCOUNT_RECORD
+ 	select HAVE_FUNCTION_TRACER
+diff --git a/arch/arm64/Makefile b/arch/arm64/Makefile
+index 0c5f70e..b15e6da 100644
+--- a/arch/arm64/Makefile
++++ b/arch/arm64/Makefile
+@@ -83,6 +83,11 @@ ifeq ($(CONFIG_ARM64_MODULE_PLTS),y)
+ KBUILD_LDFLAGS_MODULE	+= -T $(srctree)/arch/arm64/kernel/module.lds
+ endif
+ 
++ifeq ($(CONFIG_DYNAMIC_FTRACE_WITH_REGS),y)
++  KBUILD_CPPFLAGS += -DCC_USING_PATCHABLE_FENTRY
++  CC_FLAGS_FTRACE := -fpatchable-function-entry=2
++endif
++
+ # Default value
+ head-y		:= arch/arm64/kernel/head.o
+ 
+diff --git a/arch/arm64/include/asm/ftrace.h b/arch/arm64/include/asm/ftrace.h
+index caa955f..9a4e151 100644
+--- a/arch/arm64/include/asm/ftrace.h
++++ b/arch/arm64/include/asm/ftrace.h
+@@ -13,7 +13,14 @@
+ 
+ #include <asm/insn.h>
+ 
++#ifdef CONFIG_DYNAMIC_FTRACE_WITH_REGS
++#define ARCH_SUPPORTS_FTRACE_OPS 1
++/* All we need is some magic value. Simply use "_mCount:" */
++#define MCOUNT_ADDR		(0x5f6d436f756e743a)
++#else
+ #define MCOUNT_ADDR		((unsigned long)_mcount)
++#endif
++
+ #define MCOUNT_INSN_SIZE	AARCH64_INSN_SIZE
+ 
+ #ifndef __ASSEMBLY__
+@@ -33,6 +40,13 @@ extern void return_to_handler(void);
+ static inline unsigned long ftrace_call_adjust(unsigned long addr)
+ {
+ 	/*
++	 * For -fpatchable-function-entry=2, there's first the
++	 * LR saver, and only then the actual call insn.
++	 * Advance addr accordingly.
++	 */
++	if (IS_ENABLED(CONFIG_DYNAMIC_FTRACE_WITH_REGS))
++		return (addr + AARCH64_INSN_SIZE);
++	/*
+ 	 * addr is the address of the mcount call instruction.
+ 	 * recordmcount does the necessary offset calculation.
+ 	 */
+diff --git a/arch/arm64/include/asm/module.h b/arch/arm64/include/asm/module.h
+index 4f76617..409761e 100644
+--- a/arch/arm64/include/asm/module.h
++++ b/arch/arm64/include/asm/module.h
+@@ -32,7 +32,8 @@ struct mod_arch_specific {
+ 	struct mod_plt_sec	init;
+ 
+ 	/* for CONFIG_DYNAMIC_FTRACE */
+-	struct plt_entry 	*ftrace_trampoline;
++	struct plt_entry	*ftrace_trampolines;
++#define MOD_ARCH_NR_FTRACE_TRAMPOLINES	2
+ };
+ #endif
+ 
+diff --git a/arch/arm64/kernel/Makefile b/arch/arm64/kernel/Makefile
+index 7d2a72b..3c270e4 100644
+--- a/arch/arm64/kernel/Makefile
++++ b/arch/arm64/kernel/Makefile
+@@ -7,9 +7,9 @@ CPPFLAGS_vmlinux.lds	:= -DTEXT_OFFSET=$(TEXT_OFFSET)
+ AFLAGS_head.o		:= -DTEXT_OFFSET=$(TEXT_OFFSET)
+ CFLAGS_armv8_deprecated.o := -I$(src)
+ 
+-CFLAGS_REMOVE_ftrace.o = -pg
+-CFLAGS_REMOVE_insn.o = -pg
+-CFLAGS_REMOVE_return_address.o = -pg
++CFLAGS_REMOVE_ftrace.o = $(CC_FLAGS_FTRACE)
++CFLAGS_REMOVE_insn.o = $(CC_FLAGS_FTRACE)
++CFLAGS_REMOVE_return_address.o = $(CC_FLAGS_FTRACE)
+ 
+ CFLAGS_setup.o = -DUTS_MACHINE='"$(UTS_MACHINE)"'
+ 
+diff --git a/arch/arm64/kernel/arm64ksyms.c b/arch/arm64/kernel/arm64ksyms.c
+index 66be504..8fa4918 100644
+--- a/arch/arm64/kernel/arm64ksyms.c
++++ b/arch/arm64/kernel/arm64ksyms.c
+@@ -67,10 +67,12 @@ EXPORT_SYMBOL(test_and_clear_bit);
+ EXPORT_SYMBOL(change_bit);
+ EXPORT_SYMBOL(test_and_change_bit);
+ 
++#ifndef CONFIG_DYNAMIC_FTRACE_WITH_REGS
+ #ifdef CONFIG_FUNCTION_TRACER
+ EXPORT_SYMBOL(_mcount);
+ NOKPROBE_SYMBOL(_mcount);
+ #endif
++#endif
+ 
+ 	/* arm-smccc */
+ EXPORT_SYMBOL(__arm_smccc_smc);
+diff --git a/arch/arm64/kernel/entry-ftrace.S b/arch/arm64/kernel/entry-ftrace.S
+index 5a10e3a..8df0360 100644
+--- a/arch/arm64/kernel/entry-ftrace.S
++++ b/arch/arm64/kernel/entry-ftrace.S
+@@ -10,6 +10,7 @@
+  */
+ 
+ #include <linux/linkage.h>
++#include <asm/asm-offsets.h>
+ #include <asm/assembler.h>
+ #include <asm/ftrace.h>
+ #include <asm/insn.h>
+@@ -128,6 +129,7 @@ skip_ftrace_call:
+ ENDPROC(_mcount)
+ 
+ #else /* CONFIG_DYNAMIC_FTRACE */
++#ifndef CONFIG_DYNAMIC_FTRACE_WITH_REGS
+ /*
+  * _mcount() is used to build the kernel with -pg option, but all the branch
+  * instructions to _mcount() are replaced to NOP initially at kernel start up,
+@@ -167,6 +169,138 @@ ftrace_graph_call:			// ftrace_graph_caller();
+ 
+ 	mcount_exit
+ ENDPROC(ftrace_caller)
++
++#ifdef CONFIG_FUNCTION_GRAPH_TRACER
++/*
++ * void ftrace_graph_caller(void)
++ *
++ * Called from _mcount() or ftrace_caller() when function_graph tracer is
++ * selected.
++ * This function w/ prepare_ftrace_return() fakes link register's value on
++ * the call stack in order to intercept instrumented function's return path
++ * and run return_to_handler() later on its exit.
++ */
++ENTRY(ftrace_graph_caller)
++	mcount_get_lr_addr	x0	// pointer to function's saved lr
++	mcount_get_pc		x1	// function's pc
++	mcount_get_parent_fp	x2	// parent's fp
++	bl	prepare_ftrace_return	// prepare_ftrace_return(&lr, pc, fp)
++
++	mcount_exit
++ENDPROC(ftrace_graph_caller)
++#endif /* CONFIG_FUNCTION_GRAPH_TRACER */
++
++#else /* CONFIG_DYNAMIC_FTRACE_WITH_REGS */
++
++	.macro  ftrace_regs_entry, allregs=0
++	/* make room for pt_regs, plus a callee frame */
++	sub	sp, sp, #(S_FRAME_SIZE + 16)
++
++	/* save function arguments */
++	stp	x0, x1, [sp, #S_X0]
++	stp	x2, x3, [sp, #S_X2]
++	stp	x4, x5, [sp, #S_X4]
++	stp	x6, x7, [sp, #S_X6]
++	stp	x8, x9, [sp, #S_X8]
++
++	.if \allregs == 1
++	stp	x10, x11, [sp, #S_X10]
++	stp	x12, x13, [sp, #S_X12]
++	stp	x14, x15, [sp, #S_X14]
++	stp	x16, x17, [sp, #S_X16]
++	stp	x18, x19, [sp, #S_X18]
++	stp	x20, x21, [sp, #S_X20]
++	stp	x22, x23, [sp, #S_X22]
++	stp	x24, x25, [sp, #S_X24]
++	stp	x26, x27, [sp, #S_X26]
++	.endif
++
++	/* Save fp and x28, which is used in this function. */
++	stp	x28, x29, [sp, #S_X28]
++
++	/* The stack pointer as it was on ftrace_caller entry... */
++	add	x28, sp, #(S_FRAME_SIZE + 16)
++	/* ...and the link Register at callee entry */
++	stp	x9, x28, [sp, #S_LR]	/* to pt_regs.r[30] and .sp */
++
++	/* The program counter just after the ftrace call site */
++	str	lr, [sp, #S_PC]
++
++	/* Now fill in callee's preliminary stackframe. */
++	stp	x29, x9, [sp, #S_FRAME_SIZE]
++	/* Let FP point to it. */
++	add	x29, sp, #S_FRAME_SIZE
++
++	/* Our stackframe, stored inside pt_regs. */
++	stp	x29, x30, [sp, #S_STACKFRAME]
++	add	x29, sp, #S_STACKFRAME
++	.endm
++
++ENTRY(ftrace_regs_caller)
++	ftrace_regs_entry	1
++	b	ftrace_common
++ENDPROC(ftrace_regs_caller)
++
++ENTRY(ftrace_caller)
++	ftrace_regs_entry	0
++	b	ftrace_common
++ENDPROC(ftrace_caller)
++
++ENTRY(ftrace_common)
++
++	mov	x3, sp				/* pt_regs are @sp */
++	ldr_l	x2, function_trace_op, x0
++	mov	x1, x9				/* parent IP */
++	sub	x0, lr, #AARCH64_INSN_SIZE
++
++	.global ftrace_call
++ftrace_call:
++	bl	ftrace_stub
++
++#ifdef CONFIG_FUNCTION_GRAPH_TRACER
++	.global ftrace_graph_call	// ftrace_graph_caller();
++ftrace_graph_call:
++	nop				// If enabled, this will be replaced
++					// "b ftrace_graph_caller"
++#endif
++
++/*
++ * GCC's patchable-function-entry implicitly disables IPA-RA,
++ * so all non-argument registers are either scratch / dead
++ * or callee-saved (within the ftrace framework). Function
++ * arguments of the call we are intercepting right now however
++ * need to be preserved in any case.
++ */
++ftrace_common_return:
++	/* restore function args */
++	ldp	x0, x1, [sp]
++	ldp	x2, x3, [sp, #S_X2]
++	ldp	x4, x5, [sp, #S_X4]
++	ldp	x6, x7, [sp, #S_X6]
++	ldr	x8, [sp, #S_X8]
++
++	/* restore fp and x28 */
++	ldp	x28, x29, [sp, #S_X28]
++
++	ldr	lr, [sp, #S_LR]
++	ldr	x9, [sp, #S_PC]
++	/* clean up both frames, ours and callee preliminary */
++	add	sp, sp, #S_FRAME_SIZE + 16
++
++	ret	x9
++ENDPROC(ftrace_common)
++
++#ifdef CONFIG_FUNCTION_GRAPH_TRACER
++ENTRY(ftrace_graph_caller)
++	add	x0, sp, #S_LR
++	ldr	x1, [sp, #S_PC]
++	sub	x1, x1, #AARCH64_INSN_SIZE
++	ldr	x2, [sp, #S_FRAME_SIZE]	   /* fp */
++	bl	prepare_ftrace_return
++	b	ftrace_common_return
++ENDPROC(ftrace_graph_caller)
++#endif /* CONFIG_FUNCTION_GRAPH_TRACER */
++#endif /* CONFIG_DYNAMIC_FTRACE_WITH_REGS */
+ #endif /* CONFIG_DYNAMIC_FTRACE */
+ 
+ ENTRY(ftrace_stub)
+@@ -193,24 +327,6 @@ ENDPROC(ftrace_stub)
+ 	.endm
+ 
+ /*
+- * void ftrace_graph_caller(void)
+- *
+- * Called from _mcount() or ftrace_caller() when function_graph tracer is
+- * selected.
+- * This function w/ prepare_ftrace_return() fakes link register's value on
+- * the call stack in order to intercept instrumented function's return path
+- * and run return_to_handler() later on its exit.
+- */
+-ENTRY(ftrace_graph_caller)
+-	mcount_get_lr_addr	  x0	//     pointer to function's saved lr
+-	mcount_get_pc		  x1	//     function's pc
+-	mcount_get_parent_fp	  x2	//     parent's fp
+-	bl	prepare_ftrace_return	// prepare_ftrace_return(&lr, pc, fp)
+-
+-	mcount_exit
+-ENDPROC(ftrace_graph_caller)
+-
+-/*
+  * void return_to_handler(void)
+  *
+  * Run ftrace_return_to_handler() before going back to parent.
+diff --git a/arch/arm64/kernel/ftrace.c b/arch/arm64/kernel/ftrace.c
+index 50986e3..2d52999 100644
+--- a/arch/arm64/kernel/ftrace.c
++++ b/arch/arm64/kernel/ftrace.c
+@@ -65,6 +65,40 @@ int ftrace_update_ftrace_func(ftrace_func_t func)
+ 	return ftrace_modify_code(pc, 0, new, false);
+ }
+ 
++#ifdef CONFIG_ARM64_MODULE_PLTS
++static int install_ftrace_trampoline(struct module *mod, unsigned long *addr)
++{
++	struct plt_entry trampoline, *mod_trampoline;
++
++	/*
++	 * Iterate over
++	 * mod->arch.ftrace_trampolines[MOD_ARCH_NR_FTRACE_TRAMPOLINES]
++	 * The assignment to various ftrace functions happens here.
++	 */
++	if (*addr == FTRACE_ADDR)
++		mod_trampoline = &mod->arch.ftrace_trampolines[0];
++	else if (*addr == FTRACE_REGS_ADDR)
++		mod_trampoline = &mod->arch.ftrace_trampolines[1];
++	else
++		return -EINVAL;
++
++	trampoline = get_plt_entry(*addr, mod_trampoline);
++
++	if (!plt_entries_equal(mod_trampoline, &trampoline)) {
++		/* point the trampoline at our ftrace entry point */
++		module_disable_ro(mod);
++		*mod_trampoline = trampoline;
++		module_enable_ro(mod, true);
++
++		/* update trampoline before patching in the branch */
++		smp_wmb();
++	}
++	*addr = (unsigned long)(void *)mod_trampoline;
++
++	return 0;
++}
++#endif
++
+ /*
+  * Turn on the call to ftrace_caller() in instrumented function
+  */
+@@ -76,8 +110,8 @@ int ftrace_make_call(struct dyn_ftrace *rec, unsigned long addr)
+ 
+ 	if (offset < -SZ_128M || offset >= SZ_128M) {
+ #ifdef CONFIG_ARM64_MODULE_PLTS
+-		struct plt_entry trampoline;
+ 		struct module *mod;
++		int ret;
+ 
+ 		/*
+ 		 * On kernels that support module PLTs, the offset between the
+@@ -96,32 +130,14 @@ int ftrace_make_call(struct dyn_ftrace *rec, unsigned long addr)
+ 		if (WARN_ON(!mod))
+ 			return -EINVAL;
+ 
+-		/*
+-		 * There is only one ftrace trampoline per module. For now,
+-		 * this is not a problem since on arm64, all dynamic ftrace
+-		 * invocations are routed via ftrace_caller(). This will need
+-		 * to be revisited if support for multiple ftrace entry points
+-		 * is added in the future, but for now, the pr_err() below
+-		 * deals with a theoretical issue only.
+-		 */
+-		trampoline = get_plt_entry(addr);
+-		if (!plt_entries_equal(mod->arch.ftrace_trampoline,
+-				       &trampoline)) {
+-			if (!plt_entries_equal(mod->arch.ftrace_trampoline,
+-					       &(struct plt_entry){})) {
+-				pr_err("ftrace: far branches to multiple entry points unsupported inside a single module\n");
+-				return -EINVAL;
+-			}
+-
+-			/* point the trampoline to our ftrace entry point */
+-			module_disable_ro(mod);
+-			*mod->arch.ftrace_trampoline = trampoline;
+-			module_enable_ro(mod, true);
++		/* Check against our well-known list of ftrace entry points */
++		if (addr == FTRACE_ADDR || addr == FTRACE_REGS_ADDR) {
++			ret = install_ftrace_trampoline(mod, &addr);
++			if (ret < 0)
++				return ret;
++		} else
++			return -EINVAL;
+ 
+-			/* update trampoline before patching in the branch */
+-			smp_wmb();
+-		}
+-		addr = (unsigned long)(void *)mod->arch.ftrace_trampoline;
+ #else /* CONFIG_ARM64_MODULE_PLTS */
+ 		return -EINVAL;
+ #endif /* CONFIG_ARM64_MODULE_PLTS */
+@@ -133,6 +149,45 @@ int ftrace_make_call(struct dyn_ftrace *rec, unsigned long addr)
+ 	return ftrace_modify_code(pc, old, new, true);
+ }
+ 
++#ifdef CONFIG_DYNAMIC_FTRACE_WITH_REGS
++int ftrace_modify_call(struct dyn_ftrace *rec, unsigned long old_addr,
++			unsigned long addr)
++{
++	unsigned long pc = rec->ip;
++	u32 old, new;
++
++	old = aarch64_insn_gen_branch_imm(pc, old_addr,
++					  AARCH64_INSN_BRANCH_LINK);
++	new = aarch64_insn_gen_branch_imm(pc, addr, AARCH64_INSN_BRANCH_LINK);
++
++	return ftrace_modify_code(pc, old, new, true);
++}
++
++/*
++ * Ftrace with regs generates the tracer calls as close as possible to
++ * the function entry; no stack frame has been set up at that point.
++ * In order to make another call e.g to ftrace_caller, the LR must be
++ * saved from being overwritten.
++ * Between two functions, and with IPA-RA turned off, the scratch registers
++ * are available, so move the LR to x9 before calling into ftrace.
++ *
++ * This function is called once during kernel startup for each call site.
++ * The address passed is that of the actual branch, so patch in the LR saver
++ * just before that.
++ */
++static int ftrace_setup_lr_saver(unsigned long addr)
++{
++	u32 old, new;
++
++	old = aarch64_insn_gen_nop();
++	/* "mov x9, lr" is officially aliased from "orr x9, xzr, lr". */
++	new = aarch64_insn_gen_logical_shifted_reg(AARCH64_INSN_REG_9,
++		AARCH64_INSN_REG_ZR, AARCH64_INSN_REG_LR, 0,
++		AARCH64_INSN_VARIANT_64BIT, AARCH64_INSN_LOGIC_ORR);
++	return ftrace_modify_code(addr - AARCH64_INSN_SIZE, old, new, true);
++}
++#endif
++
+ /*
+  * Turn off the call to ftrace_caller() in instrumented function
+  */
+@@ -144,6 +199,16 @@ int ftrace_make_nop(struct module *mod, struct dyn_ftrace *rec,
+ 	u32 old = 0, new;
+ 	long offset = (long)pc - (long)addr;
+ 
++	/*
++	 * -fpatchable-function-entry= does not generate a profiling call
++	 *  initially; the NOPs are already there. So instead,
++	 *  put the LR saver there ahead of time, in order to avoid
++	 *  any race condition over patching 2 instructions.
++	 */
++	if (IS_ENABLED(CONFIG_DYNAMIC_FTRACE_WITH_REGS) &&
++		addr == MCOUNT_ADDR)
++		return ftrace_setup_lr_saver(pc);
++
+ 	if (offset < -SZ_128M || offset >= SZ_128M) {
+ #ifdef CONFIG_ARM64_MODULE_PLTS
+ 		u32 replaced;
+diff --git a/arch/arm64/kernel/module-plts.c b/arch/arm64/kernel/module-plts.c
+index ea640f9..c48e49a 100644
+--- a/arch/arm64/kernel/module-plts.c
++++ b/arch/arm64/kernel/module-plts.c
+@@ -190,7 +190,8 @@ int module_frob_arch_sections(Elf_Ehdr *ehdr, Elf_Shdr *sechdrs,
+ 		tramp->sh_type = SHT_NOBITS;
+ 		tramp->sh_flags = SHF_EXECINSTR | SHF_ALLOC;
+ 		tramp->sh_addralign = __alignof__(struct plt_entry);
+-		tramp->sh_size = sizeof(struct plt_entry);
++		tramp->sh_size = MOD_ARCH_NR_FTRACE_TRAMPOLINES
++				 * sizeof(struct plt_entry);
+ 	}
+ 
+ 	return 0;
+diff --git a/arch/arm64/kernel/module.c b/arch/arm64/kernel/module.c
+index f469e04..ce05638 100644
+--- a/arch/arm64/kernel/module.c
++++ b/arch/arm64/kernel/module.c
+@@ -197,6 +197,184 @@ static int reloc_insn_imm(enum aarch64_reloc_op op, __le32 *place, u64 val,
+ 	return 0;
+ }
+ 
++int static_relocate(struct module *me, int type, void *loc,
++		    unsigned long val)
++{
++	int ovf = 0;
++	bool overflow_check = true;
++	/* Perform the static relocation. */
++	switch (type) {
++		/* Null relocations. */
++		case R_ARM_NONE:
++		case R_AARCH64_NONE:
++			ovf = 0;
++			break;
++
++		/* Data relocations. */
++		case R_AARCH64_ABS64:
++			overflow_check = false;
++			ovf = reloc_data(RELOC_OP_ABS, loc, val, 64);
++			break;
++		case R_AARCH64_ABS32:
++			ovf = reloc_data(RELOC_OP_ABS, loc, val, 32);
++			break;
++		case R_AARCH64_ABS16:
++			ovf = reloc_data(RELOC_OP_ABS, loc, val, 16);
++			break;
++		case R_AARCH64_PREL64:
++			overflow_check = false;
++			ovf = reloc_data(RELOC_OP_PREL, loc, val, 64);
++			break;
++		case R_AARCH64_PREL32:
++			ovf = reloc_data(RELOC_OP_PREL, loc, val, 32);
++			break;
++		case R_AARCH64_PREL16:
++			ovf = reloc_data(RELOC_OP_PREL, loc, val, 16);
++			break;
++
++		/* MOVW instruction relocations. */
++		case R_AARCH64_MOVW_UABS_G0_NC:
++			overflow_check = false;
++		case R_AARCH64_MOVW_UABS_G0:
++			ovf = reloc_insn_movw(RELOC_OP_ABS, loc, val, 0,
++					      AARCH64_INSN_IMM_MOVKZ);
++			break;
++		case R_AARCH64_MOVW_UABS_G1_NC:
++			overflow_check = false;
++		case R_AARCH64_MOVW_UABS_G1:
++			ovf = reloc_insn_movw(RELOC_OP_ABS, loc, val, 16,
++					      AARCH64_INSN_IMM_MOVKZ);
++			break;
++		case R_AARCH64_MOVW_UABS_G2_NC:
++			overflow_check = false;
++		case R_AARCH64_MOVW_UABS_G2:
++			ovf = reloc_insn_movw(RELOC_OP_ABS, loc, val, 32,
++					      AARCH64_INSN_IMM_MOVKZ);
++			break;
++		case R_AARCH64_MOVW_UABS_G3:
++			/* We're using the top bits so we can't overflow. */
++			overflow_check = false;
++			ovf = reloc_insn_movw(RELOC_OP_ABS, loc, val, 48,
++					      AARCH64_INSN_IMM_MOVKZ);
++			break;
++		case R_AARCH64_MOVW_SABS_G0:
++			ovf = reloc_insn_movw(RELOC_OP_ABS, loc, val, 0,
++					      AARCH64_INSN_IMM_MOVNZ);
++			break;
++		case R_AARCH64_MOVW_SABS_G1:
++			ovf = reloc_insn_movw(RELOC_OP_ABS, loc, val, 16,
++					      AARCH64_INSN_IMM_MOVNZ);
++			break;
++		case R_AARCH64_MOVW_SABS_G2:
++			ovf = reloc_insn_movw(RELOC_OP_ABS, loc, val, 32,
++					      AARCH64_INSN_IMM_MOVNZ);
++			break;
++		case R_AARCH64_MOVW_PREL_G0_NC:
++			overflow_check = false;
++			ovf = reloc_insn_movw(RELOC_OP_PREL, loc, val, 0,
++					      AARCH64_INSN_IMM_MOVKZ);
++			break;
++		case R_AARCH64_MOVW_PREL_G0:
++			ovf = reloc_insn_movw(RELOC_OP_PREL, loc, val, 0,
++					      AARCH64_INSN_IMM_MOVNZ);
++			break;
++		case R_AARCH64_MOVW_PREL_G1_NC:
++			overflow_check = false;
++			ovf = reloc_insn_movw(RELOC_OP_PREL, loc, val, 16,
++					      AARCH64_INSN_IMM_MOVKZ);
++			break;
++		case R_AARCH64_MOVW_PREL_G1:
++			ovf = reloc_insn_movw(RELOC_OP_PREL, loc, val, 16,
++					      AARCH64_INSN_IMM_MOVNZ);
++			break;
++		case R_AARCH64_MOVW_PREL_G2_NC:
++			overflow_check = false;
++			ovf = reloc_insn_movw(RELOC_OP_PREL, loc, val, 32,
++					      AARCH64_INSN_IMM_MOVKZ);
++			break;
++		case R_AARCH64_MOVW_PREL_G2:
++			ovf = reloc_insn_movw(RELOC_OP_PREL, loc, val, 32,
++					      AARCH64_INSN_IMM_MOVNZ);
++			break;
++		case R_AARCH64_MOVW_PREL_G3:
++			/* We're using the top bits so we can't overflow. */
++			overflow_check = false;
++			ovf = reloc_insn_movw(RELOC_OP_PREL, loc, val, 48,
++					      AARCH64_INSN_IMM_MOVNZ);
++			break;
++
++		/* Immediate instruction relocations. */
++		case R_AARCH64_LD_PREL_LO19:
++			ovf = reloc_insn_imm(RELOC_OP_PREL, loc, val, 2, 19,
++					     AARCH64_INSN_IMM_19);
++			break;
++		case R_AARCH64_ADR_PREL_LO21:
++			ovf = reloc_insn_imm(RELOC_OP_PREL, loc, val, 0, 21,
++					     AARCH64_INSN_IMM_ADR);
++			break;
++#ifndef CONFIG_ARM64_ERRATUM_843419
++		case R_AARCH64_ADR_PREL_PG_HI21_NC:
++			overflow_check = false;
++		case R_AARCH64_ADR_PREL_PG_HI21:
++			ovf = reloc_insn_imm(RELOC_OP_PAGE, loc, val, 12, 21,
++					     AARCH64_INSN_IMM_ADR);
++			break;
++#endif
++		case R_AARCH64_ADD_ABS_LO12_NC:
++		case R_AARCH64_LDST8_ABS_LO12_NC:
++			overflow_check = false;
++			ovf = reloc_insn_imm(RELOC_OP_ABS, loc, val, 0, 12,
++					     AARCH64_INSN_IMM_12);
++			break;
++		case R_AARCH64_LDST16_ABS_LO12_NC:
++			overflow_check = false;
++			ovf = reloc_insn_imm(RELOC_OP_ABS, loc, val, 1, 11,
++					     AARCH64_INSN_IMM_12);
++			break;
++		case R_AARCH64_LDST32_ABS_LO12_NC:
++			overflow_check = false;
++			ovf = reloc_insn_imm(RELOC_OP_ABS, loc, val, 2, 10,
++					     AARCH64_INSN_IMM_12);
++			break;
++		case R_AARCH64_LDST64_ABS_LO12_NC:
++			overflow_check = false;
++			ovf = reloc_insn_imm(RELOC_OP_ABS, loc, val, 3, 9,
++					     AARCH64_INSN_IMM_12);
++			break;
++		case R_AARCH64_LDST128_ABS_LO12_NC:
++			overflow_check = false;
++			ovf = reloc_insn_imm(RELOC_OP_ABS, loc, val, 4, 8,
++					     AARCH64_INSN_IMM_12);
++			break;
++		case R_AARCH64_TSTBR14:
++			ovf = reloc_insn_imm(RELOC_OP_PREL, loc, val, 2, 14,
++					     AARCH64_INSN_IMM_14);
++			break;
++		case R_AARCH64_CONDBR19:
++			ovf = reloc_insn_imm(RELOC_OP_PREL, loc, val, 2, 19,
++					     AARCH64_INSN_IMM_19);
++			break;
++		case R_AARCH64_JUMP26:
++		case R_AARCH64_CALL26:
++			ovf = reloc_insn_imm(RELOC_OP_PREL, loc, val, 2, 26,
++					     AARCH64_INSN_IMM_26);
++			break;
++		default:
++			pr_err("module %s: unsupported RELA relocation: %d\n",
++				me->name, type);
++			return -ENOEXEC;
++	}
++
++	if (overflow_check && ovf == -ERANGE) {
++		pr_err("module %s: overflow in relocation type %d val %lx\n",
++			me->name, type, val);
++		return -ENOEXEC;
++	}
++
++	return 0;
++}
++EXPORT_SYMBOL_GPL(static_relocate);
++
+ int apply_relocate_add(Elf64_Shdr *sechdrs,
+ 		       const char *strtab,
+ 		       unsigned int symindex,
+@@ -424,7 +602,7 @@ int module_finalize(const Elf_Ehdr *hdr,
+ #ifdef CONFIG_ARM64_MODULE_PLTS
+ 		if (IS_ENABLED(CONFIG_DYNAMIC_FTRACE) &&
+ 		    !strcmp(".text.ftrace_trampoline", secstrs + s->sh_name))
+-			me->arch.ftrace_trampoline = (void *)s->sh_addr;
++			me->arch.ftrace_trampolines = (void *)s->sh_addr;
+ #endif
+ 	}
+ 
+diff --git a/drivers/firmware/efi/libstub/Makefile b/drivers/firmware/efi/libstub/Makefile
+index 678bc91..84c16fd 100644
+--- a/drivers/firmware/efi/libstub/Makefile
++++ b/drivers/firmware/efi/libstub/Makefile
+@@ -11,8 +11,8 @@ cflags-$(CONFIG_X86)		+= -m$(BITS) -D__KERNEL__ -O2 \
+ 				   -fPIC -fno-strict-aliasing -mno-red-zone \
+ 				   -mno-mmx -mno-sse
+ 
+-cflags-$(CONFIG_ARM64)		:= $(subst -pg,,$(KBUILD_CFLAGS)) -fpie
+-cflags-$(CONFIG_ARM)		:= $(subst -pg,,$(KBUILD_CFLAGS)) \
++cflags-$(CONFIG_ARM64)		:= $(subst $(CC_FLAGS_FTRACE),,$(KBUILD_CFLAGS)) -fpie
++cflags-$(CONFIG_ARM)		:= $(subst $(CC_FLAGS_FTRACE),,$(KBUILD_CFLAGS)) \
+ 				   -fno-builtin -fpic \
+ 				   $(call cc-option,-mno-single-pic-base)
+ 
+diff --git a/include/asm-generic/vmlinux.lds.h b/include/asm-generic/vmlinux.lds.h
+index fcec26d..0fd59a2 100644
+--- a/include/asm-generic/vmlinux.lds.h
++++ b/include/asm-generic/vmlinux.lds.h
+@@ -106,6 +106,7 @@
+ #define MCOUNT_REC()	. = ALIGN(8);				\
+ 			VMLINUX_SYMBOL(__start_mcount_loc) = .; \
+ 			*(__mcount_loc)				\
++			KEEP(*(__patchable_function_entries))	\
+ 			VMLINUX_SYMBOL(__stop_mcount_loc) = .;
+ #else
+ #define MCOUNT_REC()
+diff --git a/include/linux/compiler_types.h b/include/linux/compiler_types.h
+index 4be464a..29aad2a 100644
+--- a/include/linux/compiler_types.h
++++ b/include/linux/compiler_types.h
+@@ -60,6 +60,8 @@ extern void __chk_io_ptr(const volatile void __iomem *);
+ 
+ #if defined(CC_USING_HOTPATCH) && !defined(__CHECKER__)
+ #define notrace __attribute__((hotpatch(0,0)))
++#elif defined(CC_USING_PATCHABLE_FENTRY)
++#define notrace			__attribute__((patchable_function_entry(0)))
+ #else
+ #define notrace __attribute__((no_instrument_function))
+ #endif
+diff --git a/kernel/module.c b/kernel/module.c
+index c2415a1..55cdc7d 100644
+--- a/kernel/module.c
++++ b/kernel/module.c
+@@ -1945,6 +1945,7 @@ void module_disable_ro(const struct module *mod)
+ 	frob_text(&mod->init_layout, set_memory_rw);
+ 	frob_rodata(&mod->init_layout, set_memory_rw);
+ }
++EXPORT_SYMBOL_GPL(module_disable_ro);
+ 
+ void module_enable_ro(const struct module *mod, bool after_init)
+ {
+@@ -1959,6 +1960,7 @@ void module_enable_ro(const struct module *mod, bool after_init)
+ 	if (after_init)
+ 		frob_ro_after_init(&mod->core_layout, set_memory_ro);
+ }
++EXPORT_SYMBOL_GPL(module_enable_ro);
+ 
+ static void module_enable_nx(const struct module *mod)
+ {
+@@ -3126,7 +3128,12 @@ static int find_module_sections(struct module *mod, struct load_info *info)
+ #endif
+ #ifdef CONFIG_FTRACE_MCOUNT_RECORD
+ 	/* sechdrs[0].sh_size is always zero */
+-	mod->ftrace_callsites = section_objs(info, "__mcount_loc",
++	mod->ftrace_callsites = section_objs(info,
++#ifdef CC_USING_PATCHABLE_FENTRY
++					     "__patchable_function_entries",
++#else
++					     "__mcount_loc",
++#endif
+ 					     sizeof(*mod->ftrace_callsites),
+ 					     &mod->num_ftrace_callsites);
+ #endif
+diff --git a/mm/kasan/Makefile b/mm/kasan/Makefile
+index 3289db3..a7abd7c 100644
+--- a/mm/kasan/Makefile
++++ b/mm/kasan/Makefile
+@@ -3,7 +3,7 @@ KASAN_SANITIZE := n
+ UBSAN_SANITIZE_kasan.o := n
+ KCOV_INSTRUMENT := n
+ 
+-CFLAGS_REMOVE_kasan.o = -pg
++CFLAGS_REMOVE_kasan.o = $(CC_FLAGS_FTRACE)
+ # Function splitter causes unnecessary splits in __asan_load1/__asan_store1
+ # see: https://gcc.gnu.org/bugzilla/show_bug.cgi?id=63533
+ CFLAGS_kasan.o := $(call cc-option, -fno-conserve-stack -fno-stack-protector)
+-- 
+1.8.3.1
+
