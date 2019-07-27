@@ -31,6 +31,14 @@
 #define SHF_RELA_LIVEPATCH	0x00100000
 #define SHN_LIVEPATCH		0xff20
 
+#ifdef __powerpc64__
+#define ABSOLUTE_RELA_TYPE R_PPC64_ADDR64
+#elif defined(__aarch64__)
+#define ABSOLUTE_RELA_TYPE R_AARCH64_ABS64
+#elif defined(__x86_64__)
+#define ABSOLUTE_RELA_TYPE R_X86_64_64
+#endif
+
 /*******************
  * Data structures
  * ****************/
@@ -166,4 +174,5 @@ void kpatch_rebuild_rela_section_data(struct section *sec);
 void kpatch_write_output_elf(struct kpatch_elf *kelf, Elf *elf, char *outfile);
 void kpatch_elf_teardown(struct kpatch_elf *kelf);
 void kpatch_elf_free(struct kpatch_elf *kelf);
+int kpatch_is_arm_mapping_symbol(struct symbol *sym);
 #endif /* _KPATCH_ELF_H_ */

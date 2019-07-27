@@ -102,14 +102,14 @@ static void create_dynamic_rela_sections(struct kpatch_elf *kelf, struct section
 		/* dest */
 		ALLOC_LINK(rela, &dynsec->rela->relas);
 		rela->sym = sym;
-		rela->type = R_X86_64_64;
+		rela->type = ABSOLUTE_RELA_TYPE;
 		rela->addend = dest_offset;
 		rela->offset = index * sizeof(*dynrelas);
 
 		/* name */
 		ALLOC_LINK(rela, &dynsec->rela->relas);
 		rela->sym = strsec->secsym;
-		rela->type = R_X86_64_64;
+		rela->type = ABSOLUTE_RELA_TYPE;
 		rela->addend = name_offset;
 		rela->offset = index * sizeof(*dynrelas) + \
 			       offsetof(struct kpatch_patch_dynrela, name);
@@ -117,7 +117,7 @@ static void create_dynamic_rela_sections(struct kpatch_elf *kelf, struct section
 		/* objname */
 		ALLOC_LINK(rela, &dynsec->rela->relas);
 		rela->sym = strsec->secsym;
-		rela->type = R_X86_64_64;
+		rela->type = ABSOLUTE_RELA_TYPE;
 		rela->addend = objname_offset;
 		rela->offset = index * sizeof(*dynrelas) + \
 			       offsetof(struct kpatch_patch_dynrela, objname);

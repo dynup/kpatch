@@ -259,6 +259,17 @@ void kpatch_create_section_list(struct kpatch_elf *kelf)
 		ERROR("expected NULL");
 }
 
+#ifdef __aarch64__
+int kpatch_is_arm_mapping_symbol(struct symbol *sym)
+{
+	if (sym->name && sym->name[0] == '$'
+		&& sym->type == STT_NOTYPE \
+		&& sym->bind == STB_LOCAL)
+		return 1;
+	return 0;
+}
+#endif
+
 void kpatch_create_symbol_list(struct kpatch_elf *kelf)
 {
 	struct section *symtab;
@@ -314,7 +325,11 @@ void kpatch_create_symbol_list(struct kpatch_elf *kelf)
 
 }
 
+
 /* Check which functions have fentry/mcount calls; save this info for later use. */
+#ifdef __aarch64__
+static void kpatch_find_func_profiling_calls(struct kpatch_elf *kelf) {}
+#else
 static void kpatch_find_func_profiling_calls(struct kpatch_elf *kelf)
 {
 	struct symbol *sym;
@@ -342,6 +357,7 @@ static void kpatch_find_func_profiling_calls(struct kpatch_elf *kelf)
 #endif
 	}
 }
+#endif
 
 struct kpatch_elf *kpatch_elf_open(const char *name)
 {
