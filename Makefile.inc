@@ -22,5 +22,9 @@ ifeq ($(ARCH),x86_64)
 BUILDMOD  ?= yes
 endif
 
+ifeq ($(ARCH),aarch64)
+BUILDMOD  ?= yes
+endif
+
 .PHONY: all install clean
 .DEFAULT: all

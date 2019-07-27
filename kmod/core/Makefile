@@ -10,7 +10,7 @@ endif
 KPATCH_MAKE = $(MAKE) -C $(KPATCH_BUILD) M=$(THISDIR)
 
 kpatch.ko: core.c
-	$(KPATCH_MAKE) kpatch.ko
+	$(KPATCH_MAKE) modules
 
 all: kpatch.ko
 
