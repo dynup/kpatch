@@ -748,7 +748,7 @@ if [[ "$ARCH" = "ppc64le" ]]; then
 	ARCH_KCFLAGS="-mcmodel=large -fplugin=$PLUGINDIR/ppc64le-plugin.so"
 fi
 
-export KCFLAGS="-I$DATADIR/patch -ffunction-sections -fdata-sections $ARCH_KCFLAGS"
+export KCFLAGS="-I$DATADIR/patch -ffunction-sections -fdata-sections -gz=none $ARCH_KCFLAGS"
 
 echo "Reading special section data"
 find_special_section_data
