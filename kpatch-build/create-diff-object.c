@@ -3156,6 +3156,9 @@ static void kpatch_create_mcount_sections(struct kpatch_elf *kelf)
 		 * __fentry__" so that ftrace will be happy.
 		 */
 		newdata = malloc(sym->sec->data->d_size);
+		if (!newdata)
+			ERROR("malloc");
+
 		memcpy(newdata, sym->sec->data->d_buf, sym->sec->data->d_size);
 		sym->sec->data->d_buf = newdata;
 		insn = newdata;
