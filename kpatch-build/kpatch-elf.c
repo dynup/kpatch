@@ -567,6 +567,7 @@ void kpatch_create_strtab(struct kpatch_elf *kelf)
 void kpatch_create_symtab(struct kpatch_elf *kelf)
 {
 	struct section *symtab;
+	struct section *strtab;
 	struct symbol *sym;
 	char *buf;
 	size_t size;
@@ -600,7 +601,11 @@ void kpatch_create_symtab(struct kpatch_elf *kelf)
 	symtab->data->d_size = size;
 
 	/* update symtab section header */
-	symtab->sh.sh_link = find_section_by_name(&kelf->sections, ".strtab")->index;
+	strtab = find_section_by_name(&kelf->sections, ".strtab");
+	if (!strtab)
+		ERROR("missing .strtab section");
+
+	symtab->sh.sh_link = strtab->index;
 	symtab->sh.sh_info = nr_local;
 }
 
@@ -753,6 +758,7 @@ void kpatch_write_output_elf(struct kpatch_elf *kelf, Elf *elf, char *outfile)
 {
 	int fd;
 	struct section *sec;
+	struct section *shstrtab;
 	Elf *elfout;
 	GElf_Ehdr eh, ehout;
 	Elf_Scn *scn;
@@ -782,7 +788,12 @@ void kpatch_write_output_elf(struct kpatch_elf *kelf, Elf *elf, char *outfile)
 	ehout.e_machine = eh.e_machine;
 	ehout.e_type = eh.e_type;
 	ehout.e_version = EV_CURRENT;
-	ehout.e_shstrndx = find_section_by_name(&kelf->sections, ".shstrtab")->index;
+
+	shstrtab = find_section_by_name(&kelf->sections, ".shstrtab");
+	if (!shstrtab)
+		ERROR("missing .shstrtab section");
+
+	ehout.e_shstrndx = shstrtab->index;
 
 	/* add changed sections */
 	list_for_each_entry(sec, &kelf->sections, list) {
