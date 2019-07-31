@@ -373,6 +373,9 @@ static int rela_equal(struct rela *rela1, struct rela *rela2)
 	if (!rela_toc1 && !rela_toc2)
 		return toc_data1 == toc_data2;
 
+	if (!rela_toc1 || !rela_toc2)
+		return 0;
+
 	if (rela_toc1->string)
 		return rela_toc2->string && !strcmp(rela_toc1->string, rela_toc2->string);
 
