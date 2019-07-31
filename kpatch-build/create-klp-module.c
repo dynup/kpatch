@@ -244,7 +244,6 @@ static void create_klp_relasecs_and_syms(struct kpatch_elf *kelf, struct section
 static void create_klp_arch_sections(struct kpatch_elf *kelf, char *strings)
 {
 	struct section *karch, *sec, *base = NULL;
-	struct kpatch_arch *entries;
 	struct rela *rela, *rela2;
 	char *secname, *objname = NULL;
 	char buf[256];
@@ -254,11 +253,10 @@ static void create_klp_arch_sections(struct kpatch_elf *kelf, char *strings)
 	if (!karch)
 		return;
 
-	entries = karch->data->d_buf;
-	nr = karch->data->d_size / sizeof(*entries);
+	nr = karch->data->d_size / sizeof(struct kpatch_arch);
 
 	for (index = 0; index < nr; index++) {
-		offset = index * sizeof(*entries);
+		offset = index * sizeof(struct kpatch_arch);
 
 		/* Get the base section (.parainstructions or .altinstructions) */
 		rela = find_rela_by_offset(karch->rela,
