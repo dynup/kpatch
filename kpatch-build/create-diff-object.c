@@ -3516,6 +3516,9 @@ int main(int argc, char *argv[])
 	 * buffers from the relas lists.
 	 */
 	symtab = find_section_by_name(&kelf_out->sections, ".symtab");
+	if (!symtab)
+		ERROR("missing .symtab section");
+
 	list_for_each_entry(sec, &kelf_out->sections, list) {
 		if (!is_rela_section(sec))
 			continue;
