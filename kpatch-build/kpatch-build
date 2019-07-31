@@ -50,6 +50,7 @@ DEBUG=0
 SKIPCLEANUP=0
 SKIPGCCCHECK=0
 ARCH_KCFLAGS=""
+DEBUG_KCFLAGS=""
 declare -a PATCH_LIST
 APPLIED_PATCHES=0
 OOT_MODULE=
@@ -205,13 +206,18 @@ gcc_version_check() {
 	else
 		kgccver="$(gcc_version_from_file "$VMLINUX")"
 	fi
-	rm -f "$c" "$o"
 
 	if [[ -n "$out" ]]; then
 		warn "gcc >= 4.8 required for -pg -ffunction-settings"
 		echo "gcc output: $out"
 		return 1
 	fi
+
+	out="$(gcc -c -gz=none -o "$o" "$c" 2>&1)"
+	if [[ -z "$out" ]]; then
+		DEBUG_KCFLAGS="-gz=none"
+	fi
+	rm -f "$c" "$o"
 
 	# ensure gcc version matches that used to build the kernel
 	if [[ "$gccver" != "$kgccver" ]]; then
@@ -748,7 +754,8 @@ if [[ "$ARCH" = "ppc64le" ]]; then
 	ARCH_KCFLAGS="-mcmodel=large -fplugin=$PLUGINDIR/ppc64le-plugin.so"
 fi
 
-export KCFLAGS="-I$DATADIR/patch -ffunction-sections -fdata-sections -gz=none $ARCH_KCFLAGS"
+export KCFLAGS="-I$DATADIR/patch -ffunction-sections -fdata-sections \
+		$ARCH_KCFLAGS $DEBUG_KCFLAGS"
 
 echo "Reading special section data"
 find_special_section_data
