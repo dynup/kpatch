@@ -2419,15 +2419,13 @@ static void kpatch_mark_ignored_functions_same(struct kpatch_elf *kelf)
 static void kpatch_create_kpatch_arch_section(struct kpatch_elf *kelf, char *objname)
 {
 	struct special_section *special;
-	struct kpatch_arch *entries;
 	struct symbol *strsym;
 	struct section *sec, *karch_sec;
 	struct rela *rela;
 	int nr, index = 0;
 
 	nr = sizeof(special_sections) / sizeof(special_sections[0]);
-	karch_sec = create_section_pair(kelf, ".kpatch.arch", sizeof(*entries), nr);
-	entries = karch_sec->data->d_buf;
+	karch_sec = create_section_pair(kelf, ".kpatch.arch", sizeof(struct kpatch_arch), nr);
 
 	/* lookup strings symbol */
 	strsym = find_symbol_by_name(&kelf->symbols, ".kpatch.strings");
@@ -2448,7 +2446,7 @@ static void kpatch_create_kpatch_arch_section(struct kpatch_elf *kelf, char *obj
 		rela->sym = sec->secsym;
 		rela->type = ABSOLUTE_RELA_TYPE;
 		rela->addend = 0;
-		rela->offset = index * sizeof(*entries) + \
+		rela->offset = index * sizeof(struct kpatch_arch) + \
 			       offsetof(struct kpatch_arch, sec);
 
 		/* entries[index].objname */
@@ -2456,7 +2454,7 @@ static void kpatch_create_kpatch_arch_section(struct kpatch_elf *kelf, char *obj
 		rela->sym = strsym;
 		rela->type = ABSOLUTE_RELA_TYPE;
 		rela->addend = offset_of_string(&kelf->strings, objname);
-		rela->offset = index * sizeof(*entries) + \
+		rela->offset = index * sizeof(struct kpatch_arch) + \
 			       offsetof(struct kpatch_arch, objname);
 
 		index++;
@@ -3118,7 +3116,7 @@ static void kpatch_create_mcount_sections(struct kpatch_elf *kelf)
 	struct section *sec, *relasec;
 	struct symbol *sym;
 	struct rela *rela;
-	void **funcs, *newdata;
+	void *newdata;
 	unsigned char *insn;
 
 	nr = 0;
@@ -3128,9 +3126,8 @@ static void kpatch_create_mcount_sections(struct kpatch_elf *kelf)
 			nr++;
 
 	/* create text/rela section pair */
-	sec = create_section_pair(kelf, "__mcount_loc", sizeof(*funcs), nr);
+	sec = create_section_pair(kelf, "__mcount_loc", sizeof(void*), nr);
 	relasec = sec->rela;
-	funcs = sec->data->d_buf;
 
 	/* populate sections */
 	index = 0;
@@ -3149,7 +3146,7 @@ static void kpatch_create_mcount_sections(struct kpatch_elf *kelf)
 		rela->sym = sym;
 		rela->type = R_X86_64_64;
 		rela->addend = 0;
-		rela->offset = index * sizeof(*funcs);
+		rela->offset = index * sizeof(void*);
 
 		/*
 		 * Modify the first instruction of the function to "callq
