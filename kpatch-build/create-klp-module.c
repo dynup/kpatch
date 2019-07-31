@@ -486,6 +486,9 @@ int main(int argc, char *argv[])
 
 	/* Rebuild rela sections, new klp rela sections will be rebuilt too. */
 	symtab = find_section_by_name(&kelf->sections, ".symtab");
+	if (!symtab)
+		ERROR("missing .symtab section");
+
 	list_for_each_entry(sec, &kelf->sections, list) {
 		if (!is_rela_section(sec))
 			continue;
