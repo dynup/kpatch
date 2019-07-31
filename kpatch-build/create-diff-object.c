@@ -2186,6 +2186,9 @@ static void kpatch_regenerate_orc_sections(struct kpatch_elf *kelf)
 		return;
 	orc_entry_size = atoi(str);
 
+	if (!orc_entry_size)
+		ERROR("bad ORC_STRUCT_SIZE");
+
 	LIST_HEAD(newrelas);
 
 	orc_sec = find_section_by_name(&kelf->sections, ".orc_unwind");
