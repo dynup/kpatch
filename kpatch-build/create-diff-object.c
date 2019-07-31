@@ -1905,6 +1905,8 @@ static int fixup_group_size(struct kpatch_elf *kelf, int offset)
 		/* last group */
 		struct section *fixupsec;
 		fixupsec = find_section_by_name(&kelf->sections, ".fixup");
+		if (!fixupsec)
+			ERROR("missing .fixup section");
 		return fixupsec->sh.sh_size - offset;
 	}
 
