@@ -2046,7 +2046,6 @@ static void kpatch_regenerate_special_section(struct kpatch_elf *kelf,
 		}
 	}
 
-	group_size = 0;
 	src_offset = 0;
 	dest_offset = 0;
 	for ( ; src_offset < sec->base->sh.sh_size; src_offset += group_size) {
