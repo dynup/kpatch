@@ -1322,6 +1322,7 @@ static void kpatch_replace_sections_syms(struct kpatch_elf *kelf)
 				int start, end;
 
 				if (sym->type == STT_SECTION ||
+				    !sym->sec ||
 				    sym->sec != rela->sym->sec)
 					continue;
 
