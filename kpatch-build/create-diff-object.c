@@ -1238,6 +1238,10 @@ static void rela_insn(struct section *sec, struct rela *rela, struct insn *insn)
 
 	start = (unsigned long)sec->base->data->d_buf;
 	end = start + sec->base->sh.sh_size;
+
+	if (end <= start)
+		ERROR("bad section size");
+
 	rela_addr = start + rela->offset;
 	for (insn_addr = start; insn_addr < end; insn_addr += insn->length) {
 		insn_init(insn, (void *)insn_addr, 1);
