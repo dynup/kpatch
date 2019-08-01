@@ -3462,6 +3462,7 @@ int main(int argc, char *argv[])
 			log_debug("no changed functions were found, but callbacks exist\n");
 		else {
 			log_debug("no changed functions were found\n");
+			free(hint);
 			return EXIT_STATUS_NO_CHANGE;
 		}
 	}
