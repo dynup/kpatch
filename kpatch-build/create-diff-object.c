@@ -373,6 +373,9 @@ static int rela_equal(struct rela *rela1, struct rela *rela2)
 	if (!rela_toc1 && !rela_toc2)
 		return toc_data1 == toc_data2;
 
+	if (!rela_toc1 || !rela_toc2)
+		return 0;
+
 	if (rela_toc1->string)
 		return rela_toc2->string && !strcmp(rela_toc1->string, rela_toc2->string);
 
@@ -1235,6 +1238,10 @@ static void rela_insn(struct section *sec, struct rela *rela, struct insn *insn)
 
 	start = (unsigned long)sec->base->data->d_buf;
 	end = start + sec->base->sh.sh_size;
+
+	if (end <= start)
+		ERROR("bad section size");
+
 	rela_addr = start + rela->offset;
 	for (insn_addr = start; insn_addr < end; insn_addr += insn->length) {
 		insn_init(insn, (void *)insn_addr, 1);
@@ -1319,6 +1326,7 @@ static void kpatch_replace_sections_syms(struct kpatch_elf *kelf)
 				int start, end;
 
 				if (sym->type == STT_SECTION ||
+				    !sym->sec ||
 				    sym->sec != rela->sym->sec)
 					continue;
 
@@ -1902,6 +1910,8 @@ static int fixup_group_size(struct kpatch_elf *kelf, int offset)
 		/* last group */
 		struct section *fixupsec;
 		fixupsec = find_section_by_name(&kelf->sections, ".fixup");
+		if (!fixupsec)
+			ERROR("missing .fixup section");
 		return fixupsec->sh.sh_size - offset;
 	}
 
@@ -2040,7 +2050,6 @@ static void kpatch_regenerate_special_section(struct kpatch_elf *kelf,
 		}
 	}
 
-	group_size = 0;
 	src_offset = 0;
 	dest_offset = 0;
 	for ( ; src_offset < sec->base->sh.sh_size; src_offset += group_size) {
@@ -2180,6 +2189,9 @@ static void kpatch_regenerate_orc_sections(struct kpatch_elf *kelf)
 	if (!str)
 		return;
 	orc_entry_size = atoi(str);
+
+	if (!orc_entry_size)
+		ERROR("bad ORC_STRUCT_SIZE");
 
 	LIST_HEAD(newrelas);
 
@@ -2411,15 +2423,13 @@ static void kpatch_mark_ignored_functions_same(struct kpatch_elf *kelf)
 static void kpatch_create_kpatch_arch_section(struct kpatch_elf *kelf, char *objname)
 {
 	struct special_section *special;
-	struct kpatch_arch *entries;
 	struct symbol *strsym;
 	struct section *sec, *karch_sec;
 	struct rela *rela;
 	int nr, index = 0;
 
 	nr = sizeof(special_sections) / sizeof(special_sections[0]);
-	karch_sec = create_section_pair(kelf, ".kpatch.arch", sizeof(*entries), nr);
-	entries = karch_sec->data->d_buf;
+	karch_sec = create_section_pair(kelf, ".kpatch.arch", sizeof(struct kpatch_arch), nr);
 
 	/* lookup strings symbol */
 	strsym = find_symbol_by_name(&kelf->symbols, ".kpatch.strings");
@@ -2440,7 +2450,7 @@ static void kpatch_create_kpatch_arch_section(struct kpatch_elf *kelf, char *obj
 		rela->sym = sec->secsym;
 		rela->type = ABSOLUTE_RELA_TYPE;
 		rela->addend = 0;
-		rela->offset = index * sizeof(*entries) + \
+		rela->offset = index * sizeof(struct kpatch_arch) + \
 			       offsetof(struct kpatch_arch, sec);
 
 		/* entries[index].objname */
@@ -2448,7 +2458,7 @@ static void kpatch_create_kpatch_arch_section(struct kpatch_elf *kelf, char *obj
 		rela->sym = strsym;
 		rela->type = ABSOLUTE_RELA_TYPE;
 		rela->addend = offset_of_string(&kelf->strings, objname);
-		rela->offset = index * sizeof(*entries) + \
+		rela->offset = index * sizeof(struct kpatch_arch) + \
 			       offsetof(struct kpatch_arch, objname);
 
 		index++;
@@ -3110,7 +3120,7 @@ static void kpatch_create_mcount_sections(struct kpatch_elf *kelf)
 	struct section *sec, *relasec;
 	struct symbol *sym;
 	struct rela *rela;
-	void **funcs, *newdata;
+	void *newdata;
 	unsigned char *insn;
 
 	nr = 0;
@@ -3120,9 +3130,8 @@ static void kpatch_create_mcount_sections(struct kpatch_elf *kelf)
 			nr++;
 
 	/* create text/rela section pair */
-	sec = create_section_pair(kelf, "__mcount_loc", sizeof(*funcs), nr);
+	sec = create_section_pair(kelf, "__mcount_loc", sizeof(void*), nr);
 	relasec = sec->rela;
-	funcs = sec->data->d_buf;
 
 	/* populate sections */
 	index = 0;
@@ -3141,13 +3150,16 @@ static void kpatch_create_mcount_sections(struct kpatch_elf *kelf)
 		rela->sym = sym;
 		rela->type = R_X86_64_64;
 		rela->addend = 0;
-		rela->offset = index * sizeof(*funcs);
+		rela->offset = index * sizeof(void*);
 
 		/*
 		 * Modify the first instruction of the function to "callq
 		 * __fentry__" so that ftrace will be happy.
 		 */
 		newdata = malloc(sym->sec->data->d_size);
+		if (!newdata)
+			ERROR("malloc");
+
 		memcpy(newdata, sym->sec->data->d_buf, sym->sec->data->d_size);
 		sym->sec->data->d_buf = newdata;
 		insn = newdata;
@@ -3454,6 +3466,7 @@ int main(int argc, char *argv[])
 			log_debug("no changed functions were found, but callbacks exist\n");
 		else {
 			log_debug("no changed functions were found\n");
+			free(hint);
 			return EXIT_STATUS_NO_CHANGE;
 		}
 	}
@@ -3505,6 +3518,9 @@ int main(int argc, char *argv[])
 	 * buffers from the relas lists.
 	 */
 	symtab = find_section_by_name(&kelf_out->sections, ".symtab");
+	if (!symtab)
+		ERROR("missing .symtab section");
+
 	list_for_each_entry(sec, &kelf_out->sections, list) {
 		if (!is_rela_section(sec))
 			continue;

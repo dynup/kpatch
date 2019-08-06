@@ -185,7 +185,7 @@ static char *make_modname(char *modname)
 
 	name = strdup(basename(modname));
 	if (!name)
-		perror("strdup");
+		ERROR("strdup");
 
 	cur = name; /* use cur as tmp */
 	while (*cur != '\0') {
