@@ -3161,6 +3161,7 @@ static void kpatch_create_mcount_sections(struct kpatch_elf *kelf)
 			ERROR("malloc");
 
 		memcpy(newdata, sym->sec->data->d_buf, sym->sec->data->d_size);
+		free(sym->sec->data->d_buf);
 		sym->sec->data->d_buf = newdata;
 		insn = newdata;
 
