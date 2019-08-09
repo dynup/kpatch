@@ -72,7 +72,9 @@ kpatch_rhel_dependencies()
 kpatch_centos_dependencies()
 {
 	local kernel_version
+	local arch
 	kernel_version=$(uname -r)
+	arch=$(uname -m)
 
 	sudo yum install -y gcc gcc-c++ "kernel-devel-${kernel_version%.*}" elfutils elfutils-devel
 	sudo yum install -y yum-utils zlib-devel binutils-devel newt-devel \
@@ -82,7 +84,7 @@ kpatch_centos_dependencies()
 	sudo yum-builddep -y "kernel-${kernel_version%.*}"
 	sudo debuginfo-install -y "kernel-${kernel_version%.*}"
 
-	sudo yum install -y ccache
+	sudo yum install -y "https://dl.fedoraproject.org/pub/epel/7/${arch}/Packages/c/ccache-3.3.4-1.el7.${arch}.rpm"
 }
 
 kpatch_dependencies()
