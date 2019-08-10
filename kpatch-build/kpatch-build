@@ -46,6 +46,7 @@ RPMTOPDIR="$CACHEDIR/buildroot"
 VERSIONFILE="$CACHEDIR/version"
 TEMPDIR="$CACHEDIR/tmp"
 LOGFILE="$CACHEDIR/build.log"
+RELEASE_FILE=/etc/os-release
 DEBUG=0
 SKIPCLEANUP=0
 SKIPGCCCHECK=0
@@ -569,8 +570,8 @@ fi
 [[ -z "$TARGETS" ]] && TARGETS="vmlinux modules"
 
 # Don't check external file.
-# shellcheck disable=SC1091
-source /etc/os-release
+# shellcheck disable=SC1090
+[[ -f "$RELEASE_FILE" ]] && source "$RELEASE_FILE"
 DISTRO="$ID"
 if [[ "$DISTRO" = fedora ]] || [[ "$DISTRO" = rhel ]] || [[ "$DISTRO" = ol ]] || [[ "$DISTRO" = centos ]]; then
 	[[ -z "$VMLINUX" ]] && VMLINUX="/usr/lib/debug/lib/modules/$ARCHVERSION/vmlinux"
