@@ -1,0 +1,36 @@
+Index: kernel/fs/proc/cmdline.c
+===================================================================
+--- kernel.orig/fs/proc/cmdline.c
++++ kernel/fs/proc/cmdline.c
+@@ -27,3 +27,10 @@ static int __init proc_cmdline_init(void
+ 	return 0;
+ }
+ module_init(proc_cmdline_init);
++
++#include <linux/printk.h>
++void kpatch_print_message(void)
++{
++	if (!jiffies)
++		printk("hello there!\n");
++}
+Index: kernel/fs/proc/meminfo.c
+===================================================================
+--- kernel.orig/fs/proc/meminfo.c
++++ kernel/fs/proc/meminfo.c
+@@ -16,6 +16,8 @@
+ #include <asm/pgtable.h>
+ #include "internal.h"
+ 
++void kpatch_print_message(void);
++
+ void __attribute__((weak)) arch_report_meminfo(struct seq_file *m)
+ {
+ }
+@@ -53,6 +55,7 @@ static int meminfo_proc_show(struct seq_
+ 	/*
+ 	 * Tagged format, for easy grepping and expansion.
+ 	 */
++	kpatch_print_message();
+ 	seq_printf(m,
+ 		"MemTotal:       %8lu kB\n"
+ 		"MemFree:        %8lu kB\n"

@@ -1,0 +1,23 @@
+Index: kernel/net/ipv6/netfilter.c
+===================================================================
+--- kernel.orig/net/ipv6/netfilter.c
++++ kernel/net/ipv6/netfilter.c
+@@ -112,6 +112,8 @@ static int nf_ip6_reroute(struct sk_buff
+ 	return 0;
+ }
+ 
++#include "kpatch-macros.h"
++
+ static int nf_ip6_route(struct net *net, struct dst_entry **dst,
+ 			struct flowi *fl, bool strict)
+ {
+@@ -125,6 +127,9 @@ static int nf_ip6_route(struct net *net,
+ 	struct dst_entry *result;
+ 	int err;
+ 
++	if (!jiffies)
++		printk("kpatch nf_ip6_route foo\n");
++
+ 	result = ip6_route_output(net, sk, &fl->u.ip6);
+ 	err = result->error;
+ 	if (err)

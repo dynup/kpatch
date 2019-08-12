@@ -1,0 +1,15 @@
+Index: kernel/drivers/tty/tty_buffer.c
+===================================================================
+--- kernel.orig/drivers/tty/tty_buffer.c
++++ kernel/drivers/tty/tty_buffer.c
+@@ -217,6 +217,10 @@ int tty_buffer_request_room(struct tty_p
+ 	/* OPTIMISATION: We could keep a per tty "zero" sized buffer to
+ 	   remove this conditional if its worth it. This would be invisible
+ 	   to the callers */
++
++	if (!size)
++		printk("kpatch-test: testing .smp_locks section changes\n");
++
+ 	b = buf->tail;
+ 	if (b != NULL)
+ 		left = b->size - b->used;
