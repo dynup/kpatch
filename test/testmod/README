@@ -1,4 +1,0 @@
-To test, run ./doit.sh from the current directory.
-
-To test on a remote system, set remote system using REMOTE in doit.sh.
-Then run ./doit.sh.
