@@ -1,0 +1,26 @@
+Index: kernel/drivers/tty/n_tty.c
+===================================================================
+--- kernel.orig/drivers/tty/n_tty.c
++++ kernel/drivers/tty/n_tty.c
+@@ -2175,7 +2175,7 @@ do_it_again:
+  *		  lock themselves)
+  */
+ 
+-static ssize_t n_tty_write(struct tty_struct *tty, struct file *file,
++static ssize_t noinline kpatch_n_tty_write(struct tty_struct *tty, struct file *file,
+ 			   const unsigned char *buf, size_t nr)
+ {
+ 	const unsigned char *b = buf;
+@@ -2264,6 +2264,12 @@ break_out:
+ 	return (b - buf) ? b - buf : retval;
+ }
+ 
++static ssize_t __attribute__((optimize("-fno-optimize-sibling-calls"))) n_tty_write(struct tty_struct *tty, struct file *file,
++			   const unsigned char *buf, size_t nr)
++{
++	return kpatch_n_tty_write(tty, file, buf, nr);
++}
++
+ /**
+  *	n_tty_poll		-	poll method for N_TTY
+  *	@tty: terminal device

@@ -1,0 +1,12 @@
+Index: kernel/net/core/dev.c
+===================================================================
+--- kernel.orig/net/core/dev.c
++++ kernel/net/core/dev.c
+@@ -4327,6 +4327,7 @@ skip_classify:
+ 		case RX_HANDLER_PASS:
+ 			break;
+ 		default:
++			printk("BUG!\n");
+ 			BUG();
+ 		}
+ 	}

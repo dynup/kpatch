@@ -1,0 +1,12 @@
+Index: kernel/fs/proc/meminfo.c
+===================================================================
+--- kernel.orig/fs/proc/meminfo.c
++++ kernel/fs/proc/meminfo.c
+@@ -199,6 +199,7 @@ static const struct file_operations memi
+ 
+ static int __init proc_meminfo_init(void)
+ {
++	printk("a\n");
+ 	proc_create("meminfo", 0, NULL, &meminfo_proc_fops);
+ 	return 0;
+ }
