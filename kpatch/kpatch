@@ -230,21 +230,8 @@ signal_stalled_processes() {
 	[[ -z "$module" ]] && return
 
 	if [[ -e "/sys/kernel/livepatch/$module/signal" ]] ; then
+		echo "signaling stalled process(es):"
 		echo 1 > "/sys/kernel/livepatch/$module/signal"
-	else
-		for proc_task in /proc/[0-9]*/task/[0-9]*; do
-			tid=${proc_task#*/task/}
-			if is_stalled "$module" "$tid" ; then
-				if [[ "$tid" -eq "$$" ]] ; then
-					echo "skipping pid $tid $(cat "$proc_task"/comm 2>/dev/null)"
-				else
-					echo "signaling pid $tid $(cat "$proc_task"/comm 2>/dev/null)"
-					kill -SIGSTOP "$tid"
-					sleep .1
-					kill -SIGCONT "$tid"
-				fi
-			fi
-		done
 	fi
 }
 
@@ -263,7 +250,7 @@ wait_for_patch_transition() {
 		sleep 1s
 	done
 
-	echo "patch transition has stalled, signaling stalled process(es):"
+	echo "patch transition has stalled!"
 	signal_stalled_processes
 
 	echo "waiting (up to $POST_SIGNAL_WAIT seconds) for patch transition to complete..."
