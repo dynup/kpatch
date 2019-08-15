@@ -1290,11 +1290,13 @@ static void kpatch_replace_sections_syms(struct kpatch_elf *kelf)
 				rela->sym = rela->sym->sec->sym;
 
 				/*
-				 * On ppc64le with GCC6+, the function symbol
-				 * starts 8 bytes past the beginning of the
-				 * section, because of localentry.  So even
-				 * though the symbol is bundled, we can't
-				 * assume it's at offset 0 in the section.
+				 * On ppc64le with GCC6+, even with
+				 * -ffunction-sections, the function symbol
+				 *  starts 8 bytes past the beginning of the
+				 *  section, because the .TOC pointer is at the
+				 *  beginning, right before the code.  So even
+				 *  though the symbol is bundled, we can't
+				 *  assume it's at offset 0 in the section.
 				 */
 				rela->addend -= rela->sym->sym.st_value;
 
