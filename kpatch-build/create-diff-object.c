@@ -1585,11 +1585,6 @@ static int kpatch_include_callback_elements(struct kpatch_elf *kelf)
 			sym = rela->sym;
 			log_normal("found callback: %s\n",sym->name);
 			kpatch_include_symbol(sym);
-			/* strip the callback symbol */
-			sym->include = 0;
-			sym->sec->sym = NULL;
-			/* use section symbol instead */
-			rela->sym = sym->sec->secsym;
 		} else {
 			sec->secsym->include = 1;
 		}
