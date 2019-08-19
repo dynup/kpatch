@@ -237,6 +237,15 @@ static void kpatch_detect_child_functions(struct kpatch_elf *kelf)
 	}
 }
 
+static bool is_dynamic_debug_symbol(struct symbol *sym)
+{
+	if (sym->type == STT_OBJECT && !strcmp(sym->sec->name, "__verbose"))
+		return true;
+	if (sym->type == STT_SECTION && !strcmp(sym->name, "__verbose"))
+		return true;
+	return false;
+}
+
 /*
  * This function detects whether the given symbol is a "special" static local
  * variable (for lack of a better term).
@@ -261,8 +270,7 @@ static int is_special_static(struct symbol *sym)
 		return 0;
 
 	/* pr_debug() uses static local variables in the __verbose section */
-	if ((sym->type == STT_OBJECT && !strcmp(sym->sec->name, "__verbose")) ||
-	    (sym->type == STT_SECTION && !strcmp(sym->name, "__verbose")))
+	if (is_dynamic_debug_symbol(sym))
 		return 1;
 
 	if (sym->type == STT_SECTION) {
@@ -2104,9 +2112,16 @@ static void kpatch_regenerate_special_section(struct kpatch_elf *kelf,
 			if (i != 3)
 				ERROR("BUG: __jump_table has an unexpected format");
 
-			if (strncmp(key->sym->name, "__tracepoint_", 13))
-				ERROR("Found a jump label at %s()+0x%x, using key %s.  Jump labels aren't currently supported.  Use static_key_enabled() instead.",
-				      code->sym->name, code->addend, key->sym->name);
+			/* inert tracepoints are harmless */
+			if (!strncmp(key->sym->name, "__tracepoint_", 13))
+				continue;
+
+			/* inert dynamic debug printks are harmless */
+			if (is_dynamic_debug_symbol(key->sym))
+				continue;
+
+			ERROR("Found a jump label at %s()+0x%x, using key %s.  Jump labels aren't currently supported.  Use static_key_enabled() instead.",
+			      code->sym->name, code->addend, key->sym->name);
 
 			continue;
 		}
