@@ -1264,6 +1264,28 @@ static void rela_insn(struct section *sec, struct rela *rela, struct insn *insn)
 }
 #endif
 
+static bool is_callback_section(struct section *sec) {
+
+	static char *callback_sections[] = {
+		".kpatch.callbacks.pre_patch",
+		".kpatch.callbacks.post_patch",
+		".kpatch.callbacks.pre_unpatch",
+		".kpatch.callbacks.post_unpatch",
+		".rela.kpatch.callbacks.pre_patch",
+		".rela.kpatch.callbacks.post_patch",
+		".rela.kpatch.callbacks.pre_unpatch",
+		".rela.kpatch.callbacks.post_unpatch",
+		NULL,
+	};
+	char **callback_sec;
+
+	for (callback_sec = callback_sections; *callback_sec; callback_sec++)
+		if (!strcmp(sec->name, *callback_sec))
+			return true;
+
+	return false;
+}
+
 /*
  * Mangle the relas a little.  The compiler will sometimes use section symbols
  * to reference local objects and functions rather than the object or function
@@ -1298,11 +1320,13 @@ static void kpatch_replace_sections_syms(struct kpatch_elf *kelf)
 				rela->sym = rela->sym->sec->sym;
 
 				/*
-				 * On ppc64le with GCC6+, the function symbol
-				 * starts 8 bytes past the beginning of the
-				 * section, because of localentry.  So even
-				 * though the symbol is bundled, we can't
-				 * assume it's at offset 0 in the section.
+				 * On ppc64le with GCC6+, even with
+				 * -ffunction-sections, the function symbol
+				 *  starts 8 bytes past the beginning of the
+				 *  section, because the .TOC pointer is at the
+				 *  beginning, right before the code.  So even
+				 *  though the symbol is bundled, we can't
+				 *  assume it's at offset 0 in the section.
 				 */
 				rela->addend -= rela->sym->sym.st_value;
 
@@ -1556,57 +1580,28 @@ static int kpatch_include_callback_elements(struct kpatch_elf *kelf)
 	struct rela *rela;
 	int found = 0;
 
-	static char *callback_sections[] = {
-		".kpatch.callbacks.pre_patch",
-		".kpatch.callbacks.post_patch",
-		".kpatch.callbacks.pre_unpatch",
-		".kpatch.callbacks.post_unpatch",
-		".rela.kpatch.callbacks.pre_patch",
-		".rela.kpatch.callbacks.post_patch",
-		".rela.kpatch.callbacks.pre_unpatch",
-		".rela.kpatch.callbacks.post_unpatch",
-		NULL,
-	};
-	char **callback_section;
-
 	/* include load/unload sections */
 	list_for_each_entry(sec, &kelf->sections, list) {
+		if (!is_callback_section(sec))
+			continue;
 
-		for (callback_section = callback_sections; *callback_section; callback_section++) {
-
-			if (strcmp(*callback_section, sec->name))
-				continue;
-
-			sec->include = 1;
-			found = 1;
-			if (is_rela_section(sec)) {
-				/* include callback dependencies */
-				rela = list_entry(sec->relas.next,
-			                         struct rela, list);
-				sym = rela->sym;
-				log_normal("found callback: %s\n",sym->name);
-				kpatch_include_symbol(sym);
-				/* strip the callback symbol */
-				sym->include = 0;
-				sym->sec->sym = NULL;
-				/* use section symbol instead */
-				rela->sym = sym->sec->secsym;
-			} else {
-				sec->secsym->include = 1;
-			}
+		sec->include = 1;
+		found = 1;
+		if (is_rela_section(sec)) {
+			/* include callback dependencies */
+			rela = list_entry(sec->relas.next, struct rela, list);
+			sym = rela->sym;
+			log_normal("found callback: %s\n",sym->name);
+			kpatch_include_symbol(sym);
+		} else {
+			sec->secsym->include = 1;
 		}
 	}
 
 	/* Strip temporary global structures used by the callback macros. */
 	list_for_each_entry(sym, &kelf->symbols, list) {
-		if (!sym->sec)
-			continue;
-		for (callback_section = callback_sections; *callback_section; callback_section++) {
-			if (!strcmp(*callback_section, sym->sec->name)) {
-				sym->include = 0;
-				break;
-			}
-		}
+		if (sym->sec && is_callback_section(sym->sec))
+			sym->include = 0;
 	}
 
 	return found;
