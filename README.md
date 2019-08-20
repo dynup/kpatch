@@ -40,7 +40,7 @@ sudo dnf install gcc kernel-devel-${UNAME%.*} elfutils elfutils-devel
 Install the dependencies for the "kpatch-build" command:
 
 ```bash
-sudo dnf install pesign yum-utils openssl wget numactl-devel
+sudo dnf install pesign yum-utils openssl wget numactl-devel patchutils
 sudo dnf builddep kernel-${UNAME%.*}
 sudo dnf debuginfo-install kernel-${UNAME%.*}
 
@@ -50,9 +50,6 @@ sudo dnf install gcc-plugin-devel
 # optional, but highly recommended
 sudo dnf install ccache
 ccache --max-size=5G
-
-# optional, for kpatch-test
-sudo dnf install patchutils
 ```
 
 #### RHEL 7
@@ -73,7 +70,8 @@ Install the dependencies for the "kpatch-build" command:
 sudo yum-config-manager --enable rhel-7-server-optional-rpms
 sudo yum install pesign yum-utils zlib-devel \
   binutils-devel newt-devel python-devel perl-ExtUtils-Embed \
-  audit-libs-devel numactl-devel pciutils-devel bison ncurses-devel
+  audit-libs-devel numactl-devel pciutils-devel bison ncurses-devel \
+  patchutils
 
 sudo yum-builddep kernel-${UNAME%.*}
 sudo debuginfo-install kernel-${UNAME%.*}
@@ -84,9 +82,6 @@ sudo yum install gcc-plugin-devel
 # optional, but highly recommended
 sudo yum install https://dl.fedoraproject.org/pub/epel/7/x86_64/Packages/c/ccache-3.3.4-1.el7.x86_64.rpm
 ccache --max-size=5G
-
-# optional, for kpatch-test
-sudo yum install patchutils
 ```
 
 #### CentOS 7
@@ -106,7 +101,7 @@ Install the dependencies for the "kpatch-build" command:
 ```bash
 sudo yum install pesign yum-utils zlib-devel \
   binutils-devel newt-devel python-devel perl-ExtUtils-Embed \
-  audit-libs audit-libs-devel numactl-devel pciutils-devel bison
+  audit-libs audit-libs-devel numactl-devel pciutils-devel bison patchutils
 
 # enable CentOS 7 debug repo
 sudo yum-config-manager --enable debug
@@ -117,9 +112,6 @@ sudo debuginfo-install kernel-${UNAME%.*}
 # optional, but highly recommended - enable EPEL 7
 sudo yum install ccache
 ccache --max-size=5G
-
-# optional, for kpatch-test
-sudo yum install patchutils
 ```
 
 #### Oracle Linux 7
@@ -139,7 +131,7 @@ Install the dependencies for the "kpatch-build" command:
 ```bash
 sudo yum install pesign yum-utils zlib-devel \
   binutils-devel newt-devel python-devel perl-ExtUtils-Embed \
-  audit-libs numactl-devel pciutils-devel bison
+  audit-libs numactl-devel pciutils-devel bison patchutils
 
 # enable ol7_optional_latest repo
 sudo yum-config-manager --enable ol7_optional_latest
@@ -153,9 +145,6 @@ rpm -ivh https://oss.oracle.com/ol7/debuginfo/kernel-debuginfo-common-x86_64-$(u
 # optional, but highly recommended - enable EPEL 7
 sudo yum install ccache
 ccache --max-size=5G
-
-# optional, for kpatch-test
-sudo yum install patchutils
 ```
 
 #### Ubuntu

@@ -87,6 +87,33 @@ logger() {
 	fi
 }
 
+verify_patch_files() {
+	local path
+	local dir
+	local ret=0
+
+	for patch in "${PATCH_LIST[@]}"; do
+		for path in $(lsdiff "$patch" 2>/dev/null); do
+
+			dir=$(dirname "$path")
+			ext="${path##*.}"
+
+			if [[ "$dir" =~ ^lib$ ]] || [[ "$dir" =~ ^lib/ ]] ; then
+				warn "$patch: unsupported patch to lib/: $path"
+				ret=1
+			fi
+
+			if [[ "$ext" == "S" ]] ; then
+				warn "$patch: unsupported patch to assembly: $path"
+				ret=1
+			fi
+
+		done
+	done
+
+	[[ $ret == 1 ]] && die "Unsupported changes detected"
+}
+
 apply_patches() {
 	local patch
 
@@ -745,6 +772,7 @@ grep -q "CONFIG_GCC_PLUGIN_RANDSTRUCT=y" "$CONFIGFILE" && die "kernel option 'CO
 
 echo "Testing patch file(s)"
 cd "$SRCDIR" || die
+verify_patch_files
 apply_patches
 remove_patches
 
