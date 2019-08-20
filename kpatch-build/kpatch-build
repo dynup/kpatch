@@ -142,7 +142,7 @@ check_pipe_status() {
 			cp core* /tmp
 			die "core file at /tmp/$(ls core*)"
 		fi
-		die "no core file found, run 'ulimit -c unlimited' and try to recreate"
+		die "There was a SIGSEGV, but no core dump was found in the current directory.  Depending on your distro you might find it in /var/lib/systemd/coredump or /var/crash."
 	fi
 }
 
