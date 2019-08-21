@@ -1,6 +1,6 @@
 Name: kpatch
 Summary: Dynamic kernel patching
-Version: 0.7.1
+Version: 0.8.0
 License: GPLv2
 Group: System Environment/Kernel
 URL: http://github.com/dynup/kpatch
@@ -93,6 +93,13 @@ rm -rf %{buildroot}
 %{_mandir}/man1/kpatch-build.1*
 
 %changelog
+* Wed Aug 21 2019 Artem Savkov <asavkov@redhat.com> - 0.8.0
+- kpatch.ko atomic replace fixes
+- Fixes for potential problems found by covscan
+- Remove manual signaling logic from kpatch utility
+- Don't strip callback symbols
+- Allow dynamic debug static keys
+
 * Wed Jul 24 2019 Josh Poimboeuf <jpoimboe@redhat.com> - 0.7.1
 - Fix several powerpc-specific bugs, including two which can result in kernel
   panics
