@@ -1,16 +1,20 @@
 #!/bin/bash
 
 KPATCH_SLOW=0
+KPATCH_GIT=${KPATCH_GIT:-https://github.com/dynup/kpatch.git}
+KPATCH_REV=${KPATCH_REV:-HEAD}
 LOGDIR="/vagrant/logs"
 
 usage()
 {
   echo "usage: $(basename "${0}") [options]" >&2
-  echo "-h, --help This message" >&2
-  echo "-s, --slow Run all of the tests" >&2
+  echo "-h, --help      This message" >&2
+  echo "-s, --slow      Run all of the tests" >&2
+  echo "-g, --git       Git url to clone from" >&2
+  echo "-r, --revision  Revision to use (HEAD by default)" >&2
 }
 
-options="$(getopt -o s -l "slow" -- "$@")" || "getopt failed"
+options="$(getopt -o "shg:r:" -l "slow,help,git:,revision:" -- "$@")" || "getopt failed"
 
 eval set -- "${options}"
 
@@ -18,18 +22,32 @@ while [[ $# -gt 0 ]]; do
   case "$1" in
     -s|--slow)
       KPATCH_SLOW=1
+      shift
+      ;;
+    -g|--git)
+      KPATCH_GIT="${2}"
+      shift 2
+      ;;
+    -r|--revision)
+      KPATCH_REV="${2}"
+      shift 2
       ;;
     -h|--help)
       usage
       exit 0
       ;;
+    --)
+      shift
+      break
+      ;;
   esac
-  shift
 done
 
-git clone https://github.com/dynup/kpatch.git || exit 1
+git clone "${KPATCH_GIT}" || exit 1
 
 cd kpatch || exit 1
+
+git reset --hard "${KPATCH_REV}" || exit 1
 
 # shellcheck disable=SC1091
 source test/integration/lib.sh
