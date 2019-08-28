@@ -1240,7 +1240,8 @@ static void kpatch_compare_correlated_elements(struct kpatch_elf *kelf)
 }
 
 #ifdef __x86_64__
-static void rela_insn(struct section *sec, struct rela *rela, struct insn *insn)
+static void rela_insn(const struct section *sec, const struct rela *rela,
+		      struct insn *insn)
 {
 	unsigned long insn_addr, start, end, rela_addr;
 
