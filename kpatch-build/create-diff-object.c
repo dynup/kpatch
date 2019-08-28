@@ -3412,15 +3412,15 @@ int main(int argc, char *argv[])
 	kelf_base = kpatch_elf_open(orig_obj);
 	kelf_patched = kpatch_elf_open(patched_obj);
 
+	kpatch_compare_elf_headers(kelf_base->elf, kelf_patched->elf);
+	kpatch_check_program_headers(kelf_base->elf);
+	kpatch_check_program_headers(kelf_patched->elf);
+
 	kpatch_bundle_symbols(kelf_base);
 	kpatch_bundle_symbols(kelf_patched);
 
 	kpatch_detect_child_functions(kelf_base);
 	kpatch_detect_child_functions(kelf_patched);
-
-	kpatch_compare_elf_headers(kelf_base->elf, kelf_patched->elf);
-	kpatch_check_program_headers(kelf_base->elf);
-	kpatch_check_program_headers(kelf_patched->elf);
 
 	list_for_each_entry(sym, &kelf_base->symbols, list) {
 		if (sym->type == STT_FILE) {
