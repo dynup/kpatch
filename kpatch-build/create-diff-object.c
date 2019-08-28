@@ -1310,14 +1310,14 @@ static void kpatch_replace_sections_syms(struct kpatch_elf *kelf)
 
 		list_for_each_entry(rela, &sec->relas, list) {
 
-			if (rela->sym->type != STT_SECTION)
+			if (rela->sym->type != STT_SECTION || !rela->sym->sec)
 				continue;
 
 			/*
 			 * Replace references to bundled sections with their
 			 * symbols.
 			 */
-			if (rela->sym->sec && rela->sym->sec->sym) {
+			if (rela->sym->sec->sym) {
 				rela->sym = rela->sym->sec->sym;
 
 				/*
@@ -1359,7 +1359,6 @@ static void kpatch_replace_sections_syms(struct kpatch_elf *kelf)
 				int start, end;
 
 				if (sym->type == STT_SECTION ||
-				    !sym->sec ||
 				    sym->sec != rela->sym->sec)
 					continue;
 
