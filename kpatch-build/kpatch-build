@@ -785,8 +785,6 @@ verify_patch_files
 apply_patches
 remove_patches
 
-cp -LR "$DATADIR/patch" "$TEMPDIR" || die
-
 if [[ "$ARCH" = "ppc64le" ]]; then
 	ARCH_KCFLAGS="-mcmodel=large -fplugin=$PLUGINDIR/ppc64le-plugin.so"
 fi
@@ -880,10 +878,10 @@ for i in $FILES; do
 
 	[[ "$i" = usr/initramfs_data.o ]] && continue
 
-	mkdir -p "output/$(dirname "$i")"
 	cd "$SRCDIR" || die
 	find_kobj "$i"
 	cd "$TEMPDIR" || die
+	mkdir -p "output/$(basename "${KOBJFILE}")/$(dirname "$i")"
 	if [[ -e "orig/$i" ]]; then
 		if [[ "$(basename "$KOBJFILE")" = vmlinux ]]; then
 			KOBJFILE_NAME=vmlinux
@@ -915,7 +913,7 @@ for i in $FILES; do
 		#		     Module.symvers patch-mod-name output.o
 		"$TOOLSDIR"/create-diff-object "orig/$i" "patched/$i" "$KOBJFILE_NAME" \
 			"$SYMTAB" "$SYMVERS_FILE" "${MODNAME//-/_}" \
-			"output/$i" 2>&1 | logger 1
+			"output/$(basename "${KOBJFILE}")/${i}" 2>&1 | logger 1
 		check_pipe_status create-diff-object
 		# create-diff-object returns 3 if no functional change is found
 		[[ "$rc" -eq 0 ]] || [[ "$rc" -eq 3 ]] || ERROR="$((ERROR + 1))"
@@ -925,7 +923,7 @@ for i in $FILES; do
 			objnames[${#objnames[@]}]="$KOBJFILE"
 		fi
 	else
-		cp -f "patched/$i" "output/$i"
+		cp -f "patched/$i" "output/$(basename "${KOBJFILE}")/${i}"
 		objnames[${#objnames[@]}]="$KOBJFILE"
 	fi
 done
@@ -959,65 +957,81 @@ if [[ -z "$USERSRCDIR" ]] && [[ "$DISTRO" = ubuntu ]]; then
 	echo "#define UTS_UBUNTU_RELEASE_ABI $UBUNTU_ABI" >> "$SRCDIR"/include/generated/utsrelease.h
 fi
 
-cd "$TEMPDIR/output" || die
 # $KPATCH_LDFLAGS and result of find used as list, no quotes.
 # shellcheck disable=SC2086,SC2046
-ld -r $KPATCH_LDFLAGS -o ../patch/tmp_output.o $(find . -name "*.o") 2>&1 | logger || die
+for obj_path in "${objnames[@]}"; do
+	obj=$(basename ${obj_path})
 
-if "$KPATCH_MODULE"; then
-	# Add .kpatch.checksum for kpatch script
-	md5sum ../patch/tmp_output.o | awk '{printf "%s\0", $1}' > checksum.tmp || die
-	objcopy --add-section .kpatch.checksum=checksum.tmp --set-section-flags .kpatch.checksum=alloc,load,contents,readonly  ../patch/tmp_output.o || die
-	rm -f checksum.tmp
-	"$TOOLSDIR"/create-kpatch-module "$TEMPDIR"/patch/tmp_output.o "$TEMPDIR"/patch/output.o 2>&1 | logger 1
-	check_pipe_status create-kpatch-module
-else
-	cp "$TEMPDIR"/patch/tmp_output.o "$TEMPDIR"/patch/output.o || die
-fi
+	cd "${TEMPDIR}/output" || die
+	patch_dir="${TEMPDIR}/patch/${obj}"
+	mkdir -p "${patch_dir}"
 
-cd "$TEMPDIR/patch" || die
-if [[ -z "$OOT_MODULE" ]]; then
-	KPATCH_BUILD="$SRCDIR"
-else
-	KPATCH_BUILD="/lib/modules/$ARCHVERSION/build"
-fi
-KPATCH_BUILD="$KPATCH_BUILD" KPATCH_NAME="$MODNAME" \
-KBUILD_EXTRA_SYMBOLS="$KBUILD_EXTRA_SYMBOLS" \
-KPATCH_LDFLAGS="$KPATCH_LDFLAGS" \
-	make 2>&1 | logger || die
+	cp -LR "$DATADIR/patch/"* "${patch_dir}" || die
 
-if ! "$KPATCH_MODULE"; then
-	if [[ -z "$KPATCH_LDFLAGS" ]]; then
-		extra_flags="--no-klp-arch-sections"
+	ld -r $KPATCH_LDFLAGS -o "${patch_dir}/tmp_output.o" $(find "./${obj}" -name "*.o") 2>&1 | logger || die
+
+	if "$KPATCH_MODULE"; then
+		# Add .kpatch.checksum for kpatch script
+		md5sum "${patch_dir}/tmp_output.o" | awk '{printf "%s\0", $1}' > checksum.tmp || die
+		objcopy --add-section .kpatch.checksum=checksum.tmp --set-section-flags .kpatch.checksum=alloc,load,contents,readonly "${patch_dir}/tmp_output.o" || die
+		rm -f checksum.tmp
+		"$TOOLSDIR"/create-kpatch-module "${patch_dir}/tmp_output.o" "${patch_dir}/output.o" 2>&1 | logger 1
+		check_pipe_status create-kpatch-module
+	else
+		cp "${patch_dir}/tmp_output.o" "${patch_dir}/output.o" || die
 	fi
-	cp "$TEMPDIR/patch/$MODNAME.ko" "$TEMPDIR/patch/tmp.ko" || die
-	"$TOOLSDIR"/create-klp-module $extra_flags "$TEMPDIR/patch/tmp.ko" "$TEMPDIR/patch/$MODNAME.ko" 2>&1 | logger 1
-	check_pipe_status create-klp-module
-fi
 
-readelf --wide --symbols "$TEMPDIR/patch/$MODNAME.ko" 2>/dev/null | \
-	sed -r 's/\s+\[<localentry>: 8\]//' | \
-	awk '($4=="FUNC" || $4=="OBJECT") && ($5=="GLOBAL" || $5=="WEAK") && $7!="UND" {print $NF}' \
-	>"${TEMPDIR}"/new_symbols
+	cd "${patch_dir}" || die
+	if [[ -z "$OOT_MODULE" ]]; then
+		KPATCH_BUILD="$SRCDIR"
+	else
+		KPATCH_BUILD="/lib/modules/$ARCHVERSION/build"
+	fi
 
-if "$KPATCH_MODULE"; then
-	cat >>"${TEMPDIR}"/new_symbols <<-EOF
-		kpatch_shadow_free
-		kpatch_shadow_alloc
-		kpatch_register
-		kpatch_shadow_get
-		kpatch_unregister
-		kpatch_root_kobj
-	EOF
-fi
+	if [ "${obj}" == "vmlinux" ]; then
+		modulename="${MODNAME}"
+	else
+		modulename="${obj%.ko}_${MODNAME}"
+	fi
 
-# Compare undefined_references and new_symbols files and print only the first
-# column containing lines unique to first file.
-UNDEFINED=$(comm -23 <(sort -u "${TEMPDIR}"/undefined_references) \
-	<(sort -u "${TEMPDIR}"/new_symbols) | tr '\n' ' ')
-[[ -n "$UNDEFINED" ]] && die "Undefined symbols: $UNDEFINED"
+	KPATCH_BUILD="$KPATCH_BUILD" KPATCH_NAME="${modulename}" \
+	KBUILD_EXTRA_SYMBOLS="$KBUILD_EXTRA_SYMBOLS" \
+	KPATCH_LDFLAGS="$KPATCH_LDFLAGS" \
+		make 2>&1 | logger || die
 
-cp -f "$TEMPDIR/patch/$MODNAME.ko" "$BASE" || die
+	if ! "$KPATCH_MODULE"; then
+		if [[ -z "$KPATCH_LDFLAGS" ]]; then
+			extra_flags="--no-klp-arch-sections"
+		fi
+		cp "${patch_dir}/${modulename}.ko" "${patch_dir}/tmp.ko" || die
+		"$TOOLSDIR"/create-klp-module $extra_flags "${patch_dir}/tmp.ko" "${patch_dir}/${modulename}.ko" 2>&1 | logger 1
+		check_pipe_status create-klp-module
+	fi
+
+	readelf --wide --symbols "${patch_dir}/${modulename}.ko" 2>/dev/null | \
+		sed -r 's/\s+\[<localentry>: 8\]//' | \
+		awk '($4=="FUNC" || $4=="OBJECT") && ($5=="GLOBAL" || $5=="WEAK") && $7!="UND" {print $NF}' \
+		>"${TEMPDIR}"/new_symbols
+
+	if "$KPATCH_MODULE"; then
+		cat >>"${TEMPDIR}"/new_symbols <<-EOF
+			kpatch_shadow_free
+			kpatch_shadow_alloc
+			kpatch_register
+			kpatch_shadow_get
+			kpatch_unregister
+			kpatch_root_kobj
+		EOF
+	fi
+
+	# Compare undefined_references and new_symbols files and print only the first
+	# column containing lines unique to first file.
+	UNDEFINED=$(comm -23 <(sort -u "${TEMPDIR}"/undefined_references) \
+		<(sort -u "${TEMPDIR}"/new_symbols) | tr '\n' ' ')
+	[[ -n "$UNDEFINED" ]] && die "Undefined symbols: $UNDEFINED"
+
+	cp -f "${patch_dir}/${modulename}.ko" "$BASE" || die
+done
 
 [[ "$DEBUG" -eq 0 ]] && rm -f "$LOGFILE"
 
