@@ -757,6 +757,13 @@ static int kpatch_subsection_changed(struct section *sec1, struct section *sec2)
 	return kpatch_subsection_type(sec1) != kpatch_subsection_type(sec2);
 }
 
+static struct symbol *kpatch_get_correlated_parent(struct symbol *sym)
+{
+	while (sym->parent && !sym->parent->twin)
+		sym = sym->parent;
+	return sym->parent;
+}
+
 static void kpatch_compare_correlated_symbol(struct symbol *sym)
 {
 	struct symbol *sym1 = sym, *sym2 = sym->twin;
@@ -1008,21 +1015,13 @@ static char *kpatch_section_function_name(struct section *sec)
 	return sec->sym ? sec->sym->name : sec->name;
 }
 
-/*
- * Given a static local variable symbol and a rela section which references it
- * in the base object, find a corresponding usage of a similarly named symbol
- * in the patched object.
- */
-static struct symbol *kpatch_find_static_twin(struct section *sec,
-					      struct symbol *sym)
+static struct symbol *kpatch_find_uncorrelated_rela(struct section *rela_sec,
+						    struct symbol *sym)
 {
 	struct rela *rela, *rela_toc;
 
-	if (!sec->twin)
-		return NULL;
-
 	/* find the patched object's corresponding variable */
-	list_for_each_entry(rela, &sec->twin->relas, list) {
+	list_for_each_entry(rela, &rela_sec->relas, list) {
 		struct symbol *patched_sym;
 
 		rela_toc = toc_rela(rela);
@@ -1048,6 +1047,67 @@ static struct symbol *kpatch_find_static_twin(struct section *sec,
 	return NULL;
 }
 
+static struct symbol *kpatch_find_static_twin_in_children(struct symbol *parent,
+							  struct symbol *sym)
+{
+	struct symbol *child;
+
+	list_for_each_entry(child, &parent->children, subfunction_node) {
+		struct symbol *res;
+
+		/* Only look in children whose rela section differ from the parent's */
+		if (child->sec->rela == parent->sec->rela || !child->sec->rela)
+			continue;
+
+		res = kpatch_find_uncorrelated_rela(child->sec->rela, sym);
+		/* Need to go deeper */
+		if (!res)
+			res = kpatch_find_static_twin_in_children(child, sym);
+		if (res != NULL)
+			return res;
+	}
+
+	return NULL;
+}
+
+/*
+ * Given a static local variable symbol and a rela section which references it
+ * in the base object, find a corresponding usage of a similarly named symbol
+ * in the patched object.
+ */
+static struct symbol *kpatch_find_static_twin(struct section *sec,
+					      struct symbol *sym)
+{
+	struct symbol *res;
+
+	if (!sec->twin && sec->base->sym) {
+		struct symbol *parent = NULL;
+
+		/*
+		 * The static twin might have been in a .part. symbol in the
+		 * original object that got removed in the patched object.
+		 */
+		parent = kpatch_get_correlated_parent(sec->base->sym);
+		if (parent)
+			sec = parent->sec->rela;
+
+	}
+
+	if (!sec->twin)
+		return NULL;
+
+	res = kpatch_find_uncorrelated_rela(sec->twin, sym);
+	if (res != NULL)
+		return res;
+
+	/* Look if reference might have moved to child functions' sections */
+	if (sec->twin->base->sym)
+		return kpatch_find_static_twin_in_children(sec->twin->base->sym,
+							   sym);
+
+	return NULL;
+}
+
 static int kpatch_is_normal_static_local(struct symbol *sym)
 {
 	if (sym->type != STT_OBJECT || sym->bind != STB_LOCAL)
@@ -1060,6 +1120,35 @@ static int kpatch_is_normal_static_local(struct symbol *sym)
 		return 0;
 
 	return 1;
+}
+
+static struct rela *kpatch_find_static_twin_ref(struct section *rela_sec, struct symbol *sym)
+{
+	struct rela *rela;
+
+	list_for_each_entry(rela, &rela_sec->relas, list) {
+		if (rela->sym == sym->twin)
+			return rela;
+	}
+
+	/* Reference to static variable might have moved to child function section */
+	if (rela_sec->base->sym) {
+		struct symbol *parent = rela_sec->base->sym;
+		struct symbol *child;
+
+		list_for_each_entry(child, &parent->children, subfunction_node) {
+			/* Only look in children whose rela section differ from the parent's */
+			if (child->sec->rela == parent->sec->rela ||
+			    !child->sec->rela)
+				continue;
+
+			rela = kpatch_find_static_twin_ref(child->sec->rela, sym);
+			if (rela)
+				return rela;
+		}
+	}
+
+	return NULL;
 }
 
 /*
@@ -1091,8 +1180,8 @@ static void kpatch_correlate_static_local_variables(struct kpatch_elf *base,
 {
 	struct symbol *sym, *patched_sym;
 	struct section *sec;
-	struct rela *rela, *rela2;
-	int bundled, patched_bundled, found;
+	struct rela *rela;
+	int bundled, patched_bundled;
 
 	/*
 	 * First undo the correlations for all static locals.  Two static
@@ -1192,28 +1281,29 @@ static void kpatch_correlate_static_local_variables(struct kpatch_elf *base,
 			continue;
 
 		list_for_each_entry(rela, &sec->relas, list) {
+			struct section *target_sec = sec;
 
 			sym = rela->sym;
 			if (!kpatch_is_normal_static_local(sym))
 				continue;
 
-			if (!sym->twin || !sec->twin)
-				DIFF_FATAL("reference to static local variable %s in %s was removed",
-					   sym->name,
-					   kpatch_section_function_name(sec));
+			if (!sec->twin && sec->base->sym) {
+				struct symbol *parent = NULL;
 
-			found = 0;
-			list_for_each_entry(rela2, &sec->twin->relas, list) {
-				if (rela2->sym == sym->twin) {
-					found = 1;
-					break;
-				}
+				parent = kpatch_get_correlated_parent(sec->base->sym);
+				if (parent)
+					target_sec = parent->sec->rela;
 			}
 
-			if (!found)
+			if (!sym->twin || !target_sec->twin)
+				DIFF_FATAL("reference to static local variable %s in %s was removed",
+					   sym->name,
+					   kpatch_section_function_name(target_sec));
+
+			if (!kpatch_find_static_twin_ref(target_sec->twin, sym))
 				DIFF_FATAL("static local %s has been correlated with %s, but patched %s is missing a reference to it",
 					   sym->name, sym->twin->name,
-					   kpatch_section_function_name(sec->twin));
+					   kpatch_section_function_name(target_sec->twin));
 		}
 	}
 
