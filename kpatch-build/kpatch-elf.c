@@ -277,6 +277,8 @@ void kpatch_create_symbol_list(struct kpatch_elf *kelf)
 	while (symbols_nr--) {
 		ALLOC_LINK(sym, &kelf->symbols);
 
+		INIT_LIST_HEAD(&sym->children);
+
 		sym->index = index;
 		if (!gelf_getsym(symtab->data, index, &sym->sym))
 			ERROR("gelf_getsym");

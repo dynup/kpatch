@@ -221,6 +221,7 @@ static void kpatch_detect_child_functions(struct kpatch_elf *kelf)
 
 	list_for_each_entry(sym, &kelf->symbols, list) {
 		char *coldstr;
+		struct symbol *parent;
 
 		coldstr = strstr(sym->name, ".cold.");
 		if (coldstr != NULL) {
@@ -230,13 +231,14 @@ static void kpatch_detect_child_functions(struct kpatch_elf *kelf)
 			if (!pname)
 				ERROR("strndup");
 
-			sym->parent = find_symbol_by_name(&kelf->symbols, pname);
+			parent = find_symbol_by_name(&kelf->symbols, pname);
 			free(pname);
 
-			if (!sym->parent)
+			if (!parent)
 				ERROR("failed to find parent function for %s", sym->name);
 
-			sym->parent->child = sym;
+			list_add_tail(&sym->subfunction_node, &parent->children);
+			sym->parent = parent;
 		}
 	}
 }
@@ -659,6 +661,26 @@ static int kpatch_line_macro_change_only(struct section *sec)
 }
 #endif
 
+/*
+ * Child functions with "*.cold" names don't have _fentry_ calls, but "*.part",
+ * often do. In the later case, it is not necessary to include the parent
+ * in the output object when the child function has changed.
+ */
+static bool kpatch_changed_child_needs_parent_profiling(struct symbol *sym)
+{
+	struct symbol *child;
+
+	list_for_each_entry(child, &sym->children, subfunction_node) {
+		if (child->has_func_profiling)
+			continue;
+		if (child->sec->status == CHANGED ||
+		    kpatch_changed_child_needs_parent_profiling(child))
+			return true;
+	}
+
+	return false;
+}
+
 static void kpatch_compare_sections(struct list_head *seclist)
 {
 	struct section *sec;
@@ -691,9 +713,8 @@ static void kpatch_compare_sections(struct list_head *seclist)
 			if (sym && sym->status != CHANGED)
 				sym->status = sec->status;
 
-			if (sym && sym->child && sym->status == SAME &&
-			    sym->child->sec->status == CHANGED &&
-			    !sym->child->has_func_profiling)
+			if (sym && sym->status == SAME &&
+			    kpatch_changed_child_needs_parent_profiling(sym))
 				sym->status = CHANGED;
 		}
 	}
@@ -2364,6 +2385,16 @@ static void kpatch_mark_ignored_sections_same(struct kpatch_elf *kelf)
 			sym->status = SAME;
 }
 
+static void kpatch_mark_ignored_children_same(struct symbol *sym)
+{
+	struct symbol *child;
+
+	list_for_each_entry(child, &sym->children, subfunction_node) {
+		child->status = SAME;
+		kpatch_mark_ignored_children_same(child);
+	}
+}
+
 static void kpatch_mark_ignored_functions_same(struct kpatch_elf *kelf)
 {
 	struct section *sec;
@@ -2385,8 +2416,7 @@ static void kpatch_mark_ignored_functions_same(struct kpatch_elf *kelf)
 		rela->sym->status = SAME;
 		rela->sym->sec->status = SAME;
 
-		if (rela->sym->child)
-			rela->sym->child->status = SAME;
+		kpatch_mark_ignored_children_same(rela->sym);
 
 		if (rela->sym->sec->secsym)
 			rela->sym->sec->secsym->status = SAME;
