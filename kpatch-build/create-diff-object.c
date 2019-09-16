@@ -209,9 +209,28 @@ static void kpatch_bundle_symbols(struct kpatch_elf *kelf)
 	}
 }
 
+static struct symbol *kpatch_lookup_parent(struct kpatch_elf *kelf,
+					   const char *symname,
+					   const char *child_suffix)
+{
+	struct symbol *parent;
+	char *pname;
+
+	pname = strndup(symname, child_suffix - symname);
+	if (!pname)
+		ERROR("strndup");
+
+	parent = find_symbol_by_name(&kelf->symbols, pname);
+	free(pname);
+
+	return parent;
+}
+
 /*
  * During optimization gcc may move unlikely execution branches into *.cold
- * subfunctions. kpatch_detect_child_functions detects such subfunctions and
+ * subfunctions. Some functions can also be split into multiple *.part
+ * functions.
+ * kpatch_detect_child_functions detects such subfunctions and
  * crossreferences them with their parent functions through parent/child
  * pointers.
  */
@@ -220,26 +239,28 @@ static void kpatch_detect_child_functions(struct kpatch_elf *kelf)
 	struct symbol *sym;
 
 	list_for_each_entry(sym, &kelf->symbols, list) {
-		char *coldstr;
-		struct symbol *parent;
+		char *childstr;
 
-		coldstr = strstr(sym->name, ".cold.");
-		if (coldstr != NULL) {
-			char *pname;
+		if (sym->type != STT_FUNC)
+			continue;
 
-			pname = strndup(sym->name, coldstr - sym->name);
-			if (!pname)
-				ERROR("strndup");
-
-			parent = find_symbol_by_name(&kelf->symbols, pname);
-			free(pname);
-
-			if (!parent)
-				ERROR("failed to find parent function for %s", sym->name);
-
-			list_add_tail(&sym->subfunction_node, &parent->children);
-			sym->parent = parent;
+		childstr = strstr(sym->name, ".cold.");
+		if (childstr) {
+			sym->parent = kpatch_lookup_parent(kelf, sym->name,
+							   childstr);
+			if (!sym->parent)
+				ERROR("failed to find parent function for %s",
+				      sym->name);
+		} else {
+			childstr = strstr(sym->name, ".part.");
+			if (!childstr)
+				continue;
+			sym->parent = kpatch_lookup_parent(kelf, sym->name,
+							   childstr);
 		}
+
+		if (sym->parent)
+			list_add_tail(&sym->subfunction_node, &sym->parent->children);
 	}
 }
 
