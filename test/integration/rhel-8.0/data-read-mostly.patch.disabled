@@ -1,3 +1,5 @@
+Disabled due to https://github.com/dynup/kpatch/issues/940
+---
 diff --git a/net/core/dev.c b/net/core/dev.c
 index b6f9647..b376a48 100644
 --- a/net/core/dev.c

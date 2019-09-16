@@ -1,3 +1,5 @@
+Disabled due to https://github.com/dynup/kpatch/issues/940
+---
 diff --git a/fs/proc/array.c b/fs/proc/array.c
 index 0ceb3b6..1b44c7f 100644
 --- a/fs/proc/array.c
