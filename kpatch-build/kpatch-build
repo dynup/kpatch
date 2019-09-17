@@ -365,17 +365,17 @@ find_parent_obj() {
 	if [[ "$DEEP_FIND" -eq 1 ]]; then
 		num=0
 		if [[ -n "$last_deep_find" ]]; then
-			parent="$(grep -l "$grepname" "$last_deep_find"/.*.cmd | grep -Fv "$pdir/.${file}.cmd" | head -n1)"
-			num="$(grep -l "$grepname" "$last_deep_find"/.*.cmd | grep -Fvc "$pdir/.${file}.cmd")"
+			parent="$(grep -lw "$grepname" "$last_deep_find"/.*.cmd | grep -Fv "$pdir/.${file}.cmd" | head -n1)"
+			num="$(grep -lw "$grepname" "$last_deep_find"/.*.cmd | grep -Fvc "$pdir/.${file}.cmd")"
 		fi
 		if [[ "$num" -eq 0 ]]; then
-			parent="$(find . -name ".*.cmd" -print0 | xargs -0 grep -l "$grepname" | grep -Fv "$pdir/.${file}.cmd" | cut -c3- | head -n1)"
-			num="$(find . -name ".*.cmd" -print0 | xargs -0 grep -l "$grepname" | grep -Fvc "$pdir/.${file}.cmd")"
+			parent="$(find . -name ".*.cmd" -print0 | xargs -0 grep -lw "$grepname" | grep -Fv "$pdir/.${file}.cmd" | cut -c3- | head -n1)"
+			num="$(find . -name ".*.cmd" -print0 | xargs -0 grep -lw "$grepname" | grep -Fvc "$pdir/.${file}.cmd")"
 			[[ "$num" -eq 1 ]] && last_deep_find="$(dirname "$parent")"
 		fi
 	else
-		parent="$(grep -l "$grepname" "$dir"/.*.cmd | grep -Fv "$dir/.${file}.cmd" | head -n1)"
-		num="$(grep -l "$grepname" "$dir"/.*.cmd | grep -Fvc "$dir/.${file}.cmd")"
+		parent="$(grep -lw "$grepname" "$dir"/.*.cmd | grep -Fv "$dir/.${file}.cmd" | head -n1)"
+		num="$(grep -lw "$grepname" "$dir"/.*.cmd | grep -Fvc "$dir/.${file}.cmd")"
 	fi
 
 	[[ "$num" -eq 0 ]] && PARENT="" && return
@@ -385,7 +385,7 @@ find_parent_obj() {
 	PARENT="$(basename "$parent")"
 	PARENT="${PARENT#.}"
 	PARENT="${PARENT%.cmd}"
-	PARENT="$dir/$PARENT"
+	[[ $dir != "." ]] && PARENT="$dir/$PARENT"
 	[[ ! -e "$PARENT" ]] && die "ERROR: can't find parent $PARENT for $1"
 }
 
