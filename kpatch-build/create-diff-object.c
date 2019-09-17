@@ -975,18 +975,26 @@ static struct symbol *kpatch_find_static_twin(struct section *sec,
 
 	/* find the patched object's corresponding variable */
 	list_for_each_entry(rela, &sec->twin->relas, list) {
+		struct symbol *patched_sym;
 
 		rela_toc = toc_rela(rela);
 		if (!rela_toc)
 			continue; /* skip toc constants */
 
-		if (rela_toc->sym->twin)
+		patched_sym = rela_toc->sym;
+
+		if (patched_sym->twin)
 			continue;
 
-		if (kpatch_mangled_strcmp(rela_toc->sym->name, sym->name))
+		if (sym->type != patched_sym->type ||
+		    (sym->type == STT_OBJECT &&
+		     sym->sym.st_size != patched_sym->sym.st_size))
 			continue;
 
-		return rela_toc->sym;
+		if (kpatch_mangled_strcmp(patched_sym->name, sym->name))
+			continue;
+
+		return patched_sym;
 	}
 
 	return NULL;
