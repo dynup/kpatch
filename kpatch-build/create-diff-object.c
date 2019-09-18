@@ -82,7 +82,6 @@ enum loglevel loglevel = NORMAL;
 struct special_section {
 	char *name;
 	int (*group_size)(struct kpatch_elf *kelf, int offset);
-	int unsupported;
 };
 
 /*************
@@ -1956,27 +1955,22 @@ static struct special_section special_sections[] = {
 	{
 		.name		= "__ftr_fixup",
 		.group_size	= fixup_entry_group_size,
-		.unsupported	= 1,
 	},
 	{
 		.name		= "__mmu_ftr_fixup",
 		.group_size	= fixup_entry_group_size,
-		.unsupported	= 1,
 	},
 	{
 		.name		= "__fw_ftr_fixup",
 		.group_size	= fixup_entry_group_size,
-		.unsupported	= 1,
 	},
 	{
 		.name		= "__lwsync_fixup",
 		.group_size	= fixup_lwsync_group_size,
-		.unsupported	= 1,
 	},
 	{
 		.name		= "__barrier_nospec_fixup",
 		.group_size	= fixup_barrier_nospec_group_size,
-		.unsupported	= 1,
 	},
 #endif
 	{},
@@ -2074,9 +2068,6 @@ static void kpatch_regenerate_special_section(struct kpatch_elf *kelf,
 
 		if (!include)
 			continue;
-
-		if (special->unsupported)
-			DIFF_FATAL("unsupported reference to special section %s", sec->base->name);
 
 		/*
 		 * Jump labels (aka static keys or static branches) aren't

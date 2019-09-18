@@ -354,6 +354,14 @@ find_special_section_data() {
 	return
 }
 
+filter_parent_obj()
+{
+  local dir="${1}"
+  local file="${2}"
+
+  grep -v "\.mod\.cmd$" | grep -Fv "${dir}/.${file}.cmd"
+}
+
 find_parent_obj() {
 	dir="$(dirname "$1")"
 	absdir="$(readlink -f "$dir")"
@@ -365,17 +373,17 @@ find_parent_obj() {
 	if [[ "$DEEP_FIND" -eq 1 ]]; then
 		num=0
 		if [[ -n "$last_deep_find" ]]; then
-			parent="$(grep -lw "$grepname" "$last_deep_find"/.*.cmd | grep -Fv "$pdir/.${file}.cmd" | head -n1)"
-			num="$(grep -lw "$grepname" "$last_deep_find"/.*.cmd | grep -Fvc "$pdir/.${file}.cmd")"
+			parent="$(grep -lw "$grepname" "$last_deep_find"/.*.cmd | filter_parent_obj "${pdir}" "${file}" | head -n1)"
+			num="$(grep -lw "$grepname" "$last_deep_find"/.*.cmd | filter_parent_obj "${pdir}" "${file}" | wc -l)"
 		fi
 		if [[ "$num" -eq 0 ]]; then
-			parent="$(find . -name ".*.cmd" -print0 | xargs -0 grep -lw "$grepname" | grep -Fv "$pdir/.${file}.cmd" | cut -c3- | head -n1)"
-			num="$(find . -name ".*.cmd" -print0 | xargs -0 grep -lw "$grepname" | grep -Fvc "$pdir/.${file}.cmd")"
+			parent="$(find . -name ".*.cmd" -print0 | xargs -0 grep -lw "$grepname" | filter_parent_obj "${pdir}" "${file}" | cut -c3- | head -n1)"
+			num="$(find . -name ".*.cmd" -print0 | xargs -0 grep -lw "$grepname" | filter_parent_obj "${pdir}" "${file}" | wc -l)"
 			[[ "$num" -eq 1 ]] && last_deep_find="$(dirname "$parent")"
 		fi
 	else
-		parent="$(grep -lw "$grepname" "$dir"/.*.cmd | grep -Fv "$dir/.${file}.cmd" | head -n1)"
-		num="$(grep -lw "$grepname" "$dir"/.*.cmd | grep -Fvc "$dir/.${file}.cmd")"
+		parent="$(grep -lw "$grepname" "$dir"/.*.cmd | filter_parent_obj "${dir}" "${file}" | head -n1)"
+		num="$(grep -lw "$grepname" "$dir"/.*.cmd | filter_parent_obj "${dir}" "${file}" | wc -l)"
 	fi
 
 	[[ "$num" -eq 0 ]] && PARENT="" && return
