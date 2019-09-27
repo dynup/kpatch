@@ -373,17 +373,17 @@ find_parent_obj() {
 	if [[ "$DEEP_FIND" -eq 1 ]]; then
 		num=0
 		if [[ -n "$last_deep_find" ]]; then
-			parent="$(grep -l "$grepname" "$last_deep_find"/.*.cmd | filter_parent_obj "${pdir}" "${file}" | head -n1)"
-			num="$(grep -l "$grepname" "$last_deep_find"/.*.cmd | filter_parent_obj "${pdir}" "${file}" | wc -l)"
+			parent="$(grep -lw "$grepname" "$last_deep_find"/.*.cmd | filter_parent_obj "${pdir}" "${file}" | head -n1)"
+			num="$(grep -lw "$grepname" "$last_deep_find"/.*.cmd | filter_parent_obj "${pdir}" "${file}" | wc -l)"
 		fi
 		if [[ "$num" -eq 0 ]]; then
-			parent="$(find . -name ".*.cmd" -print0 | xargs -0 grep -l "$grepname" | filter_parent_obj "${pdir}" "${file}" | cut -c3- | head -n1)"
-			num="$(find . -name ".*.cmd" -print0 | xargs -0 grep -l "$grepname" | filter_parent_obj "${pdir}" "${file}" | wc -l)"
+			parent="$(find . -name ".*.cmd" -print0 | xargs -0 grep -lw "$grepname" | filter_parent_obj "${pdir}" "${file}" | cut -c3- | head -n1)"
+			num="$(find . -name ".*.cmd" -print0 | xargs -0 grep -lw "$grepname" | filter_parent_obj "${pdir}" "${file}" | wc -l)"
 			[[ "$num" -eq 1 ]] && last_deep_find="$(dirname "$parent")"
 		fi
 	else
-		parent="$(grep -l "$grepname" "$dir"/.*.cmd | filter_parent_obj "${dir}" "${file}" | head -n1)"
-		num="$(grep -l "$grepname" "$dir"/.*.cmd | filter_parent_obj "${dir}" "${file}" | wc -l)"
+		parent="$(grep -lw "$grepname" "$dir"/.*.cmd | filter_parent_obj "${dir}" "${file}" | head -n1)"
+		num="$(grep -lw "$grepname" "$dir"/.*.cmd | filter_parent_obj "${dir}" "${file}" | wc -l)"
 	fi
 
 	[[ "$num" -eq 0 ]] && PARENT="" && return
@@ -393,7 +393,7 @@ find_parent_obj() {
 	PARENT="$(basename "$parent")"
 	PARENT="${PARENT#.}"
 	PARENT="${PARENT%.cmd}"
-	PARENT="$dir/$PARENT"
+	[[ $dir != "." ]] && PARENT="$dir/$PARENT"
 	[[ ! -e "$PARENT" ]] && die "ERROR: can't find parent $PARENT for $1"
 }
 
