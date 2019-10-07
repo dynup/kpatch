@@ -1239,7 +1239,8 @@ static void kpatch_compare_correlated_elements(struct kpatch_elf *kelf)
 }
 
 #ifdef __x86_64__
-static void rela_insn(struct section *sec, struct rela *rela, struct insn *insn)
+static void rela_insn(const struct section *sec, const struct rela *rela,
+		      struct insn *insn)
 {
 	unsigned long insn_addr, start, end, rela_addr;
 
@@ -1308,14 +1309,14 @@ static void kpatch_replace_sections_syms(struct kpatch_elf *kelf)
 
 		list_for_each_entry(rela, &sec->relas, list) {
 
-			if (rela->sym->type != STT_SECTION)
+			if (rela->sym->type != STT_SECTION || !rela->sym->sec)
 				continue;
 
 			/*
 			 * Replace references to bundled sections with their
 			 * symbols.
 			 */
-			if (rela->sym->sec && rela->sym->sec->sym) {
+			if (rela->sym->sec->sym) {
 				rela->sym = rela->sym->sec->sym;
 
 				/*
@@ -1357,7 +1358,6 @@ static void kpatch_replace_sections_syms(struct kpatch_elf *kelf)
 				int start, end;
 
 				if (sym->type == STT_SECTION ||
-				    !sym->sec ||
 				    sym->sec != rela->sym->sec)
 					continue;
 
@@ -3403,15 +3403,15 @@ int main(int argc, char *argv[])
 	kelf_base = kpatch_elf_open(orig_obj);
 	kelf_patched = kpatch_elf_open(patched_obj);
 
+	kpatch_compare_elf_headers(kelf_base->elf, kelf_patched->elf);
+	kpatch_check_program_headers(kelf_base->elf);
+	kpatch_check_program_headers(kelf_patched->elf);
+
 	kpatch_bundle_symbols(kelf_base);
 	kpatch_bundle_symbols(kelf_patched);
 
 	kpatch_detect_child_functions(kelf_base);
 	kpatch_detect_child_functions(kelf_patched);
-
-	kpatch_compare_elf_headers(kelf_base->elf, kelf_patched->elf);
-	kpatch_check_program_headers(kelf_base->elf);
-	kpatch_check_program_headers(kelf_patched->elf);
 
 	list_for_each_entry(sym, &kelf_base->symbols, list) {
 		if (sym->type == STT_FILE) {
