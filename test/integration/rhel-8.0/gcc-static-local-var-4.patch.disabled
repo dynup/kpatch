@@ -1,3 +1,5 @@
+Disabled due to https://github.com/dynup/kpatch/issues/940
+---
 diff --git a/fs/aio.c b/fs/aio.c
 index e1f8f01..4dfb05c 100644
 --- a/fs/aio.c
