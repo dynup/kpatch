@@ -760,7 +760,7 @@ static void kpatch_compare_symbols(struct list_head *symlist)
 	}
 }
 
-#define CORRELATE_ELEMENT(_e1_, _e2_)				\
+#define CORRELATE_ELEMENT(_e1_, _e2_, kindstr)			\
 do {								\
 	typeof(_e1_) e1 = (_e1_);				\
 	typeof(_e2_) e2 = (_e2_);				\
@@ -768,16 +768,22 @@ do {								\
 	e2->twin = e1;						\
 	/* set initial status, might change */			\
 	e1->status = e2->status = SAME;				\
+	if (strcmp(e1->name, e2->name)) {			\
+		/* Rename mangled element */			\
+		log_debug("renaming %s %s to %s\n",		\
+			  kindstr, e2->name, e1->name);		\
+		e2->name = strdup(e1->name);			\
+	}							\
 } while (0)
 
 static void __kpatch_correlate_section(struct section *sec1, struct section *sec2)
 {
-	CORRELATE_ELEMENT(sec1, sec2);
+	CORRELATE_ELEMENT(sec1, sec2, "section");
 }
 
 static void kpatch_correlate_symbol(struct symbol *sym1, struct symbol *sym2)
 {
-	CORRELATE_ELEMENT(sym1, sym2);
+	CORRELATE_ELEMENT(sym1, sym2, "symbol");
 }
 
 static void kpatch_correlate_section(struct section *sec1, struct section *sec2)
