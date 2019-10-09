@@ -847,6 +847,8 @@ void kpatch_elf_teardown(struct kpatch_elf *kelf)
 	struct rela *rela, *saferela;
 
 	list_for_each_entry_safe(sec, safesec, &kelf->sections, list) {
+		if (sec->twin)
+			sec->twin->twin = NULL;
 		if (is_rela_section(sec)) {
 			list_for_each_entry_safe(rela, saferela, &sec->relas, list) {
 				memset(rela, 0, sizeof(*rela));
@@ -858,6 +860,8 @@ void kpatch_elf_teardown(struct kpatch_elf *kelf)
 	}
 
 	list_for_each_entry_safe(sym, safesym, &kelf->symbols, list) {
+		if (sym->twin)
+			sym->twin->twin = NULL;
 		memset(sym, 0, sizeof(*sym));
 		free(sym);
 	}
