@@ -760,11 +760,51 @@ static void kpatch_compare_symbols(struct list_head *symlist)
 	}
 }
 
+#define CORRELATE_ELEMENT(_e1_, _e2_)				\
+do {								\
+	typeof(_e1_) e1 = (_e1_);				\
+	typeof(_e2_) e2 = (_e2_);				\
+	e1->twin = e2;						\
+	e2->twin = e1;						\
+	/* set initial status, might change */			\
+	e1->status = e2->status = SAME;				\
+} while (0)
+
+static void __kpatch_correlate_section(struct section *sec1, struct section *sec2)
+{
+	CORRELATE_ELEMENT(sec1, sec2);
+}
+
+static void kpatch_correlate_symbol(struct symbol *sym1, struct symbol *sym2)
+{
+	CORRELATE_ELEMENT(sym1, sym2);
+}
+
+static void kpatch_correlate_section(struct section *sec1, struct section *sec2)
+{
+	__kpatch_correlate_section(sec1, sec2);
+
+	if (is_rela_section(sec1)) {
+		__kpatch_correlate_section(sec1->base, sec2->base);
+		sec1 = sec1->base;
+		sec2 = sec2->base;
+	} else if (sec1->rela) {
+		__kpatch_correlate_section(sec1->rela, sec2->rela);
+	}
+
+	if (sec1->secsym)
+		kpatch_correlate_symbol(sec1->secsym, sec2->secsym);
+	if (sec1->sym)
+		kpatch_correlate_symbol(sec1->sym, sec2->sym);
+}
+
 static void kpatch_correlate_sections(struct list_head *seclist1, struct list_head *seclist2)
 {
 	struct section *sec1, *sec2;
 
 	list_for_each_entry(sec1, seclist1, list) {
+		if (sec1->twin)
+			continue;
 		list_for_each_entry(sec2, seclist2, list) {
 			if (kpatch_mangled_strcmp(sec1->name, sec2->name) ||
 			    sec2->twin)
@@ -786,10 +826,8 @@ static void kpatch_correlate_sections(struct list_head *seclist1, struct list_he
 				           sec1->data->d_size))
 					continue;
 			}
-			sec1->twin = sec2;
-			sec2->twin = sec1;
-			/* set initial status, might change */
-			sec1->status = sec2->status = SAME;
+
+			kpatch_correlate_section(sec1, sec2);
 			break;
 		}
 	}
@@ -800,6 +838,8 @@ static void kpatch_correlate_symbols(struct list_head *symlist1, struct list_hea
 	struct symbol *sym1, *sym2;
 
 	list_for_each_entry(sym1, symlist1, list) {
+		if (sym1->twin)
+			continue;
 		list_for_each_entry(sym2, symlist2, list) {
 			if (kpatch_mangled_strcmp(sym1->name, sym2->name) ||
 			    sym1->type != sym2->type || sym2->twin)
@@ -832,10 +872,7 @@ static void kpatch_correlate_symbols(struct list_head *symlist1, struct list_hea
 			    sym1->sec->twin != sym2->sec)
 				continue;
 
-			sym1->twin = sym2;
-			sym2->twin = sym1;
-			/* set initial status, might change */
-			sym1->status = sym2->status = SAME;
+			kpatch_correlate_symbol(sym1, sym2);
 			break;
 		}
 	}
