@@ -133,12 +133,14 @@ get_module_name () {
 	readelf -p .gnu.linkonce.this_module "$1" | grep '\[.*\]' | awk '{print $3}'
 }
 
-init_sysfs_var() {
+init_vars() {
+	MODPREFIX="kpatch-"
 	# If the kernel is configured with CONFIG_LIVEPATCH, use that.
 	# Otherwise, use the kpatch core module (kpatch.ko).
 	if [[ -e /sys/kernel/livepatch ]] ; then
 		# livepatch ABI
 		SYSFS="/sys/kernel/livepatch"
+		MODPREFIX="livepatch-"
 
 	elif [[ -e /sys/kernel/kpatch/patches ]] ; then
 		# kpatch pre-0.4 ABI
@@ -279,7 +281,7 @@ load_module () {
 
 		# Now that the core module has been loaded, set $SYSFS to the
 		# correct value based on the loaded core module's ABI.
-		init_sysfs_var
+		init_vars
 	fi
 
 	local modname
@@ -385,12 +387,16 @@ get_module_version() {
 	MODVER="${MODVER/ */}"
 }
 
+is_module_patch() {
+	[[ ! "$(basename "${1}")" =~ ^${MODPREFIX%-}[_-] ]]
+}
+
 unset MODULE
 
 # Initialize the $SYSFS var.  This only works if the core module has been
 # loaded.  Otherwise, the value of $SYSFS doesn't matter at this point anyway,
 # and we'll have to call this function again after loading it.
-init_sysfs_var
+init_vars
 
 [[ "$#" -lt 1 ]] && usage
 case "$1" in
@@ -400,6 +406,7 @@ case "$1" in
 	"--all")
 		for i in "$INSTALLDIR/$(uname -r)"/*.ko; do
 			[[ -e "$i" ]] || continue
+			is_module_patch "${i}" && continue
 			load_module "$i" || die "failed to load module $i"
 		done
 		;;
@@ -417,6 +424,7 @@ case "$1" in
 	"--all")
 		for module in "$SYSFS"/*; do
 			[[ -e "$module" ]] || continue
+			is_module_patch "${module}" && continue
 			unload_module "$(basename "$module")" || die "failed to unload module $module"
 		done
 		;;
@@ -457,6 +465,14 @@ case "$1" in
 	mkdir -p "$INSTALLDIR/$KVER" || die "failed to create install directory"
 	cp -f "$PATCH" "$INSTALLDIR/$KVER" || die "failed to install module $PATCH"
 	command -v systemctl > /dev/null 2>&1 && systemctl enable kpatch.service
+	if is_module_patch "${PATCH}"; then
+		mod_name "$PATCH"
+		PARENT_MOD="$(basename "${PATCH}")"
+		PARENT_MOD="${PARENT_MOD%%_${MODPREFIX}*}"
+		echo "install ${PARENT_MOD} modprobe --ignore-install ${PARENT_MOD} && kpatch load ${MODNAME}" > "/etc/modprobe.d/${MODNAME}.conf"
+		echo "remove ${PARENT_MOD} kpatch unload ${MODNAME} && modprobe --ignore-remove -r ${PARENT_MOD}" >> "/etc/modprobe.d/${MODNAME}.conf"
+		depmod
+	fi
 	;;
 
 "uninstall")
@@ -497,6 +513,12 @@ case "$1" in
 
 	echo "uninstalling $PATCH ($KVER)"
 	rm -f "$MODULE" || die "failed to uninstall module $PATCH"
+
+	if is_module_patch "${PATCH}"; then
+		mod_name "$PATCH"
+		rm -f "/etc/modprobe.d/${MODNAME}.conf"
+		depmod
+	fi
 	;;
 
 "list")
