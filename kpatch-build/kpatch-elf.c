@@ -852,9 +852,9 @@ void kpatch_elf_teardown(struct kpatch_elf *kelf)
 				memset(rela, 0, sizeof(*rela));
 				free(rela);
 			}
-			memset(sec, 0, sizeof(*sec));
-			free(sec);
 		}
+		memset(sec, 0, sizeof(*sec));
+		free(sec);
 	}
 
 	list_for_each_entry_safe(sym, safesym, &kelf->symbols, list) {
