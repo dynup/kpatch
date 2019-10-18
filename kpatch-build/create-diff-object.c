@@ -297,6 +297,13 @@ static int is_special_static(struct symbol *sym)
  */
 static int kpatch_mangled_strcmp(char *s1, char *s2)
 {
+	/*
+	 * ELF string sections aren't mangled, though they look that way.  Just
+	 * compare them normally.
+	 */
+	if (strstr(s1, ".str1."))
+		return strcmp(s1, s2);
+
 	while (*s1 == *s2) {
 		if (!*s1)
 			return 0;
@@ -389,11 +396,7 @@ static int rela_equal(struct rela *rela1, struct rela *rela2)
 	if (rela_toc1->addend != rela_toc2->addend)
 		return 0;
 
-	if (is_special_static(rela_toc1->sym))
-		return !kpatch_mangled_strcmp(rela_toc1->sym->name,
-					      rela_toc2->sym->name);
-
-	return !strcmp(rela_toc1->sym->name, rela_toc2->sym->name);
+	return !kpatch_mangled_strcmp(rela_toc1->sym->name, rela_toc2->sym->name);
 }
 
 static void kpatch_compare_correlated_rela_section(struct section *sec)
@@ -443,7 +446,7 @@ static void kpatch_compare_correlated_section(struct section *sec)
 	    sec1->sh.sh_entsize != sec2->sh.sh_entsize ||
 	    (sec1->sh.sh_addralign != sec2->sh.sh_addralign &&
 	     !is_text_section(sec1)))
-		DIFF_FATAL("%s section header details differ", sec1->name);
+		DIFF_FATAL("%s section header details differ from %s", sec1->name, sec2->name);
 
 	/* Short circuit for mcount sections, we rebuild regardless */
 	if (!strcmp(sec->name, ".rela__mcount_loc") ||
@@ -763,7 +766,8 @@ static void kpatch_correlate_sections(struct list_head *seclist1, struct list_he
 
 	list_for_each_entry(sec1, seclist1, list) {
 		list_for_each_entry(sec2, seclist2, list) {
-			if (strcmp(sec1->name, sec2->name))
+			if (kpatch_mangled_strcmp(sec1->name, sec2->name) ||
+			    sec2->twin)
 				continue;
 
 			if (is_special_static(is_rela_section(sec1) ?
@@ -797,8 +801,8 @@ static void kpatch_correlate_symbols(struct list_head *symlist1, struct list_hea
 
 	list_for_each_entry(sym1, symlist1, list) {
 		list_for_each_entry(sym2, symlist2, list) {
-			if (strcmp(sym1->name, sym2->name) ||
-			    sym1->type != sym2->type)
+			if (kpatch_mangled_strcmp(sym1->name, sym2->name) ||
+			    sym1->type != sym2->type || sym2->twin)
 				continue;
 
 			if (is_special_static(sym1))
@@ -891,77 +895,6 @@ static void kpatch_mark_grouped_sections(struct kpatch_elf *kelf)
 			          sec->name, sec->index);
 			data++;
 		}
-	}
-}
-
-/*
- * When gcc makes compiler optimizations which affect a function's calling
- * interface, it mangles the function's name.  For example, sysctl_print_dir is
- * renamed to sysctl_print_dir.isra.2.  The problem is that the trailing number
- * is chosen arbitrarily, and the patched version of the function may end up
- * with a different trailing number.  Rename any mangled patched functions to
- * match their base counterparts.
- */
-static void kpatch_rename_mangled_functions(struct kpatch_elf *base,
-					    struct kpatch_elf *patched)
-{
-	struct symbol *sym, *basesym;
-	char name[256], *origname;
-	struct section *sec, *basesec;
-	int found;
-
-	list_for_each_entry(sym, &patched->symbols, list) {
-		if (sym->type != STT_FUNC)
-			continue;
-
-		if (!strstr(sym->name, ".isra.") &&
-		    !strstr(sym->name, ".constprop.") &&
-		    !strstr(sym->name, ".cold.") &&
-		    !strstr(sym->name, ".part."))
-			continue;
-
-		found = 0;
-		list_for_each_entry(basesym, &base->symbols, list) {
-			if (!kpatch_mangled_strcmp(basesym->name, sym->name)) {
-				found = 1;
-				break;
-			}
-		}
-
-		if (!found)
-			continue;
-
-		if (!strcmp(sym->name, basesym->name))
-			continue;
-
-		log_debug("renaming %s to %s\n", sym->name, basesym->name);
-		origname = sym->name;
-		sym->name = strdup(basesym->name);
-
-		if (sym != sym->sec->sym)
-			continue;
-
-		sym->sec->name = strdup(basesym->sec->name);
-		if (sym->sec->rela)
-			sym->sec->rela->name = strdup(basesym->sec->rela->name);
-
-		/*
-		 * When function foo.isra.1 has a switch statement, it might
-		 * have a corresponding bundled .rodata.foo.isra.1 section (in
-		 * addition to .text.foo.isra.1 which we renamed above).
-		 */
-		sprintf(name, ".rodata.%s", origname);
-		sec = find_section_by_name(&patched->sections, name);
-		if (!sec)
-			continue;
-		sprintf(name, ".rodata.%s", basesym->name);
-		basesec = find_section_by_name(&base->sections, name);
-		if (!basesec)
-			continue;
-		sec->name = strdup(basesec->name);
-		sec->secsym->name = sec->name;
-		if (sec->rela)
-			sec->rela->name = strdup(basesec->rela->name);
 	}
 }
 
@@ -3429,7 +3362,6 @@ int main(int argc, char *argv[])
 	kpatch_mark_grouped_sections(kelf_patched);
 	kpatch_replace_sections_syms(kelf_base);
 	kpatch_replace_sections_syms(kelf_patched);
-	kpatch_rename_mangled_functions(kelf_base, kelf_patched);
 
 	kpatch_correlate_elfs(kelf_base, kelf_patched);
 	kpatch_correlate_static_local_variables(kelf_base, kelf_patched);
