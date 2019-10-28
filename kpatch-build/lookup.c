@@ -280,18 +280,24 @@ static void symtab_read(struct lookup_table *table, char *path)
 	fclose(file);
 }
 
+/*
+ * Symvers file format is the following for kernels v5.3 and newer:
+ * <CRC>	<Symbol>	<Namespace>	<Module>	<Export Type>
+ *
+ * Separated by tabs. <Namespace> can be blank (i.e. ""). Kernels before v5.3
+ * don't have namespace column at all.
+ */
 static void symvers_read(struct lookup_table *table, char *path)
 {
 	FILE *file;
-	unsigned int crc, i = 0;
-	char name[256], mod[256], export[256];
+	unsigned int i = 0;
+	char line[4096];
 	char *objname, *symname;
 
 	if ((file = fopen(path, "r")) == NULL)
 		ERROR("fopen");
 
-	while (fscanf(file, "%x %s %s %s\n",
-		      &crc, name, mod, export) != EOF)
+	while (fgets(line, 4096, file))
 		table->exp_nr++;
 
 	table->exp_syms = malloc(table->exp_nr * sizeof(*table->exp_syms));
@@ -302,8 +308,31 @@ static void symvers_read(struct lookup_table *table, char *path)
 
 	rewind(file);
 
-	while (fscanf(file, "%x %s %s %s\n",
-		      &crc, name, mod, export) != EOF) {
+	while (fgets(line, 4096, file)) {
+		char *name, *namespace, *mod, *tmp;
+
+		if (!(name = strchr(line, '\t')))
+			continue;
+		*name++ = '\0';
+
+		if (!(namespace = strchr(name, '\t')))
+			continue;
+		*namespace++ = '\0';
+
+		if (!(mod = strchr(namespace, '\t')))
+			continue;
+		*mod++ = '\0';
+
+		if ((tmp = strchr(mod, '\t')) != NULL) {
+			*tmp++ = '\0';
+		} else {
+			/*
+			 * Looks like it's an old symvers file with no
+			 * namespace column.
+			 */
+			mod = namespace;
+		}
+
 		symname = strdup(name);
 		if (!symname)
 			perror("strdup");
