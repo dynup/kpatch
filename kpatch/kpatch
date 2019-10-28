@@ -339,7 +339,10 @@ disable_patch () {
 	local modname="$1"
 
 	local enabled="$SYSFS/$modname/enabled"
-	[[ -e "$enabled" ]] || die "patch module $1 is not loaded"
+	if ! [[ -e "$enabled" ]]; then
+	    warn "patch module $modname is not loaded"
+	    return 1
+	fi
 
 	if [[ "$(cat "$enabled")" -eq 1 ]]; then
 		echo "disabling patch module: $modname"
@@ -349,35 +352,44 @@ disable_patch () {
 			[[ -z "$out" ]] && break
 			echo "$out" 1>&2
 			if [[ ! "$out" =~ "Device or resource busy" ]]; then
-				die "failed to disable module $modname"
+				return 1
 			fi
 
 			# "Device or resource busy" means the activeness safety check
 			# failed.  Retry in a few seconds.
 			i=$((i+1))
 			if [[ $i -eq $MAX_LOAD_ATTEMPTS ]]; then
-				die "failed to disable module $modname"
+				return 1
 			else
 				warn "retrying..."
 				sleep $RETRY_INTERVAL
 			fi
 		done
 	fi
+}
+
+disable_patch_strict () {
+	local modname="$1"
+
+	disable_patch "$modname" || die "failed to disable module $modname"
 
 	if ! wait_for_patch_transition "$modname" ; then
 		die "transition stalled for $modname"
 	fi
 }
 
+remove_module () {
+	echo "unloading patch module: $1"
+	# ignore any error here because rmmod can fail if the module used
+	# KPATCH_FORCE_UNSAFE.
+	rmmod "$1" 2> /dev/null || return 0
+}
+
 unload_module () {
 	PATCH="${1//-/_}"
 	PATCH="${PATCH%.ko}"
-	disable_patch "$PATCH"
-
-	echo "unloading patch module: $PATCH"
-	# ignore any error here because rmmod can fail if the module used
-	# KPATCH_FORCE_UNSAFE.
-	rmmod "$PATCH" 2> /dev/null || return 0
+	disable_patch_strict "$PATCH"
+	remove_module "$PATCH"
 }
 
 get_module_version() {
@@ -415,10 +427,39 @@ case "$1" in
 	[[ "$#" -ne 2 ]] && usage
 	case "$2" in
 	"--all")
-		for module in "$SYSFS"/*; do
-			[[ -e "$module" ]] || continue
-			unload_module "$(basename "$module")" || die "failed to unload module $module"
+		# Versions of linux < 5.1 livepatching require patches to be
+		# disabled in the inverse order in which they were enabled.
+		while true; do
+			nr_disabled=0
+			for module in "$SYSFS"/*; do
+				modname="$(basename "$module")"
+
+				[[ -e "$module" ]] || continue
+				disable_patch "$modname" || continue
+				if ! wait_for_patch_transition "$modname" ; then
+				    warn "transition stalled for $modname"
+				    continue
+				fi
+				remove_module "$modname"
+				nr_disabled=$((nr_disabled + 1))
+			done
+			if [ $nr_disabled -eq 0 ]; then
+				break
+			fi
 		done
+
+		nr_remaining=0
+		for module in "$SYSFS"/*; do
+			modname="$(basename "$module")"
+
+			[[ -e "$module" ]] || continue
+			nr_remaining=$((nr_remaining + 1))
+			warn "failed to unload module $modname"
+		done
+
+		if [ $nr_remaining -gt 0 ]; then
+			exit 1
+		fi
 		;;
 	*)
 		unload_module "$(basename "$2")" || die "failed to unload module $2"

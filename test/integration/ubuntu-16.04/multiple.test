@@ -1,64 +1,7 @@
 #!/bin/bash
 
 SCRIPTDIR="$(readlink -f $(dirname $(type -p $0)))"
-ROOTDIR="$(readlink -f $SCRIPTDIR/../../..)"
-KPATCH="sudo $ROOTDIR/kpatch/kpatch"
 
-MODULE_PREFIX="test-"
-MODULE_POSTFIX=".ko"
-TEST_POSTFIX="-LOADED.test"
-
-set -o errexit
-
-die() {
-	echo "ERROR: $@" >&2
-	exit 1
-}
-
-ko_to_test() {
-	tmp=${1%${MODULE_POSTFIX}}${TEST_POSTFIX}
-	echo ${tmp#${MODULE_PREFIX}}
-}
-
-# make sure any modules added here are disjoint
-declare -a modules
 declare -a blacklist=(data-new-LOADED.test meminfo-cmdline-rebuild-SLOW-LOADED.test)
 
-for file in "${SCRIPTDIR}"/*"${TEST_POSTFIX}"; do
-	name=$(basename ${file})
-	skip=0
-	for bname in "${blacklist[@]}"; do
-		if [ "${bname}" == "${name}" ]; then
-			skip=1
-			break
-		fi
-	done
-	if [ ${skip} -eq 0 ]; then
-		modules+=(${MODULE_PREFIX}${name%${TEST_POSTFIX}}${MODULE_POSTFIX})
-	fi
-done
-
-for mod in "${modules[@]}"; do
-	testprog=$(ko_to_test $mod)
-	$SCRIPTDIR/$testprog && die "$SCRIPTDIR/$testprog succeeded before loading any modules"
-done
-
-for mod in "${modules[@]}"; do
-	$KPATCH load $mod
-done
-
-for mod in "${modules[@]}"; do
-	testprog=$(ko_to_test $mod)
-	$SCRIPTDIR/$testprog || die "$SCRIPTDIR/$testprog failed after loading modules"
-done
-
-for mod in "${modules[@]}"; do
-	$KPATCH unload $mod
-done
-
-for mod in "${modules[@]}"; do
-	testprog=$(ko_to_test $mod)
-	$SCRIPTDIR/$testprog && die "$SCRIPTDIR/$testprog succeeded after unloading modules"
-done
-
-exit 0
+source ${SCRIPTDIR}/../common/multiple.template
