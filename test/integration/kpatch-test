@@ -260,6 +260,7 @@ run_combined_test() {
 
 	for testprog in "${TEST_LIST[@]}"; do
 		[[ $testprog != *-LOADED.test ]] && continue
+		[ -e ${testprog/"-LOADED.test"/".patch.disabled"} ] && continue
 		if ! $testprog >> $LOG 2>&1; then
 			error "combined: $testprog failed after kpatch load"
 		fi
