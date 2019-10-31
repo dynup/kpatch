@@ -692,7 +692,8 @@ static void kpatch_compare_sections(struct list_head *seclist)
 				sym->status = sec->status;
 
 			if (sym && sym->child && sym->status == SAME &&
-			    sym->child->sec->status == CHANGED)
+			    sym->child->sec->status == CHANGED &&
+			    !sym->child->has_func_profiling)
 				sym->status = CHANGED;
 		}
 	}
@@ -1402,7 +1403,8 @@ static void kpatch_check_func_profiling_calls(struct kpatch_elf *kelf)
 	int errs = 0;
 
 	list_for_each_entry(sym, &kelf->symbols, list) {
-		if (sym->type != STT_FUNC || sym->status != CHANGED || sym->parent)
+		if (sym->type != STT_FUNC || sym->status != CHANGED ||
+		    (sym->parent && sym->parent->status == CHANGED))
 			continue;
 		if (!sym->twin->has_func_profiling) {
 			log_normal("function %s has no fentry/mcount call, unable to patch\n",
