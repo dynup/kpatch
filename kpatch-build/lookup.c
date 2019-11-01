@@ -57,6 +57,7 @@ struct lookup_table {
 	struct object_symbol *obj_syms;
 	struct export_symbol *exp_syms;
 	struct object_symbol *local_syms;
+	char *objname;
 };
 
 #define for_each_obj_symbol(ndx, iter, table) \
@@ -167,13 +168,15 @@ static void find_local_syms(struct lookup_table *table, char *hint,
 		if (!locals_match(table, i, child_locals))
 			continue;
 		if (table->local_syms)
-			ERROR("find_local_syms for %s: found_dup", hint);
+			ERROR("found duplicate matches for %s local symbols in %s symbol table",
+			      hint, table->objname);
 
 		table->local_syms = sym;
 	}
 
 	if (!table->local_syms)
-		ERROR("find_local_syms for %s: couldn't find in vmlinux symbol table", hint);
+		ERROR("couldn't find matching %s local symbols in %s symbol table",
+		      hint, table->objname);
 }
 
 /* Strip the path and replace '-' with '_' */
@@ -359,8 +362,9 @@ static void symvers_read(struct lookup_table *table, char *path)
 	fclose(file);
 }
 
-struct lookup_table *lookup_open(char *symtab_path, char *symvers_path,
-				 char *hint, struct sym_compare_type *locals)
+struct lookup_table *lookup_open(char *symtab_path, char *objname,
+				 char *symvers_path, char *hint,
+				 struct sym_compare_type *locals)
 {
 	struct lookup_table *table;
 
@@ -369,6 +373,7 @@ struct lookup_table *lookup_open(char *symtab_path, char *symvers_path,
 		ERROR("malloc table");
 	memset(table, 0, sizeof(*table));
 
+	table->objname = objname;
 	symtab_read(table, symtab_path);
 	symvers_read(table, symvers_path);
 	find_local_syms(table, hint, locals);
@@ -429,6 +434,7 @@ bool lookup_local_symbol(struct lookup_table *table, char *name,
 	if (!match)
 		return false;
 
+	result->objname = table->objname;
 	result->sympos = sympos;
 	result->addr = sym->addr;
 	result->size = sym->size;
@@ -445,6 +451,7 @@ bool lookup_global_symbol(struct lookup_table *table, char *name,
 	for_each_obj_symbol(i, sym, table) {
 		if ((sym->bind == STB_GLOBAL || sym->bind == STB_WEAK) &&
 		    !strcmp(sym->name, name)) {
+			result->objname = table->objname;
 			result->addr = sym->addr;
 			result->size = sym->size;
 			result->sympos = 0; /* always 0 for global symbols */

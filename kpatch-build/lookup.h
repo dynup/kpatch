@@ -6,6 +6,7 @@
 struct lookup_table;
 
 struct lookup_result {
+	char *objname;
 	unsigned long addr;
 	unsigned long size;
 	unsigned long sympos;
@@ -16,8 +17,9 @@ struct sym_compare_type {
 	int type;
 };
 
-struct lookup_table *lookup_open(char *symtab_path, char *symvers_path,
-				 char *hint, struct sym_compare_type *locals);
+struct lookup_table *lookup_open(char *symtab_path, char *objname,
+				 char *symvers_path, char *hint,
+				 struct sym_compare_type *locals);
 void lookup_close(struct lookup_table *table);
 bool lookup_local_symbol(struct lookup_table *table, char *name,
 			 struct lookup_result *result);
