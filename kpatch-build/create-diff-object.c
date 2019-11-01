@@ -760,11 +760,69 @@ static void kpatch_compare_symbols(struct list_head *symlist)
 	}
 }
 
+#define CORRELATE_ELEMENT(_e1_, _e2_, kindstr)			\
+do {								\
+	typeof(_e1_) e1 = (_e1_);				\
+	typeof(_e2_) e2 = (_e2_);				\
+	e1->twin = e2;						\
+	e2->twin = e1;						\
+	/* set initial status, might change */			\
+	e1->status = e2->status = SAME;				\
+	if (strcmp(e1->name, e2->name)) {			\
+		/* Rename mangled element */			\
+		log_debug("renaming %s %s to %s\n",		\
+			  kindstr, e2->name, e1->name);		\
+		e2->name = strdup(e1->name);			\
+	}							\
+} while (0)
+
+#define UNCORRELATE_ELEMENT(_elem_)				\
+do {								\
+	typeof(_elem_) elem = (_elem_);				\
+	elem->twin->twin = NULL;				\
+	elem->twin = NULL;					\
+} while (0)
+
+static void __kpatch_correlate_section(struct section *sec1, struct section *sec2)
+{
+	CORRELATE_ELEMENT(sec1, sec2, "section");
+}
+
+static void kpatch_correlate_symbol(struct symbol *sym1, struct symbol *sym2)
+{
+	CORRELATE_ELEMENT(sym1, sym2, "symbol");
+}
+
+static void kpatch_correlate_static_local(struct symbol *sym1, struct symbol *sym2)
+{
+	CORRELATE_ELEMENT(sym1, sym2, "static local");
+}
+
+static void kpatch_correlate_section(struct section *sec1, struct section *sec2)
+{
+	__kpatch_correlate_section(sec1, sec2);
+
+	if (is_rela_section(sec1)) {
+		__kpatch_correlate_section(sec1->base, sec2->base);
+		sec1 = sec1->base;
+		sec2 = sec2->base;
+	} else if (sec1->rela) {
+		__kpatch_correlate_section(sec1->rela, sec2->rela);
+	}
+
+	if (sec1->secsym)
+		kpatch_correlate_symbol(sec1->secsym, sec2->secsym);
+	if (sec1->sym)
+		kpatch_correlate_symbol(sec1->sym, sec2->sym);
+}
+
 static void kpatch_correlate_sections(struct list_head *seclist1, struct list_head *seclist2)
 {
 	struct section *sec1, *sec2;
 
 	list_for_each_entry(sec1, seclist1, list) {
+		if (sec1->twin)
+			continue;
 		list_for_each_entry(sec2, seclist2, list) {
 			if (kpatch_mangled_strcmp(sec1->name, sec2->name) ||
 			    sec2->twin)
@@ -786,10 +844,8 @@ static void kpatch_correlate_sections(struct list_head *seclist1, struct list_he
 				           sec1->data->d_size))
 					continue;
 			}
-			sec1->twin = sec2;
-			sec2->twin = sec1;
-			/* set initial status, might change */
-			sec1->status = sec2->status = SAME;
+
+			kpatch_correlate_section(sec1, sec2);
 			break;
 		}
 	}
@@ -800,6 +856,8 @@ static void kpatch_correlate_symbols(struct list_head *symlist1, struct list_hea
 	struct symbol *sym1, *sym2;
 
 	list_for_each_entry(sym1, symlist1, list) {
+		if (sym1->twin)
+			continue;
 		list_for_each_entry(sym2, symlist2, list) {
 			if (kpatch_mangled_strcmp(sym1->name, sym2->name) ||
 			    sym1->type != sym2->type || sym2->twin)
@@ -832,10 +890,7 @@ static void kpatch_correlate_symbols(struct list_head *symlist1, struct list_hea
 			    sym1->sec->twin != sym2->sec)
 				continue;
 
-			sym1->twin = sym2;
-			sym2->twin = sym1;
-			/* set initial status, might change */
-			sym1->status = sym2->status = SAME;
+			kpatch_correlate_symbol(sym1, sym2);
 			break;
 		}
 	}
@@ -993,23 +1048,17 @@ static void kpatch_correlate_static_local_variables(struct kpatch_elf *base,
 		if (!kpatch_is_normal_static_local(sym))
 			continue;
 
-		if (sym->twin) {
-			sym->twin->twin = NULL;
-			sym->twin = NULL;
-		}
+		if (sym->twin)
+			UNCORRELATE_ELEMENT(sym);
 
 		bundled = sym == sym->sec->sym;
 		if (bundled && sym->sec->twin) {
-			sym->sec->twin->twin = NULL;
-			sym->sec->twin = NULL;
+			UNCORRELATE_ELEMENT(sym->sec);
 
-			sym->sec->secsym->twin->twin = NULL;
-			sym->sec->secsym->twin = NULL;
+			UNCORRELATE_ELEMENT(sym->sec->secsym);
 
-			if (sym->sec->rela) {
-				sym->sec->rela->twin->twin = NULL;
-				sym->sec->rela->twin = NULL;
-			}
+			if (sym->sec->rela)
+				UNCORRELATE_ELEMENT(sym->sec->rela);
 		}
 	}
 
@@ -1063,28 +1112,10 @@ static void kpatch_correlate_static_local_variables(struct kpatch_elf *base,
 				ERROR("sections %s and %s aren't correlated for symbol %s",
 				      sym->sec->name, patched_sym->sec->name, sym->name);
 
-			log_debug("renaming and correlating static local %s to %s\n",
-				  patched_sym->name, sym->name);
+			kpatch_correlate_static_local(sym, patched_sym);
 
-			patched_sym->name = strdup(sym->name);
-			sym->twin = patched_sym;
-			patched_sym->twin = sym;
-
-			/* set initial status, might change */
-			sym->status = patched_sym->status = SAME;
-
-			if (bundled) {
-				sym->sec->twin = patched_sym->sec;
-				patched_sym->sec->twin = sym->sec;
-
-				sym->sec->secsym->twin = patched_sym->sec->secsym;
-				patched_sym->sec->secsym->twin = sym->sec->secsym;
-
-				if (sym->sec->rela && patched_sym->sec->rela) {
-					sym->sec->rela->twin = patched_sym->sec->rela;
-					patched_sym->sec->rela->twin = sym->sec->rela;
-				}
-			}
+			if (bundled)
+				kpatch_correlate_section(sym->sec, patched_sym->sec);
 		}
 	}
 
