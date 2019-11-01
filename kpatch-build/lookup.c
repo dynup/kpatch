@@ -394,15 +394,15 @@ void lookup_close(struct lookup_table *table)
 	free(table);
 }
 
-int lookup_local_symbol(struct lookup_table *table, char *name,
-                        struct lookup_result *result)
+bool lookup_local_symbol(struct lookup_table *table, char *name,
+			 struct lookup_result *result)
 {
 	struct object_symbol *sym;
 	unsigned long sympos = 0;
 	int i, match = 0, in_file = 0;
 
 	if (!table->local_syms)
-		return 1;
+		return false;
 
 	memset(result, 0, sizeof(*result));
 	for_each_obj_symbol(i, sym, table) {
@@ -427,16 +427,16 @@ int lookup_local_symbol(struct lookup_table *table, char *name,
 	}
 
 	if (!match)
-		return 1;
+		return false;
 
 	result->sympos = sympos;
 	result->addr = sym->addr;
 	result->size = sym->size;
-	return 0;
+	return true;
 }
 
-int lookup_global_symbol(struct lookup_table *table, char *name,
-                         struct lookup_result *result)
+bool lookup_global_symbol(struct lookup_table *table, char *name,
+			  struct lookup_result *result)
 {
 	struct object_symbol *sym;
 	int i;
@@ -448,14 +448,14 @@ int lookup_global_symbol(struct lookup_table *table, char *name,
 			result->addr = sym->addr;
 			result->size = sym->size;
 			result->sympos = 0; /* always 0 for global symbols */
-			return 0;
+			return true;
 		}
 	}
 
-	return 1;
+	return false;
 }
 
-int lookup_is_exported_symbol(struct lookup_table *table, char *name)
+bool lookup_is_exported_symbol(struct lookup_table *table, char *name)
 {
 	struct export_symbol *sym, *match = NULL;
 	int i;
