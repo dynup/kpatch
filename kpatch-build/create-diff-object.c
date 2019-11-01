@@ -2714,7 +2714,7 @@ static void kpatch_create_patches_sections(struct kpatch_elf *kelf,
 	struct section *sec, *relasec;
 	struct symbol *sym, *strsym;
 	struct rela *rela;
-	struct lookup_result result;
+	struct lookup_result symbol;
 	struct kpatch_patch_func *funcs;
 
 	/* count patched functions */
@@ -2747,15 +2747,15 @@ static void kpatch_create_patches_sections(struct kpatch_elf *kelf,
 			continue;
 
 		if (sym->bind == STB_LOCAL) {
-			if (!lookup_local_symbol(table, sym->name, &result))
+			if (!lookup_local_symbol(table, sym->name, &symbol))
 				ERROR("lookup_local_symbol %s", sym->name);
 		} else {
-			if (!lookup_global_symbol(table, sym->name, &result))
+			if (!lookup_global_symbol(table, sym->name, &symbol))
 				ERROR("lookup_global_symbol %s", sym->name);
 		}
 
 		log_debug("lookup for %s @ 0x%016lx len %lu\n",
-			  sym->name, result.addr, result.size);
+			  sym->name, symbol.addr, symbol.size);
 
 		/*
 		 * Convert global symbols to local so other objects in the
@@ -2768,10 +2768,10 @@ static void kpatch_create_patches_sections(struct kpatch_elf *kelf,
 				   GELF_ST_INFO(sym->bind, sym->type);
 
 		/* add entry in text section */
-		funcs[index].old_addr = result.addr;
-		funcs[index].old_size = result.size;
+		funcs[index].old_addr = symbol.addr;
+		funcs[index].old_size = symbol.size;
 		funcs[index].new_size = sym->sym.st_size;
-		funcs[index].sympos = result.sympos;
+		funcs[index].sympos = symbol.sympos;
 
 		/*
 		 * Add a relocation that will populate the
@@ -2902,7 +2902,7 @@ static void kpatch_create_intermediate_sections(struct kpatch_elf *kelf,
 	struct symbol *strsym, *ksym_sec_sym;
 	struct kpatch_symbol *ksyms;
 	struct kpatch_relocation *krelas;
-	struct lookup_result result;
+	struct lookup_result symbol;
 	char *sym_objname;
 	int vmlinux, external;
 
@@ -3017,7 +3017,7 @@ static void kpatch_create_intermediate_sections(struct kpatch_elf *kelf,
 			if (rela->sym->bind == STB_LOCAL) {
 				/* An unchanged local symbol */
 				if (!lookup_local_symbol(table, rela->sym->name,
-							 &result))
+							 &symbol))
 					ERROR("lookup_local_symbol %s needed for %s",
 					      rela->sym->name, sec->base->name);
 
@@ -3058,7 +3058,7 @@ static void kpatch_create_intermediate_sections(struct kpatch_elf *kelf,
 				 * patch module.
 				 */
 				if (!lookup_global_symbol(table, rela->sym->name,
-							  &result))
+							  &symbol))
 					continue;
 			} else {
 				/*
@@ -3067,7 +3067,7 @@ static void kpatch_create_intermediate_sections(struct kpatch_elf *kelf,
 				 * the module being patched.
 				 */
 				if (!lookup_global_symbol(table, rela->sym->name,
-							  &result)) {
+							  &symbol)) {
 					/*
 					 * Not there, see if the symbol is
 					 * exported, and set sym_objname to the
@@ -3095,15 +3095,15 @@ static void kpatch_create_intermediate_sections(struct kpatch_elf *kelf,
 				}
 			}
 			log_debug("lookup for %s @ 0x%016lx len %lu\n",
-			          rela->sym->name, result.addr, result.size);
+			          rela->sym->name, symbol.addr, symbol.size);
 
 			/* Fill in ksyms[index] */
 			if (vmlinux)
-				ksyms[index].src = result.addr;
+				ksyms[index].src = symbol.addr;
 			else
 				/* for modules, src is discovered at runtime */
 				ksyms[index].src = 0;
-			ksyms[index].sympos = result.sympos;
+			ksyms[index].sympos = symbol.sympos;
 			ksyms[index].type = rela->sym->type;
 			ksyms[index].bind = rela->sym->bind;
 
