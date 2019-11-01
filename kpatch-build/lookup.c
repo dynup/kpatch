@@ -404,7 +404,7 @@ bool lookup_local_symbol(struct lookup_table *table, char *name,
 {
 	struct object_symbol *sym;
 	unsigned long sympos = 0;
-	int i, match = 0, in_file = 0;
+	int i, in_file = 0;
 
 	if (!table->local_syms)
 		return false;
@@ -426,19 +426,18 @@ bool lookup_local_symbol(struct lookup_table *table, char *name,
 			break;
 
 		if (sym->bind == STB_LOCAL && !strcmp(sym->name, name)) {
-			match = 1;
-			break;
+
+			if (result->objname)
+				ERROR("duplicate local symbol found for %s", name);
+
+			result->objname		= table->objname;
+			result->addr		= sym->addr;
+			result->size		= sym->size;
+			result->sympos		= sympos;
 		}
 	}
 
-	if (!match)
-		return false;
-
-	result->objname = table->objname;
-	result->sympos = sympos;
-	result->addr = sym->addr;
-	result->size = sym->size;
-	return true;
+	return !!result->objname;
 }
 
 bool lookup_global_symbol(struct lookup_table *table, char *name,
@@ -451,15 +450,18 @@ bool lookup_global_symbol(struct lookup_table *table, char *name,
 	for_each_obj_symbol(i, sym, table) {
 		if ((sym->bind == STB_GLOBAL || sym->bind == STB_WEAK) &&
 		    !strcmp(sym->name, name)) {
-			result->objname = table->objname;
-			result->addr = sym->addr;
-			result->size = sym->size;
-			result->sympos = 0; /* always 0 for global symbols */
-			return true;
+
+			if (result->objname)
+				ERROR("duplicate global symbol found for %s", name);
+
+			result->objname		= table->objname;
+			result->addr		= sym->addr;
+			result->size		= sym->size;
+			result->sympos		= 0; /* always 0 for global symbols */
 		}
 	}
 
-	return false;
+	return !!result->objname;
 }
 
 bool lookup_is_exported_symbol(struct lookup_table *table, char *name)
