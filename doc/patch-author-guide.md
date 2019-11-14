@@ -108,7 +108,7 @@ functions.
 ### Use a kpatch callback macro
 
 Kpatch supports livepatch style callbacks, as described by the kernel's
-[Documentation/livepatch/callbacks.txt](https://github.com/torvalds/linux/blob/master/Documentation/livepatch/callbacks.txt).
+[Documentation/livepatch/callbacks.rst](https://github.com/torvalds/linux/blob/master/Documentation/livepatch/callbacks.rst).
 
 `kpatch-macros.h` defines the following macros that can be used to
 register such callbacks:
