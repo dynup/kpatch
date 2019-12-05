@@ -25,10 +25,11 @@ and how they relate to the live patching environment.**
 kpatch vs livepatch vs kGraft
 -----------------------------
 
-This document assumes that the kpatch core module is being used.  Other live
-patching systems (e.g., livepatch and kGraft) have different consistency
-models.  Each comes with its own guarantees, and there are some subtle
-differences.  The guidance in this document applies **only** to kpatch.
+This document assumes that the kpatch-build tool is being used to create
+livepatch kernel modules.  Other live patching systems may have different
+consistency models, their own guarantees, and other subtle differences.
+The guidance in this document applies **only** to kpatch-build generated
+livepatches.
 
 Patch upgrades
 --------------
@@ -102,16 +103,15 @@ new case before looking in the data structure:
 ```
 
 Not only is this an easy solution, it's also safer than touching data since
-kpatch creates a barrier between the calling of old functions and new
-functions.
+`svm_exit_handlers[]` may be in use by tasks that haven't been patched
+yet.
 
 ### Use a kpatch callback macro
 
-Kpatch supports livepatch style callbacks, as described by the kernel's
-[Documentation/livepatch/callbacks.rst](https://github.com/torvalds/linux/blob/master/Documentation/livepatch/callbacks.rst).
-
-`kpatch-macros.h` defines the following macros that can be used to
-register such callbacks:
+Kpatch supports the kernel's livepatch [(Un)patching
+callbacks](https://github.com/torvalds/linux/blob/master/Documentation/livepatch/callbacks.rst).
+The kernel API requires callback registration through `struct klp_callbacks`,
+but to do so through kpatch-build, `kpatch-macros.h` defines the following:
 
 * `KPATCH_PRE_PATCH_CALLBACK` - executed before patching
 * `KPATCH_POST_PATCH_CALLBACK` - executed after patching
@@ -124,9 +124,10 @@ A pre-patch callback routine has the following signature:
 
 ```
 static int callback(patch_object *obj) { }
+KPATCH_PRE_PATCH_CALLBACK(callback);
 ```
 
-and any non-zero return status indicates failure to the kpatch core.  For more
+and any non-zero return status indicates failure to the kernel.  For more
 information on pre-patch callback failure, see the **Pre-patch return status**
 section below.
 
@@ -135,6 +136,9 @@ following signature:
 
 ```
 static void callback(patch_object *obj) { }
+KPATCH_POST_PATCH_CALLBACK(callback);            /* or */
+KPATCH_PRE_UNPATCH_CALLBACK(callback);           /* or */
+KPATCH_POST_UNPATCH_CALLBACK(callback);
 ```
 
 Generally pre-patch callbacks are paired with post-unpatch callbacks, meaning
@@ -143,30 +147,28 @@ callback.  Likewise for post-patch and pre-unpatch callbacks.
 
 #### Pre-patch return status
 
-If kpatch is currently patching already-loaded objects (vmlinux always by
+If kpatch is currently patching already loaded objects (vmlinux always by
 definition as well as any currently loaded kernel modules), a non-zero pre-patch
-callback status results in the kpatch core reverting the current
-patch-in-progress.  The kpatch-module is rejected, completely reverted, and
-unloaded.
+callback status stops the current patch in progress.  The kpatch-module
+is rejected, completely reverted, and unloaded.
 
-If kpatch is patching a newly loaded kernel module, then a failing pre-patch
-callback will only result in a WARN message.  This is non-intuitive and a
-deviation from livepatch callback behavior, but the result of a limitation of
-kpatch and linux module notifiers.
+If an already loaded kpatch is patching an incoming kernel module, then
+a failing pre-patch callback will result in the kernel module loader
+rejecting the new module.
 
-In both cases, if a pre-patch callback fails, none of its other callbacks will
-be executed.
+In both cases, if a pre-patch callback fails, none of its other
+associated callbacks will be executed.
 
 #### Callback context
 
 * For patches to vmlinux or already loaded kernel modules, callback functions
-will be run by `stop_machine` as part of applying or removing a patch.
-(Therefore the callbacks must not block or sleep.)
+will be run around the livepatch transitions in the `klp_enable_patch()`
+callchain.  This is executed automatically on kpatch module init.
 
 * For patches to kernel modules which haven't been loaded yet, a
-module-notifier will execute callbacks when the associated module is loaded
-into the `MODULE_STATE_COMING` state.  The pre and post-patch callbacks
-are called before any module_init code.
+module-notifier will execute callbacks when the module is loaded into
+the `MODULE_STATE_COMING` state.  The pre and post-patch callbacks are
+called before any module_init code.
 
 Example: a kpatch fix for CVE-2016-5389 could utilize the
 `KPATCH_PRE_PATCH_CALLBACK` and `KPATCH_POST_UNPATCH_CALLBACK` macros to modify
@@ -193,53 +195,11 @@ static void kpatch_post_unpatch_tcp_send_challenge_ack(patch_object *obj)
 +KPATCH_POST_UNPATCH_CALLBACK(kpatch_post_unpatch_tcp_send_challenge_ack);
 ```
 
-Don't forget to protect access to the data as needed. Please note that
-spinlocks and mutexes / sleeping locks can't be used from stop_machine
-context. Also note the pre-patch callback return code will be ignored by the
-kernel's module notifier, so it does not affect the target module or livepatch
-module status. This means:
+Don't forget to protect access to data as needed. Spinlocks and mutexes /
+sleeping locks **may be used** (this is a change of behavior from when kpatch
+relied on the kpatch.ko support module and `stop_machine()` context.)
 
-* Pre-patch callbacks to loaded objects (vmlinux, loaded kernel modules) are
-  run from stop_machine(), so they may only inspect lock state (i.e.
-  spin_is_locked(), mutex_is_locked()) and optionally return -EBUSY to prevent
-  patching.
-
-* Post-patch, pre-unpatch, and post-unpatch callbacks to loaded objects are
-  also run from stop_machine(), so the same locking context applies.  No
-  return status is supported.
-
-* Deferred pre-patch callbacks to newly loading objects do not run from
-  stop_machine(), so they may spin or schedule, i.e. spin_lock(),
-  mutex_lock()).  Return status is ignored.
-
-* Post-patch, pre-unpatch, and post-unpatch callbacks to unloading objects are
-  also *not* run from stop_machine(), so they may spin or sleep.  No return
-  status is supported.
-
-Unfortunately there is no simple, all-case-inclusive kpatch callback
-implementation that handles data structures and mutual exclusion.
-
-A few workarounds:
-
-1. If a given lock/mutex is held and released by the same set of functions
-(that is, functions that take a lock/mutex always release it before
-returning), a trivial change to those functions can re-purpose kpatch's
-activeness safety check to avoid patching when the lock/mutex may be held.
-This assumes that all lock/mutex holders can be patched.
-
-2. If it can be assured that all patch targets will be loaded before the
-kpatch patch module, pre-patch callbacks may return -EBUSY if the lock/mutex
-is held to block the patching.
-
-3. Finally, if a kpatch is disabled or removed and while all patch targets are
-still loaded, then all unpatch callbacks will run from stop_machine() -- the
-unpatching cannot be stopped at this point and the callbacks cannot spin or
-sleep.
-
-    With that in mind, it is probably easiest to omit unpatching callbacks
-at this point.
-
-Also be careful when upgrading.  If patch A has a pre/post-patch callback which
+Be careful when upgrading.  If patch A has a pre/post-patch callback which
 writes to X, and then you load patch B which is a superset of A, in some cases
 you may want to prevent patch B from writing to X, if A is already loaded.
 
@@ -247,72 +207,126 @@ you may want to prevent patch B from writing to X, if A is already loaded.
 ### Use a shadow variable
 
 If you need to add a field to an existing data structure, or even many existing
-data structures, you can use the `kpatch_shadow_*()` functions:
+data structures, you can use the kernel's
+[Shadow Variable](https://www.kernel.org/doc/html/latest/livepatch/shadow-vars.html) API.
 
-* `kpatch_shadow_alloc` - allocates a new shadow variable associated with a
-  given object
-* `kpatch_shadow_get` - find and return a pointer to a shadow variable
-* `kpatch_shadow_free` - find and free a shadow variable
-
-Example: The `shadow-newpid.patch` integration test demonstrates the usage of
-these functions.
+Example: The `shadow-newpid.patch` integration test employs shadow variables
+to add a rolling counter to the new `struct task_struct` instances.  A
+simplified version is presented here.
 
 A shadow PID variable is allocated in `do_fork()`: it is associated with the
-current `struct task_struct *p` value, given a string lookup key of "newpid",
-sized accordingly, and allocated as per `GFP_KERNEL` flag rules.
+current `struct task_struct *p` value, given an ID of `KPATCH_SHADOW_NEWPID`,
+sized accordingly, and allocated as per `GFP_KERNEL` flag rules.  Note that
+the shadow variable <obj, id> association is global -- hence it is best to
+provide unique ID enumerations per kpatch as needed.
 
-`kpatch_shadow_alloc` returns a pointer to the shadow variable, so we can
+`klp_shadow_alloc()` returns a pointer to the shadow variable, so we can
 dereference and make assignments as usual.  In this patch chunk, the shadow
 `newpid` is allocated then assigned to a rolling `ctr` counter value:
 ```
+diff --git a/kernel/fork.c b/kernel/fork.c
+index 9bff3b28c357..18374fd35bd9 100644
+--- a/kernel/fork.c
++++ b/kernel/fork.c
+@@ -1751,6 +1751,8 @@ struct task_struct *fork_idle(int cpu)
+ 	return task;
+ }
+ 
++#include <linux/livepatch.h>
++#define KPATCH_SHADOW_NEWPID 0
+ /*
+  *  Ok, this is the main fork-routine.
+  *
+@@ -1794,6 +1796,14 @@ long do_fork(unsigned long clone_flags,
+ 	if (!IS_ERR(p)) {
+ 		struct completion vfork;
+ 		struct pid *pid;
 +		int *newpid;
 +		static int ctr = 0;
 +
-+		newpid = kpatch_shadow_alloc(p, "newpid", sizeof(*newpid),
-+					     GFP_KERNEL);
++		newpid = klp_shadow_get(p, KPATCH_SHADOW_NEWPID,
++					sizeof(*newpid), GFP_KERNEL,
++					NULL, NULL);
 +		if (newpid)
 +			*newpid = ctr++;
+ 
+ 		trace_sched_process_fork(current, p);
 ```
 
-A shadow variable may also be accessed via `kpatch_shadow_get`.  Here the
-patch modifies `task_context_switch_counts()` to fetch the shadow variable
-associated with the current `struct task_struct *p` object and a "newpid" tag.
-As in the previous patch chunk, the shadow variable pointer may be accessed
-as an ordinary pointer type:
+A shadow variable may be accessed via `klp_shadow_get()`.  Here the patch
+modifies `task_context_switch_counts()` to fetch the shadow variable
+associated with the current `struct task_struct *p` object and a
+`KPATCH_SHADOW_NEWPID ID`.  As in the previous patch chunk, the shadow
+variable pointer may be accessed as an ordinary pointer type:
 ```
-+	int *newpid;
-+
- 	seq_put_decimal_ull(m, "voluntary_ctxt_switches:\t", p->nvcsw);
- 	seq_put_decimal_ull(m, "\nnonvoluntary_ctxt_switches:\t", p->nivcsw);
+diff --git a/fs/proc/array.c b/fs/proc/array.c
+index 39684c79e8e2..fe0259d057a3 100644
+--- a/fs/proc/array.c
++++ b/fs/proc/array.c
+@@ -394,13 +394,19 @@ static inline void task_seccomp(struct seq_file *m, struct task_struct *p)
  	seq_putc(m, '\n');
-+
-+	newpid = kpatch_shadow_get(p, "newpid");
+ }
+ 
++#include <linux/livepatch.h>
++#define KPATCH_SHADOW_NEWPID 0
+ static inline void task_context_switch_counts(struct seq_file *m,
+ 						struct task_struct *p)
+ {
++	int *newpid;
+ 	seq_printf(m,	"voluntary_ctxt_switches:\t%lu\n"
+ 			"nonvoluntary_ctxt_switches:\t%lu\n",
+ 			p->nvcsw,
+ 			p->nivcsw);
++	newpid = klp_shadow_get(p, KPATCH_SHADOW_NEWPID);
 +	if (newpid)
 +		seq_printf(m, "newpid:\t%d\n", *newpid);
+ }
+ 
+ static void task_cpus_allowed(struct seq_file *m, struct task_struct *task)
 ```
 
-A shadow variable is freed by calling `kpatch_shadow_free` and providing
-the object / string key combination.  Once freed, the shadow variable is not
-safe to access:
+A shadow variable is freed by calling `klp_shadow_free()` and providing
+the object / enum ID combination.  Once freed, the shadow variable is no
+longer safe to access:
 ```
- 	exit_task_work(tsk);
- 	exit_thread(tsk);
+diff --git a/kernel/exit.c b/kernel/exit.c
+index 148a7842928d..44b6fe61e912 100644
+--- a/kernel/exit.c
++++ b/kernel/exit.c
+@@ -791,6 +791,8 @@ static void check_stack_usage(void)
+ static inline void check_stack_usage(void) {}
+ #endif
  
-+	kpatch_shadow_free(tsk, "newpid");
++#include <linux/livepatch.h>
++#define KPATCH_SHADOW_NEWPID 0
+ void do_exit(long code)
+ {
+ 	struct task_struct *tsk = current;
+@@ -888,6 +890,8 @@ void do_exit(long code)
+ 	check_stack_usage();
+ 	exit_thread();
+ 
++	klp_shadow_free(tsk, KPATCH_SHADOW_NEWPID, NULL);
 +
  	/*
  	 * Flush inherited counters to the parent - before the parent
  	 * gets woken up by child-exit notifications.
 ```
 Notes:
-* `kpatch_shadow_alloc` initializes only shadow variable metadata. It
-  allocates variable storage via `kmalloc` with the `gfp_t` flags it is
-  given, but otherwise leaves the area untouched. Initialization of a shadow
-  variable is the responsibility of the caller.
-* As soon as `kpatch_shadow_alloc` creates a shadow variable, its presence
-  will be reported by `kpatch_shadow_get`. Care should be taken to avoid any
-  potential race conditions between a kernel thread that allocates a shadow
-  variable and concurrent threads that may attempt to use it.
+* `klp_shadow_alloc()` and `klp_shadow_get_or_alloc()` initialize only shadow
+  variable metadata. They allocate variable storage via `kmalloc` with the
+  `gfp_t` flags given, but otherwise leave the area untouched. Initialization
+  of a shadow variable is the responsibility of the caller.
+* As soon as `klp_shadow_alloc()` or `klp_shadow_get_or_alloc()` create a shadow
+  variable, its presence will be reported by `klp_shadow_get()`. Care should be
+  taken to avoid any potential race conditions between a kernel thread that
+  allocates a shadow variable and concurrent threads that may attempt to use
+  it.
+* Patches may need to call `klp_shadow_free_all()` from a post-unpatch handler
+  to safely cleanup any shadow variables of a particular ID.  From post-unpatch
+  context, unloading kpatch module code (aside from .exit) should be
+  completely inactive.  As long as these shadow variables were only accessed by
+  the unloaded kpatch, they are be safe to release.
 
 Data semantic changes
 ---------------------
@@ -323,47 +337,62 @@ kioctx.reqs_active`. Associating a shadow variable to new instances of this
 structure can be used by patched code to handle both new (post-patch) and
 existing (pre-patch) instances.
 
-(This example is trimmed to highlight this use-case. Boilerplate code is also
-required to allocate/free a shadow variable called "reqs_active_v2" whenever a
-new `struct kioctx` is created/released. No values are ever assigned to the
-shadow variable.)
+(Note: this example is trimmed to highlight this use-case. Boilerplate code is
+also required to allocate/free a shadow variable with enum ID
+`KPATCH_SHADOW_REQS_ACTIVE_V2` whenever a new `struct kioctx` is
+created/released. No values are ever assigned to the shadow variable.)
 
-Shadow variable existence can be verified before applying the new data
+```
+diff --git a/fs/aio.c b/fs/aio.c
+index ebd06fd0de89..6a33b73c9107 100644
+--- a/fs/aio.c
++++ b/fs/aio.c
+@@ -280,6 +280,8 @@ static void free_ioctx_rcu(struct rcu_head *head)
+  * and ctx->users has dropped to 0, so we know no more kiocbs can be submitted -
+  * now it's safe to cancel any that need to be.
+  */
++#include <linux/livepatch.h>
++#define KPATCH_SHADOW_REQS_ACTIVE_V2 1
+ static void free_ioctx(struct kioctx *ctx)
+ {
+        struct aio_ring *ring;
+```
+
+Shadow variable existence can be verified before applying the *new* data
 semantic of the associated object:
 ```
-@@ -678,6 +688,9 @@ void aio_complete(struct kiocb *iocb, lo
+@@ -678,6 +681,8 @@ void aio_complete(struct kiocb *iocb, long res, long res2)
  put_rq:
- 	/* everything turned out well, dispose of the aiocb. */
- 	aio_put_req(iocb);
-+	reqs_active_v2 = kpatch_shadow_get(ctx, "reqs_active_v2");
-+	if (reqs_active_v2)
-+		atomic_dec(&ctx->reqs_active);
+        /* everything turned out well, dispose of the aiocb. */
+        aio_put_req(iocb);
++       if (klp_shadow_get(ctx, KPATCH_SHADOW_REQS_ACTIVE_V2))
++               atomic_dec(&ctx->reqs_active);
  
- 	/*
- 	 * We have to order our ring_info tail store above and test
+        /*
+         * We have to order our ring_info tail store above and test
 ```
 
 Likewise, shadow variable non-existence can be tested to continue applying the
-old data semantic:
+*old* data semantic:
 ```
-@@ -705,6 +718,7 @@ static long aio_read_events_ring(struct
- 	unsigned head, pos;
- 	long ret = 0;
- 	int copy_ret;
-+	int *reqs_active_v2;
+@@ -310,7 +312,8 @@ static void free_ioctx(struct kioctx *ctx)
  
- 	mutex_lock(&ctx->ring_lock);
+                avail = (head <= ctx->tail ? ctx->tail : ctx->nr_events) - head;
  
-@@ -756,7 +770,9 @@ static long aio_read_events_ring(struct
+-               atomic_sub(avail, &ctx->reqs_active);
++               if (!klp_shadow_get(ctx, KPATCH_SHADOW_REQS_ACTIVE_V2))
++                       atomic_sub(avail, &ctx->reqs_active);
+                head += avail;
+                head %= ctx->nr_events;
+        }
+@@ -757,6 +762,8 @@ static long aio_read_events_ring(struct kioctx *ctx,
+        pr_debug("%li  h%u t%u\n", ret, head, ctx->tail);
  
- 	pr_debug("%li  h%u t%u\n", ret, head, ctx->tail);
- 
--	atomic_sub(ret, &ctx->reqs_active);
-+	reqs_active_v2 = kpatch_shadow_get(ctx, "reqs_active_v2");
-+	if (!reqs_active_v2)
-+		atomic_sub(ret, &ctx->reqs_active);
+        atomic_sub(ret, &ctx->reqs_active);
++       if (!klp_shadow_get(ctx, KPATCH_SHADOW_REQS_ACTIVE_V2))
++               atomic_sub(ret, &ctx->reqs_active);
  out:
- 	mutex_unlock(&ctx->ring_lock);
+        mutex_unlock(&ctx->ring_lock);
 ```
  
 The previous example can be extended to use shadow variable storage to handle
@@ -371,22 +400,37 @@ locking semantic changes.  Consider the [upstream fix](https://git.kernel.org/pu
 for CVE-2014-2706, which added a `ps_lock` to `struct sta_info` to protect
 critical sections throughout `net/mac80211/sta_info.c`.
 
-When allocating a new `struct sta_info`, allocate a corresponding "ps_lock"
-shadow variable large enough to hold a `spinlock_t` instance, then initialize
-the spinlock:
+When allocating a new `struct sta_info`, allocate a corresponding shadow
+variable large enough to hold a `spinlock_t` instance, then initialize the
+spinlock:
 ```
-@@ -333,12 +336,16 @@ struct sta_info *sta_info_alloc(struct ieee80211_sub_if_data *sdata,
- 	struct sta_info *sta;
+diff --git a/net/mac80211/sta_info.c b/net/mac80211/sta_info.c
+index decd30c1e290..758533dda4d8 100644
+--- a/net/mac80211/sta_info.c
++++ b/net/mac80211/sta_info.c
+@@ -287,6 +287,8 @@ static int sta_prepare_rate_control(struct ieee80211_local *local,
+ 	return 0;
+ }
+ 
++#include <linux/livepatch.h>
++#define KPATCH_SHADOW_PS_LOCK 2
+ struct sta_info *sta_info_alloc(struct ieee80211_sub_if_data *sdata,
+ 				const u8 *addr, gfp_t gfp)
+ {
+@@ -295,6 +297,7 @@ struct sta_info *sta_info_alloc(struct ieee80211_sub_if_data *sdata,
  	struct timespec uptime;
+ 	struct ieee80211_tx_latency_bin_ranges *tx_latency;
  	int i;
 +	spinlock_t *ps_lock;
  
  	sta = kzalloc(sizeof(*sta) + local->hw.sta_data_size, gfp);
  	if (!sta)
- 		return NULL;
+@@ -330,6 +333,10 @@ struct sta_info *sta_info_alloc(struct ieee80211_sub_if_data *sdata,
+ 	rcu_read_unlock();
  
  	spin_lock_init(&sta->lock);
-+	ps_lock = kpatch_shadow_alloc(sta, "ps_lock", sizeof(*ps_lock), gfp);
++	ps_lock = klp_shadow_alloc(sta, KPATCH_SHADOW_PS_LOCK,
++				   sizeof(*ps_lock), gfp, NULL, NULL);
 +	if (ps_lock)
 +		spin_lock_init(ps_lock);
  	INIT_WORK(&sta->drv_unblock_wk, sta_unblock);
@@ -394,17 +438,37 @@ the spinlock:
  	mutex_init(&sta->ampdu_mlme.mtx);
 ```
 
-Patched code can reference the "ps_lock" shadow variable associated with a
-given `struct sta_info` to determine and apply the correct locking semantic
-for that instance:
+Patched code can reference the shadow variable associated with a given `struct
+sta_info` to determine and apply the correct locking semantic for that
+instance:
 ```
-@@ -471,6 +475,23 @@ ieee80211_tx_h_unicast_ps_buf(struct ieee80211_tx_data *tx)
+diff --git a/net/mac80211/tx.c b/net/mac80211/tx.c
+index 97a02d3f7d87..0edb0ed8dc60 100644
+--- a/net/mac80211/tx.c
++++ b/net/mac80211/tx.c
+@@ -459,12 +459,15 @@ static int ieee80211_use_mfp(__le16 fc, struct sta_info *sta,
+ 	return 1;
+ }
+ 
++#include <linux/livepatch.h>
++#define KPATCH_SHADOW_PS_LOCK 2
+ static ieee80211_tx_result
+ ieee80211_tx_h_unicast_ps_buf(struct ieee80211_tx_data *tx)
+ {
+ 	struct sta_info *sta = tx->sta;
+ 	struct ieee80211_tx_info *info = IEEE80211_SKB_CB(tx->skb);
+ 	struct ieee80211_local *local = tx->local;
++	spinlock_t *ps_lock;
+ 
+ 	if (unlikely(!sta))
+ 		return TX_CONTINUE;
+@@ -478,6 +481,23 @@ ieee80211_tx_h_unicast_ps_buf(struct ieee80211_tx_data *tx)
  		       sta->sta.addr, sta->sta.aid, ac);
  		if (tx->local->total_ps_buffered >= TOTAL_MAX_TX_BUFFER)
  			purge_old_ps_buffers(tx->local);
 +
 +		/* sync with ieee80211_sta_ps_deliver_wakeup */
-+		ps_lock = kpatch_shadow_get(sta, "ps_lock");
++		ps_lock = klp_shadow_get(sta, KPATCH_SHADOW_PS_LOCK);
 +		if (ps_lock) {
 +			spin_lock(ps_lock);
 +			/*
