@@ -567,8 +567,8 @@ In some patching cases it might be necessary to completely remove the original
 function to avoid the compiler complaining about a defined, but unused
 function.  This will depend on symbol scope and kernel build options.
 
-Other issues
-------------
+"Once" macros
+-------------
 
 When adding a call to `printk_once()`, `pr_warn_once()`, or any other "once"
 variation of `printk()`, you'll get the following eror:
@@ -597,3 +597,61 @@ For example, a `pr_warn_once()` can be replaced with:
 		pr_warn("...");
 	}
 ```
+
+inline implies notrace
+----------------------
+
+The linux kernel defines its own version of "inline" in
+include/linux/compiler_types.h which includes "notrace" as well:
+
+```
+#if !defined(CONFIG_OPTIMIZE_INLINING)
+#define inline inline __attribute__((__always_inline__)) __gnu_inline \
+        __inline_maybe_unused notrace
+#else
+#define inline inline                                    __gnu_inline \
+        __inline_maybe_unused notrace
+#endif
+```
+
+With the implicit "notrace", use of "inline" in patch sources may lead
+to kpatch-build errors like the following:
+
+1. `__tcp_mtu_to_mss()` is marked as inline:
+
+```
+net/ipv4/tcp_output.c:
+
+/* Calculate MSS not accounting any TCP options.  */
+static inline int __tcp_mtu_to_mss(struct sock *sk, int pmtu)
+{
+```
+
+2. the compiler decides not to inline it and keeps it in its own
+   function-section.  Then kpatch-build notices that it doesn't have an
+   fentry/mcount call:
+
+```
+% kpatch-build ...
+
+tcp_output.o: function __tcp_mtu_to_mss has no fentry/mcount call, unable to patch
+```
+
+3. a peek at the generated code:
+
+```
+Disassembly of section .text.__tcp_mtu_to_mss:
+
+0000000000000000 <__tcp_mtu_to_mss>:
+   0:   48 8b 87 60 05 00 00    mov    0x560(%rdi),%rax
+   7:   0f b7 50 30             movzwl 0x30(%rax),%edx
+   b:   0f b7 40 32             movzwl 0x32(%rax),%eax
+   f:   29 d6                   sub    %edx,%esi
+  11:   83 ee 14                sub    $0x14,%esi
+  ...
+```
+
+This could be a little confusing since one might have expected to see
+changes to all of `__tcp_mtu_to_mss()` callers (ie, it was inlined as
+requested).  In this case, a simple workaround is to specify
+`__tcp_mtu_to_mss()` as `__always_inline` to force the compiler to do so.
