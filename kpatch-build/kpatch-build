@@ -900,7 +900,7 @@ for i in $FILES; do
 			awk '{ print $1 "\t" $2 "\t" $3 "\t" $4}' "${BUILDDIR}/Module.symvers" >> "$SYMVERS_FILE"
 		else
 			KOBJFILE_NAME=$(basename "${KOBJFILE%.ko}")
-			KOBJFILE_NAME="${KOBJFILE_NAME/-/_}"
+			KOBJFILE_NAME="${KOBJFILE_NAME//-/_}"
 			KOBJFILE_PATH="${TEMPDIR}/module/$KOBJFILE"
 			SYMTAB="${KOBJFILE_PATH}.symtab"
 			SYMVERS_FILE="$SRCDIR/Module.symvers"
