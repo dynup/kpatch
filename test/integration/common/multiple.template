@@ -5,6 +5,8 @@ KPATCH="sudo $ROOTDIR/kpatch/kpatch"
 MODULE_PREFIX="test-"
 MODULE_POSTFIX=".ko"
 TEST_POSTFIX="-LOADED.test"
+PATCH_POSTFIX=".patch"
+DISABLED_POSTFIX="${PATCH_POSTFIX}.disabled"
 
 set -o errexit
 
@@ -44,6 +46,10 @@ for file in "${SCRIPTDIR}"/*"${TEST_POSTFIX}"; do
 			break
 		fi
 	done
+	if ! [ -e ${file/${TEST_POSTFIX}/${PATCH_POSTFIX}} ] && \
+	     [ -e ${file/${TEST_POSTFIX}/${DISABLED_POSTFIX}} ]; then
+		skip=1
+	fi
 	if [ ${skip} -eq 0 ]; then
 		modules+=(${MODULE_PREFIX}${name%${TEST_POSTFIX}}${MODULE_POSTFIX})
 	fi

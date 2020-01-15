@@ -1,0 +1,14 @@
+diff --git a/mm/slub.c b/mm/slub.c
+index 51258ef..3cb5264 100644
+--- a/mm/slub.c
++++ b/mm/slub.c
+@@ -5852,6 +5852,9 @@ void get_slabinfo(struct kmem_cache *s, struct slabinfo *sinfo)
+ 	int node;
+ 	struct kmem_cache_node *n;
+ 
++	if (!jiffies)
++		printk("slabinfo\n");
++
+ 	for_each_kmem_cache_node(s, node, n) {
+ 		nr_slabs += node_nr_slabs(n);
+ 		nr_objs += node_nr_objs(n);

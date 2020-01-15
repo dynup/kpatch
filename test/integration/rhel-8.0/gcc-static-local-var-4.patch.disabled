@@ -1,0 +1,25 @@
+Disabled due to https://github.com/dynup/kpatch/issues/940
+---
+diff --git a/fs/aio.c b/fs/aio.c
+index e1f8f01..4dfb05c 100644
+--- a/fs/aio.c
++++ b/fs/aio.c
+@@ -263,11 +263,18 @@ static int __init aio_setup(void)
+ }
+ __initcall(aio_setup);
+ 
++void kpatch_aio_foo(void)
++{
++	if (!jiffies)
++		printk("kpatch aio foo\n");
++}
++
+ static void put_aio_ring_file(struct kioctx *ctx)
+ {
+ 	struct file *aio_ring_file = ctx->aio_ring_file;
+ 	struct address_space *i_mapping;
+ 
++	kpatch_aio_foo();
+ 	if (aio_ring_file) {
+ 		truncate_setsize(file_inode(aio_ring_file), 0);
+ 
