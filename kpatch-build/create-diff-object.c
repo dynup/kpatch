@@ -374,14 +374,14 @@ static int rela_equal(struct rela *rela1, struct rela *rela2)
 		 */
 		memcpy(&toc_data1, rela1->sym->sec->data->d_buf + rela1->addend, sizeof(toc_data1));
 		if (!toc_data1)
-			ERROR(".toc entry not found %s + %x", rela1->sym->name, rela1->addend);
+			ERROR(".toc entry not found %s + %lx", rela1->sym->name, rela1->addend);
 	}
 
 	rela_toc2 = toc_rela(rela2);
 	if (!rela_toc2) {
 		memcpy(&toc_data2, rela2->sym->sec->data->d_buf + rela2->addend, sizeof(toc_data2));
 		if (!toc_data2)
-			ERROR(".toc entry not found %s + %x", rela2->sym->name, rela2->addend);
+			ERROR(".toc entry not found %s + %lx", rela2->sym->name, rela2->addend);
 	}
 
 	if (!rela_toc1 && !rela_toc2)
@@ -1369,7 +1369,7 @@ static void kpatch_replace_sections_syms(struct kpatch_elf *kelf)
 					   rela->addend + add_off >= end)
 					continue;
 
-				log_debug("%s: replacing %s+%d reference with %s+%d\n",
+				log_debug("%s: replacing %s+%ld reference with %s+%ld\n",
 					  sec->name,
 					  rela->sym->name, rela->addend,
 					  sym->name, rela->addend - start);
@@ -2070,7 +2070,7 @@ static void kpatch_regenerate_special_section(struct kpatch_elf *kelf,
 			if (is_dynamic_debug_symbol(key->sym))
 				continue;
 
-			ERROR("Found a jump label at %s()+0x%x, using key %s.  Jump labels aren't currently supported.  Use static_key_enabled() instead.",
+			ERROR("Found a jump label at %s()+0x%lx, using key %s.  Jump labels aren't currently supported.  Use static_key_enabled() instead.",
 			      code->sym->name, code->addend, key->sym->name);
 
 			continue;
@@ -2237,8 +2237,8 @@ static void kpatch_check_relocations(struct kpatch_elf *kelf)
 		list_for_each_entry(rela, &sec->relas, list) {
 			if (rela->sym->sec) {
 				sdata = rela->sym->sec->data;
-				if (rela->addend > (int)sdata->d_size) {
-					ERROR("out-of-range relocation %s+%x in %s", rela->sym->sec->name,
+				if (rela->addend > (long)sdata->d_size) {
+					ERROR("out-of-range relocation %s+%lx in %s", rela->sym->sec->name,
 							rela->addend, sec->name);
 				}
 			}

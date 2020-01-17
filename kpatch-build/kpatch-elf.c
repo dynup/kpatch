@@ -194,15 +194,15 @@ void kpatch_create_rela_list(struct kpatch_elf *kelf, struct section *sec)
 		    (rela->sym->sec->sh.sh_flags & SHF_STRINGS)) {
 			rela->string = rela->sym->sec->data->d_buf + rela->addend;
 			if (!rela->string)
-				ERROR("could not lookup rela string for %s+%d",
+				ERROR("could not lookup rela string for %s+%ld",
 				      rela->sym->name, rela->addend);
 		}
 
 		if (skip)
 			continue;
-		log_debug("offset %d, type %d, %s %s %d", rela->offset,
+		log_debug("offset %d, type %d, %s %s %ld", rela->offset,
 			rela->type, rela->sym->name,
-			(rela->addend < 0)?"-":"+", abs(rela->addend));
+			(rela->addend < 0)?"-":"+", labs(rela->addend));
 		if (rela->string)
 			log_debug(" (string = %s)", rela->string);
 		log_debug("\n");
@@ -403,11 +403,11 @@ void kpatch_dump_kelf(struct kpatch_elf *kelf)
 				goto next;
 			printf("rela section expansion\n");
 			list_for_each_entry(rela, &sec->relas, list) {
-				printf("sym %d, offset %d, type %d, %s %s %d\n",
+				printf("sym %d, offset %d, type %d, %s %s %ld\n",
 				       rela->sym->index, rela->offset,
 				       rela->type, rela->sym->name,
 				       (rela->addend < 0)?"-":"+",
-				       abs(rela->addend));
+				       labs(rela->addend));
 			}
 		} else {
 			if (sec->sym)
