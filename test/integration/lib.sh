@@ -66,7 +66,9 @@ kpatch_rhel_dependencies()
 	[ "${arch}" == "x86_64" ] && sudo yum install -y pesign
 	[ "${arch}" == "ppc64le" ] && sudo yum install -y gcc-plugin-devel
 
-	sudo yum install -y "https://dl.fedoraproject.org/pub/epel/7/${arch}/Packages/c/ccache-3.3.4-1.el7.${arch}.rpm"
+	sudo yum install -y "https://dl.fedoraproject.org/pub/epel/epel-release-latest-7.noarch.rpm"
+	sudo yum install -y ccache
+	sudo yum remove -y epel-release
 }
 
 kpatch_centos_dependencies()
@@ -84,7 +86,9 @@ kpatch_centos_dependencies()
 	sudo yum-builddep -y "kernel-${kernel_version%.*}"
 	sudo debuginfo-install -y "kernel-${kernel_version%.*}"
 
-	sudo yum install -y "https://dl.fedoraproject.org/pub/epel/7/${arch}/Packages/c/ccache-3.3.4-1.el7.${arch}.rpm"
+	sudo yum install -y "https://dl.fedoraproject.org/pub/epel/epel-release-latest-7.noarch.rpm"
+	sudo yum install -y ccache
+	sudo yum remove -y epel-release
 }
 
 kpatch_dependencies()
