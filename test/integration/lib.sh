@@ -273,7 +273,7 @@ kpatch_integration_tests_vagrant_distro()
 
 	vagrant up || { vagrant destroy -f; exit 1; }
 
-	local test_cmd="bash /vagrant/runtest.sh"
+	local test_cmd="KPATCH_GIT=${KPATCH_GIT} KPATCH_REV=${KPATCH_REV} bash /vagrant/runtest.sh"
 	if [ "${slowtest}" == "1" ]; then
 		test_cmd="${test_cmd} --slow"
 	fi
