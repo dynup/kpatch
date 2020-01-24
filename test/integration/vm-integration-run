@@ -63,6 +63,12 @@ if [[ -d "${HOME}/src" && -f "${HOME}/src/version" ]]; then
   mv "${HOME}/src" "${HOME}/.kpatch/"
 fi
 
+source /etc/os-release
+
+if [[ "${NAME}" == "Fedora" ]] && [[ "${VERSION_ID}" -lt 30 ]]; then
+  export BUILDMOD=yes
+fi
+
 if [ ${KPATCH_SLOW} -eq 1 ]; then
   make integration-slow 2>&1
 else

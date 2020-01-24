@@ -80,7 +80,9 @@ sudo debuginfo-install kernel-${UNAME%.*}
 sudo yum install gcc-plugin-devel
 
 # optional, but highly recommended
-sudo yum install https://dl.fedoraproject.org/pub/epel/7/x86_64/Packages/c/ccache-3.3.4-1.el7.x86_64.rpm
+sudo yum install "https://dl.fedoraproject.org/pub/epel/epel-release-latest-7.noarch.rpm"
+sudo yum install  ccache
+sudo yum remove -y epel-release             # If you no longer want epel repos
 ccache --max-size=5G
 ```
 

@@ -18,7 +18,7 @@ quick: clean
 cached:
 	./kpatch-test -d $(PATCH_DIR) --cached $(PATCHES)
 
-vagrant: vagrant_quick
+vagrant: vagrant-quick
 
 vagrant-quick:
 	./test-vagrant

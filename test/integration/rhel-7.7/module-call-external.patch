@@ -1,17 +1,22 @@
-Index: kernel/fs/nfsd/export.c
-===================================================================
---- kernel.orig/fs/nfsd/export.c
-+++ kernel/fs/nfsd/export.c
-@@ -1184,6 +1184,8 @@ static void exp_flags(struct seq_file *m
+diff --git a/fs/nfsd/export.c b/fs/nfsd/export.c
+index 27459a453bb8..2247255877be 100644
+--- a/fs/nfsd/export.c
++++ b/fs/nfsd/export.c
+@@ -1184,7 +1184,13 @@ static void exp_flags(struct seq_file *m, int flag, int fsid,
  	}
  }
  
 +extern char *kpatch_string(void);
 +
++#ifdef CONFIG_PPC64
++static int __attribute__((optimize("-fno-optimize-sibling-calls"))) e_show(struct seq_file *m, void *p)
++#else
  static int e_show(struct seq_file *m, void *p)
++#endif
  {
  	struct cache_head *cp = p;
-@@ -1193,6 +1195,7 @@ static int e_show(struct seq_file *m, vo
+ 	struct svc_export *exp = container_of(cp, struct svc_export, h);
+@@ -1193,6 +1199,7 @@ static int e_show(struct seq_file *m, void *p)
  	if (p == SEQ_START_TOKEN) {
  		seq_puts(m, "# Version 1.1\n");
  		seq_puts(m, "# Path Client(Flags) # IPs\n");
@@ -19,10 +24,10 @@ Index: kernel/fs/nfsd/export.c
  		return 0;
  	}
  
-Index: kernel/net/netlink/af_netlink.c
-===================================================================
---- kernel.orig/net/netlink/af_netlink.c
-+++ kernel/net/netlink/af_netlink.c
+diff --git a/net/netlink/af_netlink.c b/net/netlink/af_netlink.c
+index 592f64643491..21b87cb948c9 100644
+--- a/net/netlink/af_netlink.c
++++ b/net/netlink/af_netlink.c
 @@ -2568,4 +2568,9 @@ panic:
  	panic("netlink_init: Cannot allocate nl_table\n");
  }

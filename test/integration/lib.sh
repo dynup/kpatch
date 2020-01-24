@@ -66,7 +66,9 @@ kpatch_rhel_dependencies()
 	[ "${arch}" == "x86_64" ] && sudo yum install -y pesign
 	[ "${arch}" == "ppc64le" ] && sudo yum install -y gcc-plugin-devel
 
-	sudo yum install -y "https://dl.fedoraproject.org/pub/epel/7/${arch}/Packages/c/ccache-3.3.4-1.el7.${arch}.rpm"
+	sudo yum install -y "https://dl.fedoraproject.org/pub/epel/epel-release-latest-7.noarch.rpm"
+	sudo yum install -y ccache
+	sudo yum remove -y epel-release
 }
 
 kpatch_centos_dependencies()
@@ -84,7 +86,9 @@ kpatch_centos_dependencies()
 	sudo yum-builddep -y "kernel-${kernel_version%.*}"
 	sudo debuginfo-install -y "kernel-${kernel_version%.*}"
 
-	sudo yum install -y "https://dl.fedoraproject.org/pub/epel/7/${arch}/Packages/c/ccache-3.3.4-1.el7.${arch}.rpm"
+	sudo yum install -y "https://dl.fedoraproject.org/pub/epel/epel-release-latest-7.noarch.rpm"
+	sudo yum install -y ccache
+	sudo yum remove -y epel-release
 }
 
 kpatch_dependencies()
@@ -269,7 +273,7 @@ kpatch_integration_tests_vagrant_distro()
 
 	vagrant up || { vagrant destroy -f; exit 1; }
 
-	local test_cmd="bash /vagrant/runtest.sh"
+	local test_cmd="KPATCH_GIT=${KPATCH_GIT} KPATCH_REV=${KPATCH_REV} bash /vagrant/runtest.sh"
 	if [ "${slowtest}" == "1" ]; then
 		test_cmd="${test_cmd} --slow"
 	fi
