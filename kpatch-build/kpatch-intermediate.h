@@ -35,8 +35,8 @@ struct kpatch_symbol {
 struct kpatch_relocation {
 	unsigned long dest;
 	unsigned int type;
-	int addend;
 	int external;
+	long addend;
 	char *objname; /* object to which this rela applies to */
 	struct kpatch_symbol *ksym;
 };
