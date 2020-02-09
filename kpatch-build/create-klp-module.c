@@ -45,15 +45,15 @@ static struct symbol *find_or_add_ksym_to_symbols(struct kpatch_elf *kelf,
 	struct rela *rela;
 	char *objname, *name;
 	char pos[32], buf[256];
-	int index;
+	unsigned int index;
 
 	ksyms = ksymsec->data->d_buf;
-	index = offset / sizeof(*ksyms);
+	index = (unsigned int)(offset / sizeof(*ksyms));
 	ksym = &ksyms[index];
 
 	/* Get name of ksym */
 	rela = find_rela_by_offset(ksymsec->rela,
-				   offset + offsetof(struct kpatch_symbol, name));
+		(unsigned int)(offset + offsetof(struct kpatch_symbol, name)));
 	if (!rela)
 		ERROR("name of ksym not found?");
 
@@ -61,7 +61,7 @@ static struct symbol *find_or_add_ksym_to_symbols(struct kpatch_elf *kelf,
 
 	/* Get objname of ksym */
 	rela = find_rela_by_offset(ksymsec->rela,
-				   offset + offsetof(struct kpatch_symbol, objname));
+		(unsigned int)(offset + offsetof(struct kpatch_symbol, objname)));
 	if (!rela)
 		ERROR("objname of ksym not found?");
 
@@ -88,7 +88,7 @@ static struct symbol *find_or_add_ksym_to_symbols(struct kpatch_elf *kelf,
 	 * and sym->index is set in kpatch_reindex_elements()
 	 */
 	sym->sym.st_shndx = SHN_LIVEPATCH;
-	sym->sym.st_info = GELF_ST_INFO(sym->bind, sym->type);
+	sym->sym.st_info = (unsigned char)GELF_ST_INFO(sym->bind, sym->type);
 	/*
 	 * Figure out where to put the new symbol:
 	 *   a) locals need to be grouped together, before globals
@@ -175,13 +175,13 @@ static void create_klp_relasecs_and_syms(struct kpatch_elf *kelf, struct section
 	struct symbol *sym, *dest;
 	struct rela *rela;
 	char *objname;
-	int nr, index, offset, dest_off;
+	unsigned int nr, index, offset, dest_off;
 
 	krelas = krelasec->data->d_buf;
-	nr = krelasec->data->d_size / sizeof(*krelas);
+	nr = (unsigned int)(krelasec->data->d_size / sizeof(*krelas));
 
 	for (index = 0; index < nr; index++) {
-		offset = index * sizeof(*krelas);
+		offset = (unsigned int)(index * sizeof(*krelas));
 
 		/* Get the rela dest sym + offset */
 		rela = find_rela_by_offset(krelasec->rela,
@@ -190,11 +190,11 @@ static void create_klp_relasecs_and_syms(struct kpatch_elf *kelf, struct section
 			ERROR("find_rela_by_offset");
 
 		dest = rela->sym;
-		dest_off = rela->addend;
+		dest_off = (unsigned int)rela->addend;
 
 		/* Get the name of the object the dest belongs to */
 		rela = find_rela_by_offset(krelasec->rela,
-					   offset + offsetof(struct kpatch_relocation, objname));
+			(unsigned int)(offset + offsetof(struct kpatch_relocation, objname)));
 		if (!rela)
 			ERROR("find_rela_by_offset");
 
@@ -202,12 +202,13 @@ static void create_klp_relasecs_and_syms(struct kpatch_elf *kelf, struct section
 
 		/* Get the .kpatch.symbol entry for the rela src */
 		rela = find_rela_by_offset(krelasec->rela,
-					   offset + offsetof(struct kpatch_relocation, ksym));
+			(unsigned int)(offset + offsetof(struct kpatch_relocation, ksym)));
 		if (!rela)
 			ERROR("find_rela_by_offset");
 
 		/* Create (or find) a klp symbol from the rela src entry */
-		sym = find_or_add_ksym_to_symbols(kelf, ksymsec, strings, rela->addend);
+		sym = find_or_add_ksym_to_symbols(kelf, ksymsec, strings,
+							(unsigned int)rela->addend);
 		if (!sym)
 			ERROR("error finding or adding ksym to symtab");
 
@@ -218,7 +219,7 @@ static void create_klp_relasecs_and_syms(struct kpatch_elf *kelf, struct section
 
 		/* Add the klp rela to the .klp.rela. section */
 		ALLOC_LINK(rela, &klp_relasec->relas);
-		rela->offset = dest->sym.st_value + dest_off;
+		rela->offset = (unsigned int)(dest->sym.st_value + dest_off);
 		rela->type = krelas[index].type;
 		rela->sym = sym;
 		rela->addend = krelas[index].addend;
@@ -247,16 +248,17 @@ static void create_klp_arch_sections(struct kpatch_elf *kelf, char *strings)
 	struct rela *rela, *rela2;
 	char *secname, *objname = NULL;
 	char buf[256];
-	int nr, index, offset, old_size, new_size;
+	unsigned int nr, index, offset;
+	size_t new_size, old_size;
 
 	karch = find_section_by_name(&kelf->sections, ".kpatch.arch");
 	if (!karch)
 		return;
 
-	nr = karch->data->d_size / sizeof(struct kpatch_arch);
+	nr = (unsigned int)(karch->data->d_size / sizeof(struct kpatch_arch));
 
 	for (index = 0; index < nr; index++) {
-		offset = index * sizeof(struct kpatch_arch);
+		offset = (unsigned int)(index * sizeof(struct kpatch_arch));
 
 		/* Get the base section (.parainstructions or .altinstructions) */
 		rela = find_rela_by_offset(karch->rela,
@@ -270,7 +272,7 @@ static void create_klp_arch_sections(struct kpatch_elf *kelf, char *strings)
 
 		/* Get the name of the object the base section belongs to */
 		rela = find_rela_by_offset(karch->rela,
-					   offset + offsetof(struct kpatch_arch, objname));
+			(unsigned int)(offset + offsetof(struct kpatch_arch, objname)));
 		if (!rela)
 			ERROR("find_rela_by_offset");
 
@@ -334,7 +336,7 @@ static void create_klp_arch_sections(struct kpatch_elf *kelf, char *strings)
 			rela2->sym = rela->sym;
 			rela2->type = rela->type;
 			rela2->addend = rela->addend;
-			rela2->offset = old_size + rela->offset;
+			rela2->offset = (unsigned int)(old_size + rela->offset);
 		}
 	}
 }
@@ -429,7 +431,7 @@ int main(int argc, char *argv[])
 	struct section *ksymsec, *krelasec, *strsec;
 	struct arguments arguments;
 	char *strings;
-	int ksyms_nr, krelas_nr;
+	unsigned int ksyms_nr, krelas_nr;
 
 	memset(&arguments, 0, sizeof(arguments));
 	argp_parse (&argp, argc, argv, 0, 0, &arguments);
@@ -456,12 +458,12 @@ int main(int argc, char *argv[])
 	ksymsec = find_section_by_name(&kelf->sections, ".kpatch.symbols");
 	if (!ksymsec)
 		ERROR("missing .kpatch.symbols section");
-	ksyms_nr = ksymsec->data->d_size / sizeof(struct kpatch_symbol);
+	ksyms_nr = (unsigned int)(ksymsec->data->d_size / sizeof(struct kpatch_symbol));
 
 	krelasec = find_section_by_name(&kelf->sections, ".kpatch.relocations");
 	if (!krelasec)
 		ERROR("missing .kpatch.relocations section");
-	krelas_nr = krelasec->data->d_size / sizeof(struct kpatch_relocation);
+	krelas_nr = (unsigned int)(krelasec->data->d_size / sizeof(struct kpatch_relocation));
 
 	if (krelas_nr != ksyms_nr)
 		ERROR("number of krelas and ksyms do not match");
