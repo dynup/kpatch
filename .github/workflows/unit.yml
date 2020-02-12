@@ -1,0 +1,26 @@
+name: build and unit tests
+
+on: [push, pull_request]
+
+jobs:
+  build:
+    strategy:
+      matrix:
+        cflags: [ "", "-O2", "-O3" ]
+    runs-on: ubuntu-latest
+    env:
+      CFLAGS: ${{ matrix.cflags }}
+    steps:
+    - uses: actions/checkout@v2
+    - name: dependencies
+      run: sudo apt-get install -y libelf-dev linux-headers-$(uname -r) shellcheck elfutils
+    - name: make
+      run: make
+    - name: submodule update
+      run: git submodule update --init
+    - name: make unit
+      run: make unit
+    - name: make check
+      run: make check
+    - name: install
+      run: sudo make install
