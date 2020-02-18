@@ -1570,9 +1570,10 @@ static int kpatch_include_callback_elements(struct kpatch_elf *kelf)
 		}
 	}
 
-	/* Strip temporary global structures used by the callback macros. */
+	/* Strip temporary structure symbols used by the callback macros. */
 	list_for_each_entry(sym, &kelf->symbols, list) {
-		if (sym->sec && is_callback_section(sym->sec))
+		if (sym->type == STT_OBJECT && sym->sec &&
+		    is_callback_section(sym->sec))
 			sym->include = 0;
 	}
 
