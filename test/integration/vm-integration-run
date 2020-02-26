@@ -47,6 +47,7 @@ git clone "${KPATCH_GIT}" || exit 1
 
 cd kpatch || exit 1
 
+git fetch origin +refs/pull/*:refs/pull/*
 git reset --hard "${KPATCH_REV}" || exit 1
 
 # shellcheck disable=SC1091
