@@ -1,8 +1,6 @@
 kpatch: dynamic kernel patching
 ===============================
 
-retrigger
-
 kpatch is a Linux dynamic kernel patching infrastructure which allows you to
 patch a running kernel without rebooting or restarting any processes.  It
 enables sysadmins to apply critical security patches to the kernel immediately,
