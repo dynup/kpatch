@@ -177,6 +177,10 @@ static struct rela *toc_rela(const struct rela *rela)
 	    rela->type != R_PPC64_TOC16_LO_DS)
 		return (struct rela *)rela;
 
+	/* Only constants in toc */
+	if (!rela->sym->sec->rela)
+		return NULL;
+
 	/* Will return NULL for .toc constant entries */
 	return find_rela_by_offset(rela->sym->sec->rela,
 				   (unsigned int)rela->addend);
