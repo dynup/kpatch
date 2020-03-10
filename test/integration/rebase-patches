@@ -1,50 +1,56 @@
 #!/bin/bash
 #
-# rebase a set of patches, assumes the kernel has already been downloaded into
-# the kpatch $CACHEDIR.Output patches go into ./${ID}-${VERSION_ID}/
+# rebase a set of integration test patches
 #
 # Example:
 #
-# ./rebase-patches old_dir/*.patch
+# 1 - Extract kernel sources:
+#
+# % (rpm -ivh kernel-3.10.0-1127.el7.src.rpm; \
+#    cd ~/rpmbuild/SPECS; \
+#    rpmbuild --nodeps -bp kernel.spec)
+#
+#
+# 2 - Rebase from previous release tests:
+#
+# % cd test/integration
+# % SRCDIR="$HOME/rpmbuild/BUILD/kernel-3.10.0-1127.el7/linux-3.10.0-1127.el7.x86_64" \
+#    ID=rhel VERSION_ID=7.8 ./rebase-patches rhel-7.7/*{.patch,.disabled}
+# % cp rhel-7.7/*.test rhel-7.8/
 
-CACHEDIR="${CACHEDIR:-$HOME/.kpatch}"
-SRCDIR="$CACHEDIR/src"
-
-source /etc/os-release
 OUTDIR=$(pwd)/${ID}-${VERSION_ID}
-mkdir -p $OUTDIR
+mkdir -p "$OUTDIR"
 
 echo "* Making backup copy of kernel sources"
-rm -rf ${SRCDIR}.orig
-cp -r $SRCDIR ${SRCDIR}.orig
+rm -rf "${SRCDIR}.orig"
+cp -r "$SRCDIR" "${SRCDIR}.orig"
 
-
-for P in $@; do
+for P in "$@"; do
 
   echo
-  echo "* Patch: $(basename $P)"
+  echo "* Patch: $(basename "$P")"
 
   echo "** dry run..."
-  patch -d $CACHEDIR --dry-run --quiet -p0 < $P
-  [[ $? -ne 0 ]] && echo "*** Skipping! ***" && continue
+  if ! patch -d "$SRCDIR" --dry-run --quiet -p1 < "$P"; then
+    echo "*** Skipping! ***" && continue
+  fi
 
   echo "** patching..."
-  patch -d $CACHEDIR -p0 --no-backup-if-mismatch < $P
+  patch -d "$SRCDIR" -p1 --no-backup-if-mismatch < "$P"
 
-  echo "** generating new $(basename $P)..."
-  NEWP=$OUTDIR/$(basename $P)
-  awk '/^diff|^patch/{exit} {print $LF}' $P > $NEWP
-  cd $CACHEDIR
-  diff -Nupr src.orig src >> $NEWP
-  cd -
+  echo "** generating new $(basename "$P")..."
+  NEWP="$OUTDIR"/$(basename "$P")
+  awk '/^Index|^diff|^patch/{exit} {print $LF}' "$P" > "$NEWP"
+  diff -Nupr "$SRCDIR.orig" "${SRCDIR}" >> "$NEWP"
+  sed -i "s#$SRCDIR#src#g" "$NEWP"
 
   echo "** reversing patch to restore tree..."
-  patch -d $CACHEDIR -p0 -R < $NEWP
+  patch -d "$SRCDIR" -p1 -R < "$NEWP"
 
 done
 
 echo "*** Removing backup copy of kernel sources"
-rm -rf ${SRCDIR}.orig
+rm -rf "${SRCDIR}.orig"
 
 echo
 echo "*** Done"
