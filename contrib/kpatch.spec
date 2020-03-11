@@ -1,6 +1,6 @@
 Name: kpatch
 Summary: Dynamic kernel patching
-Version: 0.8.0
+Version: 0.9.1
 License: GPLv2
 Group: System Environment/Kernel
 URL: http://github.com/dynup/kpatch
@@ -93,6 +93,27 @@ rm -rf %{buildroot}
 %{_mandir}/man1/kpatch-build.1*
 
 %changelog
+* Wed Mar 11 2020 Yannick Cote <ycote@redhat.com> - 0.9.1
+- Handle ppc64le toc with only constants
+- Don't strip callback section symbols
+- Integration tests update
+- Fix -Wconversion warnings
+- Process debug sections last
+
+* Wed Mar 11 2020 Yannick Cote <ycote@redhat.com> - 0.9.0
+- Many fixes in integration tests and adding rhel-8.0
+- Updates to documentation
+- Many updates and additions to the patch author guide
+- Fix to relocations used for ZERO_PAGE(0)
+- Simplify static local variables correlation
+- Make symvers reading code more flexible
+- Free sections in elf teardown
+- Fix kpatch-test module unloading
+- Disable the build of kpatch.ko module by default
+- Simplify mangled function correlation
+- Use whole word filename matching in find_parent_obj()
+- Simplify relocation processing
+
 * Wed Aug 21 2019 Artem Savkov <asavkov@redhat.com> - 0.8.0
 - kpatch.ko atomic replace fixes
 - Fixes for potential problems found by covscan
