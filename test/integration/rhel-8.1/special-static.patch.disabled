@@ -1,0 +1,22 @@
+diff -Nupr src/kernel/fork.c src/kernel/fork.c
+--- src/kernel/fork.c	2020-03-11 11:23:30.438682903 +0000
++++ src/kernel/fork.c	2020-03-11 11:41:01.567796732 +0000
+@@ -1524,10 +1524,18 @@ static void posix_cpu_timers_init_group(
+ static inline void posix_cpu_timers_init_group(struct signal_struct *sig) { }
+ #endif
+ 
++void kpatch_foo(void)
++{
++	if (!jiffies)
++		printk("kpatch copy signal\n");
++}
++
+ static int copy_signal(unsigned long clone_flags, struct task_struct *tsk)
+ {
+ 	struct signal_struct *sig;
+ 
++	kpatch_foo();
++
+ 	if (clone_flags & CLONE_THREAD)
+ 		return 0;
+ 
