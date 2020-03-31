@@ -1,0 +1,34 @@
+diff -Nupr src.orig/fs/proc/cmdline.c src/fs/proc/cmdline.c
+--- src.orig/fs/proc/cmdline.c	2020-03-10 10:35:54.567563836 -0400
++++ src/fs/proc/cmdline.c	2020-03-10 10:37:21.219379377 -0400
+@@ -27,3 +27,10 @@ static int __init proc_cmdline_init(void
+ 	return 0;
+ }
+ module_init(proc_cmdline_init);
++
++#include <linux/printk.h>
++void kpatch_print_message(void)
++{
++	if (!jiffies)
++		printk("hello there!\n");
++}
+diff -Nupr src.orig/fs/proc/meminfo.c src/fs/proc/meminfo.c
+--- src.orig/fs/proc/meminfo.c	2020-03-10 10:35:54.568563834 -0400
++++ src/fs/proc/meminfo.c	2020-03-10 10:37:21.220379374 -0400
+@@ -17,6 +17,8 @@
+ #include <asm/pgtable.h>
+ #include "internal.h"
+ 
++void kpatch_print_message(void);
++
+ void __attribute__((weak)) arch_report_meminfo(struct seq_file *m)
+ {
+ }
+@@ -54,6 +56,7 @@ static int meminfo_proc_show(struct seq_
+ 	/*
+ 	 * Tagged format, for easy grepping and expansion.
+ 	 */
++	kpatch_print_message();
+ 	seq_printf(m,
+ 		"MemTotal:       %8lu kB\n"
+ 		"MemFree:        %8lu kB\n"

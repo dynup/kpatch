@@ -1,0 +1,12 @@
+diff -Nupr linux-3.10.0-1127.fc30.x86_64.orig/fs/proc/meminfo.c linux-3.10.0-1127.fc30.x86_64/fs/proc/meminfo.c
+--- linux-3.10.0-1127.fc30.x86_64.orig/fs/proc/meminfo.c	2020-03-10 09:40:37.849666782 -0400
++++ linux-3.10.0-1127.fc30.x86_64/fs/proc/meminfo.c	2020-03-10 09:50:26.871990501 -0400
+@@ -100,7 +100,7 @@ static int meminfo_proc_show(struct seq_
+ 		"Committed_AS:   %8lu kB\n"
+ 		"VmallocTotal:   %8lu kB\n"
+ 		"VmallocUsed:    %8lu kB\n"
+-		"VmallocChunk:   %8lu kB\n"
++		"VMALLOCCHUNK:   %8lu kB\n"
+ 		"Percpu:         %8lu kB\n"
+ #ifdef CONFIG_MEMORY_FAILURE
+ 		"HardwareCorrupted: %5lu kB\n"
