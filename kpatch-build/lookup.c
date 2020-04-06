@@ -35,6 +35,7 @@
 #include <gelf.h>
 #include <unistd.h>
 #include <libgen.h>
+#include <stdbool.h>
 
 #include "lookup.h"
 #include "log.h"
@@ -203,6 +204,7 @@ static void symtab_read(struct lookup_table *table, char *path)
 	long unsigned int value;
 	int alloc_nr = 0, i = 0;
 	int matched;
+	bool skip = false;
 	char line[256], name[256], size[16], type[16], bind[16], ndx[16];
 
 	if ((file = fopen(path, "r")) == NULL)
@@ -224,6 +226,22 @@ static void symtab_read(struct lookup_table *table, char *path)
 
 	/* Now read the actual entries: */
 	while (fgets(line, 256, file)) {
+
+		/*
+		 * On powerpc, "readelf -s" shows both .dynsym and .symtab
+		 * tables.  .dynsym is just a subset of .symtab, so skip it to
+		 * avoid duplicates.
+		 */
+		if (strstr(line, ".dynsym")) {
+			skip = true;
+			continue;
+		} else if (strstr(line, ".symtab")) {
+			skip = false;
+			continue;
+		}
+		if (skip)
+			continue;
+
 		matched = sscanf(line, "%*s %lx %s %s %s %*s %s %s\n",
 				 &value, size, type, bind, ndx, name);
 
