@@ -201,37 +201,28 @@ static void symtab_read(struct lookup_table *table, char *path)
 {
 	FILE *file;
 	long unsigned int value;
-	unsigned int i = 0;
+	int alloc_nr = 0, i = 0;
 	int matched;
 	char line[256], name[256], size[16], type[16], bind[16], ndx[16];
 
 	if ((file = fopen(path, "r")) == NULL)
 		ERROR("fopen");
 
-	while (fgets(line, 256, file)) {
-		matched = sscanf(line, "%*s %lx %s %s %s %*s %s %s\n",
-				 &value, size, type, bind, ndx, name);
+	/*
+	 * First, get an upper limit on the number of entries for allocation
+	 * purposes:
+	 */
+	while (fgets(line, 256, file))
+		alloc_nr++;
 
-		if (matched == 5) {
-			name[0] = '\0';
-			matched++;
-		}
-
-		if (matched != 6 ||
-		    !strcmp(ndx, "UND") ||
-		    !strcmp(type, "SECTION"))
-			continue;
-
-		table->obj_nr++;
-	}
-
-	table->obj_syms = malloc(table->obj_nr * sizeof(*table->obj_syms));
+	table->obj_syms = malloc(alloc_nr * sizeof(*table->obj_syms));
 	if (!table->obj_syms)
 		ERROR("malloc table.obj_syms");
-	memset(table->obj_syms, 0, table->obj_nr * sizeof(*table->obj_syms));
+	memset(table->obj_syms, 0, alloc_nr * sizeof(*table->obj_syms));
 
 	rewind(file);
 
+	/* Now read the actual entries: */
 	while (fgets(line, 256, file)) {
 		matched = sscanf(line, "%*s %lx %s %s %s %*s %s %s\n",
 				 &value, size, type, bind, ndx, name);
@@ -274,8 +265,11 @@ static void symtab_read(struct lookup_table *table, char *path)
 		table->obj_syms[i].name = strdup(name);
 		if (!table->obj_syms[i].name)
 			ERROR("strdup");
+
 		i++;
 	}
+
+	table->obj_nr = i;
 
 	fclose(file);
 }
