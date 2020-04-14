@@ -746,15 +746,14 @@ CONFIG_PARAVIRT=0
 CONFIG_UNWINDER_ORC=0
 CONFIG_JUMP_LABEL=0
 
-if grep -q "CONFIG_LIVEPATCH=y" "$CONFIGFILE" && (kernel_is_rhel || kernel_version_gte 4.7.0); then
+if grep -q "CONFIG_LIVEPATCH=y" "$CONFIGFILE" && (kernel_is_rhel || kernel_version_gte 4.9.0); then
 
 	USE_KLP=1
 
-	if kernel_is_rhel || kernel_version_gte 4.9.0; then
+		# TEMPORARY: always assume .klp.arch
 		USE_KLP_ARCH=1
 		KPATCH_LDFLAGS="--unique=.parainstructions --unique=.altinstructions"
 		CDO_FLAGS="--klp-arch"
-	fi
 else
 	# No support for livepatch in the kernel. Kpatch core module is needed.
 
