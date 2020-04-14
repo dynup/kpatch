@@ -757,6 +757,11 @@ if grep -q "CONFIG_LIVEPATCH=y" "$CONFIGFILE" && (kernel_is_rhel || kernel_versi
 	fi
 else
 	# No support for livepatch in the kernel. Kpatch core module is needed.
+
+	# There may be ordering bugs, with jump labels and other special
+	# sections.  Use with caution!
+	echo "WARNING: Use of kpatch core module (kpatch.ko) is deprecated!  There may be bugs!" >&2
+
 	find_core_symvers || die "unable to find Module.symvers for kpatch core module"
 	KBUILD_EXTRA_SYMBOLS="$SYMVERSFILE"
 fi
