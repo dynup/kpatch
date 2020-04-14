@@ -750,10 +750,11 @@ if grep -q "CONFIG_LIVEPATCH=y" "$CONFIGFILE" && (kernel_is_rhel || kernel_versi
 
 	USE_KLP=1
 
-		# TEMPORARY: always assume .klp.arch
+	if kernel_is_rhel || ! kernel_version_gte 5.8.0; then
 		USE_KLP_ARCH=1
 		KPATCH_LDFLAGS="--unique=.parainstructions --unique=.altinstructions"
 		CDO_FLAGS="--klp-arch"
+	fi
 else
 	# No support for livepatch in the kernel. Kpatch core module is needed.
 
@@ -909,7 +910,7 @@ for i in $FILES; do
 
 		# create-diff-object orig.o patched.o parent-name parent-symtab
 		#		     Module.symvers patch-mod-name output.o
-		"$TOOLSDIR"/create-diff-object "orig/$i" "patched/$i" "$KOBJFILE_NAME" \
+		"$TOOLSDIR"/create-diff-object $CDO_FLAGS "orig/$i" "patched/$i" "$KOBJFILE_NAME" \
 			"$SYMTAB" "$SYMVERS_FILE" "${MODNAME//-/_}" \
 			"output/$i" 2>&1 | logger 1
 		check_pipe_status create-diff-object
