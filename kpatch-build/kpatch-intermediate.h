@@ -26,7 +26,7 @@
 
 struct kpatch_symbol {
 	unsigned long src;
-	unsigned long pos;
+	unsigned long sympos;
 	unsigned char bind, type;
 	char *name;
 	char *objname; /* object to which this sym belongs */

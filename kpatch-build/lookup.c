@@ -35,12 +35,13 @@
 #include <gelf.h>
 #include <unistd.h>
 #include <libgen.h>
+#include <stdbool.h>
 
 #include "lookup.h"
 #include "log.h"
 
 struct object_symbol {
-	unsigned long value;
+	unsigned long addr;
 	unsigned long size;
 	char *name;
 	int type, bind;
@@ -56,6 +57,7 @@ struct lookup_table {
 	struct object_symbol *obj_syms;
 	struct export_symbol *exp_syms;
 	struct object_symbol *local_syms;
+	char *objname;
 };
 
 #define for_each_obj_symbol(ndx, iter, table) \
@@ -166,13 +168,15 @@ static void find_local_syms(struct lookup_table *table, char *hint,
 		if (!locals_match(table, i, child_locals))
 			continue;
 		if (table->local_syms)
-			ERROR("find_local_syms for %s: found_dup", hint);
+			ERROR("found duplicate matches for %s local symbols in %s symbol table",
+			      hint, table->objname);
 
 		table->local_syms = sym;
 	}
 
 	if (!table->local_syms)
-		ERROR("find_local_syms for %s: couldn't find in vmlinux symbol table", hint);
+		ERROR("couldn't find matching %s local symbols in %s symbol table",
+		      hint, table->objname);
 }
 
 /* Strip the path and replace '-' with '_' */
@@ -200,41 +204,49 @@ static char *make_modname(char *modname)
 static void symtab_read(struct lookup_table *table, char *path)
 {
 	FILE *file;
-	long unsigned int value;
-	unsigned int i = 0;
+	long unsigned int addr;
+	int alloc_nr = 0, i = 0;
 	int matched;
+	bool skip = false;
 	char line[256], name[256], size[16], type[16], bind[16], ndx[16];
 
 	if ((file = fopen(path, "r")) == NULL)
 		ERROR("fopen");
 
-	while (fgets(line, 256, file)) {
-		matched = sscanf(line, "%*s %lx %s %s %s %*s %s %s\n",
-				 &value, size, type, bind, ndx, name);
+	/*
+	 * First, get an upper limit on the number of entries for allocation
+	 * purposes:
+	 */
+	while (fgets(line, 256, file))
+		alloc_nr++;
 
-		if (matched == 5) {
-			name[0] = '\0';
-			matched++;
-		}
-
-		if (matched != 6 ||
-		    !strcmp(ndx, "UND") ||
-		    !strcmp(type, "SECTION"))
-			continue;
-
-		table->obj_nr++;
-	}
-
-	table->obj_syms = malloc(table->obj_nr * sizeof(*table->obj_syms));
+	table->obj_syms = malloc(alloc_nr * sizeof(*table->obj_syms));
 	if (!table->obj_syms)
 		ERROR("malloc table.obj_syms");
-	memset(table->obj_syms, 0, table->obj_nr * sizeof(*table->obj_syms));
+	memset(table->obj_syms, 0, alloc_nr * sizeof(*table->obj_syms));
 
 	rewind(file);
 
+	/* Now read the actual entries: */
 	while (fgets(line, 256, file)) {
+
+		/*
+		 * On powerpc, "readelf -s" shows both .dynsym and .symtab
+		 * tables.  .dynsym is just a subset of .symtab, so skip it to
+		 * avoid duplicates.
+		 */
+		if (strstr(line, ".dynsym")) {
+			skip = true;
+			continue;
+		} else if (strstr(line, ".symtab")) {
+			skip = false;
+			continue;
+		}
+		if (skip)
+			continue;
+
 		matched = sscanf(line, "%*s %lx %s %s %s %*s %s %s\n",
-				 &value, size, type, bind, ndx, name);
+				 &addr, size, type, bind, ndx, name);
 
 		if (matched == 5) {
 			name[0] = '\0';
@@ -246,7 +258,7 @@ static void symtab_read(struct lookup_table *table, char *path)
 		    !strcmp(type, "SECTION"))
 			continue;
 
-		table->obj_syms[i].value = value;
+		table->obj_syms[i].addr = addr;
 		table->obj_syms[i].size = strtoul(size, NULL, 0);
 
 		if (!strcmp(bind, "LOCAL")) {
@@ -274,8 +286,11 @@ static void symtab_read(struct lookup_table *table, char *path)
 		table->obj_syms[i].name = strdup(name);
 		if (!table->obj_syms[i].name)
 			ERROR("strdup");
+
 		i++;
 	}
+
+	table->obj_nr = i;
 
 	fclose(file);
 }
@@ -347,8 +362,9 @@ static void symvers_read(struct lookup_table *table, char *path)
 	fclose(file);
 }
 
-struct lookup_table *lookup_open(char *symtab_path, char *symvers_path,
-				 char *hint, struct sym_compare_type *locals)
+struct lookup_table *lookup_open(char *symtab_path, char *objname,
+				 char *symvers_path, char *hint,
+				 struct sym_compare_type *locals)
 {
 	struct lookup_table *table;
 
@@ -357,6 +373,7 @@ struct lookup_table *lookup_open(char *symtab_path, char *symvers_path,
 		ERROR("malloc table");
 	memset(table, 0, sizeof(*table));
 
+	table->objname = objname;
 	symtab_read(table, symtab_path);
 	symvers_read(table, symvers_path);
 	find_local_syms(table, hint, locals);
@@ -382,20 +399,20 @@ void lookup_close(struct lookup_table *table)
 	free(table);
 }
 
-int lookup_local_symbol(struct lookup_table *table, char *name,
-                        struct lookup_result *result)
+static bool lookup_local_symbol(struct lookup_table *table, char *name,
+				struct lookup_result *result)
 {
 	struct object_symbol *sym;
-	unsigned long pos = 0;
-	int i, match = 0, in_file = 0;
+	unsigned long sympos = 0;
+	int i, in_file = 0;
 
 	if (!table->local_syms)
-		return 1;
+		return false;
 
 	memset(result, 0, sizeof(*result));
 	for_each_obj_symbol(i, sym, table) {
 		if (sym->bind == STB_LOCAL && !strcmp(sym->name, name))
-			pos++;
+			sympos++;
 
 		if (table->local_syms == sym) {
 			in_file = 1;
@@ -409,22 +426,59 @@ int lookup_local_symbol(struct lookup_table *table, char *name,
 			break;
 
 		if (sym->bind == STB_LOCAL && !strcmp(sym->name, name)) {
-			match = 1;
-			break;
+
+			if (result->objname)
+				ERROR("duplicate local symbol found for %s", name);
+
+			result->objname		= table->objname;
+			result->addr		= sym->addr;
+			result->size		= sym->size;
+			result->sympos		= sympos;
+			result->global		= false;
+			result->exported	= false;
 		}
 	}
 
-	if (!match)
-		return 1;
-
-	result->pos = pos;
-	result->value = sym->value;
-	result->size = sym->size;
-	return 0;
+	return !!result->objname;
 }
 
-int lookup_global_symbol(struct lookup_table *table, char *name,
-                         struct lookup_result *result)
+static bool lookup_exported_symbol(struct lookup_table *table, char *name,
+				   struct lookup_result *result)
+{
+	struct export_symbol *sym;
+	int i;
+
+	if (result)
+		memset(result, 0, sizeof(*result));
+
+	for_each_exp_symbol(i, sym, table) {
+		if (!strcmp(sym->name, name)) {
+
+			if (!result)
+				return true;
+
+			if (result->objname)
+				ERROR("duplicate exported symbol found for %s", name);
+
+			result->objname		= sym->objname;
+			result->addr		= 0; /* determined at runtime */
+			result->size		= 0; /* not used for exported symbols */
+			result->sympos		= 0; /* always 0 for exported symbols */
+			result->global		= true;
+			result->exported	= true;
+		}
+	}
+
+	return result && result->objname;
+}
+
+bool is_exported(struct lookup_table *table, char *name)
+{
+	return lookup_exported_symbol(table, name, NULL);
+}
+
+static bool lookup_global_symbol(struct lookup_table *table, char *name,
+				 struct lookup_result *result)
 {
 	struct object_symbol *sym;
 	int i;
@@ -433,91 +487,30 @@ int lookup_global_symbol(struct lookup_table *table, char *name,
 	for_each_obj_symbol(i, sym, table) {
 		if ((sym->bind == STB_GLOBAL || sym->bind == STB_WEAK) &&
 		    !strcmp(sym->name, name)) {
-			result->value = sym->value;
-			result->size = sym->size;
-			result->pos = 0; /* always 0 for global symbols */
-			return 0;
+
+			if (result->objname)
+				ERROR("duplicate global symbol found for %s", name);
+
+			result->objname		= table->objname;
+			result->addr		= sym->addr;
+			result->size		= sym->size;
+			result->sympos		= 0; /* always 0 for global symbols */
+			result->global		= true;
+			result->exported	= is_exported(table, name);
 		}
 	}
 
-	return 1;
+	return !!result->objname;
 }
 
-int lookup_is_exported_symbol(struct lookup_table *table, char *name)
+bool lookup_symbol(struct lookup_table *table, char *name,
+		   struct lookup_result *result)
 {
-	struct export_symbol *sym, *match = NULL;
-	int i;
+	if (lookup_local_symbol(table, name, result))
+		return true;
 
-	for_each_exp_symbol(i, sym, table) {
-		if (!strcmp(sym->name, name)) {
-			if (match)
-				ERROR("duplicate exported symbol found for %s", name);
-			match = sym;
-		}
-	}
+	if (lookup_global_symbol(table, name, result))
+		return true;
 
-	return !!match;
+	return lookup_exported_symbol(table, name, result);
 }
-
-/*
- * lookup_exported_symbol_objname - find the object/module an exported
- * symbol belongs to.
- */
-char *lookup_exported_symbol_objname(struct lookup_table *table, char *name)
-{
-	struct export_symbol *sym, *match = NULL;
-	int i;
-
-	for_each_exp_symbol(i, sym, table) {
-		if (!strcmp(sym->name, name)) {
-			if (match)
-				ERROR("duplicate exported symbol found for %s", name);
-			match = sym;
-		}
-	}
-
-	if (match)
-		return match->objname;
-
-	return NULL;
- }
-
-#if 0 /* for local testing */
-static void find_this(struct lookup_table *table, char *sym, char *hint)
-{
-	struct lookup_result result;
-
-	if (hint)
-		lookup_local_symbol(table, sym, hint, &result);
-	else
-		lookup_global_symbol(table, sym, &result);
-
-	printf("%s %s w/ %s hint at 0x%016lx len %lu pos %lu\n",
-	       hint ? "local" : "global", sym, hint ? hint : "no",
-	       result.value, result.size, result.pos);
-}
-
-int main(int argc, char **argv)
-{
-	struct lookup_table *vmlinux;
-
-	if (argc != 2)
-		return 1;
-
-	vmlinux = lookup_open(argv[1]);
-
-	printf("printk is%s exported\n",
-		lookup_is_exported_symbol(vmlinux, "__fentry__") ? "" : " not");
-	printf("meminfo_proc_show is%s exported\n",
-		lookup_is_exported_symbol(vmlinux, "meminfo_proc_show") ? "" : " not");
-
-	find_this(vmlinux, "printk", NULL);
-	find_this(vmlinux, "pages_to_scan_show", "ksm.c");
-	find_this(vmlinux, "pages_to_scan_show", "huge_memory.c");
-	find_this(vmlinux, "pages_to_scan_show", NULL); /* should fail */
-
-	lookup_close(vmlinux);
-
-	return 0;
-}
-#endif
