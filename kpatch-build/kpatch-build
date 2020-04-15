@@ -174,13 +174,12 @@ check_pipe_status() {
 	fi
 }
 
-# $1 >= $2
-version_gte() {
-	[  "$1" = "$(echo -e "$1\\n$2" | sort -rV | head -n1)" ]
+kernel_version_gte() {
+	[  "${ARCHVERSION//-*/}" = "$(echo -e "${ARCHVERSION//-*}\\n$1" | sort -rV | head -n1)" ]
 }
 
-is_rhel() {
-	[[ $1 =~ \.el[78]\. ]]
+kernel_is_rhel() {
+	[[ "$ARCHVERSION" =~ \.el[78]\. ]]
 }
 
 find_dirs() {
@@ -734,45 +733,43 @@ fi
 [[ ! -e "$CONFIGFILE" ]] && die "can't find config file"
 [[ ! "$CONFIGFILE" -ef "$SRCDIR"/.config ]] && cp -f "$CONFIGFILE" "$SRCDIR/.config"
 
+# kernel option checking
+grep -q "CONFIG_DEBUG_INFO=y" "$CONFIGFILE" || die "kernel doesn't have 'CONFIG_DEBUG_INFO' enabled"
+
 # Build variables - Set some defaults, then adjust features
 # according to .config and kernel version
 KBUILD_EXTRA_SYMBOLS=""
 KPATCH_LDFLAGS=""
-KPATCH_MODULE=true
+USE_KLP=0
+USE_KLP_ARCH=0
+CONFIG_PARAVIRT=0
+CONFIG_UNWINDER_ORC=0
+CONFIG_JUMP_LABEL=0
 
-# kernel option checking
-grep -q "CONFIG_DEBUG_INFO=y" "$CONFIGFILE" || die "kernel doesn't have 'CONFIG_DEBUG_INFO' enabled"
-if grep -q "CONFIG_LIVEPATCH=y" "$CONFIGFILE"; then
-	# The kernel supports livepatch.
-	if version_gte "${ARCHVERSION//-*/}" 4.7.0 || is_rhel "$ARCHVERSION"; then
-		# Use new .klp.rela. sections
-		KPATCH_MODULE=false
-		if version_gte "${ARCHVERSION//-*/}" 4.9.0 || is_rhel "$ARCHVERSION"; then
-			KPATCH_LDFLAGS="--unique=.parainstructions --unique=.altinstructions"
-		fi
+if grep -q "CONFIG_LIVEPATCH=y" "$CONFIGFILE" && (kernel_is_rhel || kernel_version_gte 4.9.0); then
+
+	USE_KLP=1
+
+	if kernel_is_rhel || ! kernel_version_gte 5.8.0; then
+		USE_KLP_ARCH=1
+		KPATCH_LDFLAGS="--unique=.parainstructions --unique=.altinstructions"
+		CDO_FLAGS="--klp-arch"
 	fi
 else
 	# No support for livepatch in the kernel. Kpatch core module is needed.
+
+	# There may be ordering bugs, with jump labels and other special
+	# sections.  Use with caution!
+	echo "WARNING: Use of kpatch core module (kpatch.ko) is deprecated!  There may be bugs!" >&2
+
 	find_core_symvers || die "unable to find Module.symvers for kpatch core module"
 	KBUILD_EXTRA_SYMBOLS="$SYMVERSFILE"
 fi
 
 # optional kernel configs:
-if grep -q "CONFIG_PARAVIRT=y" "$CONFIGFILE"; then
-	CONFIG_PARAVIRT=1
-else
-	CONFIG_PARAVIRT=0
-fi
-if grep -q "CONFIG_UNWINDER_ORC=y" "$CONFIGFILE"; then
-	CONFIG_UNWINDER_ORC=1
-else
-	CONFIG_UNWINDER_ORC=0
-fi
-if grep -q "CONFIG_JUMP_LABEL=y" "$CONFIGFILE"; then
-	CONFIG_JUMP_LABEL=1
-else
-	CONFIG_JUMP_LABEL=0
-fi
+grep -q "CONFIG_PARAVIRT=y"     "$CONFIGFILE" && CONFIG_PARAVIRT=1
+grep -q "CONFIG_UNWINDER_ORC=y" "$CONFIGFILE" && CONFIG_UNWINDER_ORC=1
+grep -q "CONFIG_JUMP_LABEL=y"   "$CONFIGFILE" && CONFIG_JUMP_LABEL=1
 
 # unsupported kernel option checking
 grep -q "CONFIG_DEBUG_INFO_SPLIT=y" "$CONFIGFILE" && die "kernel option 'CONFIG_DEBUG_INFO_SPLIT' not supported"
@@ -857,10 +854,10 @@ if [[ -z "$MODNAME" ]] ; then
 		MODNAME="patch"
 	fi
 
-	if "$KPATCH_MODULE"; then
-		MODNAME="kpatch-$MODNAME"
-	else
+	if [[ "$USE_KLP" -eq 1 ]]; then
 		MODNAME="livepatch-$MODNAME"
+	else
+		MODNAME="kpatch-$MODNAME"
 	fi
 
 	MODNAME="$(module_name_string "$MODNAME")"
@@ -913,7 +910,7 @@ for i in $FILES; do
 
 		# create-diff-object orig.o patched.o parent-name parent-symtab
 		#		     Module.symvers patch-mod-name output.o
-		"$TOOLSDIR"/create-diff-object "orig/$i" "patched/$i" "$KOBJFILE_NAME" \
+		"$TOOLSDIR"/create-diff-object $CDO_FLAGS "orig/$i" "patched/$i" "$KOBJFILE_NAME" \
 			"$SYMTAB" "$SYMVERS_FILE" "${MODNAME//-/_}" \
 			"output/$i" 2>&1 | logger 1
 		check_pipe_status create-diff-object
@@ -946,7 +943,7 @@ done
 echo
 
 export KCFLAGS="-I$DATADIR/patch $ARCH_KCFLAGS"
-if "$KPATCH_MODULE"; then
+if [[ "$USE_KLP" -eq 0 ]]; then
 	export KCPPFLAGS="-D__KPATCH_MODULE__"
 fi
 
@@ -964,15 +961,15 @@ cd "$TEMPDIR/output" || die
 # shellcheck disable=SC2086,SC2046
 ld -r $KPATCH_LDFLAGS -o ../patch/tmp_output.o $(find . -name "*.o") 2>&1 | logger || die
 
-if "$KPATCH_MODULE"; then
+if [[ "$USE_KLP" -eq 1 ]]; then
+	cp "$TEMPDIR"/patch/tmp_output.o "$TEMPDIR"/patch/output.o || die
+else
 	# Add .kpatch.checksum for kpatch script
 	md5sum ../patch/tmp_output.o | awk '{printf "%s\0", $1}' > checksum.tmp || die
 	objcopy --add-section .kpatch.checksum=checksum.tmp --set-section-flags .kpatch.checksum=alloc,load,contents,readonly  ../patch/tmp_output.o || die
 	rm -f checksum.tmp
 	"$TOOLSDIR"/create-kpatch-module "$TEMPDIR"/patch/tmp_output.o "$TEMPDIR"/patch/output.o 2>&1 | logger 1
 	check_pipe_status create-kpatch-module
-else
-	cp "$TEMPDIR"/patch/tmp_output.o "$TEMPDIR"/patch/output.o || die
 fi
 
 cd "$TEMPDIR/patch" || die
@@ -986,8 +983,8 @@ KBUILD_EXTRA_SYMBOLS="$KBUILD_EXTRA_SYMBOLS" \
 KPATCH_LDFLAGS="$KPATCH_LDFLAGS" \
 	make 2>&1 | logger || die
 
-if ! "$KPATCH_MODULE"; then
-	if [[ -z "$KPATCH_LDFLAGS" ]]; then
+if [[ "$USE_KLP" -eq 1 ]]; then
+	if [[ "$USE_KLP_ARCH" -eq 0 ]]; then
 		extra_flags="--no-klp-arch-sections"
 	fi
 	cp "$TEMPDIR/patch/$MODNAME.ko" "$TEMPDIR/patch/tmp.ko" || die
@@ -1000,7 +997,7 @@ readelf --wide --symbols "$TEMPDIR/patch/$MODNAME.ko" 2>/dev/null | \
 	awk '($4=="FUNC" || $4=="OBJECT") && ($5=="GLOBAL" || $5=="WEAK") && $7!="UND" {print $NF}' \
 	>"${TEMPDIR}"/new_symbols
 
-if "$KPATCH_MODULE"; then
+if [[ "$USE_KLP" -eq 0 ]]; then
 	cat >>"${TEMPDIR}"/new_symbols <<-EOF
 		kpatch_shadow_free
 		kpatch_shadow_alloc

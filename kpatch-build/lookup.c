@@ -296,24 +296,43 @@ static void symtab_read(struct lookup_table *table, char *path)
 }
 
 /*
- * Symvers file format is the following for kernels v5.3 and newer:
- * <CRC>	<Symbol>	<Namespace>	<Module>	<Export Type>
+ * The Module.symvers file format is one of the following, depending on kernel
+ * version:
  *
- * Separated by tabs. <Namespace> can be blank (i.e. ""). Kernels before v5.3
- * don't have namespace column at all.
+ * <CRC>	<Symbol>	<Module>	<Export Type>
+ * <CRC>	<Symbol>	<Namespace>	<Module>	<Export Type>
+ * <CRC>	<Symbol>	<Module>	<Export Type>	<Namespace>
+ *
+ * All we care about is Symbol and Module.  Since the format is unpredictable,
+ * we have to dynamically determine which column is Module by looking for
+ * "vmlinux".
  */
 static void symvers_read(struct lookup_table *table, char *path)
 {
 	FILE *file;
-	unsigned int i = 0;
+	int i, column, mod_column = 0;
 	char line[4096];
-	char *objname, *symname;
+	char *tmp, *objname, *symname;
 
 	if ((file = fopen(path, "r")) == NULL)
 		ERROR("fopen");
 
-	while (fgets(line, 4096, file))
+	while (fgets(line, 4096, file)) {
 		table->exp_nr++;
+
+		if (mod_column)
+			continue;
+
+		/* Find the module column */
+		for (column = 1, tmp = line; (tmp = strchr(tmp, '\t')); column++) {
+			tmp++;
+			if (*tmp && !strncmp(tmp, "vmlinux", 7))
+				mod_column = column;
+		}
+	}
+
+	if (table->exp_nr && !mod_column)
+		ERROR("Module.symvers: invalid format");
 
 	table->exp_syms = malloc(table->exp_nr * sizeof(*table->exp_syms));
 	if (!table->exp_syms)
@@ -322,31 +341,19 @@ static void symvers_read(struct lookup_table *table, char *path)
 	       table->exp_nr * sizeof(*table->exp_syms));
 
 	rewind(file);
+	for (i = 0; fgets(line, 4096, file); i++) {
+		char *name = NULL, *mod = NULL;
 
-	while (fgets(line, 4096, file)) {
-		char *name, *namespace, *mod, *tmp;
-
-		if (!(name = strchr(line, '\t')))
-			continue;
-		*name++ = '\0';
-
-		if (!(namespace = strchr(name, '\t')))
-			continue;
-		*namespace++ = '\0';
-
-		if (!(mod = strchr(namespace, '\t')))
-			continue;
-		*mod++ = '\0';
-
-		if ((tmp = strchr(mod, '\t')) != NULL) {
+		for (column = 1, tmp = line; (tmp = strchr(tmp, '\t')); column++) {
 			*tmp++ = '\0';
-		} else {
-			/*
-			 * Looks like it's an old symvers file with no
-			 * namespace column.
-			 */
-			mod = namespace;
+			if (*tmp && column == 1)
+				name = tmp;
+			else if (*tmp && column == mod_column)
+				mod = tmp;
 		}
+
+		if (!name || !mod)
+			continue;
 
 		symname = strdup(name);
 		if (!symname)
@@ -356,7 +363,6 @@ static void symvers_read(struct lookup_table *table, char *path)
 
 		table->exp_syms[i].name = symname;
 		table->exp_syms[i].objname = objname;
-		i++;
 	}
 
 	fclose(file);
