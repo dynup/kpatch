@@ -244,9 +244,9 @@ index 9bff3b28c357..18374fd35bd9 100644
 +		int *newpid;
 +		static int ctr = 0;
 +
-+		newpid = klp_shadow_get(p, KPATCH_SHADOW_NEWPID,
-+					sizeof(*newpid), GFP_KERNEL,
-+					NULL, NULL);
++		newpid = klp_shadow_get_or_alloc(p, KPATCH_SHADOW_NEWPID,
++						 sizeof(*newpid), GFP_KERNEL,
++						 NULL, NULL);
 +		if (newpid)
 +			*newpid = ctr++;
  
