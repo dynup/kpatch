@@ -3666,12 +3666,11 @@ int main(int argc, char *argv[])
 	 */
 	kpatch_mark_ignored_sections(kelf_patched);
 	kpatch_compare_correlated_elements(kelf_patched);
+	kpatch_mark_ignored_functions_same(kelf_patched);
+	kpatch_mark_ignored_sections_same(kelf_patched);
 	kpatch_check_func_profiling_calls(kelf_patched);
 	kpatch_elf_teardown(kelf_base);
 	kpatch_elf_free(kelf_base);
-
-	kpatch_mark_ignored_functions_same(kelf_patched);
-	kpatch_mark_ignored_sections_same(kelf_patched);
 
 	kpatch_include_standard_elements(kelf_patched);
 	num_changed = kpatch_include_changed_functions(kelf_patched);
