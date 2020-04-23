@@ -37,9 +37,9 @@ index a1143f7c2201..253c15ad82b2 100644
  	struct cache_head *cp = p;
  	struct svc_export *exp = container_of(cp, struct svc_export, h);
  	struct cache_detail *cd = m->private;
++#ifdef CONFIG_X86_64
 +	unsigned long long sched_clock;
 +
-+#ifdef CONFIG_X86_64
 +	alternative("ud2", "call yield", X86_FEATURE_ALWAYS);
 +	alternative("call yield", "ud2", X86_FEATURE_IA64);
 +
