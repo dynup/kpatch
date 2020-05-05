@@ -1,7 +1,0 @@
-#!/bin/bash
-
-SCRIPTDIR="$(readlink -f $(dirname $(type -p $0)))"
-
-declare -a blacklist=(data-new-LOADED.test)
-
-source ${SCRIPTDIR}/../common/multiple.template

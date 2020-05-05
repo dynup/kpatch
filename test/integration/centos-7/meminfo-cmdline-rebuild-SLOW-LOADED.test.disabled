@@ -1,3 +1,0 @@
-#!/bin/bash
-
-grep VMALLOCCHUNK /proc/meminfo && grep kpatch=1 /proc/cmdline
