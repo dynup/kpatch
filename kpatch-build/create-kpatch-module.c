@@ -47,6 +47,9 @@ static void create_dynamic_rela_sections(struct kpatch_elf *kelf, struct section
 	struct symbol *sym;
 	struct rela *rela;
 	unsigned int index, nr, offset, dest_offset, objname_offset, name_offset;
+	unsigned int type;
+	long addend;
+	char *target_name;
 
 	ksyms = ksymsec->data->d_buf;
 	krelas = krelasec->data->d_buf;
@@ -93,9 +96,17 @@ static void create_dynamic_rela_sections(struct kpatch_elf *kelf, struct section
 		name_offset = (unsigned int)rela->addend;
 
 		/* Fill in dynrela entry */
+		type = krelas[index].type;
+		addend = krelas[index].addend;
+		if (type == R_X86_64_64 && (addend > INT_MAX || addend <= INT_MIN)) {
+			target_name = (char *)strsec->data->d_buf + name_offset;
+			ERROR("got R_X86_64_64 dynrela for '%s' with addend too large or too small for an int: %lx",
+				target_name, addend);
+		}
+
 		dynrelas[index].src = ksym->src;
-		dynrelas[index].addend = krelas[index].addend;
-		dynrelas[index].type = krelas[index].type;
+		dynrelas[index].addend = addend;
+		dynrelas[index].type = type;
 		dynrelas[index].external = krelas[index].external;
 		dynrelas[index].sympos = ksym->sympos;
 
