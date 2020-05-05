@@ -1,3 +1,9 @@
+# needed for the kernel specific module
+%define KVER %(uname -r)
+
+# Don't build kpatch kernel module by default
+%bcond_with kpatch_mod
+
 Name: kpatch
 Summary: Dynamic kernel patching
 Version: 0.9.1
@@ -9,10 +15,11 @@ Source0: %{name}-%{version}.tar.gz
 
 Requires: kmod bash
 BuildRequires: gcc kernel-devel elfutils elfutils-devel
+%if %{with kpatch_mod}
+BuildRequires: kernel-devel-uname-r = %{KVER}
+BuildRequires: kernel-uname-r = %{KVER}
+%endif
 BuildRoot: %(mktemp -ud %{_tmppath}/%{name}-%{version}-%{release}-XXXXXX)
-
-# needed for the kernel specific module
-%define KVER %(uname -r)
 
 %description
 kpatch is a Linux dynamic kernel patching tool which allows you to patch a
@@ -47,6 +54,7 @@ having to wait for long-running tasks to complete, users to log off, or
 for scheduled reboot windows.  It gives more control over up-time without
 sacrificing security or stability.
 
+%if %{with kpatch_mod}
 %package %{KVER}
 Requires: %{name}
 Summary: Dynamic kernel patching
@@ -58,17 +66,18 @@ having to wait for long-running tasks to complete, users to log off, or
 for scheduled reboot windows.  It gives more control over up-time without
 sacrificing security or stability.
 
+%endif
 
 %prep
 %setup -q
 
 %build
-make %{_smp_mflags}
+make %{_smp_mflags} %{?with_kpatch_mod: BUILDMOD=yes KPATCH_BUILD=/lib/modules/%{KVER}/build}
 
 %install
 rm -rf %{buildroot}
 
-make install PREFIX=/%{_usr} DESTDIR=%{buildroot}
+make install PREFIX=/%{_usr} DESTDIR=%{buildroot} %{?with_kpatch_mod: BUILDMOD=yes KPATCH_BUILD=/lib/modules/%{KVER}/build}
 
 %clean
 rm -rf %{buildroot}
@@ -81,9 +90,11 @@ rm -rf %{buildroot}
 %{_usr}/lib/systemd/system/*
 %{_sysconfdir}/init/kpatch.conf
 
+%if %{with kpatch_mod}
 %files %{KVER}
 %defattr(-,root,root,-)
 %{_usr}/lib/kpatch/%{KVER}
+%endif
 
 %files build
 %defattr(-,root,root,-)
