@@ -20,6 +20,32 @@ And a few more:
 - https://www.youtube.com/watch?v=rN0sFjrJQfU
 - https://www.youtube.com/watch?v=Mftc80KyjA4
 
+Table of contents
+=================
+
+- [Installation](#installation)
+	- [Prerequisites](#prerequisites)
+		- [Fedora](#fedora)
+		- [RHEL 7](#rhel-7)
+		- [CentOS 7](#centos-7)
+		- [Oracle Linux 7](#oracle-linux-7)
+		- [Ubuntu](#ubuntu)
+		- [Debian 9 (Stretch)](#debian-9-stretch)
+		- [Debian 8 (Jessie)](#debian-8-jessie)
+		- [Debian 7 (Lenny)](#debian-7-lenny)
+		- [Gentoo](#gentoo)
+	- [Build](#build)
+	- [Install](#install)
+- [Quick start](#quick-start)
+- [Patch Author Guide](#patch-author-guide)
+- [How it works](#how-it-works)
+	- [kpatch-build](#kpatch-build)
+	- [Patching](#patching)
+- [Limitations](#limitations)
+- [Frequently Asked Questions](#frequently-asked-questions)
+- [Get involved](#get-involved)
+- [License](#license)
+
 Installation
 ------------
 
