@@ -60,10 +60,7 @@ Install the dependencies for compiling kpatch:
 
 ```bash
 UNAME=$(uname -r)
- # Standard kernel
 sudo dnf install gcc kernel-${UNAME%.*} elfutils elfutils-devel
- # Developer kernel
-sudo dnf install gcc kernel-devel-${UNAME%.*} elfutils elfutils-devel
 ```
 
 Install the dependencies for the "kpatch-build" command:
