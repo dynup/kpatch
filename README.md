@@ -121,7 +121,7 @@ Install the dependencies for compiling kpatch:
 
 ```bash
 UNAME=$(uname -r)
-sudo yum install gcc kernel-devel-${UNAME%.*} elfutils elfutils-devel
+sudo yum install gcc kernel-${UNAME%.*} elfutils elfutils-devel
 ```
 
 Install the dependencies for the "kpatch-build" command:
