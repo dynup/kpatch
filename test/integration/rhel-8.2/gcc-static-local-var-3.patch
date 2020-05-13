@@ -1,0 +1,19 @@
+diff -Nupr src.orig/kernel/reboot.c src/kernel/reboot.c
+--- src.orig/kernel/reboot.c	2020-05-12 11:14:29.670773651 -0400
++++ src/kernel/reboot.c	2020-05-12 11:14:58.579520777 -0400
+@@ -393,8 +393,15 @@ SYSCALL_DEFINE4(reboot, int, magic1, int
+ 	return ret;
+ }
+ 
++void kpatch_bar(void)
++{
++	if (!jiffies)
++		printk("kpatch_foo\n");
++}
++
+ static void deferred_cad(struct work_struct *dummy)
+ {
++	kpatch_bar();
+ 	kernel_restart(NULL);
+ }
+ 
