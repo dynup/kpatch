@@ -774,3 +774,92 @@ excellent example and description of this problem with annotated disassembly.
 
 Adding `__attribute__((optimize("-fno-optimize-sibling-calls")))` instructs
 GCC to turn off the optimization for the given function.
+
+Exported symbol versioning
+--------------------------
+
+### Background
+
+`CONFIG_MODVERSIONS` enables an ABI check between exported kernel symbols and
+modules referencing those symbols, enforced on module load.  When building the
+kernel, preprocessor output from `gcc -E` for each source file is passed to
+scripts/genksyms.  The genksyms script recursively expands each exported symbol
+to its basic types.  A hash is generated for each symbol as it traverses back up
+the symbol tree.  The end result is a CRC for each exported function in
+the Module.symvers file and embedded in the vmlinux kernel object itself.
+
+A similar checksumming is performed when building modules: referenced exported
+symbol CRCs are stored in the module’s `__versions` section (you can also find
+these in plain-text intermediate \*.mod.c files.)
+
+When the kernel loads a module, the symbol CRCs found in its `__versions` are
+compared to those of the kernel, if the two do not match, the kernel will refuse
+to load it:
+```
+<module>: disagrees about version of symbol <symbol>
+<module>: Unknown symbol <symbol> (err -22)
+```
+
+### Kpatch detection
+
+After building the original and patched sources, kpatch-build compares the
+newly calculated Module.symvers against the original.  Discrepancies are
+reported:
+
+```
+ERROR: Version disagreement for symbol <symbol>
+```
+
+These reports should be addressed to ensure that the resulting kpatch module
+can be loaded.
+
+#### False positives
+
+It is rare, but possible for a kpatch to introduce inadvertent symbol CRC
+changes that are not true ABI changes.  The following conditions must occur:
+
+1. The kpatch must modify the definition of an exported symbol.  For example,
+   introducing a new header file may further define an opaque data type:
+   Before the kpatch, compilation unit U from the original kernel build only
+   knew about a `struct S` declaration (not its complete type).  At the same
+   time, U contains function F, which has an interface that references S.  If
+   the kpatch adds a header file to U that now fully defines `struct S { int
+   a, b, c; }`, its symbol type graph changes, CRCs generated for F are updated,
+   but its ABI remains consistent.
+
+2. The kpatch must introduce either a change or reference to F such that it is
+   included in the resulting kpatch module.  This will force a `__version`
+   entry based on the new CRC.
+
+   Note: if a kpatch doesn't change or reference F such that it is **not**
+   included in the resulting kpatch module, the new CRC value won't be added
+   to the module's `__version` table.  However, if a future accumulative patch
+   does add a new change or reference to F, the new CRC will become a problem.
+
+#### Avoidance
+
+Kpatches should introduce new `#include` directives sparingly.  Whenever
+possible, extract the required definitions from header filers into kpatched
+compilation units directly.
+
+If additional header files or symbol definitions cannot be avoided, consider
+surrounding the offending include/definitions in an `#ifndef __GENKSYMS__`
+macro.  The genksyms script will skip over those blocks when performing its CRC
+calculations.
+
+### But what about a real ABI change?
+
+If a kpatch introduces a true ABI change, each of calling functions would
+consequently need to be updated in the kpatch module.  For unexported functions,
+this may be handled safely if the kpatch does indeed update all callers.
+However, since motivation behind `CONFIG_MODVERSIONS` is to provide basic ABI
+verification between the kernel and modules for  **exported** functions, kpatch
+cannot safely change this ABI without worrying about breaking other out-of-tree
+drivers.  Those drivers have been built against the reference kernel's original
+set of CRCs and expect the original ABI.
+
+To track down specifically what caused a symbol CRC change, tools like
+[kabi-dw](https://github.com/skozina/kabi-dw) can be employed to produce a
+detailed symbol definition report.  For a kpatch-build, kabi-dw can be modified
+to operate on .o object files (not just .ko and vmlinux files) and the
+`$CACHEDIR/tmp/{orig, patched}` directories compared.
