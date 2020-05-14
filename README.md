@@ -23,6 +23,7 @@ And a few more:
 Table of contents
 =================
 
+- [Supported Architectures](#supported-architectures)
 - [Installation](#installation)
 	- [Prerequisites](#prerequisites)
 		- [Fedora](#fedora)
@@ -46,10 +47,21 @@ Table of contents
 - [Get involved](#get-involved)
 - [License](#license)
 
+
+Supported Architectures
+-----------------------
+
+- [x] x86-64
+- [x] ppc64le
+- [ ] arm64
+- [ ] s390
+
 Installation
 ------------
 
 ### Prerequisites
+
+Before starting, see [Supported Architectures](#supported-architectures) and check if your device's architecture is supported.
 
 #### Fedora
 
