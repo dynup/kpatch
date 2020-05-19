@@ -868,6 +868,14 @@ mkdir output
 declare -a objnames
 CHANGED=0
 ERROR=0
+
+# Prepare OOT module symvers file
+if [[ -n "$OOT_MODULE" ]]; then
+    BUILDDIR="/lib/modules/$ARCHVERSION/build/"
+    cp "$SRCDIR/Module.symvers" "$TEMPDIR/Module.symvers"
+    awk '{ print $1 "\t" $2 "\t" $3 "\t" $4}' "${BUILDDIR}/Module.symvers" >> "$TEMPDIR/Module.symvers"
+fi
+
 for i in $FILES; do
 	# In RHEL 7 based kernels, copy_user_64.o misuses the .fixup section,
 	# which confuses create-diff-object.  It's fine to skip it, it's an
@@ -892,9 +900,6 @@ for i in $FILES; do
 			KOBJFILE_PATH="$OOT_MODULE"
 			SYMTAB="${TEMPDIR}/module/${KOBJFILE_NAME}.symtab"
 			SYMVERS_FILE="$TEMPDIR/Module.symvers"
-			BUILDDIR="/lib/modules/$ARCHVERSION/build/"
-			cp "$SRCDIR/Module.symvers" "$SYMVERS_FILE"
-			awk '{ print $1 "\t" $2 "\t" $3 "\t" $4}' "${BUILDDIR}/Module.symvers" >> "$SYMVERS_FILE"
 		else
 			KOBJFILE_NAME=$(basename "${KOBJFILE%.ko}")
 			KOBJFILE_NAME="${KOBJFILE_NAME//-/_}"
