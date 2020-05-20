@@ -745,6 +745,7 @@ USE_KLP_ARCH=0
 CONFIG_PARAVIRT=0
 CONFIG_UNWINDER_ORC=0
 CONFIG_JUMP_LABEL=0
+CONFIG_MODVERSIONS=0
 
 if grep -q "CONFIG_LIVEPATCH=y" "$CONFIGFILE" && (kernel_is_rhel || kernel_version_gte 4.9.0); then
 
@@ -770,6 +771,7 @@ fi
 grep -q "CONFIG_PARAVIRT=y"     "$CONFIGFILE" && CONFIG_PARAVIRT=1
 grep -q "CONFIG_UNWINDER_ORC=y" "$CONFIGFILE" && CONFIG_UNWINDER_ORC=1
 grep -q "CONFIG_JUMP_LABEL=y"   "$CONFIGFILE" && CONFIG_JUMP_LABEL=1
+grep -q "CONFIG_MODVERSIONS=y"  "$CONFIGFILE" && CONFIG_MODVERSIONS=1
 
 # unsupported kernel option checking
 grep -q "CONFIG_DEBUG_INFO_SPLIT=y" "$CONFIGFILE" && die "kernel option 'CONFIG_DEBUG_INFO_SPLIT' not supported"
@@ -805,6 +807,9 @@ unset KPATCH_GCC_TEMPDIR
 # shellcheck disable=SC2086
 CROSS_COMPILE="$TOOLSDIR/kpatch-gcc " make "-j$CPUS" $TARGETS 2>&1 | logger || die
 
+# Save original module symvers
+cp "$SRCDIR/Module.symvers" "$TEMPDIR/Module.symvers"
+
 echo "Building patched source"
 apply_patches
 mkdir -p "$TEMPDIR/orig" "$TEMPDIR/patched"
@@ -830,6 +835,29 @@ if [[ ! -e "$TEMPDIR/changed_objs" ]]; then
 fi
 
 [[ -n "$OOT_MODULE" ]] || grep -q vmlinux "$SRCDIR/Module.symvers" || die "truncated $SRCDIR/Module.symvers file"
+
+if [[ "$CONFIG_MODVERSIONS" -eq 1 ]]; then
+    while read -ra sym_line; do
+        if [[ ${#sym_line[@]} -lt 4 ]]; then
+            die "Malformed ${TEMPDIR}/Module.symvers file"
+        fi
+
+        sym=${sym_line[1]}
+
+        read -ra patched_sym_line <<< "$(grep "\s$sym\s" "$SRCDIR/Module.symvers")"
+        if [[ ${#patched_sym_line[@]} -lt 4 ]]; then
+            die "Malformed symbol entry for ${sym} in ${SRCDIR}/Module.symvers file"
+        fi
+
+        # Assume that both original and patched symvers have the same format.
+        # In both cases, the symbol should have the same CRC, belong to the same
+        # Module/Namespace and have the same export type.
+        if [[ ${#sym_line[@]} -ne ${#patched_sym_line[@]} || \
+                  "${sym_line[*]}" != "${patched_sym_line[*]}" ]]; then
+            warn "Version disagreement for symbol ${sym}"
+        fi
+    done < "${TEMPDIR}/Module.symvers"
+fi
 
 # Read as words, no quotes.
 # shellcheck disable=SC2013
