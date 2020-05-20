@@ -217,7 +217,7 @@ show_stalled_processes() {
 	echo "Stalled processes:"
 	for proc_task in /proc/[0-9]*/task/[0-9]*; do
 		tid=${proc_task#*/task/}
-		is_stalled "$module" "$tid" && echo "$tid $(cat "$proc_task"/comm 2>/dev/null)"
+		is_stalled "$module" "$tid" && echo -e "$tid $(cat "$proc_task"/comm 2>/dev/null)\nstack:\n$(cat "$proc_task"/stack 2>/dev/null)"
 	done
 }
 
