@@ -72,8 +72,20 @@ kpatch_rhel_dependencies()
 	sudo yum-builddep -y "kernel-${kernel_version%.*}"
 	sudo debuginfo-install -y "kernel-${kernel_version%.*}"
 
-	[ "${arch}" == "x86_64" ] && sudo yum install -y pesign
-	[ "${arch}" == "ppc64le" ] && sudo yum install -y gcc-plugin-devel
+	case "${arch}" in
+		"x86_64")
+			sudo yum install -y pesign
+			;;
+		"ppc64le")
+			sudo yum install -y gcc-plugin-devel
+			if [ "${rhel_major}" -ge 8 ]; then
+				# yum-builddep doesn't provide everything we need :(
+				sudo yum install -y flex openssl-devel
+			fi
+			;;
+		*)
+			;;
+	esac
 
 	sudo yum install -y "https://dl.fedoraproject.org/pub/epel/epel-release-latest-7.noarch.rpm"
 	sudo yum install -y ccache
