@@ -53,12 +53,21 @@ kpatch_rhel_dependencies()
 {
 	local kernel_version
 	local arch
+	local rhel_major
+	local py_version
 	kernel_version=$(uname -r)
 	arch=$(uname -m)
+	rhel_major=${VERSION_ID%%.*}
+
+	if [ "${rhel_major}" -ge 8 ]; then
+		py_version="3"
+	else
+		py_version="2"
+	fi
 
 	sudo yum install -y git gcc gcc-c++ "kernel-devel-${kernel_version%.*}" elfutils elfutils-devel
 	sudo yum install -y yum-utils zlib-devel binutils-devel newt-devel \
-		python-devel perl-ExtUtils-Embed audit-libs-devel numactl-devel \
+		python${py_version}-devel perl-ExtUtils-Embed audit-libs-devel numactl-devel \
 		pciutils-devel bison ncurses-devel rpm-build java-devel
 	sudo yum-builddep -y "kernel-${kernel_version%.*}"
 	sudo debuginfo-install -y "kernel-${kernel_version%.*}"
