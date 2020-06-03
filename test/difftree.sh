@@ -83,7 +83,7 @@ echo ""
 echo "Results:"
 for i in $(find ./* -iname '*.log')
 do
-	echo $(cat $i | head -1 | cut -f2-3 -d':')
+	head -1 "$i" | cut -f2-3 -d':'
 done | sort | uniq -c | sort -n -r | tee "$TEMPDIR/results.log"
 
 echo "results are in $TEMPDIR"
