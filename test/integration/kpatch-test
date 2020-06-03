@@ -108,7 +108,7 @@ else
 fi
 
 error() {
-	echo "ERROR: $@" |tee -a $LOG >&2
+	echo "ERROR: $*" |tee -a $LOG >&2
 	ERROR=$((ERROR + 1))
 }
 
