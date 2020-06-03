@@ -40,6 +40,7 @@
 
 shopt -s nullglob
 
+# shellcheck disable=SC2046
 SCRIPTDIR=$(readlink -f $(dirname $(type -p "$0")))
 ROOTDIR=$(readlink -f "$SCRIPTDIR/../..")
 # TODO: option to use system-installed binaries instead

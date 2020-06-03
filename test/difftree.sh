@@ -14,6 +14,7 @@
 #set -x
 
 OBJDIR="$HOME/.kpatch/obj"
+# shellcheck disable=SC2046
 SCRIPTDIR=$(readlink -f $(dirname $(type -p "$0")))
 TEMPDIR=$(mktemp -d)
 RESULTSDIR="$TEMPDIR/results"
@@ -52,6 +53,7 @@ do
 	# expect RETCODE to be 3 indicating no change
 	[[ $RETCODE -eq 3 ]] && continue
 	# otherwise record error
+	# shellcheck disable=SC2046
 	mkdir -p "$RESULTSDIR"/$(dirname "$i") || exit 1
 	cp "$i" "$RESULTSDIR/$i" || exit 1
 	case $RETCODE in
