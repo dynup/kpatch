@@ -229,6 +229,7 @@ kpatch_install_vagrant()
 kpatch_check_install_vagrant()
 {
 	local image_path=${1}
+	# shellcheck disable=SC2230
 	[ "$(which vagrant)" == "" ] && kpatch_install_vagrant "${image_path}"
 	return 0
 }
