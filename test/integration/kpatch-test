@@ -49,7 +49,7 @@ KPATCHBUILD="$ROOTDIR"/kpatch-build/kpatch-build
 ERROR=0
 LOG=test.log
 DYNDEBUG_CONTROL=/sys/kernel/debug/dynamic_debug/control
-rm -f *.log
+rm -f ./*.log
 
 PATCHDIR="${PATCHDIR:-$PWD}"
 declare -a PATCH_LIST

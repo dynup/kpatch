@@ -23,7 +23,7 @@ if [[ ! -d $OBJDIR ]]; then
 fi
 
 cd "$OBJDIR" || exit 1
-for i in $(find * -name '*.o')
+for i in $(find ./* -name '*.o')
 do
 	# copied from kpatch-build/kpatch-gcc; keep in sync
 	case $i in
@@ -81,7 +81,7 @@ rm -f "$TEMPDIR/log.txt" > /dev/null 2>&1
 cd "$RESULTSDIR" || exit 1
 echo ""
 echo "Results:"
-for i in $(find * -iname '*.log')
+for i in $(find ./* -iname '*.log')
 do
 	echo $(cat $i | head -1 | cut -f2-3 -d':')
 done | sort | uniq -c | sort -n -r | tee "$TEMPDIR/results.log"
