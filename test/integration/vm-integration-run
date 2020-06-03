@@ -64,6 +64,7 @@ if [[ -d "${HOME}/src" && -f "${HOME}/src/version" ]]; then
   mv "${HOME}/src" "${HOME}/.kpatch/"
 fi
 
+# shellcheck disable=SC1091
 source /etc/os-release
 
 if [[ "${NAME}" == "Fedora" ]] && [[ "${VERSION_ID}" -lt 30 ]]; then
