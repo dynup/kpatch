@@ -17,7 +17,6 @@ OBJDIR="$HOME/.kpatch/obj"
 SCRIPTDIR="$(readlink -f $(dirname $(type -p $0)))"
 TEMPDIR=$(mktemp -d)
 RESULTSDIR="$TEMPDIR/results"
-VMVLINUX="/usr/lib/debug/lib/modules/$(uname -r)/vmlinux" # path for F20
 
 if [[ ! -d $OBJDIR ]]; then
 	echo "please run kpatch-build to populate the object tree in $OBJDIR"
