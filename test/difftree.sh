@@ -23,6 +23,7 @@ if [[ ! -d $OBJDIR ]]; then
 fi
 
 cd "$OBJDIR" || exit 1
+# shellcheck disable=SC2044
 for i in $(find ./* -name '*.o')
 do
 	# copied from kpatch-build/kpatch-gcc; keep in sync
@@ -81,6 +82,7 @@ rm -f "$TEMPDIR/log.txt" > /dev/null 2>&1
 cd "$RESULTSDIR" || exit 1
 echo ""
 echo "Results:"
+# shellcheck disable=SC2044
 for i in $(find ./* -iname '*.log')
 do
 	head -1 "$i" | cut -f2-3 -d':'
