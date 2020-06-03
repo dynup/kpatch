@@ -14,7 +14,7 @@
 #set -x
 
 OBJDIR="$HOME/.kpatch/obj"
-SCRIPTDIR="$(readlink -f $(dirname $(type -p $0)))"
+SCRIPTDIR=$(readlink -f $(dirname $(type -p "$0")))
 TEMPDIR=$(mktemp -d)
 RESULTSDIR="$TEMPDIR/results"
 
@@ -46,13 +46,13 @@ do
 		;;
 	esac
 	# skip objects that are the linked product of more than one object file
-	[[ $(readelf -s $i | awk '$4=="FILE" {n++} END {print n}') -ne 1 ]] && continue
-	$SCRIPTDIR/../kpatch-build/create-diff-object $i $i /usr/lib/debug/lib/modules/$(uname -r)/vmlinux "$TEMPDIR/output.o" > "$TEMPDIR/log.txt" 2>&1
+	[[ $(readelf -s "$i" | awk '$4=="FILE" {n++} END {print n}') -ne 1 ]] && continue
+	"$SCRIPTDIR"/../kpatch-build/create-diff-object "$i" "$i" "/usr/lib/debug/lib/modules/$(uname -r)/vmlinux" "$TEMPDIR/output.o" > "$TEMPDIR/log.txt" 2>&1
 	RETCODE=$?
 	# expect RETCODE to be 3 indicating no change
 	[[ $RETCODE -eq 3 ]] && continue
 	# otherwise record error
-	mkdir -p $RESULTSDIR/$(dirname $i) || exit 1
+	mkdir -p "$RESULTSDIR"/$(dirname "$i") || exit 1
 	cp "$i" "$RESULTSDIR/$i" || exit 1
 	case $RETCODE in
 		139)
