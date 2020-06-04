@@ -53,18 +53,39 @@ kpatch_rhel_dependencies()
 {
 	local kernel_version
 	local arch
+	local rhel_major
+	local py_version
 	kernel_version=$(uname -r)
 	arch=$(uname -m)
+	rhel_major=${VERSION_ID%%.*}
+
+	if [ "${rhel_major}" -ge 8 ]; then
+		py_version="3"
+	else
+		py_version="2"
+	fi
 
 	sudo yum install -y git gcc gcc-c++ "kernel-devel-${kernel_version%.*}" elfutils elfutils-devel
 	sudo yum install -y yum-utils zlib-devel binutils-devel newt-devel \
-		python-devel perl-ExtUtils-Embed audit-libs-devel numactl-devel \
+		python${py_version}-devel perl-ExtUtils-Embed audit-libs-devel numactl-devel \
 		pciutils-devel bison ncurses-devel rpm-build java-devel
 	sudo yum-builddep -y "kernel-${kernel_version%.*}"
 	sudo debuginfo-install -y "kernel-${kernel_version%.*}"
 
-	[ "${arch}" == "x86_64" ] && sudo yum install -y pesign
-	[ "${arch}" == "ppc64le" ] && sudo yum install -y gcc-plugin-devel
+	case "${arch}" in
+		"x86_64")
+			sudo yum install -y pesign
+			;;
+		"ppc64le")
+			sudo yum install -y gcc-plugin-devel
+			if [ "${rhel_major}" -ge 8 ]; then
+				# yum-builddep doesn't provide everything we need :(
+				sudo yum install -y flex openssl-devel
+			fi
+			;;
+		*)
+			;;
+	esac
 
 	sudo yum install -y "https://dl.fedoraproject.org/pub/epel/epel-release-latest-7.noarch.rpm"
 	sudo yum install -y ccache
