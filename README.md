@@ -26,9 +26,7 @@ Table of contents
 - [Supported Architectures](#supported-architectures)
 - [Installation](#installation)
 	- [Prerequisites](#prerequisites)
-		- [Fedora](#fedora)
-		- [RHEL 7](#rhel-7)
-		- [CentOS 7](#centos-7)
+		- [Fedora, RHEL, CentOS](#fedora-rhel-centos)
 		- [Oracle Linux 7](#oracle-linux-7)
 		- [Ubuntu](#ubuntu)
 		- [Debian 9 (Stretch)](#debian-9-stretch)
@@ -63,95 +61,17 @@ Installation
 
 Before starting, see [Supported Architectures](#supported-architectures) and check if your device's architecture is supported.
 
-#### Fedora
+#### Fedora, RHEL, CentOS
 
 *NOTE: You'll need about 15GB of free disk space for the kpatch-build cache in
 `~/.kpatch` and for ccache.*
 
-Install the dependencies for compiling kpatch:
+Install the dependencies for compiling kpatch and running kpatch-build:
 
 ```bash
-UNAME=$(uname -r)
-sudo dnf install gcc kernel-${UNAME%.*} elfutils elfutils-devel
-```
-
-Install the dependencies for the "kpatch-build" command:
-
-```bash
-sudo dnf install pesign yum-utils openssl wget numactl-devel patchutils
-sudo dnf builddep kernel-${UNAME%.*}
-sudo dnf debuginfo-install kernel-${UNAME%.*}
-
-# required on ppc64le
-sudo dnf install gcc-plugin-devel
-
-# optional, but highly recommended
-sudo dnf install ccache
-ccache --max-size=5G
-```
-
-#### RHEL 7
-
-*NOTE: You'll need about 15GB of free disk space for the kpatch-build cache in
-`~/.kpatch` and for ccache.*
-
-Install the dependencies for compiling kpatch:
-
-```bash
-UNAME=$(uname -r)
-sudo yum install gcc kernel-${UNAME%.*} elfutils elfutils-devel
-```
-
-Install the dependencies for the "kpatch-build" command:
-
-```bash
-sudo yum-config-manager --enable rhel-7-server-optional-rpms
-sudo yum install pesign yum-utils zlib-devel \
-  binutils-devel newt-devel python-devel perl-ExtUtils-Embed \
-  audit-libs-devel numactl-devel pciutils-devel bison ncurses-devel \
-  patchutils
-
-sudo yum-builddep kernel-${UNAME%.*}
-sudo debuginfo-install kernel-${UNAME%.*}
-
-# required on ppc64le
-sudo yum install gcc-plugin-devel
-
-# optional, but highly recommended
-sudo yum install "https://dl.fedoraproject.org/pub/epel/epel-release-latest-7.noarch.rpm"
-sudo yum install  ccache
-sudo yum remove -y epel-release             # If you no longer want epel repos
-ccache --max-size=5G
-```
-
-#### CentOS 7
-
-*NOTE: You'll need about 15GB of free disk space for the kpatch-build cache in
-`~/.kpatch` and for ccache.*
-
-Install the dependencies for compiling kpatch:
-
-```bash
-UNAME=$(uname -r)
-sudo yum install gcc kernel-${UNAME%.*} elfutils elfutils-devel
-```
-
-Install the dependencies for the "kpatch-build" command:
-
-```bash
-sudo yum install pesign yum-utils zlib-devel \
-  binutils-devel newt-devel python-devel perl-ExtUtils-Embed \
-  audit-libs audit-libs-devel numactl-devel pciutils-devel bison patchutils
-
-# enable CentOS 7 debug repo
-sudo yum-config-manager --enable debug
-
-sudo yum-builddep kernel-${UNAME%.*}
-sudo debuginfo-install kernel-${UNAME%.*}
-
-# optional, but highly recommended - enable EPEL 7
-sudo yum install ccache
-ccache --max-size=5G
+source test/integration/lib.sh
+# Will request root privileges
+kpatch_dependencies
 ```
 
 #### Oracle Linux 7
@@ -192,47 +112,16 @@ ccache --max-size=5G
 *NOTE: You'll need about 15GB of free disk space for the kpatch-build cache in
 `~/.kpatch` and for ccache.*
 
-Install the dependencies for compiling kpatch:
+Install the dependencies for compiling kpatch and running kpatch-build
 
 ```bash
-apt-get install make gcc libelf-dev
-```
-
-Install the dependencies for the "kpatch-build" command:
-
-```bash
-apt-get install dpkg-dev devscripts elfutils
-apt-get build-dep linux
-
+source test/integration/lib.sh
 # required on ppc64le
 # e.g., on Ubuntu 18.04 for gcc-7.3
 apt-get install gcc-7-plugin-dev
-
-# optional, but highly recommended
-apt-get install ccache
-ccache --max-size=5G
+# Will request root privileges
+kpatch_dependencies
 ```
-
-Install kernel debug symbols:
-
-```bash
-# Add ddebs repository
-codename=$(lsb_release -sc)
-sudo tee /etc/apt/sources.list.d/ddebs.list << EOF
-deb http://ddebs.ubuntu.com/ ${codename} main restricted universe multiverse
-deb http://ddebs.ubuntu.com/ ${codename}-security main restricted universe multiverse
-deb http://ddebs.ubuntu.com/ ${codename}-updates main restricted universe multiverse
-deb http://ddebs.ubuntu.com/ ${codename}-proposed main restricted universe multiverse
-EOF
-
-# add APT key
-wget -Nq http://ddebs.ubuntu.com/dbgsym-release-key.asc -O- | sudo apt-key add -
-apt-get update && apt-get install linux-image-$(uname -r)-dbgsym
-```
-If there are no packages published yet to the codename-security pocket, the
-apt update may report a "404 Not Found" error, as well as a complaint about
-disabling the repository by default.  This message may be ignored (see issue
-#710).
 
 #### Debian 9 (Stretch)
 
