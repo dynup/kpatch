@@ -40,17 +40,17 @@
 
 shopt -s nullglob
 
-SCRIPTDIR="$(readlink -f $(dirname $(type -p $0)))"
-ROOTDIR="$(readlink -f $SCRIPTDIR/../..)"
+# shellcheck disable=SC2046
+SCRIPTDIR=$(readlink -f $(dirname $(type -p "$0")))
+ROOTDIR=$(readlink -f "$SCRIPTDIR/../..")
 # TODO: option to use system-installed binaries instead
 KPATCH="sudo $ROOTDIR/kpatch/kpatch"
-RMMOD="sudo rmmod"
 unset CCACHE_HASHDIR
 KPATCHBUILD="$ROOTDIR"/kpatch-build/kpatch-build
 ERROR=0
 LOG=test.log
 DYNDEBUG_CONTROL=/sys/kernel/debug/dynamic_debug/control
-rm -f *.log
+rm -f ./*.log
 
 PATCHDIR="${PATCHDIR:-$PWD}"
 declare -a PATCH_LIST
@@ -94,8 +94,8 @@ while [[ $# -gt 0 ]]; do
 done
 
 if [[ ${#PATCH_LIST[@]} = 0 ]]; then
-	PATCH_LIST=($PATCHDIR/*.patch)
-	TEST_LIST=($PATCHDIR/*.test)
+	PATCH_LIST=("$PATCHDIR"/*.patch)
+	TEST_LIST=("$PATCHDIR"/*.test)
 	if [[ ${#PATCH_LIST[@]} = 0 ]]; then
 		echo "No patches found!"
 		exit 1
@@ -109,7 +109,7 @@ else
 fi
 
 error() {
-	echo "ERROR: $@" |tee -a $LOG >&2
+	echo "ERROR: $*" |tee -a $LOG >&2
 	ERROR=$((ERROR + 1))
 }
 
@@ -123,7 +123,7 @@ unload_all() {
 
 build_module() {
 	file=$1
-	prefix=$(basename ${file%%.patch})
+	prefix=$(basename "${file%%.patch}")
 	modname="test-$prefix"
 	module="${modname}.ko"
 
@@ -142,10 +142,10 @@ build_module() {
 
 	log "build: $prefix"
 
-	if ! $KPATCHBUILD -n $modname $file >> $LOG 2>&1; then
+	if ! $KPATCHBUILD -n "$modname" "$file" >> $LOG 2>&1; then
 		if [[ $shouldfail -eq 0 ]]; then
 			error "$prefix: build failed"
-			cp $HOME/.kpatch/build.log $prefix.log
+			cp "$HOME/.kpatch/build.log" "$prefix.log"
 		fi
 	else
 		[[ $shouldfail -eq 1 ]] && error "$prefix: build succeeded when it should have failed"
@@ -154,10 +154,10 @@ build_module() {
 
 run_load_test() {
 	file=$1
-	prefix=$(basename ${file%%.patch})
+	prefix=$(basename "${file%%.patch}")
 	modname="test-$prefix"
 	module="${modname}.ko"
-	testprog="$(dirname $1)/$prefix-LOADED.test"
+	testprog=$(dirname "$1")/"$prefix-LOADED.test"
 
 	[[ $prefix =~ -FAIL ]] && return
 
@@ -178,7 +178,7 @@ run_load_test() {
 		return
 	fi
 
-	if ! $KPATCH load $module >> $LOG 2>&1; then
+	if ! $KPATCH load "$module" >> $LOG 2>&1; then
 		error "$prefix: kpatch load failed"
 		return
 	fi
@@ -187,7 +187,7 @@ run_load_test() {
 		error "$prefix: $testprog failed after kpatch load"
 	fi
 
-	if ! $KPATCH unload $module >> $LOG 2>&1; then
+	if ! $KPATCH unload "$module" >> $LOG 2>&1; then
 		error "$prefix: kpatch unload failed"
 		return
 	fi
@@ -200,7 +200,7 @@ run_load_test() {
 
 run_custom_test() {
 	testprog=$1
-	prefix=$(basename ${testprog%%.test})
+	prefix=$(basename "${testprog%%.test}")
 
 	[[ $testprog = *-LOADED.test ]] && return
 
@@ -221,7 +221,7 @@ build_combined_module() {
 	declare -a COMBINED_LIST
 	for file in "${PATCH_LIST[@]}"; do
 		[[ $file =~ -FAIL ]] && log "combine: skipping $file" && continue
-		COMBINED_LIST+=($file)
+		COMBINED_LIST+=("$file")
 	done
 	if [[ ${#COMBINED_LIST[@]} -le 1 ]]; then
 		log "skipping build: combined (only ${#PATCH_LIST[@]} patch(es))"
@@ -232,7 +232,7 @@ build_combined_module() {
 
 	if ! $KPATCHBUILD -n test-COMBINED "${COMBINED_LIST[@]}" >> $LOG 2>&1; then
 		error "combined build failed"
-		cp $HOME/.kpatch/build.log combined.log
+		cp "$HOME/.kpatch/build.log" combined.log
 	fi
 }
 
@@ -261,7 +261,7 @@ run_combined_test() {
 
 	for testprog in "${TEST_LIST[@]}"; do
 		[[ $testprog != *-LOADED.test ]] && continue
-		[ -e ${testprog/"-LOADED.test"/".patch.disabled"} ] && continue
+		[ -e "${testprog/-LOADED.test/.patch.disabled}" ] && continue
 		if ! $testprog >> $LOG 2>&1; then
 			error "combined: $testprog failed after kpatch load"
 		fi
@@ -286,8 +286,8 @@ echo "clearing printk buffer"
 sudo dmesg -C
 
 for file in "${PATCH_LIST[@]}"; do
-	if [[ $QUICK != 1 || $file =~ -FAIL ]]; then
-		build_module $file
+	if [[ $QUICK != 1 || "$file" =~ -FAIL ]]; then
+		build_module "$file"
 	fi
 done
 
@@ -300,7 +300,7 @@ echo "func klp_try_switch_task +p" >"${DYNDEBUG_CONTROL}" 2>/dev/null
 
 if [[ $QUICK != 1 ]]; then
 	for file in "${PATCH_LIST[@]}"; do
-		run_load_test $file
+		run_load_test "$file"
 	done
 fi
 
@@ -310,7 +310,7 @@ if [[ $QUICK != 1 ]]; then
 	for testprog in "${TEST_LIST[@]}"; do
 		if [[ ! $testprog =~ -FAIL ]]; then
 			unload_all
-			run_custom_test $testprog
+			run_custom_test "$testprog"
 		fi
 	done
 fi
