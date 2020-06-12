@@ -3,6 +3,18 @@
 
 #define PLUGIN_NAME "ppc64le-plugin"
 
+#if BUILDING_GCC_VERSION < 10000
+#define CALL_LOCAL		"*call_local_aixdi"
+#define CALL_NONLOCAL		"*call_nonlocal_aixdi"
+#define CALL_VALUE_LOCAL	"*call_value_local_aixdi"
+#define CALL_VALUE_NONLOCAL	"*call_value_nonlocal_aixdi"
+#else
+#define CALL_LOCAL		"*call_localdi"
+#define CALL_NONLOCAL		"*call_nonlocal_aixdi"
+#define CALL_VALUE_LOCAL	"*call_value_localdi"
+#define CALL_VALUE_NONLOCAL	"*call_value_nonlocal_aixdi"
+#endif
+
 int plugin_is_GPL_compatible;
 
 struct plugin_info plugin_info = {
@@ -29,13 +41,13 @@ static unsigned int ppc64le_plugin_execute(void)
 		if (!name)
 			continue;
 
-		if (!strcmp(name , "*call_local_aixdi"))
+		if (!strcmp(name , CALL_LOCAL))
 			local_code = code;
-		else if (!strcmp(name , "*call_nonlocal_aixdi"))
+		else if (!strcmp(name , CALL_NONLOCAL))
 			nonlocal_code = code;
-		else if (!strcmp(name, "*call_value_local_aixdi"))
+		else if (!strcmp(name, CALL_VALUE_LOCAL))
 			value_local_code = code;
-		else if (!strcmp(name, "*call_value_nonlocal_aixdi"))
+		else if (!strcmp(name, CALL_VALUE_NONLOCAL))
 			value_nonlocal_code = code;
 
 		if (nonlocal_code != -1 && local_code != -1 &&
