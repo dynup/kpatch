@@ -46,8 +46,7 @@ static unsigned int ppc64le_plugin_execute(void)
 found:
 	if (nonlocal_code == -1 || local_code == -1 ||
 	    value_nonlocal_code == -1 || value_local_code == -1) {
-		fprintf(stderr, PLUGIN_NAME ": can't find call instruction codes");
-		return 1;
+		error("%s: cannot find call instruction codes", PLUGIN_NAME);
 	}
 
 	/* Convert local calls to non-local */
