@@ -1027,6 +1027,29 @@ if [[ "$USE_KLP" -eq 1 ]]; then
 	check_pipe_status create-klp-module
 fi
 
+if [[ "$CONFIG_MODVERSIONS" -eq 1 ]]; then
+    # Check that final module does not reference symbols with different version
+    # than the target kernel
+    KP_MOD_VALID=true
+    # shellcheck disable=SC2086
+    while read -ra mod_symbol; do
+        if [[ ${#mod_symbol[@]} -lt 2 ]]; then
+            continue
+        fi
+
+        # Check if the symbol exists in the old Module.symvers, and if it does
+        # check that the CRCs are unchanged.
+        if ! awk -v sym="${mod_symbol[1]}" -v crc="${mod_symbol[0]}" \
+             '$2==sym && $1!=crc { exit 1 }' "$TEMPDIR/Module.symvers"; then
+            warn "Patch module references ${mod_symbol[1]} with invalid version"
+            KP_MOD_VALID=false
+        fi
+    done <<< "$(modprobe --dump-modversions $TEMPDIR/patch/$MODNAME.ko)"
+    if ! $KP_MOD_VALID; then
+        die "Patch module referencing altered exported kernel symbols cannot be loaded"
+    fi
+fi
+
 readelf --wide --symbols "$TEMPDIR/patch/$MODNAME.ko" 2>/dev/null | \
 	sed -r 's/\s+\[<localentry>: 8\]//' | \
 	awk '($4=="FUNC" || $4=="OBJECT") && ($5=="GLOBAL" || $5=="WEAK") && $7!="UND" {print $NF}' \
