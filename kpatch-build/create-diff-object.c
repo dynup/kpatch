@@ -2168,7 +2168,7 @@ static bool should_keep_jump_label(struct lookup_table *lookup,
 		 * This will be upgraded to an error after all jump labels have
 		 * been reported.
 		 */
-		log_normal("Found a jump label at %s()+0x%lx, using key %s.  Jump labels aren't supported with this kernel.  Use static_key_enabled() instead.",
+		log_normal("Found a jump label at %s()+0x%lx, using key %s.  Jump labels aren't supported with this kernel.  Use static_key_enabled() instead.\n",
 			   code->sym->name, code->addend, key->sym->name);
 		(*jump_labels_found)++;
 		return false;
@@ -2198,7 +2198,7 @@ static bool should_keep_jump_label(struct lookup_table *lookup,
 		 * This will be upgraded to an error after all jump labels have
 		 * been reported.
 		 */
-		log_normal("Found a jump label at %s()+0x%lx, using key %s, which is defined in a module.  Use static_key_enabled() instead.",
+		log_normal("Found a jump label at %s()+0x%lx, using key %s, which is defined in a module.  Use static_key_enabled() instead.\n",
 			   code->sym->name, code->addend, key->sym->name);
 		(*jump_labels_found)++;
 		return false;
