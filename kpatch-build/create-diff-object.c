@@ -388,6 +388,19 @@ static bool rela_equal(struct rela *rela1, struct rela *rela2)
 		return false;
 
 	/*
+	 * On x86, .altinstr_aux is used to store temporary code which allows
+	 * static_cpu_has() to work before apply_alternatives() has run.  This
+	 * code is completely inert for modules, because apply_alternatives()
+	 * runs during module init, before the module is fully formed.  Any
+	 * changed references to it (i.e. changed addend) can be ignored.  As
+	 * long as they're both references to .altinstr_aux, they can be
+	 * considered equal, even if the addends differ.
+	 */
+	if (!strcmp(rela1->sym->name, ".altinstr_aux") &&
+	    !strcmp(rela2->sym->name, ".altinstr_aux"))
+		return true;
+
+	/*
 	 * With -mcmodel=large on ppc64le, GCC might generate entries in the .toc
 	 * section for relocation symbol references.   The .toc offsets may change
 	 * between the original and patched .o, so comparing ".toc + offset" isn't
