@@ -378,14 +378,14 @@ static int kpatch_mangled_strcmp(char *s1, char *s2)
 	return 1;
 }
 
-static int rela_equal(struct rela *rela1, struct rela *rela2)
+static bool rela_equal(struct rela *rela1, struct rela *rela2)
 {
 	struct rela *rela_toc1, *rela_toc2;
 	unsigned long toc_data1 = 0, toc_data2 = 0; /* = 0 to prevent gcc warning */
 
 	if (rela1->type != rela2->type ||
 	    rela1->offset != rela2->offset)
-		return 0;
+		return false;
 
 	/*
 	 * With -mcmodel=large on ppc64le, GCC might generate entries in the .toc
@@ -444,13 +444,13 @@ static int rela_equal(struct rela *rela1, struct rela *rela2)
 		return toc_data1 == toc_data2;
 
 	if (!rela_toc1 || !rela_toc2)
-		return 0;
+		return false;
 
 	if (rela_toc1->string)
 		return rela_toc2->string && !strcmp(rela_toc1->string, rela_toc2->string);
 
 	if (rela_toc1->addend != rela_toc2->addend)
-		return 0;
+		return false;
 
 	return !kpatch_mangled_strcmp(rela_toc1->sym->name, rela_toc2->sym->name);
 }
