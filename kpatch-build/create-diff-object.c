@@ -378,14 +378,27 @@ static int kpatch_mangled_strcmp(char *s1, char *s2)
 	return 1;
 }
 
-static int rela_equal(struct rela *rela1, struct rela *rela2)
+static bool rela_equal(struct rela *rela1, struct rela *rela2)
 {
 	struct rela *rela_toc1, *rela_toc2;
 	unsigned long toc_data1 = 0, toc_data2 = 0; /* = 0 to prevent gcc warning */
 
 	if (rela1->type != rela2->type ||
 	    rela1->offset != rela2->offset)
-		return 0;
+		return false;
+
+	/*
+	 * On x86, .altinstr_aux is used to store temporary code which allows
+	 * static_cpu_has() to work before apply_alternatives() has run.  This
+	 * code is completely inert for modules, because apply_alternatives()
+	 * runs during module init, before the module is fully formed.  Any
+	 * changed references to it (i.e. changed addend) can be ignored.  As
+	 * long as they're both references to .altinstr_aux, they can be
+	 * considered equal, even if the addends differ.
+	 */
+	if (!strcmp(rela1->sym->name, ".altinstr_aux") &&
+	    !strcmp(rela2->sym->name, ".altinstr_aux"))
+		return true;
 
 	/*
 	 * With -mcmodel=large on ppc64le, GCC might generate entries in the .toc
@@ -444,13 +457,13 @@ static int rela_equal(struct rela *rela1, struct rela *rela2)
 		return toc_data1 == toc_data2;
 
 	if (!rela_toc1 || !rela_toc2)
-		return 0;
+		return false;
 
 	if (rela_toc1->string)
 		return rela_toc2->string && !strcmp(rela_toc1->string, rela_toc2->string);
 
 	if (rela_toc1->addend != rela_toc2->addend)
-		return 0;
+		return false;
 
 	return !kpatch_mangled_strcmp(rela_toc1->sym->name, rela_toc2->sym->name);
 }
