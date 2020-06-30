@@ -50,6 +50,7 @@ KPATCHBUILD="$ROOTDIR"/kpatch-build/kpatch-build
 ERROR=0
 LOG=test.log
 DYNDEBUG_CONTROL=/sys/kernel/debug/dynamic_debug/control
+DYNDEBUG_ENABLED=1
 rm -f ./*.log
 
 PATCHDIR="${PATCHDIR:-$PWD}"
@@ -282,6 +283,13 @@ run_combined_test() {
 
 }
 
+# shellcheck disable=SC1091
+source /etc/os-release
+if [[ "${ID}" == "rhel" && "${VERSION_ID%%.*}" == "7" && "${VERSION_ID##*.}" -le "6" ]]; then
+	DYNDEBUG_ENABLED=0
+	echo "Dynamic debug is not supported on '${PRETTY_NAME}', disabling."
+fi
+
 echo "clearing printk buffer"
 sudo dmesg -C
 
@@ -295,8 +303,10 @@ build_combined_module
 
 unload_all
 
-prev_dyndebug=$(grep klp_try_switch_task "${DYNDEBUG_CONTROL}" | awk '{print $3;}')
-echo "func klp_try_switch_task +p" >"${DYNDEBUG_CONTROL}" 2>/dev/null
+if [ "${DYNDEBUG_ENABLED}" == "1" ]; then
+	prev_dyndebug=$(grep klp_try_switch_task "${DYNDEBUG_CONTROL}" | awk '{print $3;}')
+	echo "func klp_try_switch_task +p" >"${DYNDEBUG_CONTROL}" 2>/dev/null
+fi
 
 if [[ $QUICK != 1 ]]; then
 	for file in "${PATCH_LIST[@]}"; do
@@ -318,7 +328,9 @@ fi
 
 unload_all
 
-echo "func klp_try_switch_task ${prev_dyndebug}" >"${DYNDEBUG_CONTROL}" 2>/dev/null
+if [ "${DYNDEBUG_ENABLED}" == "1" ]; then
+	echo "func klp_try_switch_task ${prev_dyndebug}" >"${DYNDEBUG_CONTROL}" 2>/dev/null
+fi
 
 if dmesg | grep -q "Call Trace"; then
 	dmesg > dmesg.log
