@@ -1016,6 +1016,6 @@ UNDEFINED=$(comm -23 <(sort -u "${TEMPDIR}"/undefined_references) \
 
 cp -f "$TEMPDIR/patch/$MODNAME.ko" "$BASE" || die
 
-[[ "$DEBUG" -eq 0 ]] && rm -f "$LOGFILE"
+[[ "$DEBUG" -eq 0 && "$SKIPCLEANUP" -eq 0 ]] && rm -f "$LOGFILE"
 
 echo "SUCCESS"
