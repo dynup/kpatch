@@ -1389,7 +1389,7 @@ static void kpatch_compare_correlated_elements(struct kpatch_elf *kelf)
 	kpatch_compare_symbols(&kelf->symbols);
 }
 
-#ifdef __x86_64__
+#if defined(__x86_64__) || defined(__aarch64__)
 static void rela_insn(const struct section *sec, const struct rela *rela,
 		      struct insn *insn)
 {
