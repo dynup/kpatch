@@ -43,7 +43,6 @@ shopt -s nullglob
 # shellcheck disable=SC2046
 SCRIPTDIR=$(readlink -f $(dirname $(type -p "$0")))
 ROOTDIR=$(readlink -f "$SCRIPTDIR/../..")
-# TODO: option to use system-installed binaries instead
 KPATCH="sudo $ROOTDIR/kpatch/kpatch"
 unset CCACHE_HASHDIR
 KPATCHBUILD="$ROOTDIR"/kpatch-build/kpatch-build
@@ -64,9 +63,11 @@ usage() {
 	echo "		-c, --cached	Don't rebuild patch modules" >&2
 	echo "		-d, --directory	Patch directory" >&2
 	echo "		-q, --quick	Test combined patch and -FAIL patches only" >&2
+	echo "		--system-kpatch-tools	Use kpatch tools installed in the system" >&2
+	echo "		--kpatch-build-opts	Additional options to pass to kpatch-build" >&2
 }
 
-options=$(getopt -o hcd:q -l "help,cached,directory,quick" -- "$@") || exit 1
+options=$(getopt -o hcd:q -l "help,cached,directory,quick,system-kpatch-tools,kpatch-build-opts:" -- "$@") || exit 1
 
 eval set -- "$options"
 
@@ -85,6 +86,14 @@ while [[ $# -gt 0 ]]; do
 		;;
 	-q|--quick)
 		QUICK=1
+		;;
+	--system-kpatch-tools)
+		KPATCH="sudo kpatch"
+		KPATCHBUILD="kpatch-build"
+		;;
+	--kpatch-build-opts)
+		KPATCHBUILD_OPTS=$2
+		shift
 		;;
 	*)
 		[[ "$1" = "--" ]] && shift && continue
@@ -143,7 +152,10 @@ build_module() {
 
 	log "build: $prefix"
 
-	if ! $KPATCHBUILD -n "$modname" "$file" >> $LOG 2>&1; then
+	# shellcheck disable=SC2086
+	# KPATCHBUILD_OPTS may contain several space-separated options,
+	# it should remain without quotes.
+	if ! $KPATCHBUILD $KPATCHBUILD_OPTS -n "$modname" "$file" >> $LOG 2>&1; then
 		if [[ $shouldfail -eq 0 ]]; then
 			error "$prefix: build failed"
 			cp "$HOME/.kpatch/build.log" "$prefix.log"
@@ -231,7 +243,8 @@ build_combined_module() {
 
 	log "build: combined module"
 
-	if ! $KPATCHBUILD -n test-COMBINED "${COMBINED_LIST[@]}" >> $LOG 2>&1; then
+	# shellcheck disable=SC2086
+	if ! $KPATCHBUILD $KPATCHBUILD_OPTS -n test-COMBINED "${COMBINED_LIST[@]}" >> $LOG 2>&1; then
 		error "combined build failed"
 		cp "$HOME/.kpatch/build.log" combined.log
 	fi
