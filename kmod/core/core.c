@@ -365,7 +365,6 @@ static int kpatch_apply_patch(void *data)
 	struct kpatch_module *kpmod;
 	struct kpatch_func *func;
 	struct hlist_node *tmp;
-	struct kpatch_object *object;
 	int ret;
 	int i;
 
@@ -375,16 +374,6 @@ static int kpatch_apply_patch(void *data)
 	if (ret) {
 		kpatch_state_finish(KPATCH_STATE_FAILURE);
 		return ret;
-	}
-
-	/* run any user-defined pre-patch callbacks */
-	list_for_each_entry(object, &kpmod->objects, list) {
-		ret = pre_patch_callback(object);
-		if (ret) {
-			pr_err("pre-patch callback failed!\n");
-			kpatch_state_finish(KPATCH_STATE_FAILURE);
-			goto err;
-		}
 	}
 
 	/* tentatively add the new funcs to the global func hash */
@@ -409,7 +398,7 @@ static int kpatch_apply_patch(void *data)
 		} while_for_each_linked_func();
 
 		ret = -EBUSY;
-		goto err;
+		return ret;
 	}
 
 	/*
@@ -425,17 +414,7 @@ static int kpatch_apply_patch(void *data)
 		}
 	}
 
-	/* run any user-defined post-patch callbacks */
-	list_for_each_entry(object, &kpmod->objects, list)
-		post_patch_callback(object);
-
 	return 0;
-err:
-	/* undo pre-patch callbacks by calling post-unpatch counterparts */
-	list_for_each_entry(object, &kpmod->objects, list)
-		post_unpatch_callback(object);
-
-	return ret;
 }
 
 /* Called from stop_machine */
@@ -443,7 +422,6 @@ static int kpatch_remove_patch(void *data)
 {
 	struct kpatch_module *kpmod = data;
 	struct kpatch_func *func;
-	struct kpatch_object *object;
 	int ret;
 
 	ret = kpatch_verify_activeness_safety(kpmod, false);
@@ -452,15 +430,11 @@ static int kpatch_remove_patch(void *data)
 		return ret;
 	}
 
-	/* run any user-defined pre-unpatch callbacks */
-	list_for_each_entry(object, &kpmod->objects, list)
-		pre_unpatch_callback(object);
-
 	/* Check if any inconsistent NMI has happened while updating */
 	ret = kpatch_state_finish(KPATCH_STATE_SUCCESS);
 	if (ret == KPATCH_STATE_FAILURE) {
 		ret = -EBUSY;
-		goto err;
+		return ret;
 	}
 
 	/* Succeeded, remove all updating funcs from hash table */
@@ -468,18 +442,7 @@ static int kpatch_remove_patch(void *data)
 		hash_del_rcu(&func->node);
 	} while_for_each_linked_func();
 
-	/* run any user-defined post-unpatch callbacks */
-	list_for_each_entry(object, &kpmod->objects, list)
-		post_unpatch_callback(object);
-
 	return 0;
-
-err:
-	/* undo pre-unpatch callbacks by calling post-patch counterparts */
-	list_for_each_entry(object, &kpmod->objects, list)
-		post_patch_callback(object);
-
-	return ret;
 }
 
 /*
@@ -742,7 +705,7 @@ static int kpatch_write_relocations(struct kpatch_module *kpmod,
 			break;
 		case R_X86_64_64:
 			loc = dynrela->dest;
-			val = dynrela->src + dynrela->addend;
+			val = dynrela->src;
 			size = 8;
 			break;
 		default:
@@ -1090,8 +1053,29 @@ int kpatch_register(struct kpatch_module *kpmod, bool replace)
 	 * Idle the CPUs, verify activeness safety, and atomically make the new
 	 * functions visible to the ftrace handler.
 	 */
-	ret = stop_machine(kpatch_apply_patch, &args, NULL);
+		 
+	/* run any user-defined pre-patch callbacks */
+	list_for_each_entry(object, &kpmod->objects, list) {
+		ret = pre_patch_callback(object);
+		if(ret){
+			pr_err("pre-patch callback failed!\n");
+			kpatch_state_finish(KPATCH_STATE_FAILURE);
+			/* undo pre-patch callbacks by calling post-unpatch counterparts */
+			list_for_each_entry(object, &kpmod->objects, list)
+				post_unpatch_callback(object);
+		}
+	}
 
+	ret = stop_machine(kpatch_apply_patch, &args, NULL);
+	
+	if(ret){
+		/* undo pre-patch callbacks by calling post-unpatch counterparts */
+		list_for_each_entry(object, &kpmod->objects, list)
+			post_unpatch_callback(object);
+	}else{
+		list_for_each_entry(object, &kpmod->objects, list)
+			post_patch_callback(object);
+	}
 	/*
 	 * For the replace case, remove any obsolete funcs from the ftrace
 	 * filter, and disable the owning patch module so that it can be
@@ -1222,7 +1206,21 @@ int kpatch_unregister(struct kpatch_module *kpmod)
 
 	kpatch_state_updating();
 
+	/* run any user-defined pre-unpatch callbacks */
+	list_for_each_entry(object, &kpmod->objects, list)
+		pre_unpatch_callback(object);
+
 	ret = stop_machine(kpatch_remove_patch, kpmod, NULL);
+	
+	if(ret){
+		/* undo pre-unpatch callbacks by calling post-patch counterparts */
+		list_for_each_entry(object, &kpmod->objects, list)
+			post_patch_callback(object);
+	}else{
+		/* run any user-defined post-unpatch callbacks */
+		list_for_each_entry(object, &kpmod->objects, list)
+			post_unpatch_callback(object);
+	}
 
 	/* NMI handlers can return to normal now */
 	kpatch_state_idle();
