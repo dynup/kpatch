@@ -22,6 +22,8 @@ GCC_PLUGINS_DIR := $(shell gcc -print-file-name=plugin)
 PLUGIN_CFLAGS := $(filter-out -Wconversion, $(CFLAGS))
 PLUGIN_CFLAGS += -shared -I$(GCC_PLUGINS_DIR)/include \
 		   -Igcc-plugins -fPIC -fno-rtti -O2 -Wall
+else
+$(error Unsupported architecture ${ARCH}, check https://github.com/dynup/kpatch/#supported-architectures)
 endif
 
 
