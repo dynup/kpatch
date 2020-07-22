@@ -9,6 +9,29 @@ __kpatch_checksum = ADDR(.kpatch.checksum);
 
 SECTIONS
 {
+  .text.unlikely.livepatch : {
+    *(.text.unlikely.*)
+  }
+
+  .text.livepatch : {
+    *(.text.*)
+  }
+
+  .rodata.str1.1 : {
+    *(.rodata.str1.1)
+    *(.rodata.*.str1.1)
+  }
+
+  .rodata.str1.8 : {
+    *(.rodata.str1.8)
+    *(.rodata.*.str1.8)
+  }
+
+  .rodata : {
+    *(.rodata)
+    *(.rodata.__func__.*)
+  }
+
   .kpatch.callbacks.pre_patch : {
     __kpatch_callbacks_pre_patch = . ;
     *(.kpatch.callbacks.pre_patch)
