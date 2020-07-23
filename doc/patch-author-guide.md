@@ -548,7 +548,7 @@ Some examples:
   any new functions to the bottom of source files, using newline whitespace to
   maintain original line counts, etc. A more exact fix can be employed by
   modifying the source code that invokes `__LINE__` and hard-coding the
-  original line number in place.
+  original line number in place.  This occurred in issue #1124 for example.
 
 Removing references to static local variables
 ---------------------------------------------
