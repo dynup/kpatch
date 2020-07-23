@@ -963,6 +963,8 @@ ld -r $KPATCH_LDFLAGS -o ../patch/tmp_output.o $(find . -name "*.o") 2>&1 | logg
 
 if [[ "$USE_KLP" -eq 1 ]]; then
 	cp "$TEMPDIR"/patch/tmp_output.o "$TEMPDIR"/patch/output.o || die
+	# Avoid MODPOST warning (pre-v5.8) and error (v5.8+) with an empty .cmd file
+	touch "$TEMPDIR"/patch/.output.o.cmd || die
 else
 	# Add .kpatch.checksum for kpatch script
 	md5sum ../patch/tmp_output.o | awk '{printf "%s\0", $1}' > checksum.tmp || die
