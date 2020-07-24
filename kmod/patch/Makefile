@@ -2,6 +2,9 @@ KPATCH_BUILD ?= /lib/modules/$(shell uname -r)/build
 KPATCH_MAKE = $(MAKE) -C $(KPATCH_BUILD) M=$(PWD)
 LDFLAGS += $(KPATCH_LDFLAGS)
 
+# object files that this Makefile can (re)build on its own
+BUILDABLE_OBJS=$(filter-out output.o, $(wildcard *.o))
+
 # ppc64le kernel modules are expected to compile with the
 # -mcmodel=large flag.  This enables 64-bit relocations
 # instead of a 32-bit offset from the TOC pointer.
@@ -25,5 +28,5 @@ patch-hook.o: patch-hook.c kpatch-patch-hook.c livepatch-patch-hook.c
 	$(KPATCH_MAKE) patch-hook.o
 
 clean:
-	$(RM) -Rf .*.o.cmd .*.ko.cmd .tmp_versions *.o *.ko *.mod.c \
+	$(RM) -Rf .*.o.cmd .*.ko.cmd .tmp_versions $(BUILDABLE_OBJS) *.ko *.mod.c \
 	Module.symvers
