@@ -303,9 +303,6 @@ if [[ "${ID}" == "rhel" && "${VERSION_ID%%.*}" == "7" && "${VERSION_ID##*.}" -le
 	echo "Dynamic debug is not supported on '${PRETTY_NAME}', disabling."
 fi
 
-echo "clearing printk buffer"
-sudo dmesg -C
-
 for file in "${PATCH_LIST[@]}"; do
 	if [[ $QUICK != 1 || "$file" =~ -FAIL ]]; then
 		build_module "$file"
@@ -315,6 +312,9 @@ done
 build_combined_module
 
 unload_all
+
+echo "clearing printk buffer"
+sudo dmesg -C
 
 if [ "${DYNDEBUG_ENABLED}" == "1" ]; then
 	prev_dyndebug=$(grep klp_try_switch_task "${DYNDEBUG_CONTROL}" | awk '{print $3;}')
