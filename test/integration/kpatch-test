@@ -296,15 +296,24 @@ run_combined_test() {
 
 }
 
+# save existing dmesg so we can detect new content
+save_dmesg() {
+	SAVED_DMESG="$(dmesg | tail -n1)"
+}
+
+# new dmesg entries since our saved entry
+new_dmesg() {
+	if ! dmesg | awk -v last="$SAVED_DMESG" 'p; $0 == last{p=1} END {exit !p}'; then
+		error "dmesg overflow, try increasing kernel log buffer size"
+	fi
+}
+
 # shellcheck disable=SC1091
 source /etc/os-release
 if [[ "${ID}" == "rhel" && "${VERSION_ID%%.*}" == "7" && "${VERSION_ID##*.}" -le "6" ]]; then
 	DYNDEBUG_ENABLED=0
 	echo "Dynamic debug is not supported on '${PRETTY_NAME}', disabling."
 fi
-
-echo "clearing printk buffer"
-sudo dmesg -C
 
 for file in "${PATCH_LIST[@]}"; do
 	if [[ $QUICK != 1 || "$file" =~ -FAIL ]]; then
@@ -315,6 +324,8 @@ done
 build_combined_module
 
 unload_all
+
+save_dmesg
 
 if [ "${DYNDEBUG_ENABLED}" == "1" ]; then
 	prev_dyndebug=$(grep klp_try_switch_task "${DYNDEBUG_CONTROL}" | awk '{print $3;}')
@@ -345,8 +356,8 @@ if [ "${DYNDEBUG_ENABLED}" == "1" ]; then
 	echo "func klp_try_switch_task ${prev_dyndebug}" >"${DYNDEBUG_CONTROL}" 2>/dev/null
 fi
 
-if dmesg | grep -q "Call Trace"; then
-	dmesg > dmesg.log
+if new_dmesg | grep -q "Call Trace"; then
+	new_dmesg > dmesg.log
 	error "kernel error detected in printk buffer"
 fi
 
