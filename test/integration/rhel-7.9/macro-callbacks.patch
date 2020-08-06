@@ -1,0 +1,163 @@
+kpatch/livepatch callback test patch:
+
+  vmlinux
+  pcspkr (mod)
+  joydev (mod)
+
+Note: update joydev's pre-patch callback to return -ENODEV to test failure path
+
+diff -Nupr src.orig/drivers/input/joydev.c src/drivers/input/joydev.c
+--- src.orig/drivers/input/joydev.c	2020-09-03 11:48:29.019721499 -0400
++++ src/drivers/input/joydev.c	2020-09-03 11:48:53.152796998 -0400
+@@ -954,3 +954,47 @@ static void __exit joydev_exit(void)
+ 
+ module_init(joydev_init);
+ module_exit(joydev_exit);
++
++#include <linux/module.h>
++#include "kpatch-macros.h"
++
++static const char *const module_state[] = {
++	[MODULE_STATE_LIVE]	= "[MODULE_STATE_LIVE] Normal state",
++	[MODULE_STATE_COMING]	= "[MODULE_STATE_COMING] Full formed, running module_init",
++	[MODULE_STATE_GOING]	= "[MODULE_STATE_GOING] Going away",
++	[MODULE_STATE_UNFORMED]	= "[MODULE_STATE_UNFORMED] Still setting it up",
++};
++
++static void callback_info(const char *callback, patch_object *obj)
++{
++	if (obj->mod)
++		pr_info("%s: %s -> %s\n", callback, obj->mod->name,
++			module_state[obj->mod->state]);
++	else
++		pr_info("%s: vmlinux\n", callback);
++}
++
++static int pre_patch_callback(patch_object *obj)
++{
++	callback_info(__func__, obj);
++	return 0; /* return -ENODEV; */
++}
++KPATCH_PRE_PATCH_CALLBACK(pre_patch_callback);
++
++static void post_patch_callback(patch_object *obj)
++{
++	callback_info(__func__, obj);
++}
++KPATCH_POST_PATCH_CALLBACK(post_patch_callback);
++
++static void pre_unpatch_callback(patch_object *obj)
++{
++	callback_info(__func__, obj);
++}
++KPATCH_PRE_UNPATCH_CALLBACK(pre_unpatch_callback);
++
++static void post_unpatch_callback(patch_object *obj)
++{
++	callback_info(__func__, obj);
++}
++KPATCH_POST_UNPATCH_CALLBACK(post_unpatch_callback);
+diff -Nupr src.orig/drivers/input/misc/pcspkr.c src/drivers/input/misc/pcspkr.c
+--- src.orig/drivers/input/misc/pcspkr.c	2020-09-03 11:48:29.025721517 -0400
++++ src/drivers/input/misc/pcspkr.c	2020-09-03 11:48:53.152796998 -0400
+@@ -136,3 +136,46 @@ static struct platform_driver pcspkr_pla
+ };
+ module_platform_driver(pcspkr_platform_driver);
+ 
++#include <linux/module.h>
++#include "kpatch-macros.h"
++
++static const char *const module_state[] = {
++	[MODULE_STATE_LIVE]	= "[MODULE_STATE_LIVE] Normal state",
++	[MODULE_STATE_COMING]	= "[MODULE_STATE_COMING] Full formed, running module_init",
++	[MODULE_STATE_GOING]	= "[MODULE_STATE_GOING] Going away",
++	[MODULE_STATE_UNFORMED]	= "[MODULE_STATE_UNFORMED] Still setting it up",
++};
++
++static void callback_info(const char *callback, patch_object *obj)
++{
++	if (obj->mod)
++		pr_info("%s: %s -> %s\n", callback, obj->mod->name,
++			module_state[obj->mod->state]);
++	else
++		pr_info("%s: vmlinux\n", callback);
++}
++
++static int pre_patch_callback(patch_object *obj)
++{
++	callback_info(__func__, obj);
++	return 0;
++}
++KPATCH_PRE_PATCH_CALLBACK(pre_patch_callback);
++
++static void post_patch_callback(patch_object *obj)
++{
++	callback_info(__func__, obj);
++}
++KPATCH_POST_PATCH_CALLBACK(post_patch_callback);
++
++static void pre_unpatch_callback(patch_object *obj)
++{
++	callback_info(__func__, obj);
++}
++KPATCH_PRE_UNPATCH_CALLBACK(pre_unpatch_callback);
++
++static void post_unpatch_callback(patch_object *obj)
++{
++	callback_info(__func__, obj);
++}
++KPATCH_POST_UNPATCH_CALLBACK(post_unpatch_callback);
+diff -Nupr src.orig/fs/aio.c src/fs/aio.c
+--- src.orig/fs/aio.c	2020-09-03 11:48:30.426725900 -0400
++++ src/fs/aio.c	2020-09-03 11:48:53.153797001 -0400
+@@ -42,6 +42,50 @@
+ #include <asm/kmap_types.h>
+ #include <asm/uaccess.h>
+ 
++#include <linux/module.h>
++#include "kpatch-macros.h"
++
++static const char *const module_state[] = {
++	[MODULE_STATE_LIVE]	= "[MODULE_STATE_LIVE] Normal state",
++	[MODULE_STATE_COMING]	= "[MODULE_STATE_COMING] Full formed, running module_init",
++	[MODULE_STATE_GOING]	= "[MODULE_STATE_GOING] Going away",
++	[MODULE_STATE_UNFORMED]	= "[MODULE_STATE_UNFORMED] Still setting it up",
++};
++
++static void callback_info(const char *callback, patch_object *obj)
++{
++	if (obj->mod)
++		pr_info("%s: %s -> %s\n", callback, obj->mod->name,
++			module_state[obj->mod->state]);
++	else
++		pr_info("%s: vmlinux\n", callback);
++}
++
++static int pre_patch_callback(patch_object *obj)
++{
++	callback_info(__func__, obj);
++	return 0;
++}
++KPATCH_PRE_PATCH_CALLBACK(pre_patch_callback);
++
++static void post_patch_callback(patch_object *obj)
++{
++	callback_info(__func__, obj);
++}
++KPATCH_POST_PATCH_CALLBACK(post_patch_callback);
++
++static void pre_unpatch_callback(patch_object *obj)
++{
++	callback_info(__func__, obj);
++}
++KPATCH_PRE_UNPATCH_CALLBACK(pre_unpatch_callback);
++
++static void post_unpatch_callback(patch_object *obj)
++{
++	callback_info(__func__, obj);
++}
++KPATCH_POST_UNPATCH_CALLBACK(post_unpatch_callback);
++
+ #define AIO_RING_MAGIC			0xa10a10a1
+ #define AIO_RING_COMPAT_FEATURES	1
+ #define AIO_RING_INCOMPAT_FEATURES	0

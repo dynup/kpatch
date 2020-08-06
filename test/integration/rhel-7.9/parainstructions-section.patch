@@ -1,0 +1,11 @@
+diff -Nupr src.orig/fs/proc/generic.c src/fs/proc/generic.c
+--- src.orig/fs/proc/generic.c	2020-09-03 11:48:30.496726119 -0400
++++ src/fs/proc/generic.c	2020-09-03 11:49:09.715848815 -0400
+@@ -194,6 +194,7 @@ int proc_alloc_inum(unsigned int *inum)
+ 	unsigned int i;
+ 	int error;
+ 
++	printk("kpatch-test: testing change to .parainstructions section\n");
+ retry:
+ 	if (!ida_pre_get(&proc_inum_ida, GFP_KERNEL))
+ 		return -ENOMEM;

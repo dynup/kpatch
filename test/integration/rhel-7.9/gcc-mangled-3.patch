@@ -1,0 +1,13 @@
+diff -Nupr src.orig/mm/slub.c src/mm/slub.c
+--- src.orig/mm/slub.c	2020-09-03 11:48:30.747726905 -0400
++++ src/mm/slub.c	2020-09-03 11:48:41.106759312 -0400
+@@ -5716,6 +5716,9 @@ void get_slabinfo(struct kmem_cache *s,
+ 	unsigned long nr_free = 0;
+ 	int node;
+ 
++	if (!jiffies)
++		printk("slabinfo\n");
++
+ 	for_each_online_node(node) {
+ 		struct kmem_cache_node *n = get_node(s, node);
+ 
