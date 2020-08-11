@@ -1,0 +1,51 @@
+From 2d6b7bce089e52563bd9c67df62f48e90b48047d Mon Sep 17 00:00:00 2001
+From: Julien Thierry <jthierry@redhat.com>
+Date: Wed, 6 May 2020 14:30:57 +0100
+Subject: [PATCH] Symbol version change
+
+This change causes:
+1) Some exported symbols in drivers/base/core.c to see their CRCs
+   change.
+2) Changes usb_get_dev() referencing a get_device() whose CRC has
+   changed, causing the symbol and the new CRC to be included in the
+   __version section of the final module.
+
+This makes the final module unloadable for the target kernel.
+
+See "Exported symbol versioning" of the patch author guide for more
+detail.
+
+---
+ drivers/base/core.c    | 2 ++
+ drivers/usb/core/usb.c | 2 ++
+ 2 files changed, 4 insertions(+)
+
+diff --git a/drivers/base/core.c b/drivers/base/core.c
+index 26bae20f0553..506ebbf0a210 100644
+--- a/drivers/base/core.c
++++ b/drivers/base/core.c
+@@ -30,6 +30,8 @@
+ #include "base.h"
+ #include "power/power.h"
+ 
++#include <linux/blktrace_api.h>
++
+ #ifdef CONFIG_SYSFS_DEPRECATED
+ #ifdef CONFIG_SYSFS_DEPRECATED_V2
+ long sysfs_deprecated = 1;
+diff --git a/drivers/usb/core/usb.c b/drivers/usb/core/usb.c
+index f74e6bda1788..86f7d453549c 100644
+--- a/drivers/usb/core/usb.c
++++ b/drivers/usb/core/usb.c
+@@ -685,6 +685,8 @@ EXPORT_SYMBOL_GPL(usb_alloc_dev);
+  */
+ struct usb_device *usb_get_dev(struct usb_device *dev)
+ {
++	barrier();
++
+ 	if (dev)
+ 		get_device(&dev->dev);
+ 	return dev;
+-- 
+2.21.3
+
