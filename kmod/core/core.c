@@ -377,16 +377,6 @@ static int kpatch_apply_patch(void *data)
 		return ret;
 	}
 
-	/* run any user-defined pre-patch callbacks */
-	list_for_each_entry(object, &kpmod->objects, list) {
-		ret = pre_patch_callback(object);
-		if (ret) {
-			pr_err("pre-patch callback failed!\n");
-			kpatch_state_finish(KPATCH_STATE_FAILURE);
-			goto err;
-		}
-	}
-
 	/* tentatively add the new funcs to the global func hash */
 	do_for_each_linked_func(kpmod, func) {
 		hash_add_rcu(kpatch_func_hash, &func->node, func->old_addr);
@@ -408,8 +398,7 @@ static int kpatch_apply_patch(void *data)
 			hash_del_rcu(&func->node);
 		} while_for_each_linked_func();
 
-		ret = -EBUSY;
-		goto err;
+		return -EBUSY;
 	}
 
 	/*
@@ -430,12 +419,6 @@ static int kpatch_apply_patch(void *data)
 		post_patch_callback(object);
 
 	return 0;
-err:
-	/* undo pre-patch callbacks by calling post-unpatch counterparts */
-	list_for_each_entry(object, &kpmod->objects, list)
-		post_unpatch_callback(object);
-
-	return ret;
 }
 
 /* Called from stop_machine */
@@ -467,10 +450,6 @@ static int kpatch_remove_patch(void *data)
 	do_for_each_linked_func(kpmod, func) {
 		hash_del_rcu(&func->node);
 	} while_for_each_linked_func();
-
-	/* run any user-defined post-unpatch callbacks */
-	list_for_each_entry(object, &kpmod->objects, list)
-		post_unpatch_callback(object);
 
 	return 0;
 
@@ -1086,11 +1065,30 @@ int kpatch_register(struct kpatch_module *kpmod, bool replace)
 
 	kpatch_state_updating();
 
-	/*
-	 * Idle the CPUs, verify activeness safety, and atomically make the new
-	 * functions visible to the ftrace handler.
-	 */
-	ret = stop_machine(kpatch_apply_patch, &args, NULL);
+	/* run any user-defined pre-patch callbacks */
+	list_for_each_entry(object, &kpmod->objects, list) {
+		ret = pre_patch_callback(object);
+		if(ret){
+			pr_err("pre-patch callback failed!\n");
+			kpatch_state_finish(KPATCH_STATE_FAILURE);
+			break;
+		}
+	}
+
+	/* if pre_patch_callback succeed. */
+	if (!ret) {
+		/*
+		 * Idle the CPUs, verify activeness safety, and atomically make the new
+		 * functions visible to the ftrace handler.
+		 */
+		ret = stop_machine(kpatch_apply_patch, &args, NULL);
+	}
+
+	/* if pre_patch_callback or stop_machine failed */
+	if (ret) {
+		list_for_each_entry(object, &kpmod->objects, list)
+			post_unpatch_callback(object);
+	}
 
 	/*
 	 * For the replace case, remove any obsolete funcs from the ftrace
@@ -1224,6 +1222,11 @@ int kpatch_unregister(struct kpatch_module *kpmod)
 
 	ret = stop_machine(kpatch_remove_patch, kpmod, NULL);
 
+	if (!ret) {
+		/* run any user-defined post-unpatch callbacks */
+		list_for_each_entry(object, &kpmod->objects, list)
+			post_unpatch_callback(object);
+	}
 	/* NMI handlers can return to normal now */
 	kpatch_state_idle();
 
