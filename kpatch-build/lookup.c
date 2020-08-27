@@ -311,7 +311,7 @@ static void symtab_read(struct lookup_table *table, char *path)
 static void symvers_read(struct lookup_table *table, char *path)
 {
 	FILE *file;
-	int i, column, mod_column = 0;
+	int i = 0, column, mod_column = 0, max_exp_nr = 0;
 	char line[4096];
 	char *tmp, *objname, *symname;
 
@@ -319,7 +319,7 @@ static void symvers_read(struct lookup_table *table, char *path)
 		ERROR("fopen");
 
 	while (fgets(line, 4096, file)) {
-		table->exp_nr++;
+		max_exp_nr++;
 
 		if (mod_column)
 			continue;
@@ -332,17 +332,17 @@ static void symvers_read(struct lookup_table *table, char *path)
 		}
 	}
 
-	if (table->exp_nr && !mod_column)
+	if (max_exp_nr && !mod_column)
 		ERROR("Module.symvers: invalid format");
 
-	table->exp_syms = malloc(table->exp_nr * sizeof(*table->exp_syms));
+	table->exp_syms = malloc(max_exp_nr * sizeof(*table->exp_syms));
 	if (!table->exp_syms)
 		ERROR("malloc table.exp_syms");
 	memset(table->exp_syms, 0,
-	       table->exp_nr * sizeof(*table->exp_syms));
+	       max_exp_nr * sizeof(*table->exp_syms));
 
 	rewind(file);
-	for (i = 0; fgets(line, 4096, file); i++) {
+	while(fgets(line, 4096, file)) {
 		char *name = NULL, *mod = NULL;
 
 		for (column = 1, tmp = line; (tmp = strchr(tmp, '\t')); column++) {
@@ -363,8 +363,9 @@ static void symvers_read(struct lookup_table *table, char *path)
 		objname = make_modname(mod);
 
 		table->exp_syms[i].name = symname;
-		table->exp_syms[i].objname = objname;
+		table->exp_syms[i++].objname = objname;
 	}
+	table->exp_nr = i;
 
 	fclose(file);
 }
