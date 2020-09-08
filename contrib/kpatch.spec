@@ -6,7 +6,7 @@
 
 Name: kpatch
 Summary: Dynamic kernel patching
-Version: 0.9.1
+Version: 0.9.2
 License: GPLv2
 Group: System Environment/Kernel
 URL: http://github.com/dynup/kpatch
@@ -104,6 +104,22 @@ rm -rf %{buildroot}
 %{_mandir}/man1/kpatch-build.1*
 
 %changelog
+* Tue Sep 8 2020 Joe Lawrence <joe.lawrence@redhat.com> - 0.9.2
+- Integration test support for rhel-{7.8,7.9,8.1,8.2}, centos-8
+- Better support for gcc child functions
+- Batch jump label errors to report all instances
+- Dynrela code cleanup
+- Remove .klp.arch and add support for jump labels in v5.8+ kernels
+- Mark ignored sections earlier to support functions missing ftrace hook
+- Minor README.md improvements
+- Add ppc64le mcount support to patched functions
+- Show additional stalled process information in kpatch script
+- Increased shellcheck coverage and fixes
+- ppc64le plugin fixes for gcc v10
+- Ignore __UNIQUE_ID_ symbol from tristate config objects
+- Don't clear dmesg during integration tests
+- Detect and report MODVERSIONS symbol version CRC changes
+
 * Wed Mar 11 2020 Yannick Cote <ycote@redhat.com> - 0.9.1
 - Handle ppc64le toc with only constants
 - Don't strip callback section symbols
