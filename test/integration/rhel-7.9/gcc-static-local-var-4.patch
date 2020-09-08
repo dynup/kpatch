@@ -1,0 +1,20 @@
+diff -Nupr src.orig/fs/aio.c src/fs/aio.c
+--- src.orig/fs/aio.c	2020-09-03 11:48:30.426725900 -0400
++++ src/fs/aio.c	2020-09-03 11:48:47.163778261 -0400
+@@ -223,9 +223,16 @@ static int __init aio_setup(void)
+ }
+ __initcall(aio_setup);
+ 
++void kpatch_aio_foo(void)
++{
++	if (!jiffies)
++		printk("kpatch aio foo\n");
++}
++
+ static void put_aio_ring_file(struct kioctx *ctx)
+ {
+ 	struct file *aio_ring_file = ctx->aio_ring_file;
++	kpatch_aio_foo();
+ 	if (aio_ring_file) {
+ 		truncate_setsize(aio_ring_file->f_inode, 0);
+ 
