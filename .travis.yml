@@ -3,6 +3,14 @@ before_install:
   - sudo apt-get -qq update
   - sudo apt-get install -y libelf-dev linux-headers-$(uname -r) shellcheck elfutils
 
+jobs:
+  include:
+    - name: "Default"
+    - name: "-O2"
+      env: CFLAGS="-O2"
+    - name: "-O3"
+      env: CFLAGS="-O3"
+
 script:
   - make
   - make unit
