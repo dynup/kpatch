@@ -759,7 +759,8 @@ void kpatch_rebuild_rela_section_data(struct section *sec)
 		ERROR("size mismatch in rebuilt rela section");
 }
 
-void kpatch_write_output_elf(struct kpatch_elf *kelf, Elf *elf, char *outfile)
+void kpatch_write_output_elf(struct kpatch_elf *kelf, Elf *elf, char *outfile,
+			     mode_t mode)
 {
 	int fd;
 	struct section *sec;
@@ -770,8 +771,7 @@ void kpatch_write_output_elf(struct kpatch_elf *kelf, Elf *elf, char *outfile)
 	Elf_Data *data;
 	GElf_Shdr sh;
 
-	/* TODO make this argv */
-	fd = creat(outfile, 0777);
+	fd = creat(outfile, mode);
 	if (fd == -1)
 		ERROR("creat");
 

@@ -503,7 +503,7 @@ int main(int argc, char *argv[])
 	kpatch_create_strtab(kelf);
 	kpatch_create_symtab(kelf);
 
-	kpatch_write_output_elf(kelf, kelf->elf, arguments.args[1]);
+	kpatch_write_output_elf(kelf, kelf->elf, arguments.args[1], 0664);
 	kpatch_elf_teardown(kelf);
 	kpatch_elf_free(kelf);
 

@@ -3796,7 +3796,7 @@ int main(int argc, char *argv[])
 	kpatch_create_strtab(kelf_out);
 	kpatch_create_symtab(kelf_out);
 	kpatch_dump_kelf(kelf_out);
-	kpatch_write_output_elf(kelf_out, kelf_patched->elf, output_obj);
+	kpatch_write_output_elf(kelf_out, kelf_patched->elf, output_obj, 0664);
 
 	lookup_close(lookup);
 	kpatch_elf_free(kelf_patched);
