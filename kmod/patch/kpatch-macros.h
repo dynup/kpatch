@@ -5,6 +5,13 @@
 #include <linux/jiffies.h>
 #include <linux/version.h>
 
+/* upstream 33def8498fdd "treewide: Convert macro and uses of __section(foo) to __section("foo")" */
+#if LINUX_VERSION_CODE < KERNEL_VERSION(5, 10, 0)
+# define __kpatch_section(section) __section(section)
+#else
+# define __kpatch_section(section) __section(#section)
+#endif
+
 /*
  * KPATCH_IGNORE_SECTION macro
  *
@@ -14,7 +21,7 @@
  * symbol to section.
  */
 #define KPATCH_IGNORE_SECTION(_sec) \
-	char *__UNIQUE_ID(kpatch_ignore_section_) __section(.kpatch.ignore.sections) = _sec;
+	char *__UNIQUE_ID(kpatch_ignore_section_) __kpatch_section(.kpatch.ignore.sections) = _sec;
 
 /*
  * KPATCH_IGNORE_FUNCTION macro
@@ -25,7 +32,7 @@
  * detected as changed when, in fact, there has been no functional change.
  */
 #define KPATCH_IGNORE_FUNCTION(_fn) \
-	void *__kpatch_ignore_func_##_fn __section(.kpatch.ignore.functions) = _fn;
+	void *__kpatch_ignore_func_##_fn __kpatch_section(.kpatch.ignore.functions) = _fn;
 
 
 /* Support for livepatch callbacks */
@@ -75,25 +82,25 @@ struct kpatch_post_unpatch_callback {
 
 #define KPATCH_PRE_PATCH_CALLBACK(_fn) \
 	static inline kpatch_pre_patch_call_t __pre_patchtest(void) { return _fn; } \
-	static struct kpatch_pre_patch_callback kpatch_pre_patch_data __section(.kpatch.callbacks.pre_patch) __used = { \
+	static struct kpatch_pre_patch_callback kpatch_pre_patch_data __kpatch_section(.kpatch.callbacks.pre_patch) __used = { \
 		.fn = _fn, \
 		.objname = NULL \
 	};
 #define KPATCH_POST_PATCH_CALLBACK(_fn) \
 	static inline kpatch_post_patch_call_t __post_patchtest(void) { return _fn; } \
-	static struct kpatch_post_patch_callback kpatch_post_patch_data __section(.kpatch.callbacks.post_patch) __used = { \
+	static struct kpatch_post_patch_callback kpatch_post_patch_data __kpatch_section(.kpatch.callbacks.post_patch) __used = { \
 		.fn = _fn, \
 		.objname = NULL \
 	};
 #define KPATCH_PRE_UNPATCH_CALLBACK(_fn) \
 	static inline kpatch_pre_unpatch_call_t __pre_unpatchtest(void) { return _fn; } \
-	static struct kpatch_pre_unpatch_callback kpatch_pre_unpatch_data __section(.kpatch.callbacks.pre_unpatch) __used = { \
+	static struct kpatch_pre_unpatch_callback kpatch_pre_unpatch_data __kpatch_section(.kpatch.callbacks.pre_unpatch) __used = { \
 		.fn = _fn, \
 		.objname = NULL \
 	};
 #define KPATCH_POST_UNPATCH_CALLBACK(_fn) \
 	static inline kpatch_post_unpatch_call_t __post_unpatchtest(void) { return _fn; } \
-	static struct kpatch_post_unpatch_callback kpatch_post_unpatch_data __section(.kpatch.callbacks.post_unpatch) __used = { \
+	static struct kpatch_post_unpatch_callback kpatch_post_unpatch_data __kpatch_section(.kpatch.callbacks.post_unpatch) __used = { \
 		.fn = _fn, \
 		.objname = NULL \
 	};
@@ -110,7 +117,7 @@ struct kpatch_post_unpatch_callback {
  * run concurrently.
  */
 #define KPATCH_FORCE_UNSAFE(_fn) \
-	void *__kpatch_force_func_##_fn __section(.kpatch.force) = _fn;
+	void *__kpatch_force_func_##_fn __kpatch_section(.kpatch.force) = _fn;
 
 /*
  * KPATCH_PRINTK macro
