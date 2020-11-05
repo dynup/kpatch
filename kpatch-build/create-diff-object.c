@@ -296,7 +296,11 @@ static bool is_dynamic_debug_symbol(struct symbol *sym)
 {
 	if (sym->type == STT_OBJECT && !strcmp(sym->sec->name, "__verbose"))
 		return true;
+	if (sym->type == STT_OBJECT && !strcmp(sym->sec->name, "__dyndbg"))
+		return true;
 	if (sym->type == STT_SECTION && !strcmp(sym->name, "__verbose"))
+		return true;
+	if (sym->type == STT_SECTION && !strcmp(sym->name, "__dyndbg"))
 		return true;
 	return false;
 }
@@ -324,7 +328,7 @@ static int is_special_static(struct symbol *sym)
 	if (!sym)
 		return 0;
 
-	/* pr_debug() uses static local variables in the __verbose section */
+	/* pr_debug() uses static local variables in the __verbose or __dyndbg section */
 	if (is_dynamic_debug_symbol(sym))
 		return 1;
 
