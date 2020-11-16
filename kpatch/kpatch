@@ -28,6 +28,7 @@ SCRIPTDIR="$(readlink -f "$(dirname "$(type -p "$0")")")"
 VERSION="0.9.2"
 POST_ENABLE_WAIT=15	# seconds
 POST_SIGNAL_WAIT=60	# seconds
+MODULE_REF_WAIT=15	# seconds
 
 # How many times to try loading the patch if activeness safety check fails.
 MAX_LOAD_ATTEMPTS=5
@@ -123,6 +124,10 @@ find_core_module() {
 	[[ -f "$COREMOD" ]] && return
 
 	return 1
+}
+
+kpatch_core_loaded() {
+	grep -q -e "T kpatch_register" /proc/kallsyms
 }
 
 core_loaded () {
@@ -265,6 +270,31 @@ wait_for_patch_transition() {
 	return 1
 }
 
+module_ref_count() {
+	local modname="$1"
+	[[ $(cat "/sys/module/$modname/refcnt" 2>/dev/null) != "0" ]]
+}
+
+wait_for_zero_module_ref_count() {
+	local modname="$1"
+	local i=0
+
+	# We can't rely on a zero refcount with kpatch.ko as it
+	# implements KPATCH_FORCE_UNSAFE with an additional reference on
+	# kpatch-patch modules to avoid potential crashes.
+	kpatch_core_loaded && return 0
+
+	module_ref_count "$modname" || return 0
+
+	echo "waiting (up to $MODULE_REF_WAIT seconds) for module refcount..."
+	for (( i=0; i<MODULE_REF_WAIT; i++ )); do
+		module_ref_count "$modname" || return 0
+		sleep 1s
+	done
+
+	return 1
+}
+
 load_module () {
 	local module="$1"
 
@@ -381,10 +411,16 @@ disable_patch_strict () {
 }
 
 remove_module () {
-	echo "unloading patch module: $1"
+	local modname="$1"
+
+	if ! wait_for_zero_module_ref_count "$modname"; then
+		die "failed to unload module $modname (refcnt)"
+	fi
+
+	echo "unloading patch module: $modname"
 	# ignore any error here because rmmod can fail if the module used
 	# KPATCH_FORCE_UNSAFE.
-	rmmod "$1" 2> /dev/null || return 0
+	rmmod "$modname" 2> /dev/null || return 0
 }
 
 unload_module () {
