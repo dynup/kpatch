@@ -1,0 +1,11 @@
+diff -Nupr src.orig/fs/proc/meminfo.c src/fs/proc/meminfo.c
+--- src.orig/fs/proc/meminfo.c	2020-03-17 01:12:55.155895808 -0400
++++ src/fs/proc/meminfo.c	2020-03-17 01:13:31.599670967 -0400
+@@ -153,6 +153,7 @@ static int meminfo_proc_show(struct seq_
+ 
+ static int __init proc_meminfo_init(void)
+ {
++	printk("a\n");
+ 	proc_create_single("meminfo", 0, NULL, meminfo_proc_show);
+ 	return 0;
+ }

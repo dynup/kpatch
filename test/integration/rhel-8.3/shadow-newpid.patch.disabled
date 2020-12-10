@@ -1,0 +1,77 @@
+Disabled due to https://github.com/dynup/kpatch/issues/940
+---
+diff -Nupr src.orig/fs/proc/array.c src/fs/proc/array.c
+--- src.orig/fs/proc/array.c	2020-03-17 01:12:55.154895731 -0400
++++ src/fs/proc/array.c	2020-03-17 01:14:09.668569881 -0400
+@@ -370,12 +370,19 @@ static inline void task_seccomp(struct s
+ 	seq_putc(m, '\n');
+ }
+ 
++#include <linux/livepatch.h>
+ static inline void task_context_switch_counts(struct seq_file *m,
+ 						struct task_struct *p)
+ {
++	int *newpid;
++
+ 	seq_put_decimal_ull(m, "voluntary_ctxt_switches:\t", p->nvcsw);
+ 	seq_put_decimal_ull(m, "\nnonvoluntary_ctxt_switches:\t", p->nivcsw);
+ 	seq_putc(m, '\n');
++
++	newpid = klp_shadow_get(p, 0);
++	if (newpid)
++		seq_printf(m, "newpid:\t%d\n", *newpid);
+ }
+ 
+ static void task_cpus_allowed(struct seq_file *m, struct task_struct *task)
+diff -Nupr src.orig/kernel/exit.c src/kernel/exit.c
+--- src.orig/kernel/exit.c	2020-03-17 01:12:55.490921320 -0400
++++ src/kernel/exit.c	2020-03-17 01:14:09.668569881 -0400
+@@ -762,6 +762,7 @@ static void check_stack_usage(void)
+ static inline void check_stack_usage(void) {}
+ #endif
+ 
++#include <linux/livepatch.h>
+ void __noreturn do_exit(long code)
+ {
+ 	struct task_struct *tsk = current;
+@@ -868,6 +869,8 @@ void __noreturn do_exit(long code)
+ 	exit_thread(tsk);
+ 	exit_umh(tsk);
+ 
++	klp_shadow_free(tsk, 0, NULL);
++
+ 	/*
+ 	 * Flush inherited counters to the parent - before the parent
+ 	 * gets woken up by child-exit notifications.
+diff -Nupr src.orig/kernel/fork.c src/kernel/fork.c
+--- src.orig/kernel/fork.c	2020-03-17 01:12:55.500922081 -0400
++++ src/kernel/fork.c	2020-03-17 01:14:09.668569881 -0400
+@@ -2206,6 +2206,7 @@ struct task_struct *fork_idle(int cpu)
+  * It copies the process, and if successful kick-starts
+  * it and waits for it to finish using the VM if required.
+  */
++#include <linux/livepatch.h>
+ long _do_fork(unsigned long clone_flags,
+ 	      unsigned long stack_start,
+ 	      unsigned long stack_size,
+@@ -2218,6 +2219,8 @@ long _do_fork(unsigned long clone_flags,
+ 	struct task_struct *p;
+ 	int trace = 0;
+ 	long nr;
++	int *newpid;
++	static int ctr = 0;
+ 
+ 	/*
+ 	 * Determine whether and which event to report to ptracer.  When
+@@ -2244,6 +2247,11 @@ long _do_fork(unsigned long clone_flags,
+ 	if (IS_ERR(p))
+ 		return PTR_ERR(p);
+ 
++	newpid = klp_shadow_get_or_alloc(p, 0, sizeof(*newpid), GFP_KERNEL,
++					 NULL, NULL);
++	if (newpid)
++		*newpid = ctr++;
++
+ 	/*
+ 	 * Do this prior waking up the new thread - the thread pointer
+ 	 * might get invalid after that point, if the thread exits quickly.
