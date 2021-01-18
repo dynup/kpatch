@@ -36,7 +36,10 @@ list
        list installed patch modules
 
 signal
-       signal/poke any process stalling the current patch transition
+       signal/poke any process stalling the current patch transition.
+       This is only useful on systems that have the sysfs livepatch signal interface.
+       On other systems, the signaling should be done automatically by the OS and
+       this subcommand is a no-op.
 
 version
        display the kpatch version

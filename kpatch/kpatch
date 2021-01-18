@@ -237,6 +237,9 @@ signal_stalled_processes() {
 	if [[ -e "/sys/kernel/livepatch/$module/signal" ]] ; then
 		echo "signaling stalled process(es):"
 		echo 1 > "/sys/kernel/livepatch/$module/signal"
+        else
+            warn "Livepatch process signaling is performed automatically on your system."
+            warn "Skipping manual process signaling."
 	fi
 }
 
