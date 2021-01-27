@@ -49,7 +49,7 @@ LOGFILE="$CACHEDIR/build.log"
 RELEASE_FILE=/etc/os-release
 DEBUG=0
 SKIPCLEANUP=0
-SKIPGCCCHECK=0
+SKIPCOMPILERCHECK=0
 ARCH_KCFLAGS=""
 DEBUG_KCFLAGS=""
 declare -a PATCH_LIST
@@ -219,10 +219,11 @@ find_core_symvers() {
 }
 
 gcc_version_from_file() {
-	readelf -p .comment "$1" | grep -o 'GCC:.*' | head -n 1
+	readelf -p .comment "$1" | grep -m 1 -o 'GCC:.*'
 }
 
 gcc_version_check() {
+	local target="$1"
 	local c="$TEMPDIR/test.c" o="$TEMPDIR/test.o"
 	local out gccver kgccver
 
@@ -231,11 +232,7 @@ gcc_version_check() {
 	echo 'void main(void) {}' > "$c"
 	out="$(gcc -c -pg -ffunction-sections -o "$o" "$c" 2>&1)"
 	gccver="$(gcc_version_from_file "$o")"
-	if [[ -n "$OOT_MODULE" ]]; then
-		kgccver="$(gcc_version_from_file "$OOT_MODULE")"
-	else
-		kgccver="$(gcc_version_from_file "$VMLINUX")"
-	fi
+	kgccver="$(gcc_version_from_file "$target")"
 
 	if [[ -n "$out" ]]; then
 		warn "gcc >= 4.8 required for -pg -ffunction-settings"
@@ -254,7 +251,31 @@ gcc_version_check() {
 		warn "gcc/kernel version mismatch"
 		echo "gcc version:    $gccver"
 		echo "kernel version: $kgccver"
-		echo "Install the matching gcc version (recommended) or use --skip-gcc-check"
+		echo "Install the matching gcc version (recommended) or use --skip-compiler-check"
+		echo "to skip the version matching enforcement (not recommended)"
+		return 1
+	fi
+
+	return
+}
+
+clang_version_from_file() {
+	readelf -p .comment "$1" | grep -m 1 -Eo 'clang version [0-9.]+'
+}
+
+clang_version_check() {
+	local target="$1"
+	local clangver kclangver
+
+	clangver=$(clang --version | grep -m 1 -Eo 'clang version [0-9.]+')
+	kclangver="$(clang_version_from_file "$target")"
+
+	# ensure clang version matches that used to build the kernel
+	if [[ "$clangver" != "$kclangver" ]]; then
+		warn "clang/kernel version mismatch"
+		echo "clang version:    $clangver"
+		echo "kernel version:   $kclangver"
+		echo "Install the matching clang version (recommended) or use --skip-compiler-check"
 		echo "to skip the version matching enforcement (not recommended)"
 		return 1
 	fi
@@ -439,28 +460,28 @@ module_name_string() {
 
 usage() {
 	echo "usage: $(basename "$0") [options] <patch1 ... patchN>" >&2
-	echo "		patchN             Input patchfile(s)" >&2
-	echo "		-h, --help         Show this help message" >&2
-	echo "		-a, --archversion  Specify the kernel arch version" >&2
-	echo "		-r, --sourcerpm    Specify kernel source RPM" >&2
-	echo "		-s, --sourcedir    Specify kernel source directory" >&2
-	echo "		-c, --config       Specify kernel config file" >&2
-	echo "		-v, --vmlinux      Specify original vmlinux" >&2
-	echo "		-j, --jobs         Specify the number of make jobs" >&2
-	echo "		-t, --target       Specify custom kernel build targets" >&2
-	echo "		-n, --name         Specify the name of the kpatch module" >&2
-	echo "		-o, --output       Specify output folder" >&2
-	echo "		-d, --debug        Enable 'xtrace' and keep scratch files" >&2
-	echo "		                   in <CACHEDIR>/tmp" >&2
-	echo "		                   (can be specified multiple times)" >&2
-	echo "		-e, --oot-module   Enable patching out-of-tree module," >&2
-	echo "		                   specify current version of module" >&2
-	echo "		--skip-cleanup     Skip post-build cleanup" >&2
-	echo "		--skip-gcc-check   Skip gcc version matching check" >&2
-	echo "		                   (not recommended)" >&2
+	echo "		patchN                  Input patchfile(s)" >&2
+	echo "		-h, --help              Show this help message" >&2
+	echo "		-a, --archversion       Specify the kernel arch version" >&2
+	echo "		-r, --sourcerpm         Specify kernel source RPM" >&2
+	echo "		-s, --sourcedir         Specify kernel source directory" >&2
+	echo "		-c, --config            Specify kernel config file" >&2
+	echo "		-v, --vmlinux           Specify original vmlinux" >&2
+	echo "		-j, --jobs              Specify the number of make jobs" >&2
+	echo "		-t, --target            Specify custom kernel build targets" >&2
+	echo "		-n, --name              Specify the name of the kpatch module" >&2
+	echo "		-o, --output            Specify output folder" >&2
+	echo "		-d, --debug             Enable 'xtrace' and keep scratch files" >&2
+	echo "		                        in <CACHEDIR>/tmp" >&2
+	echo "		                        (can be specified multiple times)" >&2
+	echo "		-e, --oot-module        Enable patching out-of-tree module," >&2
+	echo "		                        specify current version of module" >&2
+	echo "		--skip-cleanup          Skip post-build cleanup" >&2
+	echo "		--skip-compiler-check   Skip compiler version matching check" >&2
+	echo "		                        (not recommended)" >&2
 }
 
-options="$(getopt -o ha:r:s:c:v:j:t:n:o:de: -l "help,archversion:,sourcerpm:,sourcedir:,config:,vmlinux:,jobs:,target:,name:,output:,oot-module:,debug,skip-gcc-check,skip-cleanup" -- "$@")" || die "getopt failed"
+options="$(getopt -o ha:r:s:c:v:j:t:n:o:de: -l "help,archversion:,sourcerpm:,sourcedir:,config:,vmlinux:,jobs:,target:,name:,output:,oot-module:,debug,skip-gcc-check,skip-compiler-check,skip-cleanup" -- "$@")" || die "getopt failed"
 
 eval set -- "$options"
 
@@ -528,8 +549,11 @@ while [[ $# -gt 0 ]]; do
 		SKIPCLEANUP=1
 		;;
 	--skip-gcc-check)
-		echo "WARNING: Skipping gcc version matching check (not recommended)"
-		SKIPGCCCHECK=1
+		echo "DEPRECATED: --skip-gcc-check is deprecated, use --skip-compiler-check instead"
+		;&
+	--skip-compiler-check)
+		echo "WARNING: Skipping compiler version matching check (not recommended)"
+		SKIPCOMPILERCHECK=1
 		;;
 	*)
 		[[ "$1" = "--" ]] && shift && continue
@@ -630,10 +654,6 @@ elif [[ "$DISTRO" = ubuntu ]] || [[ "$DISTRO" = debian ]]; then
 fi
 
 find_dirs || die "can't find supporting tools"
-
-if [[ "$SKIPGCCCHECK" -eq 0 ]]; then
-	gcc_version_check || die
-fi
 
 if [[ -n "$USERSRCDIR" ]]; then
 	echo "Using source directory at $USERSRCDIR"
@@ -751,6 +771,8 @@ CONFIG_PARAVIRT=0
 CONFIG_UNWINDER_ORC=0
 CONFIG_JUMP_LABEL=0
 CONFIG_MODVERSIONS=0
+CONFIG_CC_IS_CLANG=0
+CONFIG_LD_IS_LLD=0
 
 if grep -q "CONFIG_LIVEPATCH=y" "$CONFIGFILE" && (kernel_is_rhel || kernel_version_gte 4.9.0); then
 
@@ -777,6 +799,8 @@ grep -q "CONFIG_PARAVIRT=y"     "$CONFIGFILE" && CONFIG_PARAVIRT=1
 grep -q "CONFIG_UNWINDER_ORC=y" "$CONFIGFILE" && CONFIG_UNWINDER_ORC=1
 grep -q "CONFIG_JUMP_LABEL=y"   "$CONFIGFILE" && CONFIG_JUMP_LABEL=1
 grep -q "CONFIG_MODVERSIONS=y"  "$CONFIGFILE" && CONFIG_MODVERSIONS=1
+grep -q "CONFIG_CC_IS_CLANG=y"  "$CONFIGFILE" && CONFIG_CC_IS_CLANG=1
+grep -q "CONFIG_LD_IS_LLD=y"    "$CONFIGFILE" && CONFIG_LD_IS_LLD=1
 
 # unsupported kernel option checking
 grep -q "CONFIG_DEBUG_INFO_SPLIT=y" "$CONFIGFILE" && die "kernel option 'CONFIG_DEBUG_INFO_SPLIT' not supported"
@@ -789,6 +813,23 @@ grep -q "CONFIG_GCC_PLUGIN_RANDSTRUCT=y" "$CONFIGFILE" && die "kernel option 'CO
 if grep -q "CONFIG_DEBUG_INFO_BTF=y" "$CONFIGFILE" ; then
 	cp -f "$SRCDIR/scripts/link-vmlinux.sh" "$TEMPDIR/link-vmlinux.sh" || die
 	sed -i 's/CONFIG_DEBUG_INFO_BTF/DISABLED_FOR_KPATCH_BUILD/g' "$SRCDIR"/scripts/link-vmlinux.sh || die
+fi
+
+if [[ "$CONFIG_CC_IS_CLANG" -eq 1 ]]; then
+	echo "WARNING: Clang support is experimental"
+fi
+
+if [[ "$SKIPCOMPILERCHECK" -eq 0 ]]; then
+	if [[ -n "$OOT_MODULE" ]]; then
+		target="$OOT_MODULE"
+	else
+		target="$VMLINUX"
+	fi
+	if [[ "$CONFIG_CC_IS_CLANG" -eq 0 ]]; then
+		gcc_version_check "$target" || die
+	else
+		clang_version_check "$target" || die
+	fi
 fi
 
 echo "Testing patch file(s)"
@@ -816,9 +857,27 @@ fi
 echo "Building original source"
 [[ -n "$OOT_MODULE" ]] || ./scripts/setlocalversion --save-scmversion || die
 unset KPATCH_GCC_TEMPDIR
+
+KPATCH_CC_PREFIX="$TOOLSDIR/kpatch-cc "
+declare -a MAKEVARS
+if [ "$CONFIG_CC_IS_CLANG" -eq 1 ]; then
+	MAKEVARS+=("CC=${KPATCH_CC_PREFIX}clang")
+	MAKEVARS+=("HOSTCC=clang")
+else
+	MAKEVARS+=("CC=${KPATCH_CC_PREFIX}gcc")
+fi
+
+if [ "$CONFIG_LD_IS_LLD" -eq 1 ]; then
+	MAKEVARS+=("LD=${KPATCH_CC_PREFIX}ld.lld")
+	MAKEVARS+=("HOSTLD=ld.lld")
+else
+	MAKEVARS+=("LD=${KPATCH_CC_PREFIX}ld")
+fi
+
+
 # $TARGETS used as list, no quotes.
 # shellcheck disable=SC2086
-CROSS_COMPILE="$TOOLSDIR/kpatch-gcc " make "-j$CPUS" $TARGETS 2>&1 | logger || die
+make "${MAKEVARS[@]}" "-j$CPUS" $TARGETS 2>&1 | logger || die
 
 # Save original module symvers
 cp -f "$SRCDIR/Module.symvers" "$TEMPDIR/Module.symvers" || die
@@ -832,9 +891,7 @@ KPATCH_GCC_SRCDIR="$SRCDIR"
 export KPATCH_GCC_SRCDIR
 # $TARGETS used as list, no quotes.
 # shellcheck disable=SC2086
-CROSS_COMPILE="$TOOLSDIR/kpatch-gcc " \
-	KBUILD_MODPOST_WARN=1 \
-	make "-j$CPUS" $TARGETS 2>&1 | logger || die
+KBUILD_MODPOST_WARN=1 make "${MAKEVARS[@]}" "-j$CPUS" $TARGETS 2>&1 | logger || die
 
 # source.c:(.section+0xFF): undefined reference to `symbol'
 grep "undefined reference" "$LOGFILE" | sed -r "s/^.*\`(.*)'$/\\1/" \
@@ -1026,10 +1083,16 @@ if [[ -z "$OOT_MODULE" ]]; then
 else
 	KPATCH_BUILD="/lib/modules/$ARCHVERSION/build"
 fi
+
+# We no longer need kpatch-cc
+for ((idx=0; idx<${#MAKEVARS[@]}; idx++)); do
+    MAKEVARS[$idx]=${MAKEVARS[$idx]/${KPATCH_CC_PREFIX}/}
+done
+
 KPATCH_BUILD="$KPATCH_BUILD" KPATCH_NAME="$MODNAME" \
 KBUILD_EXTRA_SYMBOLS="$KBUILD_EXTRA_SYMBOLS" \
 KPATCH_LDFLAGS="$KPATCH_LDFLAGS" \
-	make 2>&1 | logger || die
+	make "${MAKEVARS[@]}" 2>&1 | logger || die
 
 if [[ "$USE_KLP" -eq 1 ]]; then
 	if [[ "$USE_KLP_ARCH" -eq 0 ]]; then
