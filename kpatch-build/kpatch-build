@@ -45,6 +45,7 @@ SRCDIR="$CACHEDIR/src"
 RPMTOPDIR="$CACHEDIR/buildroot"
 VERSIONFILE="$CACHEDIR/version"
 TEMPDIR="$CACHEDIR/tmp"
+ENVFILE="$TEMPDIR/kpatch-build.env"
 LOGFILE="$CACHEDIR/build.log"
 RELEASE_FILE=/etc/os-release
 DEBUG=0
@@ -86,6 +87,17 @@ logger() {
 		# Log only to the logfile
 		cat >> "$LOGFILE"
 	fi
+}
+
+save_env() {
+	export -p | grep -wve 'OLDPWD=' -wve 'PWD=' > "$ENVFILE"
+}
+
+do_export() {
+	local var=$1
+	local val="${2:-0}"
+	eval "export $var='$val'"
+	save_env;
 }
 
 verify_patch_files() {
@@ -350,6 +362,7 @@ find_special_section_data() {
 	[[ -z "$ORC_STRUCT_SIZE" && "$CONFIG_UNWINDER_ORC" -ne 0 ]] && die "can't find special struct orc_entry size"
 	[[ -z "$JUMP_STRUCT_SIZE" && "$CONFIG_JUMP_LABEL" -ne 0 ]] && die "can't find special struct jump_entry size"
 
+	save_env
 	return
 }
 
@@ -611,7 +624,7 @@ if [[ "$DISTRO" = fedora ]] || [[ "$DISTRO" = rhel ]] || [[ "$DISTRO" = ol ]] ||
 	[[ -z "$VMLINUX" ]] && VMLINUX="/usr/lib/debug/lib/modules/$ARCHVERSION/vmlinux"
 	[[ -e "$VMLINUX" ]] || die "kernel-debuginfo-$ARCHVERSION not installed"
 
-	export PATH="/usr/lib64/ccache:$PATH"
+	do_export 'PATH' "/usr/lib64/ccache:$PATH"
 
 elif [[ "$DISTRO" = ubuntu ]] || [[ "$DISTRO" = debian ]]; then
 	[[ -z "$VMLINUX" ]] && VMLINUX="/usr/lib/debug/boot/vmlinux-$ARCHVERSION"
@@ -623,7 +636,7 @@ elif [[ "$DISTRO" = ubuntu ]] || [[ "$DISTRO" = debian ]]; then
 		[[ -e "$VMLINUX" ]] || die "linux-image-$ARCHVERSION-dbg not installed"
 	fi
 
-	export PATH="/usr/lib/ccache:$PATH"
+	do_export 'PATH' "/usr/lib/ccache:$PATH"
 fi
 
 find_dirs || die "can't find supporting tools"
@@ -790,14 +803,14 @@ if [[ "$ARCH" = "ppc64le" ]]; then
 	ARCH_KCFLAGS="-mcmodel=large -fplugin=$PLUGINDIR/ppc64le-plugin.so"
 fi
 
-export KCFLAGS="-I$DATADIR/patch -ffunction-sections -fdata-sections \
+do_export 'KCFLAGS' "-I$DATADIR/patch -ffunction-sections -fdata-sections \
 		$ARCH_KCFLAGS $DEBUG_KCFLAGS"
 
 echo "Reading special section data"
 find_special_section_data
 
 if [[ $DEBUG -ge 4 ]]; then
-	export KPATCH_GCC_DEBUG=1
+	do_export 'KPATCH_GCC_DEBUG' '1'
 fi
 
 echo "Building original source"
@@ -813,10 +826,8 @@ cp "$SRCDIR/Module.symvers" "$TEMPDIR/Module.symvers"
 echo "Building patched source"
 apply_patches
 mkdir -p "$TEMPDIR/orig" "$TEMPDIR/patched"
-KPATCH_GCC_TEMPDIR="$TEMPDIR"
-export KPATCH_GCC_TEMPDIR
-KPATCH_GCC_SRCDIR="$SRCDIR"
-export KPATCH_GCC_SRCDIR
+do_export 'KPATCH_GCC_TEMPDIR' "$TEMPDIR"
+do_export 'KPATCH_GCC_SRCDIR' "$SRCDIR"
 # $TARGETS used as list, no quotes.
 # shellcheck disable=SC2086
 CROSS_COMPILE="$TOOLSDIR/kpatch-gcc " \
@@ -975,9 +986,9 @@ do
 done
 echo
 
-export KCFLAGS="-I$DATADIR/patch $ARCH_KCFLAGS"
+do_export 'KCFLAGS' "-I$DATADIR/patch $ARCH_KCFLAGS"
 if [[ "$USE_KLP" -eq 0 ]]; then
-	export KCPPFLAGS="-D__KPATCH_MODULE__"
+	do_export 'KCPPFLAGS' '-D__KPATCH_MODULE__'
 fi
 
 echo "Building patch module: $MODNAME.ko"
@@ -1013,9 +1024,10 @@ if [[ -z "$OOT_MODULE" ]]; then
 else
 	KPATCH_BUILD="/lib/modules/$ARCHVERSION/build"
 fi
-KPATCH_BUILD="$KPATCH_BUILD" KPATCH_NAME="$MODNAME" \
+export KPATCH_BUILD="$KPATCH_BUILD" KPATCH_NAME="$MODNAME" \
 KBUILD_EXTRA_SYMBOLS="$KBUILD_EXTRA_SYMBOLS" \
-KPATCH_LDFLAGS="$KPATCH_LDFLAGS" \
+KPATCH_LDFLAGS="$KPATCH_LDFLAGS"
+save_env
 	make 2>&1 | logger || die
 
 if [[ "$USE_KLP" -eq 1 ]]; then
