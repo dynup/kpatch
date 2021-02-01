@@ -1,0 +1,9 @@
+diff -Nupr linux-5.10.11.bak/net/core/dev.c linux-5.10.11/net/core/dev.c
+--- linux-5.10.11.bak/net/core/dev.c	2021-01-28 08:18:59.936105663 -0500
++++ linux-5.10.11/net/core/dev.c	2021-01-28 08:34:03.120655935 -0500
+@@ -1,4 +1,5 @@
+ // SPDX-License-Identifier: GPL-2.0-or-later
++
+ /*
+  *      NET3    Protocol independent device support routines.
+  *
