@@ -640,7 +640,7 @@ if [[ -n "$USERSRCDIR" ]]; then
 
 	# save original vmlinux before it gets overwritten by sourcedir build
 	if [[ -z "$OOT_MODULE" ]] && [[ "$VMLINUX" -ef "$SRCDIR"/vmlinux ]]; then
-		cp -f "$VMLINUX" "$TEMPDIR/vmlinux"
+		cp -f "$VMLINUX" "$TEMPDIR/vmlinux" || die
 		VMLINUX="$TEMPDIR/vmlinux"
 	fi
 
@@ -734,7 +734,9 @@ fi
 
 [[ -z "$CONFIGFILE" ]] && CONFIGFILE="$SRCDIR"/.config
 [[ ! -e "$CONFIGFILE" ]] && die "can't find config file"
-[[ ! "$CONFIGFILE" -ef "$SRCDIR"/.config ]] && cp -f "$CONFIGFILE" "$SRCDIR/.config"
+if [[ ! "$CONFIGFILE" -ef "$SRCDIR"/.config ]] ; then
+	cp -f "$CONFIGFILE" "$SRCDIR/.config" || die
+fi
 
 # kernel option checking
 grep -q "CONFIG_DEBUG_INFO=y" "$CONFIGFILE" || die "kernel doesn't have 'CONFIG_DEBUG_INFO' enabled"
@@ -785,7 +787,7 @@ grep -q "CONFIG_GCC_PLUGIN_RANDSTRUCT=y" "$CONFIGFILE" && die "kernel option 'CO
 # support extended ELF sections.  Disable the BTF typeinfo generation in
 # link-vmlinux.sh since kpatch doesn't care about that anyway.
 if grep -q "CONFIG_DEBUG_INFO_BTF=y" "$CONFIGFILE" ; then
-	cp "$SRCDIR/scripts/link-vmlinux.sh" "$TEMPDIR/"
+	cp -f "$SRCDIR/scripts/link-vmlinux.sh" "$TEMPDIR/link-vmlinux.sh" || die
 	sed -i 's/CONFIG_DEBUG_INFO_BTF/DISABLED_FOR_KPATCH_BUILD/g' "$SRCDIR"/scripts/link-vmlinux.sh || die
 fi
 
@@ -819,7 +821,7 @@ unset KPATCH_GCC_TEMPDIR
 CROSS_COMPILE="$TOOLSDIR/kpatch-gcc " make "-j$CPUS" $TARGETS 2>&1 | logger || die
 
 # Save original module symvers
-cp "$SRCDIR/Module.symvers" "$TEMPDIR/Module.symvers"
+cp -f "$SRCDIR/Module.symvers" "$TEMPDIR/Module.symvers" || die
 
 echo "Building patched source"
 apply_patches
@@ -911,7 +913,7 @@ ERROR=0
 # Prepare OOT module symvers file
 if [[ -n "$OOT_MODULE" ]]; then
     BUILDDIR="/lib/modules/$ARCHVERSION/build/"
-    cp "$SRCDIR/Module.symvers" "$TEMPDIR/Module.symvers"
+    cp -f "$SRCDIR/Module.symvers" "$TEMPDIR/Module.symvers" || die
     awk '{ print $1 "\t" $2 "\t" $3 "\t" $4}' "${BUILDDIR}/Module.symvers" >> "$TEMPDIR/Module.symvers"
 fi
 
@@ -966,7 +968,7 @@ for i in $FILES; do
 			objnames[${#objnames[@]}]="$KOBJFILE"
 		fi
 	else
-		cp -f "patched/$i" "output/$i"
+		cp -f "patched/$i" "output/$i" || die
 		objnames[${#objnames[@]}]="$KOBJFILE"
 	fi
 done
@@ -1006,7 +1008,7 @@ cd "$TEMPDIR/output" || die
 ld -r $KPATCH_LDFLAGS -o ../patch/tmp_output.o $(find . -name "*.o") 2>&1 | logger || die
 
 if [[ "$USE_KLP" -eq 1 ]]; then
-	cp "$TEMPDIR"/patch/tmp_output.o "$TEMPDIR"/patch/output.o || die
+	cp -f "$TEMPDIR"/patch/tmp_output.o "$TEMPDIR"/patch/output.o || die
 	# Avoid MODPOST warning (pre-v5.8) and error (v5.8+) with an empty .cmd file
 	touch "$TEMPDIR"/patch/.output.o.cmd || die
 else
@@ -1033,7 +1035,7 @@ if [[ "$USE_KLP" -eq 1 ]]; then
 	if [[ "$USE_KLP_ARCH" -eq 0 ]]; then
 		extra_flags="--no-klp-arch-sections"
 	fi
-	cp "$TEMPDIR/patch/$MODNAME.ko" "$TEMPDIR/patch/tmp.ko" || die
+	cp -f "$TEMPDIR/patch/$MODNAME.ko" "$TEMPDIR/patch/tmp.ko" || die
 	"$TOOLSDIR"/create-klp-module $extra_flags "$TEMPDIR/patch/tmp.ko" "$TEMPDIR/patch/$MODNAME.ko" 2>&1 | logger 1
 	check_pipe_status create-klp-module
 fi
