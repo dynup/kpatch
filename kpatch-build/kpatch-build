@@ -148,6 +148,9 @@ cleanup() {
 	# restore original vmlinux if it was overwritten by sourcedir build
 	[[ -e "$TEMPDIR/vmlinux" ]] && mv -f "$TEMPDIR/vmlinux" "$SRCDIR/"
 
+	# restore original link-vmlinux.sh if we updated it for the build
+	[[ -e "$TEMPDIR/link-vmlinux.sh" ]] && mv -f "$TEMPDIR/link-vmlinux.sh" "$SRCDIR/scripts"
+
 	[[ "$DEBUG" -eq 0 ]] && rm -rf "$TEMPDIR"
 	rm -rf "$RPMTOPDIR"
 	unset KCFLAGS
@@ -777,6 +780,14 @@ grep -q "CONFIG_MODVERSIONS=y"  "$CONFIGFILE" && CONFIG_MODVERSIONS=1
 grep -q "CONFIG_DEBUG_INFO_SPLIT=y" "$CONFIGFILE" && die "kernel option 'CONFIG_DEBUG_INFO_SPLIT' not supported"
 grep -q "CONFIG_GCC_PLUGIN_LATENT_ENTROPY=y" "$CONFIGFILE" && die "kernel option 'CONFIG_GCC_PLUGIN_LATENT_ENTROPY' not supported"
 grep -q "CONFIG_GCC_PLUGIN_RANDSTRUCT=y" "$CONFIGFILE" && die "kernel option 'CONFIG_GCC_PLUGIN_RANDSTRUCT' not supported"
+
+# CONFIG_DEBUG_INFO_BTF invokes pahole, for which some versions don't
+# support extended ELF sections.  Disable the BTF typeinfo generation in
+# link-vmlinux.sh since kpatch doesn't care about that anyway.
+if grep -q "CONFIG_DEBUG_INFO_BTF=y" "$CONFIGFILE" ; then
+	cp "$SRCDIR/scripts/link-vmlinux.sh" "$TEMPDIR/"
+	sed -i 's/CONFIG_DEBUG_INFO_BTF/DISABLED_FOR_KPATCH_BUILD/g' "$SRCDIR"/scripts/link-vmlinux.sh || die
+fi
 
 echo "Testing patch file(s)"
 cd "$SRCDIR" || die
