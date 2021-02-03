@@ -83,8 +83,8 @@ static int maybe_discarded_sym(const char *name)
 	if (!strncmp(name, "__exitcall_", 11) ||
 	    !strncmp(name, "__brk_reservation_fn_", 21) ||
 	    !strncmp(name, "__func_stack_frame_non_standard_", 32) ||
-	    !strncmp(name, "__addressable_", 14) ||
-	    !strncmp(name, "__UNIQUE_ID_", 12) ||
+	    strstr(name, "__addressable_") ||
+	    strstr(name, "__UNIQUE_ID_") ||
 	    !strncmp(name, ".L.str", 6))
 		return 1;
 
