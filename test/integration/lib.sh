@@ -18,6 +18,10 @@ kpatch_fedora_dependencies()
 	sudo dnf debuginfo-install -y "kernel-${kernel_version%.*}"
 
 	sudo dnf install -y ccache
+
+	if [[ "$(uname -m)" == "ppc64le" ]]; then
+		sudo yum install -y gcc-plugin-devel
+	fi
 }
 
 kpatch_ubuntu_dependencies()
