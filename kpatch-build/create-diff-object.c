@@ -1168,18 +1168,21 @@ static struct symbol *kpatch_find_static_twin(struct section *sec,
 	return NULL;
 }
 
-static int kpatch_is_normal_static_local(struct symbol *sym)
+static bool kpatch_is_normal_static_local(struct symbol *sym)
 {
 	if (sym->type != STT_OBJECT || sym->bind != STB_LOCAL)
-		return 0;
+		return false;
+
+	if (!strncmp(sym->name, ".L", 2))
+		return false;
 
 	if (!strchr(sym->name, '.'))
-		return 0;
+		return false;
 
 	if (is_special_static(sym))
-		return 0;
+		return false;
 
-	return 1;
+	return true;
 }
 
 static struct rela *kpatch_find_static_twin_ref(struct section *rela_sec, struct symbol *sym)
