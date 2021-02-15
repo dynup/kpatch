@@ -366,6 +366,20 @@ static bool is_special_static(struct symbol *sym)
 	return false;
 }
 
+static bool has_digit_tail(char *tail)
+{
+	if (*tail != '.')
+		return false;
+
+	while (isdigit(*++tail))
+		;
+
+	if (!*tail)
+		return true;
+
+	return false;
+}
+
 /*
  * This is like strcmp, but for gcc-mangled symbols.  It skips the comparison
  * of any substring which consists of '.' followed by any number of digits.
@@ -394,6 +408,11 @@ static int kpatch_mangled_strcmp(char *s1, char *s2)
 			s2++;
 		}
 	}
+
+	if ((!*s1 && has_digit_tail(s2)) ||
+	    (!*s2 && has_digit_tail(s1)))
+		return 0;
+
 	return 1;
 }
 
