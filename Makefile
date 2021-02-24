@@ -62,7 +62,7 @@ vagrant-integration-quick:
 	$(MAKE) -C $(INTEGRATION_DIR) vagrant-quick
 
 check:
-	shellcheck kpatch/kpatch kpatch-build/kpatch-build kpatch-build/kpatch-gcc
+	shellcheck kpatch/kpatch kpatch-build/kpatch-build kpatch-build/kpatch-cc
 	shellcheck test/difftree.sh test/integration/kpatch-test		\
 		   test/integration/lib.sh test/integration/rebase-patches	\
 		   test/integration/test-vagrant				\

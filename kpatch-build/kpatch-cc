@@ -13,7 +13,7 @@ fi
 
 declare -a args=("$@")
 
-if [[ "$TOOLCHAINCMD" =~ "gcc" ]] ; then
+if [[ "$TOOLCHAINCMD" =~ ^(.*-)?gcc$ || "$TOOLCHAINCMD" =~ ^(.*-)?clang$ ]] ; then
 	while [ "$#" -gt 0 ]; do
 		if [ "$1" = "-o" ]; then
 			obj="$2"
@@ -61,7 +61,7 @@ if [[ "$TOOLCHAINCMD" =~ "gcc" ]] ; then
 		fi
 		shift
 	done
-elif [[ "$TOOLCHAINCMD" = "ld" ]] ; then
+elif [[ "$TOOLCHAINCMD" =~ ^(.*-)?ld || "$TOOLCHAINCMD" =~ ^(.*-)?ld.lld ]] ; then
 	while [ "$#" -gt 0 ]; do
 		if [ "$1" = "-o" ]; then
 			obj="$2"

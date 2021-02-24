@@ -312,43 +312,72 @@ static bool is_dynamic_debug_symbol(struct symbol *sym)
  * Special static local variables should never be correlated and should always
  * be included if they are referenced by an included function.
  */
-static int is_special_static(struct symbol *sym)
+static bool is_special_static(struct symbol *sym)
 {
-	static char *prefixes[] = {
-		"__key.",
-		"__warned.",
-		"__func__.",
-		"__FUNCTION__.",
-		"_rs.",
-		"CSWTCH.",
+	static char *var_names[] = {
+		"__key",
+		"__warned",
+		"__func__",
+		"__FUNCTION__",
+		"_rs",
+		"CSWTCH",
 		NULL,
 	};
-	char **prefix;
+	char **var_name;
 
 	if (!sym)
-		return 0;
+		return false;
 
 	/* pr_debug() uses static local variables in the __verbose or __dyndbg section */
 	if (is_dynamic_debug_symbol(sym))
-		return 1;
+		return true;
 
 	if (sym->type == STT_SECTION) {
 		/* make sure section is bundled */
 		if (!sym->sec->sym)
-			return 0;
+			return false;
 
 		/* use bundled object/function symbol for matching */
 		sym = sym->sec->sym;
 	}
 
 	if (sym->type != STT_OBJECT || sym->bind != STB_LOCAL)
-		return 0;
+		return false;
 
-	for (prefix = prefixes; *prefix; prefix++)
-		if (!strncmp(sym->name, *prefix, strlen(*prefix)))
-			return 1;
+	if  (!strcmp(sym->sec->name, ".data.once"))
+		return true;
 
-	return 0;
+	for (var_name = var_names; *var_name; var_name++) {
+		size_t var_name_len = strlen(*var_name);
+		char buf[256];
+
+		snprintf(buf, 256, ".%s.", *var_name);
+
+		/* First look for gcc-style statics: '<var_name>.' */
+		if (!strncmp(sym->name, buf + 1, var_name_len + 1))
+			return true;
+
+		buf[var_name_len + 1] = '\0';
+		/* Next clang-style statics: '<function_name>.<var_name>' */
+		if (strstr(sym->name, buf))
+			return true;
+	}
+
+	return false;
+}
+
+static bool has_digit_tail(char *tail)
+{
+	if (*tail != '.')
+		return false;
+
+	while (isdigit(*++tail))
+		;
+
+	if (!*tail)
+		return true;
+
+	return false;
 }
 
 /*
@@ -379,6 +408,11 @@ static int kpatch_mangled_strcmp(char *s1, char *s2)
 			s2++;
 		}
 	}
+
+	if ((!*s1 && has_digit_tail(s2)) ||
+	    (!*s2 && has_digit_tail(s1)))
+		return 0;
+
 	return 1;
 }
 
@@ -1153,18 +1187,21 @@ static struct symbol *kpatch_find_static_twin(struct section *sec,
 	return NULL;
 }
 
-static int kpatch_is_normal_static_local(struct symbol *sym)
+static bool kpatch_is_normal_static_local(struct symbol *sym)
 {
 	if (sym->type != STT_OBJECT || sym->bind != STB_LOCAL)
-		return 0;
+		return false;
+
+	if (!strncmp(sym->name, ".L", 2))
+		return false;
 
 	if (!strchr(sym->name, '.'))
-		return 0;
+		return false;
 
 	if (is_special_static(sym))
-		return 0;
+		return false;
 
-	return 1;
+	return true;
 }
 
 static struct rela *kpatch_find_static_twin_ref(struct section *rela_sec, struct symbol *sym)

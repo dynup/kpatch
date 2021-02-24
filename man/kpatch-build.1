@@ -54,12 +54,12 @@ effect.
 --skip-cleanup
    Skip post-build cleanup
 
---skip-gcc-check
-   Skips check that ensures that the system gcc version and
-   the gcc version that built the kernel match.  Skipping this
-   check is not recommended, but is useful if the exact gcc
+--skip-compiler-check
+   Skips check that ensures that the system compiler version and
+   the compiler version that built the kernel match.  Skipping this
+   check is not recommended, but is useful if the exact compiler
    version is not available or is not easily installed. Use
-   only when confident that the two versions of gcc output
+   only when confident that the two versions of compiler output
    identical objects for a given target.  Otherwise, use of
    this option might result in unexpected changed objects
    being detected.
