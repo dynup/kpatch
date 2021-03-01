@@ -575,10 +575,12 @@ case "$1" in
 	fi
 
 	[[ ! -e "$MODULE" ]] && die "$PATCH is not installed for kernel $KVER"
-	
 
 	echo "uninstalling $PATCH ($KVER)"
 	rm -f "$MODULE" || die "failed to uninstall module $PATCH"
+	rmdir --ignore-fail-on-non-empty "$INSTALLDIR/$KVER" || die "failed to remove directory $INSTALLDIR/$KVER"
+	rmdir --ignore-fail-on-non-empty "$INSTALLDIR" || die "failed to remove directory $INSTALLDIR"
+
 	;;
 
 "list")
