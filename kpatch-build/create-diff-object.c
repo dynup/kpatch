@@ -100,7 +100,7 @@ static int is_bundleable(struct symbol *sym)
 	if (sym->type == STT_FUNC &&
 	    !strncmp(sym->sec->name, ".text.unlikely.",15) &&
 	    (!strcmp(sym->sec->name + 15, sym->name) ||
-			 (strstr(sym->name, ".cold.") &&
+			 (strstr(sym->name, ".cold") &&
 			  !strncmp(sym->sec->name + 15, sym->name, strlen(sym->sec->name) - 15))))
 		return 1;
 
@@ -272,7 +272,7 @@ static void kpatch_detect_child_functions(struct kpatch_elf *kelf)
 		if (sym->type != STT_FUNC)
 			continue;
 
-		childstr = strstr(sym->name, ".cold.");
+		childstr = strstr(sym->name, ".cold");
 		if (childstr) {
 			sym->parent = kpatch_lookup_parent(kelf, sym->name,
 							   childstr);
