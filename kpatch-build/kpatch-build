@@ -818,8 +818,10 @@ if grep -q "CONFIG_DEBUG_INFO_BTF=y" "$CONFIGFILE" ; then
 	cp -f "$SRCDIR/scripts/link-vmlinux.sh" "$TEMPDIR/link-vmlinux.sh" || die
 	sed -i 's/CONFIG_DEBUG_INFO_BTF/DISABLED_FOR_KPATCH_BUILD/g' "$SRCDIR"/scripts/link-vmlinux.sh || die
 
-	cp -f "$SRCDIR/scripts/Makefile.modfinal" "$TEMPDIR/Makefile.modfinal" || die
-	sed -i 's/CONFIG_DEBUG_INFO_BTF_MODULES/DISABLED_FOR_KPATCH_BUILD/g' "$SRCDIR"/scripts/Makefile.modfinal || die
+	if [[ -e "$SRCDIR/scripts/Makefile.modfinal" ]]; then
+		cp -f "$SRCDIR/scripts/Makefile.modfinal" "$TEMPDIR/Makefile.modfinal" || die
+		sed -i 's/CONFIG_DEBUG_INFO_BTF_MODULES/DISABLED_FOR_KPATCH_BUILD/g' "$SRCDIR"/scripts/Makefile.modfinal || die
+	fi
 fi
 
 if [[ "$CONFIG_CC_IS_CLANG" -eq 1 ]]; then
