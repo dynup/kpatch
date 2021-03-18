@@ -185,7 +185,7 @@ kernel_version_gte() {
 }
 
 kernel_is_rhel() {
-	[[ "$ARCHVERSION" =~ \.el[78]\. ]]
+	[[ "$ARCHVERSION" =~ \.el[789] ]]
 }
 
 find_dirs() {
