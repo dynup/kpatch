@@ -349,12 +349,13 @@ find_special_section_data() {
 	[[ "$CONFIG_PARAVIRT" -eq 0 ]] && AWK_OPTIONS="-vskip_p=1"
 	[[ "$CONFIG_UNWINDER_ORC" -eq 0 ]] && AWK_OPTIONS="$AWK_OPTIONS -vskip_o=1"
 	[[ "$CONFIG_JUMP_LABEL" -eq 0 ]] && AWK_OPTIONS="$AWK_OPTIONS -vskip_j=1"
+	! kernel_version_gte 5.10.0 && AWK_OPTIONS="$AWK_OPTIONS -vskip_s=1"
 
 	# If $AWK_OPTIONS are blank gawk would treat "" as a blank script
 	# shellcheck disable=SC2086
 	SPECIAL_VARS="$(readelf -wi "$VMLINUX" |
 		gawk --non-decimal-data $AWK_OPTIONS '
-		BEGIN { a = b = p = e = o = j = 0 }
+		BEGIN { a = b = p = e = o = j = s = 0 }
 
 		# Set state if name matches
 		a == 0 && /DW_AT_name.* alt_instr[[:space:]]*$/ {a = 1; next}
@@ -363,6 +364,7 @@ find_special_section_data() {
 		e == 0 && /DW_AT_name.* exception_table_entry[[:space:]]*$/ {e = 1; next}
 		o == 0 && /DW_AT_name.* orc_entry[[:space:]]*$/ {o = 1; next}
 		j == 0 && /DW_AT_name.* jump_entry[[:space:]]*$/ {j = 1; next}
+		s == 0 && /DW_AT_name.* static_call_site[[:space:]]*$/ {s = 1; next}
 
 		# Reset state unless this abbrev describes the struct size
 		a == 1 && !/DW_AT_byte_size/ { a = 0; next }
@@ -371,6 +373,7 @@ find_special_section_data() {
 		e == 1 && !/DW_AT_byte_size/ { e = 0; next }
 		o == 1 && !/DW_AT_byte_size/ { o = 0; next }
 		j == 1 && !/DW_AT_byte_size/ { j = 0; next }
+		s == 1 && !/DW_AT_byte_size/ { s = 0; next }
 
 		# Now that we know the size, stop parsing for it
 		a == 1 {printf("export ALT_STRUCT_SIZE=%d\n", $4); a = 2}
@@ -379,9 +382,10 @@ find_special_section_data() {
 		e == 1 {printf("export EX_STRUCT_SIZE=%d\n", $4); e = 2}
 		o == 1 {printf("export ORC_STRUCT_SIZE=%d\n", $4); o = 2}
 		j == 1 {printf("export JUMP_STRUCT_SIZE=%d\n", $4); j = 2}
+		s == 1 {printf("export STATIC_CALL_STRUCT_SIZE=%d\n", $4); s = 2}
 
 		# Bail out once we have everything
-		a == 2 && b == 2 && (p == 2 || skip_p) && e == 2 && (o == 2 || skip_o) && (j == 2 || skip_j) {exit}')"
+		a == 2 && b == 2 && (p == 2 || skip_p) && e == 2 && (o == 2 || skip_o) && (j == 2 || skip_j) && (s == 2 || skip_s) {exit}')"
 
 	[[ -n "$SPECIAL_VARS" ]] && eval "$SPECIAL_VARS"
 
@@ -391,6 +395,7 @@ find_special_section_data() {
 	[[ -z "$PARA_STRUCT_SIZE" && "$CONFIG_PARAVIRT" -ne 0 ]] && die "can't find special struct paravirt_patch_site size"
 	[[ -z "$ORC_STRUCT_SIZE" && "$CONFIG_UNWINDER_ORC" -ne 0 ]] && die "can't find special struct orc_entry size"
 	[[ -z "$JUMP_STRUCT_SIZE" && "$CONFIG_JUMP_LABEL" -ne 0 ]] && die "can't find special struct jump_entry size"
+	[[ -z "$STATIC_CALL_STRUCT_SIZE" ]] && kernel_version_gte 5.10.0 && die "can't find special struct static_call_site size"
 
 	return
 }

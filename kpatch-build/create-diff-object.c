@@ -2036,6 +2036,21 @@ static int smp_locks_group_size(struct kpatch_elf *kelf, int offset)
 {
 	return 4;
 }
+
+static int static_call_sites_group_size(struct kpatch_elf *kelf, int offset)
+{
+	static int size = 0;
+	char *str;
+
+	if (!size) {
+		str = getenv("STATIC_CALL_STRUCT_SIZE");
+		if (!str)
+			ERROR("STATIC_CALL_STRUCT_SIZE not set");
+		size = atoi(str);
+	}
+
+	return size;
+}
 #endif
 #ifdef __powerpc64__
 static int fixup_entry_group_size(struct kpatch_elf *kelf, int offset)
@@ -2143,6 +2158,10 @@ static struct special_section special_sections[] = {
 	{
 		.name		= ".altinstructions",
 		.group_size	= altinstructions_group_size,
+	},
+	{
+		.name		= ".static_call_sites",
+		.group_size	= static_call_sites_group_size,
 	},
 #endif
 #ifdef __powerpc64__
