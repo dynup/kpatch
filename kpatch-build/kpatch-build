@@ -185,7 +185,22 @@ kernel_version_gte() {
 }
 
 kernel_is_rhel() {
-	[[ "$ARCHVERSION" =~ \.el[78]\. ]]
+	[[ "$ARCHVERSION" =~ \.el[789] ]]
+}
+
+rhel_kernel_version_gte() {
+        [  "${ARCHVERSION}" = "$(echo -e "${ARCHVERSION}\\n$1" | sort -rV | head -n1)" ]
+}
+
+# klp.arch relocations were supported prior to v5.8
+# and prior to 4.18.0-240.el8
+use_klp_arch()
+{
+	if kernel_is_rhel; then
+		! rhel_kernel_version_gte 4.18.0-240.el8
+	else
+		! kernel_version_gte 5.8.0
+	fi
 }
 
 find_dirs() {
@@ -781,7 +796,7 @@ if grep -q "CONFIG_LIVEPATCH=y" "$CONFIGFILE" && (kernel_is_rhel || kernel_versi
 
 	USE_KLP=1
 
-	if kernel_is_rhel || ! kernel_version_gte 5.8.0; then
+	if use_klp_arch; then
 		USE_KLP_ARCH=1
 		KPATCH_LDFLAGS="--unique=.parainstructions --unique=.altinstructions"
 		CDO_FLAGS="--klp-arch"
