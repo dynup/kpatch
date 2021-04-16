@@ -1,0 +1,3 @@
+#!/bin/bash
+
+uname -r | grep -q kpatch
