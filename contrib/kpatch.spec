@@ -6,7 +6,7 @@
 
 Name: kpatch
 Summary: Dynamic kernel patching
-Version: 0.9.2
+Version: 0.9.3
 License: GPLv2
 Group: System Environment/Kernel
 URL: http://github.com/dynup/kpatch
@@ -104,6 +104,15 @@ rm -rf %{buildroot}
 %{_mandir}/man1/kpatch-build.1*
 
 %changelog
+* Tue Apr 20 Yannick Cote <ycote@redhat.com> - 0.9.3
+- Initial support for clang compiler
+- Add support for rhel-8.4
+- rhel-8.4: workaround pahole and extended ELF sections
+- rhel-8.4: drop klp.arch support
+- Kpatch command waits for module to fully unload
+- Kpatch command informs user when signal subcommand is unnecessary
+- kpatch-build skips ppc64le vdso files
+
 * Tue Sep 8 2020 Joe Lawrence <joe.lawrence@redhat.com> - 0.9.2
 - Integration test support for rhel-{7.8,7.9,8.1,8.2}, centos-8
 - Better support for gcc child functions
