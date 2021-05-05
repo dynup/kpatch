@@ -2546,8 +2546,8 @@ static void kpatch_check_relocations(struct kpatch_elf *kelf)
 		list_for_each_entry(rela, &sec->relas, list) {
 			if (rela->sym->sec) {
 				sdata = rela->sym->sec->data;
-				if (rela->addend > (long)sdata->d_size) {
-					ERROR("out-of-range relocation %s+%lx in %s", rela->sym->sec->name,
+				if ((long)rela->sym->sym.st_value + rela->addend > (long)sdata->d_size) {
+					ERROR("out-of-range relocation %s+%lx in %s", rela->sym->name,
 							rela->addend, sec->name);
 				}
 			}
