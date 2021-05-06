@@ -1066,7 +1066,7 @@ for i in $FILES; do
 				ARCH_FLAG="--arch x86_64"
 				;;
 		esac
-		"$TOOLSDIR"/create-diff-object ${ARCH_FLAG} $CDO_FLAGS \
+		"$TOOLSDIR"/create-diff-object "$ARCH_FLAG" $CDO_FLAGS \
 			"orig/$i" "patched/$i" "$KOBJFILE_NAME" \
 			"$SYMTAB" "$SYMVERS_FILE" "${MODNAME//-/_}" \
 			"output/$i" 2>&1 | logger 1
