@@ -1057,7 +1057,17 @@ for i in $FILES; do
 
 		# create-diff-object orig.o patched.o parent-name parent-symtab
 		#		     Module.symvers patch-mod-name output.o
-		"$TOOLSDIR"/create-diff-object $CDO_FLAGS "orig/$i" "patched/$i" "$KOBJFILE_NAME" \
+		arch=$(readelf --file-header "orig/$i" | grep "Machine:" | sed -e 's,.*Machine:\s*,,')
+		case "${arch}" in
+			PowerPC*)
+				ARCH_FLAG="--arch powerpc"
+				;;
+			*)
+				ARCH_FLAG="--arch x86_64"
+				;;
+		esac
+		"$TOOLSDIR"/create-diff-object ${ARCH_FLAG} $CDO_FLAGS \
+			"orig/$i" "patched/$i" "$KOBJFILE_NAME" \
 			"$SYMTAB" "$SYMVERS_FILE" "${MODNAME//-/_}" \
 			"output/$i" 2>&1 | logger 1
 		check_pipe_status create-diff-object
