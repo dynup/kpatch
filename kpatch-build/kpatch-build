@@ -55,6 +55,7 @@ DEBUG_KCFLAGS=""
 declare -a PATCH_LIST
 APPLIED_PATCHES=0
 OOT_MODULE=
+KLP_REPLACE=1
 
 warn() {
 	echo "ERROR: $1" >&2
@@ -215,6 +216,15 @@ use_klp_arch()
 		! rhel_kernel_version_gte 4.18.0-284.el8
 	else
 		! kernel_version_gte 5.8.0
+	fi
+}
+
+support_klp_replace()
+{
+	if kernel_is_rhel; then
+		rhel_kernel_version_gte 4.18.0-193.el8
+	else
+		kernel_version_gte 5.1.0
 	fi
 }
 
@@ -514,12 +524,13 @@ usage() {
 	echo "		                        (can be specified multiple times)" >&2
 	echo "		-e, --oot-module        Enable patching out-of-tree module," >&2
 	echo "		                        specify current version of module" >&2
+	echo "		-R, --non-replace       Disable replace patch (replace is on by default)" >&2
 	echo "		--skip-cleanup          Skip post-build cleanup" >&2
 	echo "		--skip-compiler-check   Skip compiler version matching check" >&2
 	echo "		                        (not recommended)" >&2
 }
 
-options="$(getopt -o ha:r:s:c:v:j:t:n:o:de: -l "help,archversion:,sourcerpm:,sourcedir:,config:,vmlinux:,jobs:,target:,name:,output:,oot-module:,debug,skip-gcc-check,skip-compiler-check,skip-cleanup" -- "$@")" || die "getopt failed"
+options="$(getopt -o ha:r:s:c:v:j:t:n:o:de:R -l "help,archversion:,sourcerpm:,sourcedir:,config:,vmlinux:,jobs:,target:,name:,output:,oot-module:,debug,skip-gcc-check,skip-compiler-check,skip-cleanup,non-replace" -- "$@")" || die "getopt failed"
 
 eval set -- "$options"
 
@@ -581,6 +592,9 @@ while [[ $# -gt 0 ]]; do
 		[[ ! -f "$2" ]] && die "out-of-tree module '$2' not found"
 		OOT_MODULE="$(readlink -f "$2")"
 		shift
+		;;
+	-R|--non-replace)
+		KLP_REPLACE=0
 		;;
 	--skip-cleanup)
 		echo "Skipping cleanup"
@@ -821,6 +835,12 @@ if grep -q "CONFIG_LIVEPATCH=y" "$CONFIGFILE" && (kernel_is_rhel || kernel_versi
 		KPATCH_LDFLAGS="--unique=.parainstructions --unique=.altinstructions"
 		CDO_FLAGS="--klp-arch"
 	fi
+
+	if [[  "$KLP_REPLACE" -eq 1 ]] ; then
+		support_klp_replace || die "The kernel doesn't support klp replace"
+	else
+		export KBUILD_CFLAGS_MODULE="$KBUILD_CFLAGS_MODULE -DKLP_REPLACE_ENABLE=false"
+	fi
 else
 	# No support for livepatch in the kernel. Kpatch core module is needed.
 
@@ -828,6 +848,9 @@ else
 	# sections.  Use with caution!
 	echo "WARNING: Use of kpatch core module (kpatch.ko) is deprecated!  There may be bugs!" >&2
 
+	if [[ "$KLP_REPLACE" -eq 1 ]] ; then
+		die "kpatch core module (kpatch.ko) does not support replace, please add -R|--non-replace"
+	fi
 	find_core_symvers || die "unable to find Module.symvers for kpatch core module"
 	KBUILD_EXTRA_SYMBOLS="$SYMVERSFILE"
 fi
