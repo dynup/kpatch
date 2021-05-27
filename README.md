@@ -591,7 +591,7 @@ built separately.
 Get involved
 ------------
 
-If you have questions or feedback, join the #kpatch IRC channel on freenode and
+If you have questions or feedback, join the #kpatch IRC channel on [Libera](https://libera.chat) and
 say hi.  We also have a [mailing list](https://www.redhat.com/mailman/listinfo/kpatch).
 
 Contributions are very welcome.  Feel free to open issues or PRs on github.
