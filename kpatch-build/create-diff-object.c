@@ -2564,7 +2564,7 @@ static void kpatch_include_debug_sections(struct kpatch_elf *kelf)
 	list_for_each_entry(sec, &kelf->sections, list) {
 		if (is_debug_section(sec)) {
 			sec->include = 1;
-			if (!is_rela_section(sec))
+			if (!is_rela_section(sec) && sec->secsym)
 				sec->secsym->include = 1;
 		}
 	}
