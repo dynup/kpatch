@@ -111,9 +111,9 @@ struct kpatch_elf {
 };
 
 enum architecture {
-	ARM64,
-	PPC64,
-	X86_64,
+	ARM64  = 0x1 << 0,
+	PPC64  = 0x1 << 1,
+	X86_64 = 0x1 << 2,
 };
 
 extern enum architecture current_arch;

@@ -2739,7 +2739,7 @@ static void kpatch_create_kpatch_arch_section(struct kpatch_elf *kelf, char *obj
 		ERROR("can't find .kpatch.strings symbol");
 
 	for (special = special_sections; special->name; special++) {
-		if ((special->arch & arch) == 0)
+		if ((special->arch & current_arch) == 0)
 			continue;
 
 		if (strcmp(special->name, ".parainstructions") &&
@@ -2783,7 +2783,7 @@ static void kpatch_process_special_sections(struct kpatch_elf *kelf,
 	int altinstr = 0;
 
 	for (special = special_sections; special->name; special++) {
-		if ((special->arch & arch) == 0)
+		if ((special->arch & current_arch) == 0)
 			continue;
 
 		sec = find_section_by_name(&kelf->sections, special->name);
@@ -3255,7 +3255,7 @@ static void kpatch_create_intermediate_sections(struct kpatch_elf *kelf,
 
 		special = false;
 		for (s = special_sections; s->name; s++) {
-			if ((s->arch & arch) == 0)
+			if ((s->arch & current_arch) == 0)
 				continue;
 
 			if (!strcmp(sec->base->name, s->name))
