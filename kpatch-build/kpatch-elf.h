@@ -110,6 +110,14 @@ struct kpatch_elf {
 	int fd;
 };
 
+enum architecture {
+	ARM64,
+	PPC64,
+	X86_64,
+};
+
+extern enum architecture current_arch;
+
 /*******************
  * Helper functions
  ******************/
