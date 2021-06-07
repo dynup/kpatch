@@ -36,7 +36,7 @@ MAX_LOAD_ATTEMPTS=5
 RETRY_INTERVAL=2
 
 usage_cmd() {
-	printf '   %-20s\n      %s\n' "$1" "$2" >&2
+	printf '   %-20s\n%s\n' "$1" "$(fmt -w 80 <(echo "      $2"))" >&2
 }
 
 usage () {
@@ -57,7 +57,7 @@ usage () {
 	echo >&2
 	usage_cmd "list" "list installed patch modules"
 	echo >&2
-	usage_cmd "signal" "signal/poke any process stalling the current patch transition"
+	usage_cmd "signal" "signal/poke any process stalling the current patch transition. This is only useful on systems that have the sysfs livepatch signal interface. On other systems, the signaling should be done automatically by the OS and this subcommand is a no-op."
 	echo >&2
 	usage_cmd "version" "display the kpatch version"
 	exit 1
