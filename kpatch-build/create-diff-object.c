@@ -1500,7 +1500,7 @@ static void kpatch_replace_sections_syms(struct kpatch_elf *kelf)
 	struct section *sec;
 	struct rela *rela;
 	struct symbol *sym;
-	unsigned int add_off;
+	unsigned int add_off = 0;
 
 	log_debug("\n");
 
@@ -3500,7 +3500,7 @@ static void kpatch_create_mcount_sections(struct kpatch_elf *kelf)
 
 				rela->type = R_X86_64_PC32;
 			}
-		} else if (current_arch == PPC64) {
+		} else { /* current_arch == PPC64 */
 			bool found = false;
 
 			list_for_each_entry(rela, &sym->sec->rela->relas, list)
