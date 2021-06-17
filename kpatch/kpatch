@@ -127,11 +127,11 @@ find_core_module() {
 }
 
 kpatch_core_loaded() {
-	grep -q -e "T kpatch_register" /proc/kallsyms
+	[[ -d "/sys/kernel/kpatch" ]]
 }
 
 core_loaded () {
-	grep -q -e "T klp_enable_patch" -e "T kpatch_register" /proc/kallsyms
+	[[ -d "/sys/kernel/kpatch" ]] || [[ -d "/sys/kernel/livepatch" ]]
 }
 
 get_module_name () {
