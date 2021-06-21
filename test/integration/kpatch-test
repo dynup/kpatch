@@ -50,6 +50,7 @@ ERROR=0
 LOG=test.log
 DYNDEBUG_CONTROL=/sys/kernel/debug/dynamic_debug/control
 DYNDEBUG_ENABLED=1
+ARCHVERSION="$(uname -r)"
 rm -f ./*.log
 
 PATCHDIR="${PATCHDIR:-$PWD}"
@@ -308,11 +309,37 @@ new_dmesg() {
 	fi
 }
 
+kernel_version_gte() {
+	[  "${ARCHVERSION//-*/}" = "$(echo -e "${ARCHVERSION//-*}\\n$1" | sort -rV | head -n1)" ]
+}
+
+support_klp_replace()
+{
+	if kernel_is_rhel; then
+		rhel_kernel_version_gte 4.18.0-193.el8
+	else
+		kernel_version_gte 5.1.0
+	fi
+}
+
+kernel_is_rhel() {
+	[[ "$ARCHVERSION" =~ \.el[789] ]]
+}
+
+rhel_kernel_version_gte() {
+        [  "${ARCHVERSION}" = "$(echo -e "${ARCHVERSION}\\n$1" | sort -rV | head -n1)" ]
+}
+
 # shellcheck disable=SC1091
 source /etc/os-release
 if [[ "${ID}" == "rhel" && "${VERSION_ID%%.*}" == "7" && "${VERSION_ID##*.}" -le "6" ]]; then
 	DYNDEBUG_ENABLED=0
 	echo "Dynamic debug is not supported on '${PRETTY_NAME}', disabling."
+fi
+
+if ! support_klp_replace ; then
+    	KPATCHBUILD_OPTS="$KPATCHBUILD_OPTS -R"
+	echo "KLP replace is not supported on '${PRETTY_NAME}', disabling."
 fi
 
 for file in "${PATCH_LIST[@]}"; do

@@ -39,6 +39,13 @@ recommended that when patching a system which has already been patched, the
 second patch should be a cumulative upgrade which is a superset of the first
 patch.
 
+Since upstream kernel 5.1, livepatch supports a "replace" flag to help the
+management of cumulative patches. With the flag set, the kernel will load
+the cumulative patch and unload all existing patches in one transition.
+kpatch-build enables the replace flag by default. If replace behavior is
+not desired, the user can disable it with -R|--non-replace.
+
+
 Data structure changes
 ----------------------
 
