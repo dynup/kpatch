@@ -275,7 +275,7 @@ wait_for_patch_transition() {
 
 module_ref_count() {
 	local modname="$1"
-	[[ $(cat "/sys/module/$modname/refcnt" 2>/dev/null) != "0" ]]
+	[[ $(cat "/sys/module/$modname/refcnt" 2>/dev/null) -gt "0" ]]
 }
 
 wait_for_zero_module_ref_count() {
@@ -338,6 +338,9 @@ load_module () {
 			echo "module named $modname already loaded and enabled"
 		fi
 	else
+		# Cleanup possibly loaded, but disabled patch.
+		remove_module "$modname" "quiet"
+
 		echo "loading patch module: $module"
 		local i=0
 		while true; do
@@ -420,7 +423,9 @@ remove_module () {
 		die "failed to unload module $modname (refcnt)"
 	fi
 
-	echo "unloading patch module: $modname"
+	if [[ "$#" -lt 2 || "$2" != "quiet" ]] ; then
+		echo "unloading patch module: $modname"
+	fi
 	# ignore any error here because rmmod can fail if the module used
 	# KPATCH_FORCE_UNSAFE.
 	rmmod "$modname" 2> /dev/null || return 0
