@@ -48,6 +48,12 @@
 #include "machine.h"
 #include "bits.h"
 
+#ifdef DEBUG
+#define debug(args...) fprintf(stderr, args)
+#else
+#define debug(args...)
+#endif
+
 static int prettify(const char **fnamep)
 {
 	const char *name = *fnamep;
@@ -335,10 +341,41 @@ static struct symbol_list *sparse_tokenstream(struct token *token)
 	return translation_unit_used_list;
 }
 
+static int in_change_range(const struct token *token, const struct patch_change *chg)
+{
+	if (token->pos.line >= chg->resultline &&
+	    token->pos.line < chg->resultline+chg->numlines) {
+		debug("token: `%s`: pos line %d in range: %d-%d\n",
+		      show_token(token), token->pos.line, chg->resultline, chg->resultline+chg->numlines);
+		return 1;
+	}
+	return 0;
+}
+
+extern struct change_list *kpatch_changelist;
+
+static void mark_ifchanged(const char *filename, struct token *token)
+{
+	struct patch_change *chg;
+
+	// already marked as changed
+	if (token->pos.changed)
+		return;
+
+	FOR_EACH_PTR(kpatch_changelist, chg) {
+		if (strcmp(filename, chg->pathname)){
+			debug("%s vs %s\n", filename, chg->pathname);
+			continue;
+		}
+		if (in_change_range(token, chg))
+			token->pos.changed = 1;
+	} END_FOR_EACH_PTR(chg);
+}
+
 static struct symbol_list *sparse_file(const char *filename)
 {
 	int fd;
-	struct token *token;
+	struct token *token, *t;
 
 	if (strcmp(filename, "-") == 0) {
 		fd = 0;
@@ -350,8 +387,14 @@ static struct symbol_list *sparse_file(const char *filename)
 	base_filename = filename;
 
 	// Tokenize the input stream
-	token = tokenize(NULL, filename, fd, NULL, includepath);
+	t = token = tokenize(NULL, filename, fd, NULL, includepath);
 	close(fd);
+
+	while (!eof_token(t)) {
+		struct token *next = t->next;
+		mark_ifchanged(filename, t);
+		t = next;
+	}
 
 	return sparse_tokenstream(token);
 }

@@ -244,8 +244,8 @@ struct symbol {
 
 #define MOD_GNU_INLINE		0x00010000
 #define MOD_USERTYPE		0x00020000
-     // MOD UNUSED		0x00040000
-     // MOD UNUSED		0x00080000
+#define MOD_NOTRACE		0x00040000
+#define MOD_INIT		0x00080000
      // MOD UNUSED		0x00100000
      // MOD UNUSED		0x00200000
 
@@ -271,13 +271,13 @@ struct symbol {
 /* modifiers preserved by typeof() operator */
 #define MOD_TYPEOF	(MOD_QUALIFIER | MOD_ATOMIC | MOD_NOCAST | MOD_SPECIFIER)
 /* modifiers for function attributes */
-#define MOD_FUN_ATTR	(MOD_PURE|MOD_NORETURN)
+#define MOD_FUN_ATTR	(MOD_PURE|MOD_NORETURN|MOD_NOTRACE|MOD_INIT)
 /* like cvr-qualifiers but 'reversed' (OK: source <= target) */
 #define MOD_REV_QUAL	(MOD_PURE|MOD_NORETURN)
 /* do not warn when these are duplicated */
-#define MOD_DUP_OK	(MOD_UNUSED|MOD_GNU_INLINE)
+#define MOD_DUP_OK	(MOD_UNUSED|MOD_GNU_INLINE|MOD_NOTRACE|MOD_INIT)
 /* must be part of the declared symbol, not its type */
-#define MOD_DECLARE	(MOD_STORAGE|MOD_INLINE|MOD_TLS|MOD_GNU_INLINE|MOD_UNUSED|MOD_PURE|MOD_NORETURN|MOD_EXT_VISIBLE)
+#define MOD_DECLARE	(MOD_STORAGE|MOD_INLINE|MOD_TLS|MOD_GNU_INLINE|MOD_NOTRACE|MOD_INIT|MOD_UNUSED|MOD_PURE|MOD_NORETURN|MOD_EXT_VISIBLE)
 
 
 

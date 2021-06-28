@@ -132,6 +132,8 @@ static const char *show_modifiers(unsigned long mod, int term)
 		{MOD_BITWISE,		"[bitwise]"},
 		{MOD_EXPLICITLY_SIGNED,	"[explicitly-signed]"},
 		{MOD_GNU_INLINE,	"[gnu_inline]"},
+		{MOD_NOTRACE,		"[notrace]"},
+		{MOD_INIT,		"[__init]"},
 		{MOD_NOCAST,		"[nocast]"},
 		{MOD_NODEREF,		"[noderef]"},
 		{MOD_NORETURN,		"[noreturn]"},

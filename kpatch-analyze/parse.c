@@ -551,6 +551,8 @@ static struct init_keyword {
 	D("pure",		&attr_fun_op,		.mods = MOD_PURE),
 	A("const",		&attr_fun_op,		.mods = MOD_PURE),
 	D("gnu_inline",		&attr_fun_op,		.mods = MOD_GNU_INLINE),
+	D("no_instrument_function",	&attr_fun_op,	.mods = MOD_NOTRACE),
+	A("__section(.init.text)",	&attr_fun_op,		.mods = MOD_INIT),
 
 	/* Modes */
 	D("mode",		&mode_op),

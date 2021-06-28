@@ -50,14 +50,22 @@
 
 extern const char *sparse_version;
 
+struct patch_change {
+	char *pathname;
+	int sourceline;
+	int resultline;
+	int numlines;
+};
+
 struct position {
 	unsigned int type:6,
 		     stream:14,
 		     newline:1,
 		     whitespace:1,
 		     pos:10;
-	unsigned int line:31,
-		     noexpand:1;
+	unsigned int line:30,
+		     noexpand:1,
+		     changed:1;
 };
 
 struct ident;
@@ -71,6 +79,7 @@ struct entrypoint;
 struct instruction;
 struct multijmp;
 struct pseudo;
+struct patch_change;
 
 DECLARE_PTR_LIST(symbol_list, struct symbol);
 DECLARE_PTR_LIST(statement_list, struct statement);
@@ -82,6 +91,8 @@ DECLARE_PTR_LIST(multijmp_list, struct multijmp);
 DECLARE_PTR_LIST(pseudo_list, struct pseudo);
 DECLARE_PTR_LIST(ident_list, struct ident);
 DECLARE_PTR_LIST(string_list, char);
+DECLARE_PTR_LIST(change_list, struct patch_change);
+DECLARE_PTR_LIST(streamid_list, int);
 
 typedef struct pseudo *pseudo_t;
 

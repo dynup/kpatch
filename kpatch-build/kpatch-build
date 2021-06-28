@@ -525,12 +525,14 @@ usage() {
 	echo "		-e, --oot-module        Enable patching out-of-tree module," >&2
 	echo "		                        specify current version of module" >&2
 	echo "		-R, --non-replace       Disable replace patch (replace is on by default)" >&2
+	echo "		--skip-build            Skip actual build" >&2
+	echo "		                        (prepare and verify patches only)" >&2
 	echo "		--skip-cleanup          Skip post-build cleanup" >&2
 	echo "		--skip-compiler-check   Skip compiler version matching check" >&2
 	echo "		                        (not recommended)" >&2
 }
 
-options="$(getopt -o ha:r:s:c:v:j:t:n:o:de:R -l "help,archversion:,sourcerpm:,sourcedir:,config:,vmlinux:,jobs:,target:,name:,output:,oot-module:,debug,skip-gcc-check,skip-compiler-check,skip-cleanup,non-replace" -- "$@")" || die "getopt failed"
+options="$(getopt -o ha:r:s:c:v:j:t:n:o:de:R -l "help,archversion:,sourcerpm:,sourcedir:,config:,vmlinux:,jobs:,target:,name:,output:,oot-module:,debug,skip-build,skip-gcc-check,skip-compiler-check,skip-cleanup,non-replace" -- "$@")" || die "getopt failed"
 
 eval set -- "$options"
 
@@ -595,6 +597,10 @@ while [[ $# -gt 0 ]]; do
 		;;
 	-R|--non-replace)
 		KLP_REPLACE=0
+		;;
+	--skip-build)
+		echo "Skipping build"
+		SKIPBUILD=1
 		;;
 	--skip-cleanup)
 		echo "Skipping cleanup"
@@ -902,6 +908,8 @@ fi
 echo "Testing patch file(s)"
 cd "$SRCDIR" || die
 verify_patch_files
+
+[[ "$SKIPBUILD" -eq 1 ]] && exit 0
 apply_patches
 remove_patches
 
