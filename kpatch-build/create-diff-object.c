@@ -2785,8 +2785,10 @@ static void kpatch_process_special_sections(struct kpatch_elf *kelf,
 		 * Only include .altinstr_replacement if .altinstructions
 		 * is also included.
 		 */
-		if (!altinstr)
+		if (!altinstr) {
+			sec->status = SAME;
 			break;
+		}
 
 		/* include base section */
 		sec->include = 1;
