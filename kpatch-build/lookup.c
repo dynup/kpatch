@@ -102,6 +102,8 @@ static int locals_match(struct lookup_table *table, int idx,
 	for_each_obj_symbol_continue(i, sym, table) {
 		if (sym->type == STT_FILE)
 			break;
+		if(strstr(sym->name, ".cold") || strstr(sym->name, ".part"))
+			continue;
 		if (sym->bind != STB_LOCAL)
 			continue;
 		if (sym->type != STT_FUNC && sym->type != STT_OBJECT)
@@ -133,6 +135,8 @@ static int locals_match(struct lookup_table *table, int idx,
 		for_each_obj_symbol_continue(i, sym, table) {
 			if (sym->type == STT_FILE)
 				break;
+			if(strstr(sym->name, ".cold") || strstr(sym->name, ".part"))
+				continue;
 			if (sym->bind != STB_LOCAL)
 				continue;
 			if (sym->type != STT_FUNC && sym->type != STT_OBJECT)
@@ -164,6 +168,8 @@ static void find_local_syms(struct lookup_table *table, char *hint,
 
 	for_each_obj_symbol(i, sym, table) {
 		if (sym->type != STT_FILE)
+			continue;
+		if(strstr(sym->name, ".cold") || strstr(sym->name, ".part"))
 			continue;
 		if (strcmp(hint, sym->name))
 			continue;
