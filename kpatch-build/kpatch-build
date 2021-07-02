@@ -753,7 +753,7 @@ else
 		rm -rf "$SRCDIR/.git"
 
 		if [[ "$ARCHVERSION" == *-* ]]; then
-			echo "-${ARCHVERSION##*-}" > "$SRCDIR/localversion" || die
+			sed -i "s/^EXTRAVERSION.*/EXTRAVERSION = -${ARCHVERSION##*-}/" "$SRCDIR/Makefile" || die
 		fi
 
 		echo "$ARCHVERSION" > "$VERSIONFILE" || die
