@@ -4,6 +4,7 @@
 #include <linux/compiler.h>
 #include <linux/jiffies.h>
 #include <linux/version.h>
+#include "kpatch-syscall.h"
 
 /* upstream 33def8498fdd "treewide: Convert macro and uses of __section(foo) to __section("foo")" */
 #if LINUX_VERSION_CODE < KERNEL_VERSION(5, 10, 0)
