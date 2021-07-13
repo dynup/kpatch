@@ -10,6 +10,7 @@
 .tmp_versions
 Module.symvers
 kmod/core/.cache.mk
+kpatch-analyze/kpatch-sparse
 kpatch-build/lookup
 kpatch-build/create-diff-object
 kpatch-build/create-klp-module

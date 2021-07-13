@@ -1,10 +1,10 @@
 include Makefile.inc
 
-SUBDIRS     = kpatch-build kpatch kmod man contrib
-BUILD_DIRS   = $(SUBDIRS:%=build-%)
-INSTALL_DIRS = $(SUBDIRS:%=install-%)
+SUBDIRS        = kpatch-build kpatch kpatch-analyze kmod man contrib
+BUILD_DIRS     = $(SUBDIRS:%=build-%)
+INSTALL_DIRS   = $(SUBDIRS:%=install-%)
 UNINSTALL_DIRS = $(SUBDIRS:%=uninstall-%)
-CLEAN_DIRS   = $(SUBDIRS:%=clean-%)
+CLEAN_DIRS     = $(SUBDIRS:%=clean-%)
 
 UNITTEST_DIR = test/unit
 INTEGRATION_DIR = test/integration

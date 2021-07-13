@@ -1,0 +1,229 @@
+#!/bin/bash
+#
+# kpatch analyze script
+#
+# Copyright (C) 2021 Divya Cote <divya.cote@gmail.com>
+#
+# This program is free software; you can redistribute it and/or
+# modify it under the terms of the GNU General Public License
+# as published by the Free Software Foundation; either version 2
+# of the License, or (at your option) any later version.
+#
+# This program is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU General Public License for more details.
+#
+# You should have received a copy of the GNU General Public License
+# along with this program; if not, write to the Free Software
+# Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA,
+# 02110-1301, USA.
+
+# This front-end script takes a kernel source patch and passes it to the
+# kpatch-sparse analyzer after applying it to the destination source tree. The
+# analyzer looks for known kpatch porting pitfalls and troublesome patterns with
+# the aim of helping developers to quickly 1- pass safely the patch directly to
+# kpatch-build or to 2- rework the patch in a format that is kpatch'able.
+#
+# `kpatch-analyze` exits with "0" when the provided patch can be passed to
+# kpatch-build. Conversely, a non-zero exit status is returned and a brief
+# analysis is displayed to standard output. 
+
+set -eo pipefail
+
+BASE="$PWD"
+SCRIPTDIR="$(readlink -f "$(dirname "$(type -p "$0")")")"
+CACHEDIR="${CACHEDIR:-$HOME/.kpatch}"
+SRCDIR="$CACHEDIR/src"
+VERSIONFILE="$CACHEDIR/version"
+TEMPDIR="$CACHEDIR/tmp"
+LOGFILE="$CACHEDIR/analyze.log"
+DEBUG=0
+CHANGEDFILES=
+PATCHFILE=
+TOOLSDIR=
+
+
+warn() {
+	echo "WARNING: $1" >&2
+}
+
+err() {
+	echo "ERROR: $1" >&2
+}
+
+die() {
+	if [[ -z "$1" ]]; then
+		msg="kpatch analyze failed"
+	else
+		msg="$1"
+	fi
+
+	if [[ -e "$LOGFILE" ]]; then
+		err "$msg. Check $LOGFILE for more details."
+	else
+		err "$msg."
+	fi
+
+	exit 1
+}
+
+logger() {
+	local to_stdout=${1:-0}
+
+	if [[ $DEBUG -ge 2 ]] || [[ "$to_stdout" -eq 1 ]]; then
+		# Log to both stdout and the logfile
+		tee -a "$LOGFILE"
+	else
+		# Log only to the logfile
+		cat >> "$LOGFILE"
+	fi
+}
+
+find_dirs() {
+	if [[ -e "$SCRIPTDIR/kpatch-sparse" ]]; then
+		# git repo
+		TOOLSDIR="$SCRIPTDIR"
+	elif [[ -e "$SCRIPTDIR/../libexec/kpatch/kpatch-sparse" ]]; then
+		# installation path
+		TOOLSDIR="$(readlink -f "$SCRIPTDIR/../libexec/kpatch")"
+	else
+		return 1
+	fi
+}
+
+git_init() {
+	if [[ ! -d "$SRCDIR/.git" ]]; then
+		echo "Initializing git repo for source tree..."
+		git init 2>&1 | logger || die
+		git config user.email "init@kpatch.analyze" | logger || die
+		git config user.name "Kpatch Analyze" | logger || die
+		git add . 2>&1 | logger || die
+		git commit --no-gpg-sign -m "initial import" >/dev/null 2>&1 | logger || die
+	fi
+}
+
+changed_file_list() {
+	CHANGEDFILES=$(git status -s -uno | awk '{print $2}')
+	echo "$CHANGEDFILES"
+}
+
+run_kpatch_sparse() {
+	for i in $(echo -n "$CHANGEDFILES"); do
+		if [[ ${i: -2} = ".c" ]]; then
+			local changelist=$(mktemp -p "$TEMPDIR" changelist.XXXXXXXXXX)
+			git blame --incremental "$i" | grep '^0* ' | sed "s|^[0]*|$i|g" > "$changelist"
+			echo
+			echo " * Currently analyzing: $i"
+			env KSPARSE_CHANGELIST="$changelist" \
+				make -s C=1 'CHECK='"$TOOLSDIR"'/kpatch-sparse' "${i/%.c/.o}"
+		else
+			echo
+			echo " * Skipping non-C file: "$i""
+			warn "Patch contains changes to files that might change the behavior of"
+			warn "the kernel which cannot be reproduced by a kpatch patch."
+		fi
+	done
+}
+
+apply_patch() {
+	git apply --check "$PATCHFILE" 2>&1 | logger || die "$PATCHFILE file failed to apply"
+	git apply "$PATCHFILE" 2>&1 | logger || die "$PATCHFILE file failed to apply"
+}
+
+remove_patch() {
+	git apply -R "$PATCHFILE" &> /dev/null
+
+	# If $SRCDIR was a git repo, make sure git actually sees that
+	# we've reverted our patch(es).
+	if [[ -d "$SRCDIR/.git" ]]; then
+		(cd "$SRCDIR" && git update-index -q --refresh)
+	fi
+}
+
+cleanup() {
+	remove_patch
+	if [[ "$DEBUG" -eq 0 ]]; then
+		rm -rf "$TEMPDIR"
+	fi
+}
+
+usage() {
+	echo "usage: $(basename "$0") [options] <patch_file>" >&2
+	echo "		patch_file              Input patchfile" >&2
+	echo "		-h, --help              Show this help message" >&2
+	echo "		-d, --debug             Enable 'xtrace' and keep scratch files" >&2
+	echo "		                        in <CACHEDIR>/tmp" >&2
+	echo "		                        (can be specified multiple times)" >&2
+	echo "		--skip-cleanup          Skip post-analysis cleanup" >&2
+}
+
+options="$(getopt -o hd -l "help,debug,skip-cleanup" -- "$@")" || die "getopt failed"
+
+eval set -- "$options"
+
+while [[ $# -gt 0 ]]; do
+	case "$1" in
+	-h|--help)
+		usage
+		exit 0
+		;;
+	-d|--debug)
+	DEBUG=$((DEBUG + 1))
+	if [[ $DEBUG -eq 1 ]]; then
+		echo "DEBUG mode enabled"
+	fi
+	;;
+	--skip-cleanup)
+		echo "Skipping cleanup"
+		SKIPCLEANUP=1
+		;;
+	*)
+		[[ "$1" = "--" ]] && shift && continue
+		[[ ! -f "$1" ]] && die "patch file '$1' not found"
+		PATCHFILE="$(readlink -f "$1")"
+		;;
+	esac
+	shift
+done
+
+
+if [[ -z "$PATCHFILE" ]]; then
+	err "no patch file specified"
+	usage
+	exit 1
+fi
+
+if [[ $DEBUG -eq 1 ]] || [[ $DEBUG -ge 3 ]]; then
+	set -o xtrace
+fi
+
+# ensure cachedir and tempdir are setup properly and cleaned
+mkdir -p "$TEMPDIR" || die "Couldn't create $TEMPDIR"
+rm -rf "${TEMPDIR:?}"/*
+rm -f "$LOGFILE"
+
+echo "LOGGER started" | logger 1
+
+[[ "$SKIPCLEANUP" -eq 0 ]] && trap cleanup EXIT INT TERM HUP
+
+[[ -d "$SRCDIR" ]] || die "$SRCDIR doesn't exist, try running: 'kpatch-build --skip-build $PATCHFILE' first"
+find_dirs || die "can't find location of required 'kpatch-sparse' tool"
+
+cd "$SRCDIR" || die
+git_init
+echo
+
+echo "Applying patch"
+apply_patch
+echo
+
+echo "Checking changed files"
+changed_file_list
+echo
+
+echo "Running kpatch-sparse"
+run_kpatch_sparse
+echo
+
+echo "DONE"

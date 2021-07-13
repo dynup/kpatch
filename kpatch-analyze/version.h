@@ -1,0 +1,1 @@
+#define SPARSE_VERSION "v0.6.3-341-g8af243292348-dirty"
