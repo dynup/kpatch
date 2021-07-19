@@ -1282,7 +1282,8 @@ static void kpatch_correlate_static_local_variables(struct kpatch_elf *base,
 		if (bundled && sym->sec->twin) {
 			UNCORRELATE_ELEMENT(sym->sec);
 
-			UNCORRELATE_ELEMENT(sym->sec->secsym);
+			if (sym->sec->secsym)
+				UNCORRELATE_ELEMENT(sym->sec->secsym);
 
 			if (sym->sec->rela)
 				UNCORRELATE_ELEMENT(sym->sec->rela);
@@ -1785,7 +1786,7 @@ static int kpatch_include_callback_elements(struct kpatch_elf *kelf)
 			sym = rela->sym;
 			log_normal("found callback: %s\n",sym->name);
 			kpatch_include_symbol(sym);
-		} else {
+		} else if (sec->secsym) {
 			sec->secsym->include = 1;
 		}
 	}
@@ -1813,7 +1814,8 @@ static void kpatch_include_force_elements(struct kpatch_elf *kelf)
 			sec->include = 1;
 			if (!is_rela_section(sec)) {
 				/* .kpatch.force */
-				sec->secsym->include = 1;
+				if (sec->secsym)
+					sec->secsym->include = 1;
 				continue;
 			}
 			/* .rela.kpatch.force */
@@ -2431,7 +2433,8 @@ static void kpatch_regenerate_special_section(struct kpatch_elf *kelf,
 	sec->include = 1;
 	sec->base->include = 1;
 	/* include secsym so .kpatch.arch relas can point to section symbols */
-	sec->base->secsym->include = 1;
+	if (sec->base->secsym)
+		sec->base->secsym->include = 1;
 
 	/*
 	 * Update text section data buf and size.
@@ -2614,7 +2617,9 @@ static void kpatch_mark_ignored_sections(struct kpatch_elf *kelf)
 		 * from the section data comparison, but this is a simpler way.
 		 */
 		strsec->include = 1;
-		strsec->secsym->include = 1;
+		if (strsec->secsym)
+			strsec->secsym->include = 1;
+
 		name = strsec->data->d_buf + rela->addend;
 		ignoresec = find_section_by_name(&kelf->sections, name);
 		if (!ignoresec)
