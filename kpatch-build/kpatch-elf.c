@@ -325,24 +325,24 @@ static void kpatch_find_func_profiling_calls(struct kpatch_elf *kelf)
 	list_for_each_entry(sym, &kelf->symbols, list) {
 		if (sym->type != STT_FUNC || !sym->sec || !sym->sec->rela)
 			continue;
-#ifdef __powerpc64__
-		list_for_each_entry(rela, &sym->sec->rela->relas, list) {
-			if (!strcmp(rela->sym->name, "_mcount")) {
-				sym->has_func_profiling = 1;
-				break;
+		if (current_arch == PPC64) {
+			list_for_each_entry(rela, &sym->sec->rela->relas, list) {
+				if (!strcmp(rela->sym->name, "_mcount")) {
+					sym->has_func_profiling = 1;
+					break;
+				}
 			}
-		}
-#else
-		rela = list_first_entry(&sym->sec->rela->relas, struct rela,
-					list);
-		if ((rela->type != R_X86_64_NONE &&
-		     rela->type != R_X86_64_PC32 &&
-		     rela->type != R_X86_64_PLT32) ||
-		    strcmp(rela->sym->name, "__fentry__"))
-			continue;
+		} else {
+			rela = list_first_entry(&sym->sec->rela->relas, struct rela,
+						list);
+			if ((rela->type != R_X86_64_NONE &&
+			     rela->type != R_X86_64_PC32 &&
+			     rela->type != R_X86_64_PLT32) ||
+			    strcmp(rela->sym->name, "__fentry__"))
+				continue;
 
-		sym->has_func_profiling = 1;
-#endif
+			sym->has_func_profiling = 1;
+		}
 	}
 }
 

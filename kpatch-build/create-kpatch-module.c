@@ -31,6 +31,9 @@
 char *childobj;
 enum loglevel loglevel = NORMAL;
 
+/* For kpatch-elf.c */
+enum architecture current_arch = X86_64;
+
 /*
  * Create .kpatch.dynrelas from .kpatch.relocations and .kpatch.symbols sections
  *
@@ -153,12 +156,14 @@ static void remove_intermediate_sections(struct kpatch_elf *kelf)
 
 struct arguments {
 	char *args[2];
+	enum architecture arch;
 	int debug;
 };
 
 static char args_doc[] = "input.o output.o";
 
 static struct argp_option options[] = {
+	{"arch",	777, "ARCH", 0, "Architecture of objects [x86_64, ppc64, arm64]" },
 	{"debug", 'd', 0, 0, "Show debug output" },
 	{ 0 }
 };
@@ -173,6 +178,17 @@ static error_t parse_opt (int key, char *arg, struct argp_state *state)
 	{
 		case 'd':
 			arguments->debug = 1;
+			break;
+		case 777:
+			if (!strcmp(arg, "x86_64"))
+				arguments->arch = X86_64;
+			else if (!strcmp(arg, "ppc64"))
+				arguments->arch = PPC64;
+			else if (!strcmp(arg, "arm64"))
+				arguments->arch = ARM64;
+			else
+				/* Unsupported architecture */
+				argp_usage (state);
 			break;
 		case ARGP_KEY_ARG:
 			if (state->arg_num >= 2)
@@ -205,6 +221,7 @@ int main(int argc, char *argv[])
 	argp_parse (&argp, argc, argv, 0, 0, &arguments);
 	if (arguments.debug)
 		loglevel = DEBUG;
+	current_arch = arguments.arch;
 
 	elf_version(EV_CURRENT);
 

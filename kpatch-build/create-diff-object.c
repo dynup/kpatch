@@ -60,11 +60,16 @@
 	error(EXIT_STATUS_DIFF_FATAL, 0, "unreconcilable difference"); \
 })
 
-#ifdef __powerpc64__
-#define ABSOLUTE_RELA_TYPE R_PPC64_ADDR64
-#else
-#define ABSOLUTE_RELA_TYPE R_X86_64_64
-#endif
+#define ABSOLUTE_RELA_TYPE \
+({						\
+	typeof(R_X86_64_64) __ret = 0;		\
+	switch (current_arch) {			\
+	case ARM64:  __ret = R_AARCH64_ABS64;	\
+	case PPC64:  __ret = R_PPC64_ADDR64;	\
+	case X86_64: __ret = R_X86_64_64;	\
+	}					\
+	__ret;					\
+})
 
 char *childobj;
 
@@ -78,11 +83,14 @@ enum loglevel loglevel = NORMAL;
 
 bool KLP_ARCH;
 
+enum architecture current_arch;
+
 /*******************
  * Data structures
  * ****************/
 struct special_section {
 	char *name;
+	enum architecture arch;
 	int (*group_size)(struct kpatch_elf *kelf, int offset);
 };
 
@@ -137,7 +145,6 @@ static int is_bundleable(struct symbol *sym)
 	return 0;
 }
 
-#ifdef __powerpc64__
 /* Symbol st_others value for powerpc */
 #define STO_PPC64_LOCAL_BIT     5
 #define STO_PPC64_LOCAL_MASK    (7 << STO_PPC64_LOCAL_BIT)
@@ -163,15 +170,11 @@ static int is_bundleable(struct symbol *sym)
  */
 static int is_gcc6_localentry_bundled_sym(struct symbol *sym)
 {
+	if (current_arch != PPC64)
+		return 0;
 	return ((PPC64_LOCAL_ENTRY_OFFSET(sym->sym.st_other) != 0) &&
 		sym->sym.st_value == 8);
 }
-#else
-static int is_gcc6_localentry_bundled_sym(struct symbol *sym)
-{
-	return 0;
-}
-#endif
 
 /*
  * On ppc64le, when a function references data, it does so indirectly, via the
@@ -577,7 +580,6 @@ out:
 		log_debug("section %s has changed\n", sec->name);
 }
 
-#ifdef __x86_64__
 /*
  * Determine if a section has changed only due to a WARN* or might_sleep
  * macro call's embedding of the line number into an instruction operand.
@@ -609,7 +611,7 @@ out:
  * 3) (optional) __warned.xxxxx static local rela
  * 4) warn_slowpath_* or __might_sleep or some other similar rela
  */
-static int kpatch_line_macro_change_only(struct section *sec)
+static int kpatch_line_macro_change_only_x86_64(struct section *sec)
 {
 	struct insn insn1, insn2;
 	unsigned long start1, start2, size, offset, length;
@@ -688,11 +690,11 @@ static int kpatch_line_macro_change_only(struct section *sec)
 
 	return 1;
 }
-#elif __powerpc64__
+
 #define PPC_INSTR_LEN 4
 #define PPC_RA_OFFSET 16
 
-static int kpatch_line_macro_change_only(struct section *sec)
+static int kpatch_line_macro_change_only_ppc64(struct section *sec)
 {
 	unsigned long start1, start2, size, offset;
 	unsigned int instr1, instr2;
@@ -754,12 +756,22 @@ static int kpatch_line_macro_change_only(struct section *sec)
 
 	return 1;
 }
-#else
-static int kpatch_line_macro_change_only(struct section *sec)
+
+static int kpatch_line_macro_change_only_arm64(struct section *sec)
 {
+	/* TODO */
 	return 0;
 }
-#endif
+
+static int kpatch_line_macro_change_only(struct section *sec)
+{
+	switch (current_arch) {
+	case ARM64:  return kpatch_line_macro_change_only_arm64(sec);
+	case PPC64:  return kpatch_line_macro_change_only_ppc64(sec);
+	case X86_64: return kpatch_line_macro_change_only_x86_64(sec);
+	}
+	return 0;
+}
 
 /*
  * Child functions with "*.cold" names don't have _fentry_ calls, but "*.part",
@@ -1431,7 +1443,6 @@ static void kpatch_compare_correlated_elements(struct kpatch_elf *kelf)
 	kpatch_compare_symbols(&kelf->symbols);
 }
 
-#ifdef __x86_64__
 static void rela_insn(const struct section *sec, const struct rela *rela,
 		      struct insn *insn)
 {
@@ -1455,7 +1466,6 @@ static void rela_insn(const struct section *sec, const struct rela *rela,
 			return;
 	}
 }
-#endif
 
 static bool is_callback_section(struct section *sec) {
 
@@ -1491,7 +1501,7 @@ static void kpatch_replace_sections_syms(struct kpatch_elf *kelf)
 	struct section *sec;
 	struct rela *rela;
 	struct symbol *sym;
-	unsigned int add_off;
+	unsigned int add_off = 0;
 
 	log_debug("\n");
 
@@ -1526,22 +1536,22 @@ static void kpatch_replace_sections_syms(struct kpatch_elf *kelf)
 				continue;
 			}
 
-#ifdef __powerpc64__
-			add_off = 0;
-#else
-			if (rela->type == R_X86_64_PC32 ||
-			    rela->type == R_X86_64_PLT32) {
-				struct insn insn;
-				rela_insn(sec, rela, &insn);
-				add_off = (unsigned int)((long)insn.next_byte -
-					  (long)sec->base->data->d_buf -
-					  rela->offset);
-			} else if (rela->type == R_X86_64_64 ||
-				   rela->type == R_X86_64_32S)
+			if (current_arch == PPC64) {
 				add_off = 0;
-			else
-				continue;
-#endif
+			} else if (current_arch == X86_64) {
+				if (rela->type == R_X86_64_PC32 ||
+				    rela->type == R_X86_64_PLT32) {
+					struct insn insn;
+					rela_insn(sec, rela, &insn);
+					add_off = (unsigned int)((long)insn.next_byte -
+						  (long)sec->base->data->d_buf -
+						  rela->offset);
+				} else if (rela->type == R_X86_64_64 ||
+					   rela->type == R_X86_64_32S)
+					add_off = 0;
+				else
+					continue;
+			}
 
 			/*
 			 * Attempt to replace references to unbundled sections
@@ -2003,7 +2013,6 @@ static int jump_table_group_size(struct kpatch_elf *kelf, int offset)
 	return size;
 }
 
-#ifdef __x86_64__
 static int parainstructions_group_size(struct kpatch_elf *kelf, int offset)
 {
 	static int size = 0;
@@ -2053,8 +2062,7 @@ static int static_call_sites_group_size(struct kpatch_elf *kelf, int offset)
 
 	return size;
 }
-#endif
-#ifdef __powerpc64__
+
 static int fixup_entry_group_size(struct kpatch_elf *kelf, int offset)
 {
 	static int size = 0;
@@ -2079,7 +2087,6 @@ static int fixup_barrier_nospec_group_size(struct kpatch_elf *kelf, int offset)
 {
 	return 8;
 }
-#endif
 
 /*
  * The rela groups in the .fixup section vary in size.  The beginning of each
@@ -2134,60 +2141,69 @@ static int fixup_group_size(struct kpatch_elf *kelf, int offset)
 static struct special_section special_sections[] = {
 	{
 		.name		= "__bug_table",
+		.arch		= X86_64 | PPC64,
 		.group_size	= bug_table_group_size,
 	},
 	{
 		.name		= ".fixup",
+		.arch		= X86_64 | PPC64,
 		.group_size	= fixup_group_size,
 	},
 	{
 		.name		= "__ex_table", /* must come after .fixup */
+		.arch		= X86_64 | PPC64,
 		.group_size	= ex_table_group_size,
 	},
 	{
 		.name		= "__jump_table",
+		.arch		= X86_64 | PPC64,
 		.group_size	= jump_table_group_size,
 	},
-#ifdef __x86_64__
 	{
 		.name		= ".smp_locks",
+		.arch		= X86_64,
 		.group_size	= smp_locks_group_size,
 	},
 	{
 		.name		= ".parainstructions",
+		.arch		= X86_64,
 		.group_size	= parainstructions_group_size,
 	},
 	{
 		.name		= ".altinstructions",
+		.arch		= X86_64,
 		.group_size	= altinstructions_group_size,
 	},
 	{
 		.name		= ".static_call_sites",
+		.arch		= X86_64,
 		.group_size	= static_call_sites_group_size,
 	},
-#endif
-#ifdef __powerpc64__
 	{
 		.name		= "__ftr_fixup",
+		.arch		= PPC64,
 		.group_size	= fixup_entry_group_size,
 	},
 	{
 		.name		= "__mmu_ftr_fixup",
+		.arch		= PPC64,
 		.group_size	= fixup_entry_group_size,
 	},
 	{
 		.name		= "__fw_ftr_fixup",
+		.arch		= PPC64,
 		.group_size	= fixup_entry_group_size,
 	},
 	{
 		.name		= "__lwsync_fixup",
+		.arch		= PPC64,
 		.group_size	= fixup_lwsync_group_size,
 	},
 	{
 		.name		= "__barrier_nospec_fixup",
+		.arch		= PPC64,
 		.group_size	= fixup_barrier_nospec_group_size,
 	},
-#endif
 	{},
 };
 
@@ -2728,6 +2744,9 @@ static void kpatch_create_kpatch_arch_section(struct kpatch_elf *kelf, char *obj
 		ERROR("can't find .kpatch.strings symbol");
 
 	for (special = special_sections; special->name; special++) {
+		if ((special->arch & current_arch) == 0)
+			continue;
+
 		if (strcmp(special->name, ".parainstructions") &&
 		    strcmp(special->name, ".altinstructions"))
 			continue;
@@ -2769,6 +2788,9 @@ static void kpatch_process_special_sections(struct kpatch_elf *kelf,
 	int altinstr = 0;
 
 	for (special = special_sections; special->name; special++) {
+		if ((special->arch & current_arch) == 0)
+			continue;
+
 		sec = find_section_by_name(&kelf->sections, special->name);
 		if (!sec || !sec->rela)
 			continue;
@@ -3237,9 +3259,13 @@ static void kpatch_create_intermediate_sections(struct kpatch_elf *kelf,
 			continue;
 
 		special = false;
-		for (s = special_sections; s->name; s++)
+		for (s = special_sections; s->name; s++) {
+			if ((s->arch & current_arch) == 0)
+				continue;
+
 			if (!strcmp(sec->base->name, s->name))
 				special = true;
+		}
 
 		list_for_each_entry_safe(rela, safe, &sec->relas, list) {
 			if (!rela->need_dynrela)
@@ -3438,65 +3464,62 @@ static void kpatch_create_mcount_sections(struct kpatch_elf *kelf)
 			continue;
 		}
 
-#ifdef __x86_64__
-
-		rela = list_first_entry(&sym->sec->rela->relas, struct rela, list);
-
-		/*
-		 * For "call fentry", the relocation points to 1 byte past the
-		 * beginning of the instruction.
-		 */
-		insn_offset = rela->offset - 1;
-
-		if (rela->type == R_X86_64_NONE) {
-			void *newdata;
-			unsigned char *insn;
+		if (current_arch == X86_64) {
+			rela = list_first_entry(&sym->sec->rela->relas, struct rela, list);
 
 			/*
-			 * R_X86_64_NONE is only generated by older versions of
-			 * kernel/gcc which use the mcount script.  There's a
-			 * NOP instead of a call to fentry.
+			 * For "call fentry", the relocation points to 1 byte past the
+			 * beginning of the instruction.
 			 */
+			insn_offset = rela->offset - 1;
 
-			/* Make a writable copy of the text section data */
-			newdata = malloc(sym->sec->data->d_size);
-			memcpy(newdata, sym->sec->data->d_buf, sym->sec->data->d_size);
-			sym->sec->data->d_buf = newdata;
-			insn = newdata;
+			if (rela->type == R_X86_64_NONE) {
+				void *newdata;
+				unsigned char *insn;
 
-			/*
-			 * Replace the NOP with a call to fentry.  The fentry
-			 * rela symbol is already there, just need to change
-			 * the relocation type accordingly.
-			 */
-			insn = sym->sec->data->d_buf;
-			if (insn[0] != 0xf)
-				ERROR("%s: unexpected instruction at the start of the function", sym->name);
-			insn[0] = 0xe8;
-			insn[1] = 0;
-			insn[2] = 0;
-			insn[3] = 0;
-			insn[4] = 0;
+				/*
+				 * R_X86_64_NONE is only generated by older versions of
+				 * kernel/gcc which use the mcount script.  There's a
+				 * NOP instead of a call to fentry.
+				 */
 
-			rela->type = R_X86_64_PC32;
+				/* Make a writable copy of the text section data */
+				newdata = malloc(sym->sec->data->d_size);
+				memcpy(newdata, sym->sec->data->d_buf, sym->sec->data->d_size);
+				sym->sec->data->d_buf = newdata;
+				insn = newdata;
+
+				/*
+				 * Replace the NOP with a call to fentry.  The fentry
+				 * rela symbol is already there, just need to change
+				 * the relocation type accordingly.
+				 */
+				insn = sym->sec->data->d_buf;
+				if (insn[0] != 0xf)
+					ERROR("%s: unexpected instruction at the start of the function", sym->name);
+				insn[0] = 0xe8;
+				insn[1] = 0;
+				insn[2] = 0;
+				insn[3] = 0;
+				insn[4] = 0;
+
+				rela->type = R_X86_64_PC32;
+			}
+		} else { /* current_arch == PPC64 */
+			bool found = false;
+
+			list_for_each_entry(rela, &sym->sec->rela->relas, list)
+				if (!strcmp(rela->sym->name, "_mcount")) {
+					found = true;
+					break;
+				}
+
+			if (!found)
+				ERROR("%s: unexpected missing call to _mcount()", __func__);
+
+			insn_offset = rela->offset;
 		}
 
-#else /* __powerpc64__ */
-{
-		bool found = false;
-
-		list_for_each_entry(rela, &sym->sec->rela->relas, list)
-			if (!strcmp(rela->sym->name, "_mcount")) {
-				found = true;
-				break;
-			}
-
-		if (!found)
-			ERROR("%s: unexpected missing call to _mcount()", __func__);
-
-		insn_offset = rela->offset;
-}
-#endif
 		/*
 		 * 'rela' points to the mcount/fentry call.
 		 *
@@ -3611,10 +3634,12 @@ static void kpatch_build_strings_section_data(struct kpatch_elf *kelf)
  */
 static void kpatch_no_sibling_calls_ppc64le(struct kpatch_elf *kelf)
 {
-#ifdef __powerpc64__
 	struct symbol *sym;
 	unsigned int insn;
 	unsigned int offset;
+
+	if (current_arch != PPC64)
+		return;
 
 	list_for_each_entry(sym, &kelf->symbols, list) {
 		if (sym->type != STT_FUNC || sym->status != CHANGED)
@@ -3648,19 +3673,20 @@ static void kpatch_no_sibling_calls_ppc64le(struct kpatch_elf *kelf)
 			      sym->name, sym->sym.st_value + offset, sym->name);
 		}
 	}
-#endif
 }
 
 struct arguments {
 	char *args[7];
+	enum architecture arch;
 	bool debug, klp_arch;
 };
 
 static char args_doc[] = "original.o patched.o parent-name parent-symtab Module.symvers patch-module-name output.o";
 
 static struct argp_option options[] = {
-	{"debug",	'd', NULL, 0, "Show debug output" },
-	{"klp-arch",	'a', NULL, 0, "Kernel supports .klp.arch section" },
+	{"arch",	777, "ARCH", 0, "Architecture [x86_64, ppc64, arm64]" },
+	{"debug",	'd', NULL,   0, "Show debug output" },
+	{"klp-arch",	'a', NULL,   0, "Kernel supports .klp.arch section" },
 	{ NULL }
 };
 
@@ -3677,6 +3703,17 @@ static error_t parse_opt (int key, char *arg, struct argp_state *state)
 			break;
 		case 'a':
 			arguments->klp_arch = 1;
+			break;
+		case 777: /* --arch */
+			if (!strcmp(arg, "x86_64"))
+				arguments->arch = X86_64;
+			else if (!strcmp(arg, "ppc64"))
+				arguments->arch = PPC64;
+			else if (!strcmp(arg, "arm64"))
+				arguments->arch = ARM64;
+			else
+				/* Unsupported architecture */
+				argp_failure (state, 1, 0, "unsupported architecture: %s", arg);
 			break;
 		case ARGP_KEY_ARG:
 			if (state->arg_num >= 7)
@@ -3715,6 +3752,7 @@ int main(int argc, char *argv[])
 		loglevel = DEBUG;
 	if (arguments.klp_arch)
 		KLP_ARCH = true;
+	current_arch = arguments.arch;
 
 	elf_version(EV_CURRENT);
 
