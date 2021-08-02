@@ -10,13 +10,13 @@ local: slow
 remote: remote_slow
 
 slow: clean
-	./kpatch-test -d $(PATCH_DIR) $(PATCHES)
+	./kpatch-test --kpatch-build-opts="$(KPATCH_BUILD_OPTS)" -d $(PATCH_DIR) $(PATCHES)
 
 quick: clean
-	./kpatch-test -d $(PATCH_DIR) --quick $(PATCHES)
+	./kpatch-test --kpatch-build-opts="$(KPATCH_BUILD_OPTS)" -d $(PATCH_DIR) --quick $(PATCHES)
 
 cached:
-	./kpatch-test -d $(PATCH_DIR) --cached $(PATCHES)
+	./kpatch-test --kpatch-build-opts="$(KPATCH_BUILD_OPTS)" -d $(PATCH_DIR) --cached $(PATCHES)
 
 vagrant: vagrant-quick
 
