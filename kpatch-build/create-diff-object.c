@@ -926,6 +926,10 @@ static void __kpatch_correlate_section(struct section *sec1, struct section *sec
 static void kpatch_correlate_symbol(struct symbol *sym1, struct symbol *sym2)
 {
 	CORRELATE_ELEMENT(sym1, sym2, "symbol");
+	if (sym1->lookup_table_file_sym && !sym2->lookup_table_file_sym)
+		sym2->lookup_table_file_sym = sym1->lookup_table_file_sym;
+	else if (!sym1->lookup_table_file_sym && sym2->lookup_table_file_sym)
+		sym1->lookup_table_file_sym = sym2->lookup_table_file_sym;
 }
 
 static void kpatch_correlate_static_local(struct symbol *sym1, struct symbol *sym2)
@@ -2858,43 +2862,6 @@ static void kpatch_process_special_sections(struct kpatch_elf *kelf,
 	kpatch_regenerate_orc_sections(kelf);
 }
 
-static struct sym_compare_type *kpatch_elf_locals(struct kpatch_elf *kelf)
-{
-	struct symbol *sym;
-	int i = 0, sym_num = 0;
-	struct sym_compare_type *sym_array;
-
-	list_for_each_entry(sym, &kelf->symbols, list) {
-		if (sym->bind != STB_LOCAL)
-			continue;
-		if (sym->type != STT_FUNC && sym->type != STT_OBJECT)
-			continue;
-
-		sym_num++;
-	}
-
-	if (!sym_num)
-		return NULL;
-
-	sym_array = malloc((sym_num + 1) * sizeof(struct sym_compare_type));
-	if (!sym_array)
-		ERROR("malloc");
-
-	list_for_each_entry(sym, &kelf->symbols, list) {
-		if (sym->bind != STB_LOCAL)
-			continue;
-		if (sym->type != STT_FUNC && sym->type != STT_OBJECT)
-			continue;
-
-		sym_array[i].type = sym->type;
-		sym_array[i++].name = strdup(sym->name);
-	}
-	sym_array[i].type = 0;
-	sym_array[i].name = NULL;
-
-	return sym_array;
-}
-
 static void kpatch_create_patches_sections(struct kpatch_elf *kelf,
 					   struct lookup_table *table,
 					   char *objname)
@@ -3724,10 +3691,8 @@ int main(int argc, char *argv[])
 	int num_changed, callbacks_exist, new_globals_exist;
 	struct lookup_table *lookup;
 	struct section *sec, *symtab;
-	struct symbol *sym;
-	char *hint = NULL, *orig_obj, *patched_obj, *parent_name;
+	char *orig_obj, *patched_obj, *parent_name;
 	char *parent_symtab, *mod_symvers, *patch_name, *output_obj;
-	struct sym_compare_type *base_locals, *sym_comp;
 
 	memset(&arguments, 0, sizeof(arguments));
 	argp_parse (&argp, argc, argv, 0, NULL, &arguments);
@@ -3761,21 +3726,7 @@ int main(int argc, char *argv[])
 	kpatch_detect_child_functions(kelf_base);
 	kpatch_detect_child_functions(kelf_patched);
 
-	list_for_each_entry(sym, &kelf_base->symbols, list) {
-		if (sym->type == STT_FILE) {
-			hint = strdup(sym->name);
-			break;
-		}
-	}
-	if (!hint) {
-		log_normal("WARNING: FILE symbol not found in base. Stripped object file or assembly source?\n");
-		return EXIT_STATUS_NO_CHANGE;
-	}
-
-	base_locals = kpatch_elf_locals(kelf_base);
-
-	lookup = lookup_open(parent_symtab, parent_name, mod_symvers, hint,
-			     base_locals);
+	lookup = lookup_open(parent_symtab, parent_name, mod_symvers, kelf_base);
 
 	kpatch_mark_grouped_sections(kelf_patched);
 	kpatch_replace_sections_syms(kelf_base);
@@ -3816,7 +3767,6 @@ int main(int argc, char *argv[])
 			log_debug("no changed functions were found, but callbacks exist\n");
 		else {
 			log_debug("no changed functions were found\n");
-			free(hint);
 			return EXIT_STATUS_NO_CHANGE;
 		}
 	}
@@ -3831,11 +3781,6 @@ int main(int argc, char *argv[])
 	 * kpatch_patched.
 	 */
 	kpatch_elf_teardown(kelf_patched);
-
-	for (sym_comp = base_locals; sym_comp && sym_comp->name; sym_comp++)
-		free(sym_comp->name);
-	free(base_locals);
-	free(hint);
 
 	kpatch_no_sibling_calls_ppc64le(kelf_out);
 

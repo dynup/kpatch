@@ -76,6 +76,7 @@ struct symbol {
 	struct section *sec;
 	GElf_Sym sym;
 	char *name;
+	struct object_symbol *lookup_table_file_sym;
 	unsigned int index;
 	unsigned char bind, type;
 	enum status status;
