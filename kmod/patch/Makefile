@@ -1,5 +1,5 @@
 KPATCH_BUILD ?= /lib/modules/$(shell uname -r)/build
-KPATCH_MAKE = $(MAKE) -C $(KPATCH_BUILD) M=$(PWD)
+KPATCH_MAKE = $(MAKE) -C $(KPATCH_BUILD) M=$(PWD) CFLAGS_MODULE='$(CFLAGS_MODULE)'
 LDFLAGS += $(KPATCH_LDFLAGS)
 
 # ppc64le kernel modules are expected to compile with the
@@ -7,7 +7,7 @@ LDFLAGS += $(KPATCH_LDFLAGS)
 # instead of a 32-bit offset from the TOC pointer.
 PROCESSOR = $(shell uname -m)
 ifeq ($(PROCESSOR), ppc64le)
-KBUILD_CFLAGS_MODULE += -mcmodel=large
+CFLAGS_MODULE += -mcmodel=large
 endif
 
 obj-m += $(KPATCH_NAME).o
