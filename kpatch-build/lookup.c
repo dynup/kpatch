@@ -407,7 +407,8 @@ void lookup_close(struct lookup_table *table)
 	free(table);
 }
 
-static bool lookup_local_symbol(struct lookup_table *table, char *name,
+static bool lookup_local_symbol(struct lookup_table *table,
+				struct symbol *lookup_sym,
 				struct lookup_result *result)
 {
 	struct object_symbol *sym;
@@ -419,7 +420,8 @@ static bool lookup_local_symbol(struct lookup_table *table, char *name,
 
 	memset(result, 0, sizeof(*result));
 	for_each_obj_symbol(i, sym, table) {
-		if (sym->bind == STB_LOCAL && !strcmp(sym->name, name))
+		if (sym->bind == STB_LOCAL && !strcmp(sym->name,
+					lookup_sym->name))
 			sympos++;
 
 		if (table->local_syms == sym) {
@@ -433,10 +435,12 @@ static bool lookup_local_symbol(struct lookup_table *table, char *name,
 		if (sym->type == STT_FILE)
 			break;
 
-		if (sym->bind == STB_LOCAL && !strcmp(sym->name, name)) {
+		if (sym->bind == STB_LOCAL && !strcmp(sym->name,
+					lookup_sym->name)) {
 
 			if (result->objname)
-				ERROR("duplicate local symbol found for %s", name);
+				ERROR("duplicate local symbol found for %s",
+						lookup_sym->name);
 
 			result->objname		= table->objname;
 			result->addr		= sym->addr;
@@ -511,14 +515,14 @@ static bool lookup_global_symbol(struct lookup_table *table, char *name,
 	return !!result->objname;
 }
 
-bool lookup_symbol(struct lookup_table *table, char *name,
+bool lookup_symbol(struct lookup_table *table, struct symbol *sym,
 		   struct lookup_result *result)
 {
-	if (lookup_local_symbol(table, name, result))
+	if (lookup_local_symbol(table, sym, result))
 		return true;
 
-	if (lookup_global_symbol(table, name, result))
+	if (lookup_global_symbol(table, sym->name, result))
 		return true;
 
-	return lookup_exported_symbol(table, name, result);
+	return lookup_exported_symbol(table, sym->name, result);
 }

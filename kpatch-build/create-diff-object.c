@@ -2280,7 +2280,7 @@ static bool should_keep_jump_label(struct lookup_table *lookup,
 	 * jump label init.
 	 */
 
-	if (lookup_symbol(lookup, key->sym->name, &symbol) &&
+	if (lookup_symbol(lookup, key->sym, &symbol) &&
 	    strcmp(symbol.objname, "vmlinux")) {
 
 		/* The static key lives in a module -- not supported */
@@ -2935,7 +2935,7 @@ static void kpatch_create_patches_sections(struct kpatch_elf *kelf,
 		    sym->parent)
 			continue;
 
-		if (!lookup_symbol(table, sym->name, &symbol))
+		if (!lookup_symbol(table, sym, &symbol))
 			ERROR("can't find symbol '%s' in symbol table", sym->name);
 
 		if (sym->bind == STB_LOCAL && symbol.global)
@@ -3096,7 +3096,7 @@ static bool need_dynrela(struct lookup_table *table, const struct rela *rela)
 			!strchr(toc_rela(rela)->sym->name, '.');
 	}
 
-	if (!lookup_symbol(table, rela->sym->name, &symbol)) {
+	if (!lookup_symbol(table, rela->sym, &symbol)) {
 		/*
 		 * Assume the symbol lives in another .o in the patch module.
 		 * A normal rela should work.
@@ -3282,7 +3282,7 @@ static void kpatch_create_intermediate_sections(struct kpatch_elf *kelf,
 				ERROR("unsupported dynrela reference to symbol '%s' in module-specific special section '%s'",
 				      rela->sym->name, sec->base->name);
 
-			if (!lookup_symbol(table, rela->sym->name, &symbol))
+			if (!lookup_symbol(table, rela->sym, &symbol))
 				ERROR("can't find symbol '%s' in symbol table",
 				      rela->sym->name);
 
