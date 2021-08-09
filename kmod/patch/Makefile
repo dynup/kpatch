@@ -2,14 +2,6 @@ KPATCH_BUILD ?= /lib/modules/$(shell uname -r)/build
 KPATCH_MAKE = $(MAKE) -C $(KPATCH_BUILD) M=$(PWD) CFLAGS_MODULE='$(CFLAGS_MODULE)'
 LDFLAGS += $(KPATCH_LDFLAGS)
 
-# ppc64le kernel modules are expected to compile with the
-# -mcmodel=large flag.  This enables 64-bit relocations
-# instead of a 32-bit offset from the TOC pointer.
-PROCESSOR = $(shell uname -m)
-ifeq ($(PROCESSOR), ppc64le)
-CFLAGS_MODULE += -mcmodel=large
-endif
-
 obj-m += $(KPATCH_NAME).o
 ldflags-y += -T $(src)/kpatch.lds
 targets += kpatch.lds
