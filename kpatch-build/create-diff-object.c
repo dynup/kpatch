@@ -321,6 +321,7 @@ static bool is_special_static(struct symbol *sym)
 		"__FUNCTION__",
 		"_rs",
 		"CSWTCH",
+		"_entry",
 		NULL,
 	};
 	char **var_name;
