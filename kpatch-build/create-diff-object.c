@@ -609,7 +609,7 @@ out:
  * 3) (optional) __warned.xxxxx static local rela
  * 4) warn_slowpath_* or __might_sleep or some other similar rela
  */
-static int kpatch_line_macro_change_only(struct section *sec)
+static bool kpatch_line_macro_change_only(struct section *sec)
 {
 	struct insn insn1, insn2;
 	unsigned long start1, start2, size, offset, length;
@@ -622,7 +622,7 @@ static int kpatch_line_macro_change_only(struct section *sec)
 	    sec->sh.sh_size != sec->twin->sh.sh_size ||
 	    !sec->rela ||
 	    sec->rela->status != SAME)
-		return 0;
+		return false;
 
 	start1 = (unsigned long)sec->twin->data->d_buf;
 	start2 = (unsigned long)sec->data->d_buf;
@@ -639,7 +639,7 @@ static int kpatch_line_macro_change_only(struct section *sec)
 			      sec->name, offset);
 
 		if (insn1.length != insn2.length)
-			return 0;
+			return false;
 
 		if (!memcmp((void *)start1 + offset, (void *)start2 + offset,
 			    length))
@@ -650,7 +650,7 @@ static int kpatch_line_macro_change_only(struct section *sec)
 		insn_get_opcode(&insn2);
 		if (!(insn1.opcode.value == 0xba && insn2.opcode.value == 0xba) &&
 		    !(insn1.opcode.value == 0xbe && insn2.opcode.value == 0xbe))
-			return 0;
+			return false;
 
 		/*
 		 * Verify zero or more string relas followed by a
@@ -674,10 +674,10 @@ static int kpatch_line_macro_change_only(struct section *sec)
 				found = 1;
 				break;
 			}
-			return 0;
+			return false;
 		}
 		if (!found)
-			return 0;
+			return false;
 
 		lineonly = 1;
 	}
@@ -686,13 +686,13 @@ static int kpatch_line_macro_change_only(struct section *sec)
 		ERROR("no instruction changes detected for changed section %s",
 		      sec->name);
 
-	return 1;
+	return true;
 }
 #elif __powerpc64__
 #define PPC_INSTR_LEN 4
 #define PPC_RA_OFFSET 16
 
-static int kpatch_line_macro_change_only(struct section *sec)
+static bool kpatch_line_macro_change_only(struct section *sec)
 {
 	unsigned long start1, start2, size, offset;
 	unsigned int instr1, instr2;
@@ -705,7 +705,7 @@ static int kpatch_line_macro_change_only(struct section *sec)
 	    sec->sh.sh_size != sec->twin->sh.sh_size ||
 	    !sec->rela ||
 	    sec->rela->status != SAME)
-		return 0;
+		return false;
 
 	start1 = (unsigned long)sec->twin->data->d_buf;
 	start2 = (unsigned long)sec->data->d_buf;
@@ -720,7 +720,7 @@ static int kpatch_line_macro_change_only(struct section *sec)
 
 		/* verify it's a load immediate to r5 */
 		if (!(instr1 == 0x38a0 && instr2 == 0x38a0))
-			return 0;
+			return false;
 
 		found = 0;
 		list_for_each_entry(rela, &sec->rela->relas, list) {
@@ -740,10 +740,10 @@ static int kpatch_line_macro_change_only(struct section *sec)
 				found = 1;
 				break;
 			}
-			return 0;
+			return false;
 		}
 		if (!found)
-			return 0;
+			return false;
 
 		lineonly = 1;
 	}
@@ -752,12 +752,12 @@ static int kpatch_line_macro_change_only(struct section *sec)
 		ERROR("no instruction changes detected for changed section %s",
 		      sec->name);
 
-	return 1;
+	return true;
 }
 #else
-static int kpatch_line_macro_change_only(struct section *sec)
+static bool kpatch_line_macro_change_only(struct section *sec)
 {
-	return 0;
+	return false;
 }
 #endif
 
