@@ -2004,6 +2004,21 @@ static int jump_table_group_size(struct kpatch_elf *kelf, int offset)
 	return size;
 }
 
+static int printk_index_group_size(struct kpatch_elf *kelf, int offset)
+{
+	static int size = 0;
+	char *str;
+
+	if (!size) {
+		str = getenv("PRINTK_INDEX_STRUCT_SIZE");
+		if (!str)
+			ERROR("PRINTK_INDEX_STRUCT_SIZE not set");
+		size = atoi(str);
+	}
+
+	return size;
+}
+
 #ifdef __x86_64__
 static int parainstructions_group_size(struct kpatch_elf *kelf, int offset)
 {
@@ -2148,6 +2163,10 @@ static struct special_section special_sections[] = {
 	{
 		.name		= "__jump_table",
 		.group_size	= jump_table_group_size,
+	},
+	{
+		.name		= ".printk_index",
+		.group_size	= printk_index_group_size,
 	},
 #ifdef __x86_64__
 	{
