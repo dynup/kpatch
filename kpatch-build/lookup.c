@@ -68,10 +68,10 @@ struct lookup_table {
 #define for_each_exp_symbol(ndx, iter, table) \
 	for (ndx = 0, iter = table->exp_syms; ndx < table->exp_nr; ndx++, iter++)
 
-static int maybe_discarded_sym(const char *name)
+static bool maybe_discarded_sym(const char *name)
 {
 	if (!name)
-		return 0;
+		return false;
 
 	/*
 	 * Sometimes these symbols are discarded during linking, and sometimes
@@ -85,12 +85,12 @@ static int maybe_discarded_sym(const char *name)
 	    strstr(name, "__addressable_") ||
 	    strstr(name, "__UNIQUE_ID_") ||
 	    !strncmp(name, ".L.str", 6))
-		return 1;
+		return true;
 
-	return 0;
+	return false;
 }
 
-static int locals_match(struct lookup_table *table, int idx,
+static bool locals_match(struct lookup_table *table, int idx,
 			struct symbol *file_sym, struct list_head *sym_list)
 {
 	struct symbol *sym;
@@ -122,7 +122,7 @@ static int locals_match(struct lookup_table *table, int idx,
 		}
 
 		if (!found)
-			return 0;
+			return false;
 	}
 
 	sym = file_sym;
@@ -158,10 +158,10 @@ static int locals_match(struct lookup_table *table, int idx,
 		}
 
 		if (!found)
-			return 0;
+			return false;
 	}
 
-	return 1;
+	return true;
 }
 
 static void find_local_syms(struct lookup_table *table, struct symbol *file_sym,
