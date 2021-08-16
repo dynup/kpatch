@@ -24,7 +24,7 @@
  * This file contains the heart of the ELF object differencing engine.
  *
  * The tool takes two ELF objects from two versions of the same source
- * file; a "base" object and a "patched" object.  These object need to have
+ * file; a "orig" object and a "patched" object.  These object need to have
  * been compiled with the -ffunction-sections and -fdata-sections GCC options.
  *
  * The tool compares the objects at a section level to determine what
@@ -1255,14 +1255,14 @@ static struct rela *kpatch_find_static_twin_ref(struct section *rela_sec, struct
  *   with the same name to be used in the same function if they
  *   have different scopes.  (We have to assume that in such
  *   cases, the order in which they're referenced remains the
- *   same between the base and patched objects, as there's no
+ *   same between the orig and patched objects, as there's no
  *   other way to distinguish them.)
  *
  * - Static locals are usually referenced by functions, but
  *   they can occasionally be referenced by data sections as
  *   well.
  */
-static void kpatch_correlate_static_local_variables(struct kpatch_elf *base,
+static void kpatch_correlate_static_local_variables(struct kpatch_elf *orig,
 						    struct kpatch_elf *patched)
 {
 	struct symbol *sym, *patched_sym;
@@ -1272,10 +1272,10 @@ static void kpatch_correlate_static_local_variables(struct kpatch_elf *base,
 
 	/*
 	 * First undo the correlations for all static locals.  Two static
-	 * locals can have the same numbered suffix in the base and patched
+	 * locals can have the same numbered suffix in the orig and patched
 	 * objects by coincidence.
 	 */
-	list_for_each_entry(sym, &base->symbols, list) {
+	list_for_each_entry(sym, &orig->symbols, list) {
 
 		if (!kpatch_is_normal_static_local(sym))
 			continue;
@@ -1299,7 +1299,7 @@ static void kpatch_correlate_static_local_variables(struct kpatch_elf *base,
 	 * Do the correlations: for each section reference to a static local,
 	 * look for a corresponding reference in the section's twin.
 	 */
-	list_for_each_entry(sec, &base->sections, list) {
+	list_for_each_entry(sec, &orig->sections, list) {
 
 		if (!is_rela_section(sec) ||
 		    is_debug_section(sec) ||
@@ -1355,14 +1355,14 @@ static void kpatch_correlate_static_local_variables(struct kpatch_elf *base,
 	/*
 	 * Make sure that:
 	 *
-	 * 1. all the base object's referenced static locals have been
+	 * 1. all the orig object's referenced static locals have been
 	 *    correlated; and
 	 *
-	 * 2. each reference to a static local in the base object has a
+	 * 2. each reference to a static local in the orig object has a
 	 *    corresponding reference in the patched object (because a static
 	 *    local can be referenced by more than one section).
 	 */
-	list_for_each_entry(sec, &base->sections, list) {
+	list_for_each_entry(sec, &orig->sections, list) {
 
 		if (!is_rela_section(sec) ||
 		    is_debug_section(sec))
@@ -3686,7 +3686,7 @@ static struct argp argp = { options, parse_opt, args_doc, NULL };
 
 int main(int argc, char *argv[])
 {
-	struct kpatch_elf *kelf_base, *kelf_patched, *kelf_out;
+	struct kpatch_elf *kelf_orig, *kelf_patched, *kelf_out;
 	struct arguments arguments;
 	int num_changed, callbacks_exist, new_globals_exist;
 	struct lookup_table *lookup;
@@ -3713,30 +3713,30 @@ int main(int argc, char *argv[])
 
 	childobj = basename(orig_obj);
 
-	kelf_base = kpatch_elf_open(orig_obj);
+	kelf_orig = kpatch_elf_open(orig_obj);
 	kelf_patched = kpatch_elf_open(patched_obj);
 
-	kpatch_compare_elf_headers(kelf_base->elf, kelf_patched->elf);
-	kpatch_check_program_headers(kelf_base->elf);
+	kpatch_compare_elf_headers(kelf_orig->elf, kelf_patched->elf);
+	kpatch_check_program_headers(kelf_orig->elf);
 	kpatch_check_program_headers(kelf_patched->elf);
 
-	kpatch_bundle_symbols(kelf_base);
+	kpatch_bundle_symbols(kelf_orig);
 	kpatch_bundle_symbols(kelf_patched);
 
-	kpatch_detect_child_functions(kelf_base);
+	kpatch_detect_child_functions(kelf_orig);
 	kpatch_detect_child_functions(kelf_patched);
 
-	lookup = lookup_open(parent_symtab, parent_name, mod_symvers, kelf_base);
+	lookup = lookup_open(parent_symtab, parent_name, mod_symvers, kelf_orig);
 
 	kpatch_mark_grouped_sections(kelf_patched);
-	kpatch_replace_sections_syms(kelf_base);
+	kpatch_replace_sections_syms(kelf_orig);
 	kpatch_replace_sections_syms(kelf_patched);
 
-	kpatch_correlate_elfs(kelf_base, kelf_patched);
-	kpatch_correlate_static_local_variables(kelf_base, kelf_patched);
+	kpatch_correlate_elfs(kelf_orig, kelf_patched);
+	kpatch_correlate_static_local_variables(kelf_orig, kelf_patched);
 
 	/*
-	 * After this point, we don't care about kelf_base anymore.
+	 * After this point, we don't care about kelf_orig anymore.
 	 * We access its sections via the twin pointers in the
 	 * section, symbol, and rela lists of kelf_patched.
 	 */
@@ -3745,8 +3745,8 @@ int main(int argc, char *argv[])
 	kpatch_mark_ignored_functions_same(kelf_patched);
 	kpatch_mark_ignored_sections_same(kelf_patched);
 	kpatch_check_func_profiling_calls(kelf_patched);
-	kpatch_elf_teardown(kelf_base);
-	kpatch_elf_free(kelf_base);
+	kpatch_elf_teardown(kelf_orig);
+	kpatch_elf_free(kelf_orig);
 
 	kpatch_include_standard_elements(kelf_patched);
 	num_changed = kpatch_include_changed_functions(kelf_patched);
