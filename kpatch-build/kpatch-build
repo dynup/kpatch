@@ -713,6 +713,7 @@ elif [[ "$DISTRO" = ubuntu ]] || [[ "$DISTRO" = debian ]]; then
 	fi
 
 	export PATH="/usr/lib/ccache:$PATH"
+	export CONFIG_DEBUG_SECTION_MISMATCH=y
 fi
 
 find_dirs || die "can't find supporting tools"
