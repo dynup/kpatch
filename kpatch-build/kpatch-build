@@ -849,7 +849,7 @@ if grep -q "CONFIG_LIVEPATCH=y" "$CONFIGFILE" && (kernel_is_rhel || kernel_versi
 	if [[  "$KLP_REPLACE" -eq 1 ]] ; then
 		support_klp_replace || die "The kernel doesn't support klp replace"
 	else
-		export KBUILD_CFLAGS_MODULE="$KBUILD_CFLAGS_MODULE -DKLP_REPLACE_ENABLE=false"
+		export CFLAGS_MODULE="$CFLAGS_MODULE -DKLP_REPLACE_ENABLE=false"
 	fi
 else
 	# No support for livepatch in the kernel. Kpatch core module is needed.
