@@ -67,6 +67,12 @@ struct section {
 	};
 };
 
+enum symbol_strip {
+	SYMBOL_DEFAULT,
+	SYMBOL_USED,
+	SYMBOL_STRIP,
+};
+
 struct symbol {
 	struct list_head list;
 	struct symbol *twin;
@@ -82,7 +88,7 @@ struct symbol {
 	enum status status;
 	union {
 		int include; /* used in the patched elf */
-		int strip; /* used in the output elf */
+		enum symbol_strip strip; /* used in the output elf */
 	};
 	int has_func_profiling;
 };
