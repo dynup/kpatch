@@ -232,7 +232,7 @@ static void patch_free_livepatch(struct klp_patch *patch)
 	struct klp_object *object;
 
 	if (patch) {
-		for (object = patch->objs; object && object->funcs; object++) {
+		for (object = patch->objs; object; object++) {
 			if (object->funcs)
 				kfree(object->funcs);
 #ifndef HAVE_ELF_RELOCS
