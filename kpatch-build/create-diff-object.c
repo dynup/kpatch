@@ -24,7 +24,7 @@
  * This file contains the heart of the ELF object differencing engine.
  *
  * The tool takes two ELF objects from two versions of the same source
- * file; a "base" object and a "patched" object.  These object need to have
+ * file; a "orig" object and a "patched" object.  These object need to have
  * been compiled with the -ffunction-sections and -fdata-sections GCC options.
  *
  * The tool compares the objects at a section level to determine what
@@ -918,87 +918,95 @@ do {								\
 	elem->twin = NULL;					\
 } while (0)
 
-static void __kpatch_correlate_section(struct section *sec1, struct section *sec2)
+static void __kpatch_correlate_section(struct section *sec_orig,
+		struct section *sec_patched)
 {
-	CORRELATE_ELEMENT(sec1, sec2, "section");
+	CORRELATE_ELEMENT(sec_orig, sec_patched, "section");
 }
 
-static void kpatch_correlate_symbol(struct symbol *sym1, struct symbol *sym2)
+static void kpatch_correlate_symbol(struct symbol *sym_orig,
+		struct symbol *sym_patched)
 {
-	CORRELATE_ELEMENT(sym1, sym2, "symbol");
+	CORRELATE_ELEMENT(sym_orig, sym_patched, "symbol");
+	if (sym_orig->lookup_table_file_sym && !sym_patched->lookup_table_file_sym)
+		sym_patched->lookup_table_file_sym = sym_orig->lookup_table_file_sym;
 }
 
-static void kpatch_correlate_static_local(struct symbol *sym1, struct symbol *sym2)
+static void kpatch_correlate_static_local(struct symbol *sym_orig,
+		struct symbol *sym_patched)
 {
-	CORRELATE_ELEMENT(sym1, sym2, "static local");
+	CORRELATE_ELEMENT(sym_orig, sym_patched, "static local");
 }
 
-static void kpatch_correlate_section(struct section *sec1, struct section *sec2)
+static void kpatch_correlate_section(struct section *sec_orig,
+		struct section *sec_patched)
 {
-	__kpatch_correlate_section(sec1, sec2);
+	__kpatch_correlate_section(sec_orig, sec_patched);
 
-	if (is_rela_section(sec1)) {
-		__kpatch_correlate_section(sec1->base, sec2->base);
-		sec1 = sec1->base;
-		sec2 = sec2->base;
-	} else if (sec1->rela) {
-		__kpatch_correlate_section(sec1->rela, sec2->rela);
+	if (is_rela_section(sec_orig)) {
+		__kpatch_correlate_section(sec_orig->base, sec_patched->base);
+		sec_orig = sec_orig->base;
+		sec_patched = sec_patched->base;
+	} else if (sec_orig->rela) {
+		__kpatch_correlate_section(sec_orig->rela, sec_patched->rela);
 	}
 
-	if (sec1->secsym)
-		kpatch_correlate_symbol(sec1->secsym, sec2->secsym);
-	if (sec1->sym)
-		kpatch_correlate_symbol(sec1->sym, sec2->sym);
+	if (sec_orig->secsym)
+		kpatch_correlate_symbol(sec_orig->secsym, sec_patched->secsym);
+	if (sec_orig->sym)
+		kpatch_correlate_symbol(sec_orig->sym, sec_patched->sym);
 }
 
-static void kpatch_correlate_sections(struct list_head *seclist1, struct list_head *seclist2)
+static void kpatch_correlate_sections(struct list_head *seclist_orig,
+		struct list_head *seclist_patched)
 {
-	struct section *sec1, *sec2;
+	struct section *sec_orig, *sec_patched;
 
-	list_for_each_entry(sec1, seclist1, list) {
-		if (sec1->twin)
+	list_for_each_entry(sec_orig, seclist_orig, list) {
+		if (sec_orig->twin)
 			continue;
-		list_for_each_entry(sec2, seclist2, list) {
-			if (kpatch_mangled_strcmp(sec1->name, sec2->name) ||
-			    sec2->twin)
+		list_for_each_entry(sec_patched, seclist_patched, list) {
+			if (kpatch_mangled_strcmp(sec_orig->name, sec_patched->name) ||
+			    sec_patched->twin)
 				continue;
 
-			if (is_special_static(is_rela_section(sec1) ?
-					      sec1->base->secsym :
-					      sec1->secsym))
+			if (is_special_static(is_rela_section(sec_orig) ?
+					      sec_orig->base->secsym :
+					      sec_orig->secsym))
 				continue;
 
 			/*
 			 * Group sections must match exactly to be correlated.
 			 * Changed group sections are currently not supported.
 			 */
-			if (sec1->sh.sh_type == SHT_GROUP) {
-				if (sec1->data->d_size != sec2->data->d_size)
+			if (sec_orig->sh.sh_type == SHT_GROUP) {
+				if (sec_orig->data->d_size != sec_patched->data->d_size)
 					continue;
-				if (memcmp(sec1->data->d_buf, sec2->data->d_buf,
-				           sec1->data->d_size))
+				if (memcmp(sec_orig->data->d_buf, sec_patched->data->d_buf,
+				           sec_orig->data->d_size))
 					continue;
 			}
 
-			kpatch_correlate_section(sec1, sec2);
+			kpatch_correlate_section(sec_orig, sec_patched);
 			break;
 		}
 	}
 }
 
-static void kpatch_correlate_symbols(struct list_head *symlist1, struct list_head *symlist2)
+static void kpatch_correlate_symbols(struct list_head *symlist_orig,
+		struct list_head *symlist_patched)
 {
-	struct symbol *sym1, *sym2;
+	struct symbol *sym_orig, *sym_patched;
 
-	list_for_each_entry(sym1, symlist1, list) {
-		if (sym1->twin)
+	list_for_each_entry(sym_orig, symlist_orig, list) {
+		if (sym_orig->twin)
 			continue;
-		list_for_each_entry(sym2, symlist2, list) {
-			if (kpatch_mangled_strcmp(sym1->name, sym2->name) ||
-			    sym1->type != sym2->type || sym2->twin)
+		list_for_each_entry(sym_patched, symlist_patched, list) {
+			if (kpatch_mangled_strcmp(sym_orig->name, sym_patched->name) ||
+			    sym_orig->type != sym_patched->type || sym_patched->twin)
 				continue;
 
-			if (is_special_static(sym1))
+			if (is_special_static(sym_orig))
 				continue;
 
 			/*
@@ -1015,42 +1023,42 @@ static void kpatch_correlate_symbols(struct list_head *symlist1, struct list_hea
 			 * sure if this actually happens anywhere), any string
 			 * changes will be detected elsewhere in rela_equal().
 			 */
-			if (sym1->type == STT_NOTYPE &&
-			    !strncmp(sym1->name, ".LC", 3))
+			if (sym_orig->type == STT_NOTYPE &&
+			    !strncmp(sym_orig->name, ".LC", 3))
 				continue;
 
 			/* group section symbols must have correlated sections */
-			if (sym1->sec &&
-			    sym1->sec->sh.sh_type == SHT_GROUP &&
-			    sym1->sec->twin != sym2->sec)
+			if (sym_orig->sec &&
+			    sym_orig->sec->sh.sh_type == SHT_GROUP &&
+			    sym_orig->sec->twin != sym_patched->sec)
 				continue;
 
-			kpatch_correlate_symbol(sym1, sym2);
+			kpatch_correlate_symbol(sym_orig, sym_patched);
 			break;
 		}
 	}
 }
 
-static void kpatch_compare_elf_headers(Elf *elf1, Elf *elf2)
+static void kpatch_compare_elf_headers(Elf *elf_orig, Elf *elf_patched)
 {
-	GElf_Ehdr eh1, eh2;
+	GElf_Ehdr ehdr_orig, ehdr_patched;
 
-	if (!gelf_getehdr(elf1, &eh1))
+	if (!gelf_getehdr(elf_orig, &ehdr_orig))
 		ERROR("gelf_getehdr");
 
-	if (!gelf_getehdr(elf2, &eh2))
+	if (!gelf_getehdr(elf_patched, &ehdr_patched))
 		ERROR("gelf_getehdr");
 
-	if (memcmp(eh1.e_ident, eh2.e_ident, EI_NIDENT) ||
-	    eh1.e_type != eh2.e_type ||
-	    eh1.e_machine != eh2.e_machine ||
-	    eh1.e_version != eh2.e_version ||
-	    eh1.e_entry != eh2.e_entry ||
-	    eh1.e_phoff != eh2.e_phoff ||
-	    eh1.e_flags != eh2.e_flags ||
-	    eh1.e_ehsize != eh2.e_ehsize ||
-	    eh1.e_phentsize != eh2.e_phentsize ||
-	    eh1.e_shentsize != eh2.e_shentsize)
+	if (memcmp(ehdr_orig.e_ident, ehdr_patched.e_ident, EI_NIDENT) ||
+	    ehdr_orig.e_type != ehdr_patched.e_type ||
+	    ehdr_orig.e_machine != ehdr_patched.e_machine ||
+	    ehdr_orig.e_version != ehdr_patched.e_version ||
+	    ehdr_orig.e_entry != ehdr_patched.e_entry ||
+	    ehdr_orig.e_phoff != ehdr_patched.e_phoff ||
+	    ehdr_orig.e_flags != ehdr_patched.e_flags ||
+	    ehdr_orig.e_ehsize != ehdr_patched.e_ehsize ||
+	    ehdr_orig.e_phentsize != ehdr_patched.e_phentsize ||
+	    ehdr_orig.e_shentsize != ehdr_patched.e_shentsize)
 		DIFF_FATAL("ELF headers differ");
 }
 
@@ -1251,14 +1259,14 @@ static struct rela *kpatch_find_static_twin_ref(struct section *rela_sec, struct
  *   with the same name to be used in the same function if they
  *   have different scopes.  (We have to assume that in such
  *   cases, the order in which they're referenced remains the
- *   same between the base and patched objects, as there's no
+ *   same between the orig and patched objects, as there's no
  *   other way to distinguish them.)
  *
  * - Static locals are usually referenced by functions, but
  *   they can occasionally be referenced by data sections as
  *   well.
  */
-static void kpatch_correlate_static_local_variables(struct kpatch_elf *base,
+static void kpatch_correlate_static_local_variables(struct kpatch_elf *orig,
 						    struct kpatch_elf *patched)
 {
 	struct symbol *sym, *patched_sym;
@@ -1268,10 +1276,10 @@ static void kpatch_correlate_static_local_variables(struct kpatch_elf *base,
 
 	/*
 	 * First undo the correlations for all static locals.  Two static
-	 * locals can have the same numbered suffix in the base and patched
+	 * locals can have the same numbered suffix in the orig and patched
 	 * objects by coincidence.
 	 */
-	list_for_each_entry(sym, &base->symbols, list) {
+	list_for_each_entry(sym, &orig->symbols, list) {
 
 		if (!kpatch_is_normal_static_local(sym))
 			continue;
@@ -1295,7 +1303,7 @@ static void kpatch_correlate_static_local_variables(struct kpatch_elf *base,
 	 * Do the correlations: for each section reference to a static local,
 	 * look for a corresponding reference in the section's twin.
 	 */
-	list_for_each_entry(sec, &base->sections, list) {
+	list_for_each_entry(sec, &orig->sections, list) {
 
 		if (!is_rela_section(sec) ||
 		    is_debug_section(sec) ||
@@ -1351,14 +1359,14 @@ static void kpatch_correlate_static_local_variables(struct kpatch_elf *base,
 	/*
 	 * Make sure that:
 	 *
-	 * 1. all the base object's referenced static locals have been
+	 * 1. all the orig object's referenced static locals have been
 	 *    correlated; and
 	 *
-	 * 2. each reference to a static local in the base object has a
+	 * 2. each reference to a static local in the orig object has a
 	 *    corresponding reference in the patched object (because a static
 	 *    local can be referenced by more than one section).
 	 */
-	list_for_each_entry(sec, &base->sections, list) {
+	list_for_each_entry(sec, &orig->sections, list) {
 
 		if (!is_rela_section(sec) ||
 		    is_debug_section(sec))
@@ -1419,10 +1427,11 @@ static void kpatch_correlate_static_local_variables(struct kpatch_elf *base,
 	}
 }
 
-static void kpatch_correlate_elfs(struct kpatch_elf *kelf1, struct kpatch_elf *kelf2)
+static void kpatch_correlate_elfs(struct kpatch_elf *kelf_orig,
+		struct kpatch_elf *kelf_patched)
 {
-	kpatch_correlate_sections(&kelf1->sections, &kelf2->sections);
-	kpatch_correlate_symbols(&kelf1->symbols, &kelf2->symbols);
+	kpatch_correlate_sections(&kelf_orig->sections, &kelf_patched->sections);
+	kpatch_correlate_symbols(&kelf_orig->symbols, &kelf_patched->symbols);
 }
 
 static void kpatch_compare_correlated_elements(struct kpatch_elf *kelf)
@@ -2280,7 +2289,7 @@ static bool should_keep_jump_label(struct lookup_table *lookup,
 	 * jump label init.
 	 */
 
-	if (lookup_symbol(lookup, key->sym->name, &symbol) &&
+	if (lookup_symbol(lookup, key->sym, &symbol) &&
 	    strcmp(symbol.objname, "vmlinux")) {
 
 		/* The static key lives in a module -- not supported */
@@ -2858,43 +2867,6 @@ static void kpatch_process_special_sections(struct kpatch_elf *kelf,
 	kpatch_regenerate_orc_sections(kelf);
 }
 
-static struct sym_compare_type *kpatch_elf_locals(struct kpatch_elf *kelf)
-{
-	struct symbol *sym;
-	int i = 0, sym_num = 0;
-	struct sym_compare_type *sym_array;
-
-	list_for_each_entry(sym, &kelf->symbols, list) {
-		if (sym->bind != STB_LOCAL)
-			continue;
-		if (sym->type != STT_FUNC && sym->type != STT_OBJECT)
-			continue;
-
-		sym_num++;
-	}
-
-	if (!sym_num)
-		return NULL;
-
-	sym_array = malloc((sym_num + 1) * sizeof(struct sym_compare_type));
-	if (!sym_array)
-		ERROR("malloc");
-
-	list_for_each_entry(sym, &kelf->symbols, list) {
-		if (sym->bind != STB_LOCAL)
-			continue;
-		if (sym->type != STT_FUNC && sym->type != STT_OBJECT)
-			continue;
-
-		sym_array[i].type = sym->type;
-		sym_array[i++].name = strdup(sym->name);
-	}
-	sym_array[i].type = 0;
-	sym_array[i].name = NULL;
-
-	return sym_array;
-}
-
 static void kpatch_create_patches_sections(struct kpatch_elf *kelf,
 					   struct lookup_table *table,
 					   char *objname)
@@ -2935,7 +2907,7 @@ static void kpatch_create_patches_sections(struct kpatch_elf *kelf,
 		    sym->parent)
 			continue;
 
-		if (!lookup_symbol(table, sym->name, &symbol))
+		if (!lookup_symbol(table, sym, &symbol))
 			ERROR("can't find symbol '%s' in symbol table", sym->name);
 
 		if (sym->bind == STB_LOCAL && symbol.global)
@@ -3096,7 +3068,7 @@ static bool need_dynrela(struct lookup_table *table, const struct rela *rela)
 			!strchr(toc_rela(rela)->sym->name, '.');
 	}
 
-	if (!lookup_symbol(table, rela->sym->name, &symbol)) {
+	if (!lookup_symbol(table, rela->sym, &symbol)) {
 		/*
 		 * Assume the symbol lives in another .o in the patch module.
 		 * A normal rela should work.
@@ -3282,7 +3254,7 @@ static void kpatch_create_intermediate_sections(struct kpatch_elf *kelf,
 				ERROR("unsupported dynrela reference to symbol '%s' in module-specific special section '%s'",
 				      rela->sym->name, sec->base->name);
 
-			if (!lookup_symbol(table, rela->sym->name, &symbol))
+			if (!lookup_symbol(table, rela->sym, &symbol))
 				ERROR("can't find symbol '%s' in symbol table",
 				      rela->sym->name);
 
@@ -3719,15 +3691,13 @@ static struct argp argp = { options, parse_opt, args_doc, NULL };
 
 int main(int argc, char *argv[])
 {
-	struct kpatch_elf *kelf_base, *kelf_patched, *kelf_out;
+	struct kpatch_elf *kelf_orig, *kelf_patched, *kelf_out;
 	struct arguments arguments;
 	int num_changed, callbacks_exist, new_globals_exist;
 	struct lookup_table *lookup;
 	struct section *sec, *symtab;
-	struct symbol *sym;
-	char *hint = NULL, *orig_obj, *patched_obj, *parent_name;
+	char *orig_obj, *patched_obj, *parent_name;
 	char *parent_symtab, *mod_symvers, *patch_name, *output_obj;
-	struct sym_compare_type *base_locals, *sym_comp;
 
 	memset(&arguments, 0, sizeof(arguments));
 	argp_parse (&argp, argc, argv, 0, NULL, &arguments);
@@ -3748,44 +3718,30 @@ int main(int argc, char *argv[])
 
 	childobj = basename(orig_obj);
 
-	kelf_base = kpatch_elf_open(orig_obj);
+	kelf_orig = kpatch_elf_open(orig_obj);
 	kelf_patched = kpatch_elf_open(patched_obj);
 
-	kpatch_compare_elf_headers(kelf_base->elf, kelf_patched->elf);
-	kpatch_check_program_headers(kelf_base->elf);
+	kpatch_compare_elf_headers(kelf_orig->elf, kelf_patched->elf);
+	kpatch_check_program_headers(kelf_orig->elf);
 	kpatch_check_program_headers(kelf_patched->elf);
 
-	kpatch_bundle_symbols(kelf_base);
+	kpatch_bundle_symbols(kelf_orig);
 	kpatch_bundle_symbols(kelf_patched);
 
-	kpatch_detect_child_functions(kelf_base);
+	kpatch_detect_child_functions(kelf_orig);
 	kpatch_detect_child_functions(kelf_patched);
 
-	list_for_each_entry(sym, &kelf_base->symbols, list) {
-		if (sym->type == STT_FILE) {
-			hint = strdup(sym->name);
-			break;
-		}
-	}
-	if (!hint) {
-		log_normal("WARNING: FILE symbol not found in base. Stripped object file or assembly source?\n");
-		return EXIT_STATUS_NO_CHANGE;
-	}
-
-	base_locals = kpatch_elf_locals(kelf_base);
-
-	lookup = lookup_open(parent_symtab, parent_name, mod_symvers, hint,
-			     base_locals);
+	lookup = lookup_open(parent_symtab, parent_name, mod_symvers, kelf_orig);
 
 	kpatch_mark_grouped_sections(kelf_patched);
-	kpatch_replace_sections_syms(kelf_base);
+	kpatch_replace_sections_syms(kelf_orig);
 	kpatch_replace_sections_syms(kelf_patched);
 
-	kpatch_correlate_elfs(kelf_base, kelf_patched);
-	kpatch_correlate_static_local_variables(kelf_base, kelf_patched);
+	kpatch_correlate_elfs(kelf_orig, kelf_patched);
+	kpatch_correlate_static_local_variables(kelf_orig, kelf_patched);
 
 	/*
-	 * After this point, we don't care about kelf_base anymore.
+	 * After this point, we don't care about kelf_orig anymore.
 	 * We access its sections via the twin pointers in the
 	 * section, symbol, and rela lists of kelf_patched.
 	 */
@@ -3794,8 +3750,8 @@ int main(int argc, char *argv[])
 	kpatch_mark_ignored_functions_same(kelf_patched);
 	kpatch_mark_ignored_sections_same(kelf_patched);
 	kpatch_check_func_profiling_calls(kelf_patched);
-	kpatch_elf_teardown(kelf_base);
-	kpatch_elf_free(kelf_base);
+	kpatch_elf_teardown(kelf_orig);
+	kpatch_elf_free(kelf_orig);
 
 	kpatch_include_standard_elements(kelf_patched);
 	num_changed = kpatch_include_changed_functions(kelf_patched);
@@ -3816,7 +3772,6 @@ int main(int argc, char *argv[])
 			log_debug("no changed functions were found, but callbacks exist\n");
 		else {
 			log_debug("no changed functions were found\n");
-			free(hint);
 			return EXIT_STATUS_NO_CHANGE;
 		}
 	}
@@ -3831,11 +3786,6 @@ int main(int argc, char *argv[])
 	 * kpatch_patched.
 	 */
 	kpatch_elf_teardown(kelf_patched);
-
-	for (sym_comp = base_locals; sym_comp && sym_comp->name; sym_comp++)
-		free(sym_comp->name);
-	free(base_locals);
-	free(hint);
 
 	kpatch_no_sibling_calls_ppc64le(kelf_out);
 

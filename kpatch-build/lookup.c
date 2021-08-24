@@ -56,7 +56,6 @@ struct lookup_table {
 	int obj_nr, exp_nr;
 	struct object_symbol *obj_syms;
 	struct export_symbol *exp_syms;
-	struct object_symbol *local_syms;
 	char *objname;
 };
 
@@ -69,10 +68,10 @@ struct lookup_table {
 #define for_each_exp_symbol(ndx, iter, table) \
 	for (ndx = 0, iter = table->exp_syms; ndx < table->exp_nr; ndx++, iter++)
 
-static int maybe_discarded_sym(const char *name)
+static bool maybe_discarded_sym(const char *name)
 {
 	if (!name)
-		return 0;
+		return false;
 
 	/*
 	 * Sometimes these symbols are discarded during linking, and sometimes
@@ -86,99 +85,135 @@ static int maybe_discarded_sym(const char *name)
 	    strstr(name, "__addressable_") ||
 	    strstr(name, "__UNIQUE_ID_") ||
 	    !strncmp(name, ".L.str", 6))
-		return 1;
+		return true;
 
-	return 0;
+	return false;
 }
 
-static int locals_match(struct lookup_table *table, int idx,
-			struct sym_compare_type *child_locals)
+static bool locals_match(struct lookup_table *table, int idx,
+			struct symbol *file_sym, struct list_head *sym_list)
 {
-	struct sym_compare_type *child;
-	struct object_symbol *sym;
+	struct symbol *sym;
+	struct object_symbol *table_sym;
 	int i, found;
 
 	i = idx + 1;
-	for_each_obj_symbol_continue(i, sym, table) {
-		if (sym->type == STT_FILE)
+	for_each_obj_symbol_continue(i, table_sym, table) {
+		if (table_sym->type == STT_FILE)
 			break;
-		if (sym->bind != STB_LOCAL)
+		if (table_sym->bind != STB_LOCAL)
 			continue;
-		if (sym->type != STT_FUNC && sym->type != STT_OBJECT)
-			continue;
-
-		found = 0;
-		for (child = child_locals; child->name; child++) {
-			if (child->type == sym->type &&
-			    !strcmp(child->name, sym->name)) {
-				found = 1;
-				break;
-			}
-		}
-
-		if (!found)
-			return 0;
-	}
-
-	for (child = child_locals; child->name; child++) {
-		/*
-		 * Symbols which get discarded at link time are missing from
-		 * the lookup table, so skip them.
-		 */
-		if (maybe_discarded_sym(child->name))
+		if (table_sym->type != STT_FUNC && table_sym->type != STT_OBJECT)
 			continue;
 
 		found = 0;
-		i = idx + 1;
-		for_each_obj_symbol_continue(i, sym, table) {
+		sym = file_sym;
+		list_for_each_entry_continue(sym, sym_list, list) {
 			if (sym->type == STT_FILE)
 				break;
 			if (sym->bind != STB_LOCAL)
 				continue;
-			if (sym->type != STT_FUNC && sym->type != STT_OBJECT)
-				continue;
-			if (maybe_discarded_sym(sym->name))
-				continue;
 
-			if (!strcmp(child->name, sym->name)) {
+			if (sym->type == table_sym->type &&
+			    !strcmp(sym->name, table_sym->name)) {
 				found = 1;
 				break;
 			}
 		}
 
 		if (!found)
-			return 0;
+			return false;
 	}
 
-	return 1;
+	sym = file_sym;
+	list_for_each_entry_continue(sym, sym_list, list) {
+		if (sym->type == STT_FILE)
+			break;
+		if (sym->bind != STB_LOCAL)
+			continue;
+		if (sym->type != STT_FUNC && table_sym->type != STT_OBJECT)
+			continue;
+		/*
+		 * Symbols which get discarded at link time are missing from
+		 * the lookup table, so skip them.
+		 */
+		if (maybe_discarded_sym(sym->name))
+			continue;
+
+		found = 0;
+		i = idx + 1;
+		for_each_obj_symbol_continue(i, table_sym, table) {
+			if (table_sym->type == STT_FILE)
+				break;
+			if (table_sym->bind != STB_LOCAL)
+				continue;
+			if (maybe_discarded_sym(table_sym->name))
+				continue;
+
+			if (sym->type == table_sym->type &&
+			    !strcmp(sym->name, table_sym->name)) {
+				found = 1;
+				break;
+			}
+		}
+
+		if (!found)
+			return false;
+	}
+
+	return true;
 }
 
-static void find_local_syms(struct lookup_table *table, char *hint,
-			    struct sym_compare_type *child_locals)
+static void find_local_syms(struct lookup_table *table, struct symbol *file_sym,
+		struct list_head *sym_list)
 {
 	struct object_symbol *sym;
+	struct object_symbol *lookup_table_file_sym = NULL;
 	int i;
-
-	if (!child_locals)
-		return;
 
 	for_each_obj_symbol(i, sym, table) {
 		if (sym->type != STT_FILE)
 			continue;
-		if (strcmp(hint, sym->name))
+		if (strcmp(file_sym->name, sym->name))
 			continue;
-		if (!locals_match(table, i, child_locals))
+		if (!locals_match(table, i, file_sym, sym_list))
 			continue;
-		if (table->local_syms)
+		if (lookup_table_file_sym)
 			ERROR("found duplicate matches for %s local symbols in %s symbol table",
-			      hint, table->objname);
+			      file_sym->name, table->objname);
 
-		table->local_syms = sym;
+		lookup_table_file_sym = sym;
 	}
 
-	if (!table->local_syms)
+	if (!lookup_table_file_sym)
 		ERROR("couldn't find matching %s local symbols in %s symbol table",
-		      hint, table->objname);
+		      file_sym->name, table->objname);
+
+	list_for_each_entry_continue(file_sym, sym_list, list) {
+		if (file_sym->type == STT_FILE)
+			break;
+		file_sym->lookup_table_file_sym = lookup_table_file_sym;
+	}
+}
+
+/*
+ * Because there can be duplicate symbols and duplicate filenames we need to
+ * correlate each symbol from the elf file to it's corresponding symbol in
+ * lookup table. Both the elf file and the lookup table can be split on
+ * STT_FILE symbols into blocks of symbols originating from a single source
+ * file. We then compare local symbol lists from both blocks and store the
+ * pointer to STT_FILE symbol in lookup table for later use in
+ * lookup_local_symbol().
+ */
+static void find_local_syms_multiple(struct lookup_table *table,
+		struct kpatch_elf *kelf)
+{
+	struct symbol *sym;
+
+	list_for_each_entry(sym, &kelf->symbols, list) {
+		if (sym->type == STT_FILE)
+			find_local_syms(table, sym, &kelf->symbols);
+	}
 }
 
 /* Strip the path and replace '-' with '_' */
@@ -371,8 +406,7 @@ static void symvers_read(struct lookup_table *table, char *path)
 }
 
 struct lookup_table *lookup_open(char *symtab_path, char *objname,
-				 char *symvers_path, char *hint,
-				 struct sym_compare_type *locals)
+				 char *symvers_path, struct kpatch_elf *kelf)
 {
 	struct lookup_table *table;
 
@@ -384,7 +418,8 @@ struct lookup_table *lookup_open(char *symtab_path, char *objname,
 	table->objname = objname;
 	symtab_read(table, symtab_path);
 	symvers_read(table, symvers_path);
-	find_local_syms(table, hint, locals);
+
+	find_local_syms_multiple(table, kelf);
 
 	return table;
 }
@@ -407,22 +442,21 @@ void lookup_close(struct lookup_table *table)
 	free(table);
 }
 
-static bool lookup_local_symbol(struct lookup_table *table, char *name,
+static bool lookup_local_symbol(struct lookup_table *table,
+				struct symbol *lookup_sym,
 				struct lookup_result *result)
 {
 	struct object_symbol *sym;
 	unsigned long sympos = 0;
 	int i, in_file = 0;
 
-	if (!table->local_syms)
-		return false;
-
 	memset(result, 0, sizeof(*result));
 	for_each_obj_symbol(i, sym, table) {
-		if (sym->bind == STB_LOCAL && !strcmp(sym->name, name))
+		if (sym->bind == STB_LOCAL && !strcmp(sym->name,
+					lookup_sym->name))
 			sympos++;
 
-		if (table->local_syms == sym) {
+		if (lookup_sym->lookup_table_file_sym == sym) {
 			in_file = 1;
 			continue;
 		}
@@ -433,10 +467,11 @@ static bool lookup_local_symbol(struct lookup_table *table, char *name,
 		if (sym->type == STT_FILE)
 			break;
 
-		if (sym->bind == STB_LOCAL && !strcmp(sym->name, name)) {
-
+		if (sym->bind == STB_LOCAL && !strcmp(sym->name,
+					lookup_sym->name)) {
 			if (result->objname)
-				ERROR("duplicate local symbol found for %s", name);
+				ERROR("duplicate local symbol found for %s",
+						lookup_sym->name);
 
 			result->objname		= table->objname;
 			result->addr		= sym->addr;
@@ -511,14 +546,14 @@ static bool lookup_global_symbol(struct lookup_table *table, char *name,
 	return !!result->objname;
 }
 
-bool lookup_symbol(struct lookup_table *table, char *name,
+bool lookup_symbol(struct lookup_table *table, struct symbol *sym,
 		   struct lookup_result *result)
 {
-	if (lookup_local_symbol(table, name, result))
+	if (lookup_local_symbol(table, sym, result))
 		return true;
 
-	if (lookup_global_symbol(table, name, result))
+	if (lookup_global_symbol(table, sym->name, result))
 		return true;
 
-	return lookup_exported_symbol(table, name, result);
+	return lookup_exported_symbol(table, sym->name, result);
 }
