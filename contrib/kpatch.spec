@@ -6,7 +6,7 @@
 
 Name: kpatch
 Summary: Dynamic kernel patching
-Version: 0.9.3
+Version: 0.9.4
 License: GPLv2
 Group: System Environment/Kernel
 URL: http://github.com/dynup/kpatch
@@ -104,6 +104,19 @@ rm -rf %{buildroot}
 %{_mandir}/man1/kpatch-build.1*
 
 %changelog
+* Wed Aug 25 Yannick Cote <ycote@redhat.com> - 0.9.4
+- Support for multiple source files
+- Makefile tweaks for handling non-replace kpatch building
+- Support CONFIG_PRINTK_INDEX
+- kpatch-build: set EXTRAVERSION and not localversion for RH kernels
+- Make sure section symbols exist
+- create-diff-object: Check that the section has a secsym
+- kpatch: rmmod module of the same name before loading a module
+- kpatch-build: enable option -R|--replace to build replace klp
+- kpatch: use /sys/kernel/kpatch/ to check whether core module is loaded
+- kpatch: Sync signal subcmd usage output with manpage
+- fixes for the out-of-range relocation check
+
 * Tue Apr 20 Yannick Cote <ycote@redhat.com> - 0.9.3
 - Initial support for clang compiler
 - Add support for rhel-8.4
