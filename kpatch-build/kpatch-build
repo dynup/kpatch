@@ -1059,6 +1059,7 @@ for i in $FILES; do
 		[[ "$i" = arch/x86/lib/copy_user_64.o ]] && continue
 
 	[[ "$i" = usr/initramfs_data.o ]] && continue
+	[[ "$i" = certs/system_certificates.o ]] && continue
 
 	mkdir -p "output/$(dirname "$i")"
 	cd "$SRCDIR" || die
