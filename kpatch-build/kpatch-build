@@ -696,7 +696,7 @@ fi
 # shellcheck disable=SC1090
 [[ -f "$RELEASE_FILE" ]] && source "$RELEASE_FILE"
 DISTRO="$ID"
-if [[ "$DISTRO" = fedora ]] || [[ "$DISTRO" = rhel ]] || [[ "$DISTRO" = ol ]] || [[ "$DISTRO" = centos ]]; then
+if [[ "$DISTRO" = fedora ]] || [[ "$DISTRO" = rhel ]] || [[ "$DISTRO" = ol ]] || [[ "$DISTRO" = centos ]] || [[ "$DISTRO" = openEuler ]]; then
 	[[ -z "$VMLINUX" ]] && VMLINUX="/usr/lib/debug/lib/modules/$ARCHVERSION/vmlinux"
 	[[ -e "$VMLINUX" ]] || die "kernel-debuginfo-$ARCHVERSION not installed"
 
