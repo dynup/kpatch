@@ -3002,7 +3002,9 @@ static bool need_dynrela(struct lookup_table *table, const struct rela *rela)
 	 * should never be converted to dynrelas.
 	 */
 	if (rela->type == R_PPC64_REL16_HA || rela->type == R_PPC64_REL16_LO ||
-	    rela->type == R_PPC64_REL64 || rela->type == R_PPC64_ENTRY)
+	    rela->type == R_PPC64_ENTRY)
+		return false;
+	if (rela->type == R_PPC64_REL64 && !strcmp(rela->sym->name, ".TOC."))
 		return false;
 
 	/*
