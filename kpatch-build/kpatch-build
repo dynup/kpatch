@@ -858,9 +858,6 @@ else
 	# sections.  Use with caution!
 	echo "WARNING: Use of kpatch core module (kpatch.ko) is deprecated!  There may be bugs!" >&2
 
-	if [[ "$KLP_REPLACE" -eq 1 ]] ; then
-		die "kpatch core module (kpatch.ko) does not support replace, please add -R|--non-replace"
-	fi
 	find_core_symvers || die "unable to find Module.symvers for kpatch core module"
 	KBUILD_EXTRA_SYMBOLS="$SYMVERSFILE"
 fi
