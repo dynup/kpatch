@@ -1940,7 +1940,7 @@ static void kpatch_migrate_included_elements(struct kpatch_elf *kelf, struct kpa
 		list_del(&sym->list);
 		list_add_tail(&sym->list, &out->symbols);
 		sym->index = 0;
-		sym->strip = 0;
+		sym->strip = SYMBOL_DEFAULT;
 		if (sym->sec && !sym->sec->include)
 			/* break link to non-included section */
 			sym->sec = NULL;
@@ -3234,8 +3234,10 @@ static void kpatch_create_intermediate_sections(struct kpatch_elf *kelf,
 				special = true;
 
 		list_for_each_entry_safe(rela, safe, &sec->relas, list) {
-			if (!rela->need_dynrela)
+			if (!rela->need_dynrela) {
+				rela->sym->strip = SYMBOL_USED;
 				continue;
+			}
 
 			/*
 			 * Starting with Linux 5.8, .klp.arch sections are no
@@ -3332,8 +3334,8 @@ static void kpatch_create_intermediate_sections(struct kpatch_elf *kelf,
 			 * later (for example, they may have relocations
 			 * of their own which should be processed).
 			 */
-			if (!rela->sym->sec)
-				rela->sym->strip = 1;
+			if (!rela->sym->sec && rela->sym->strip != SYMBOL_USED)
+				rela->sym->strip = SYMBOL_STRIP;
 			list_del(&rela->list);
 			free(rela);
 
@@ -3519,7 +3521,7 @@ static void kpatch_strip_unneeded_syms(struct kpatch_elf *kelf,
 	struct symbol *sym, *safe;
 
 	list_for_each_entry_safe(sym, safe, &kelf->symbols, list) {
-		if (sym->strip) {
+		if (sym->strip == SYMBOL_STRIP) {
 			list_del(&sym->list);
 			free(sym);
 		}
