@@ -8,7 +8,7 @@ TOOLCHAINCMD="$1"
 shift
 
 if [[ -z "$KPATCH_GCC_TEMPDIR" ]]; then
-	exec "$TOOLCHAINCMD" "$@"
+	exec "${KPATCH_CROSS_COMPILE}""${TOOLCHAINCMD}" "$@"
 fi
 
 declare -a args=("$@")
@@ -85,4 +85,4 @@ elif [[ "$TOOLCHAINCMD" =~ ^(.*-)?ld || "$TOOLCHAINCMD" =~ ^(.*-)?ld.lld ]] ; th
 	done
 fi
 
-exec "$TOOLCHAINCMD" "${args[@]}"
+exec "${KPATCH_CROSS_COMPILE}""${TOOLCHAINCMD}" "${args[@]}"

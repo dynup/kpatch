@@ -273,7 +273,7 @@ gcc_version_check() {
 	# gcc --version varies between distributions therefore extract version
 	# by compiling a test file and compare it to vmlinux's version.
 	echo 'void main(void) {}' > "$c"
-	out="$(gcc -c -pg -ffunction-sections -o "$o" "$c" 2>&1)"
+	out="$("${KPATCH_CROSS_COMPILE}"gcc -c -pg -ffunction-sections -o "$o" "$c" 2>&1)"
 	gccver="$(gcc_version_from_file "$o")"
 	kgccver="$(gcc_version_from_file "$target")"
 
@@ -532,6 +532,9 @@ usage() {
 	echo "		-d, --debug             Enable 'xtrace' and keep scratch files" >&2
 	echo "		                        in <CACHEDIR>/tmp" >&2
 	echo "		                        (can be specified multiple times)" >&2
+	echo "		--cross-compile         Specify the prefix used for all executables" >&2
+	echo "		                        used during compilation" >&2
+	echo "		--distro                Override distro name" >&2
 	echo "		-e, --oot-module        Enable patching out-of-tree module," >&2
 	echo "		                        specify current version of module" >&2
 	echo "		-R, --non-replace       Disable replace patch (replace is on by default)" >&2
@@ -540,7 +543,7 @@ usage() {
 	echo "		                        (not recommended)" >&2
 }
 
-options="$(getopt -o ha:r:s:c:v:j:t:n:o:de:R -l "help,archversion:,sourcerpm:,sourcedir:,config:,vmlinux:,jobs:,target:,name:,output:,oot-module:,debug,skip-gcc-check,skip-compiler-check,skip-cleanup,non-replace" -- "$@")" || die "getopt failed"
+options="$(getopt -o ha:r:s:c:v:j:t:n:o:de:R -l "help,archversion:,sourcerpm:,sourcedir:,config:,vmlinux:,jobs:,target:,name:,output:,debug,cross-compile:,distro:,skip-gcc-check,skip-compiler-check,skip-cleanup,oot-module:,non-replace" -- "$@")" || die "getopt failed"
 
 eval set -- "$options"
 
@@ -597,6 +600,14 @@ while [[ $# -gt 0 ]]; do
 		if [[ $DEBUG -eq 1 ]]; then
 			echo "DEBUG mode enabled"
 		fi
+		;;
+	--cross-compile)
+		KPATCH_CROSS_COMPILE="$2"
+		shift
+		;;
+	--distro)
+		DISTRO="$2"
+		shift
 		;;
 	-e|--oot-module)
 		[[ ! -f "$2" ]] && die "out-of-tree module '$2' not found"
@@ -695,7 +706,7 @@ fi
 # Don't check external file.
 # shellcheck disable=SC1090
 [[ -f "$RELEASE_FILE" ]] && source "$RELEASE_FILE"
-DISTRO="$ID"
+DISTRO="${DISTRO:-${ID}}"
 if [[ "$DISTRO" = fedora ]] || [[ "$DISTRO" = rhel ]] || [[ "$DISTRO" = ol ]] || [[ "$DISTRO" = centos ]] || [[ "$DISTRO" = openEuler ]]; then
 	[[ -z "$VMLINUX" ]] && VMLINUX="/usr/lib/debug/lib/modules/$ARCHVERSION/vmlinux"
 	[[ -e "$VMLINUX" ]] || die "kernel-debuginfo-$ARCHVERSION not installed"
@@ -927,6 +938,8 @@ find_special_section_data
 if [[ $DEBUG -ge 4 ]]; then
 	export KPATCH_GCC_DEBUG=1
 fi
+
+export KPATCH_CROSS_COMPILE
 
 echo "Building original source"
 [[ -n "$OOT_MODULE" ]] || ./scripts/setlocalversion --save-scmversion || die
@@ -1166,6 +1179,7 @@ done
 KPATCH_BUILD="$KPATCH_BUILD" KPATCH_NAME="$MODNAME" \
 KBUILD_EXTRA_SYMBOLS="$KBUILD_EXTRA_SYMBOLS" \
 KPATCH_LDFLAGS="$KPATCH_LDFLAGS" \
+CROSS_COMPILE="$KPATCH_CROSS_COMPILE" \
 	make "${MAKEVARS[@]}" 2>&1 | logger || die
 
 if [[ "$USE_KLP" -eq 1 ]]; then
