@@ -380,7 +380,8 @@ find_special_section_data() {
 	[[ "$CONFIG_UNWINDER_ORC" -eq 0 ]] && AWK_OPTIONS="$AWK_OPTIONS -vskip_o=1"
 	[[ "$CONFIG_JUMP_LABEL" -eq 0 ]] && AWK_OPTIONS="$AWK_OPTIONS -vskip_j=1"
 	[[ "$CONFIG_PRINTK_INDEX" -eq 0 ]] && AWK_OPTIONS="$AWK_OPTIONS -vskip_i=1"
-	! kernel_version_gte 5.10.0 && AWK_OPTIONS="$AWK_OPTIONS -vskip_s=1"
+	(! kernel_version_gte 5.10.0 || [[ "$CONFIG_HAVE_STATIC_CALL" -eq 0 ]]) \
+		&& AWK_OPTIONS="$AWK_OPTIONS -vskip_s=1"
 
 	# If $AWK_OPTIONS are blank gawk would treat "" as a blank script
 	# shellcheck disable=SC2086
@@ -430,7 +431,7 @@ find_special_section_data() {
 	[[ -z "$ORC_STRUCT_SIZE" && "$CONFIG_UNWINDER_ORC" -ne 0 ]] && die "can't find special struct orc_entry size"
 	[[ -z "$JUMP_STRUCT_SIZE" && "$CONFIG_JUMP_LABEL" -ne 0 ]] && die "can't find special struct jump_entry size"
 	[[ -z "$PRINTK_INDEX_STRUCT_SIZE" && "$CONFIG_PRINTK_INDEX" -ne 0 ]] && die "can't find special struct pi_entry size"
-	[[ -z "$STATIC_CALL_STRUCT_SIZE" ]] && kernel_version_gte 5.10.0 && die "can't find special struct static_call_site size"
+	[[ -z "$STATIC_CALL_STRUCT_SIZE" && "$CONFIG_HAVE_STATIC_CALL" -ne 0 ]] && kernel_version_gte 5.10.0 && die "can't find special struct static_call_site size"
 
 	return
 }
@@ -869,6 +870,7 @@ grep -q "CONFIG_JUMP_LABEL=y"   "$CONFIGFILE" && CONFIG_JUMP_LABEL=1
 grep -q "CONFIG_MODVERSIONS=y"  "$CONFIGFILE" && CONFIG_MODVERSIONS=1
 grep -q "CONFIG_CC_IS_CLANG=y"  "$CONFIGFILE" && CONFIG_CC_IS_CLANG=1
 grep -q "CONFIG_LD_IS_LLD=y"    "$CONFIGFILE" && CONFIG_LD_IS_LLD=1
+grep -q "CONFIG_HAVE_STATIC_CALL=y"    "$CONFIGFILE" && CONFIG_HAVE_STATIC_CALL=1
 
 # unsupported kernel option checking
 grep -q "CONFIG_DEBUG_INFO_SPLIT=y" "$CONFIGFILE" && die "kernel option 'CONFIG_DEBUG_INFO_SPLIT' not supported"
