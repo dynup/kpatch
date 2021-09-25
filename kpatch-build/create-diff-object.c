@@ -510,6 +510,10 @@ static bool rela_equal(struct rela *rela1, struct rela *rela2)
 	if (!rela_toc1 || !rela_toc2)
 		return false;
 
+	/*
+	 * For LC symbol, comparision is performed using rela->string.
+	 * rela->string is initialized appropriately based on LC symbol or not.
+	 */
 	if (rela_toc1->string)
 		return rela_toc2->string && !strcmp(rela_toc1->string, rela_toc2->string);
 

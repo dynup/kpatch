@@ -151,6 +151,24 @@ int offset_of_string(struct list_head *list, char *name)
 	return index;
 }
 
+/*
+ * Check if the symbol name contains LC or L1^B.
+ *
+ * On s390x,
+ * .L1^B19 -> .rodata.str (bug_table)
+ * .LC0 -> .rodata.str1.2
+ *
+ *  In these cases, return true and rela->string should point to
+ *  rela->sym->sec->data->d_buf + value of the associated symbol.
+ */
+
+static bool lc_string(struct rela *rela) {
+	if (!strncmp(rela->sym->name, ".LC", 3) || !strncmp(rela->sym->name, ".L1", 3))
+		return true;
+	else
+		return false;
+}
+
 void kpatch_create_rela_list(struct kpatch_elf *kelf, struct section *sec)
 {
 	int index = 0, skip = 0;
@@ -193,7 +211,10 @@ void kpatch_create_rela_list(struct kpatch_elf *kelf, struct section *sec)
 			ERROR("could not find rela entry symbol\n");
 		if (rela->sym->sec &&
 		    (rela->sym->sec->sh.sh_flags & SHF_STRINGS)) {
-			rela->string = rela->sym->sec->data->d_buf + rela->addend;
+			if (lc_string(rela))
+				rela->string = rela->sym->sec->data->d_buf + rela->sym->sym.st_value;
+			else
+				rela->string = rela->sym->sec->data->d_buf + rela->addend;
 			if (!rela->string)
 				ERROR("could not lookup rela string for %s+%ld",
 				      rela->sym->name, rela->addend);
