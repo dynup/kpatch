@@ -2616,8 +2616,24 @@ static void kpatch_check_relocations(struct kpatch_elf *kelf)
 		if (!is_rela_section(sec))
 			continue;
 		list_for_each_entry(rela, &sec->relas, list) {
+			/*
+			 * The size of the sdata->d_size could be zero.
+			 * Usecase:
+			 * [327] .bss.__key.18
+			 *        NOBITS 0000000000000000 007284 000000 00   0   0  2
+			 *
+			 * Relocation section '.rela.text.copy_signal' at offset 0x7f9c8 contains 19 entries:
+			 * (...)
+			 * 0000000000000090  000000f90000001a R_390_GOTENT 0000000000000000 __key.18 + 2
+			 *
+			 *   8e:   c4 48 00 00 00 00       lgrl    %r4,8e <copy_signal+0x8e>
+			 *               90: R_390_GOTENT        __key.18+0x2
+			 * which is a valid relocation
+			 */
 			if (rela->sym->sec) {
 				sdata = rela->sym->sec->data;
+				if (!sdata->d_size)
+					continue;
 				if ((long)rela->sym->sym.st_value + rela->addend > (long)sdata->d_size) {
 					ERROR("out-of-range relocation %s+%lx in %s", rela->sym->name,
 							rela->addend, sec->name);
