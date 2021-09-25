@@ -127,6 +127,16 @@ static int is_bundleable(struct symbol *sym)
 		return 1;
 
 	if (sym->type == STT_OBJECT &&
+	    strstr(sym->sec->name, ".data.rel.ro.local.") &&
+	    strstr(sym->name, sym->sec->name))
+		return 1;
+
+	if (sym->type == STT_OBJECT &&
+	    strstr(sym->sec->name, ".data.rel.local.") &&
+	    strstr(sym->name, sym->sec->name))
+		return 1;
+
+	if (sym->type == STT_OBJECT &&
 	   !strncmp(sym->sec->name, ".rodata.",8) &&
 	   !strcmp(sym->sec->name + 8, sym->name))
 		return 1;
