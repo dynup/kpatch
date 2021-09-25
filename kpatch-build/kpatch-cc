@@ -43,6 +43,10 @@ if [[ "$TOOLCHAINCMD" =~ ^(.*-)?gcc$ || "$TOOLCHAINCMD" =~ ^(.*-)?clang$ ]] ; th
 				drivers/firmware/efi/libstub/*|\
 				arch/powerpc/kernel/prom_init.o|\
 				arch/powerpc/kernel/vdso64/*|\
+				arch/s390/boot/*|\
+				arch/s390/purgatory/*|\
+				arch/s390/lib/*|\
+				arch/s390/kernel/vdso64/*|\
 				lib/*|\
 				.*.o|\
 				*/.lib_exports.o)
