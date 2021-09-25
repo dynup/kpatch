@@ -55,6 +55,7 @@ struct section {
 	int include;
 	int ignore;
 	int grouped;
+	int groupindex;
 	union {
 		struct { /* if (is_rela_section()) */
 			struct section *base;
@@ -109,11 +110,23 @@ struct string {
 	char *name;
 };
 
+/*
+ * Maintain list of group section
+ */
+struct group_section {
+	struct list_head list;
+	/* List of section link names of this group */
+	char **secnames;
+	char **symnames;
+	int groupindex;
+};
+
 struct kpatch_elf {
 	Elf *elf;
 	struct list_head sections;
 	struct list_head symbols;
 	struct list_head strings;
+	struct list_head groupsec;
 	int fd;
 };
 
@@ -170,9 +183,12 @@ struct section *create_section_pair(struct kpatch_elf *kelf, char *name,
                                     int entsize, int nr);
 void kpatch_remove_and_free_section(struct kpatch_elf *kelf, char *secname);
 void kpatch_reindex_elements(struct kpatch_elf *kelf);
+void kpatch_reindex_group_sections(struct kpatch_elf *kelf);
 void kpatch_rebuild_rela_section_data(struct section *sec);
 void kpatch_write_output_elf(struct kpatch_elf *kelf, Elf *elf, char *outfile,
 			     mode_t mode);
+void kpatch_free_groupsec(struct kpatch_elf *kelf);
 void kpatch_elf_teardown(struct kpatch_elf *kelf);
 void kpatch_elf_free(struct kpatch_elf *kelf);
+void kpatch_mark_grouped_sections(struct kpatch_elf *kelf);
 #endif /* _KPATCH_ELF_H_ */

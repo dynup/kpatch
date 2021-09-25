@@ -377,6 +377,35 @@ static void remove_intermediate_sections(struct kpatch_elf *kelf)
 		kpatch_remove_and_free_section(kelf, intermediate_sections[i]);
 }
 
+/*
+ * .s390_indirect_jump , .s390_return_mem, .s390_return_reg,
+ * .s390_indirect_call are ignored to avoid the relocation error (PC32).  This
+ * means expolines will be available, if the kernel is compiled along with it.
+ * However, the expolines cannot be reverted to normal jump during runtime
+ * using these tables.
+ *
+ * These sections are already ignored in create-diff-object. However, the final
+ * module could contain s390_return_mem (via livepatch-patch-hook). Just keep
+ * the convention uniform for s390x kpatch module.
+ */
+static void remove_s390_expoline_sections(struct kpatch_elf *kelf)
+{
+	size_t i;
+	char *expoline_sections[] = {
+		".s390_return_mem",
+		".rela.s390_return_mem",
+		".s390_return_reg",
+		".rela.s390_return_reg",
+		".s390_indirect_call",
+		".rela.s390_indirect_call",
+		".s390_indirect_jump",
+		".rela.s390_indirect_jump",
+	};
+
+	for (i = 0; i < sizeof(expoline_sections)/sizeof(expoline_sections[0]); i++)
+		kpatch_remove_and_free_section(kelf, expoline_sections[i]);
+}
+
 struct arguments {
 	char *args[2];
 	int debug;
@@ -468,6 +497,9 @@ int main(int argc, char *argv[])
 	if (krelas_nr != ksyms_nr)
 		ERROR("number of krelas and ksyms do not match");
 
+	/* Maintain group section info before reindexing elements */
+	kpatch_mark_grouped_sections(kelf);
+
 	/*
 	 * Create klp rela sections and klp symbols from
 	 * .kpatch.{relocations,symbols} sections
@@ -484,6 +516,7 @@ int main(int argc, char *argv[])
 	}
 
 	remove_intermediate_sections(kelf);
+	remove_s390_expoline_sections(kelf);
 	kpatch_reindex_elements(kelf);
 
 	/* Rebuild rela sections, new klp rela sections will be rebuilt too. */
@@ -502,8 +535,11 @@ int main(int argc, char *argv[])
 	kpatch_create_shstrtab(kelf);
 	kpatch_create_strtab(kelf);
 	kpatch_create_symtab(kelf);
+	kpatch_reindex_group_sections(kelf);
+	kpatch_dump_kelf(kelf);
 
 	kpatch_write_output_elf(kelf, kelf->elf, arguments.args[1], 0664);
+	kpatch_free_groupsec(kelf);
 	kpatch_elf_teardown(kelf);
 	kpatch_elf_free(kelf);
 

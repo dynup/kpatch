@@ -321,18 +321,24 @@ void kpatch_create_symbol_list(struct kpatch_elf *kelf)
 static void kpatch_find_func_profiling_calls(struct kpatch_elf *kelf)
 {
 	struct symbol *sym;
-	struct rela *rela;
 	list_for_each_entry(sym, &kelf->symbols, list) {
 		if (sym->type != STT_FUNC || !sym->sec || !sym->sec->rela)
 			continue;
 #ifdef __powerpc64__
+		struct rela *rela;
 		list_for_each_entry(rela, &sym->sec->rela->relas, list) {
 			if (!strcmp(rela->sym->name, "_mcount")) {
 				sym->has_func_profiling = 1;
 				break;
 			}
 		}
+#elif __s390x__
+		unsigned char *insn;
+		insn = sym->sec->data->d_buf;
+		if (insn[0] == 0xc0 && insn[1] == 0x04 && insn[2] == 0x00)
+			sym->has_func_profiling = 1;
 #else
+		struct rela *rela;
 		rela = list_first_entry(&sym->sec->rela->relas, struct rela,
 					list);
 		if ((rela->type != R_X86_64_NONE &&
@@ -726,6 +732,116 @@ void kpatch_reindex_elements(struct kpatch_elf *kelf)
 	}
 }
 
+void kpatch_mark_grouped_sections(struct kpatch_elf *kelf)
+{
+	struct section *groupsec, *sec;
+	struct group_section *gsec;
+	struct symbol *tsym;
+	unsigned int *data, *end, i;
+
+	INIT_LIST_HEAD(&kelf->groupsec);
+
+	list_for_each_entry(groupsec, &kelf->sections, list) {
+		i = 0;
+		if (groupsec->sh.sh_type != SHT_GROUP)
+			continue;
+		/*
+		 * a. Maintain the section index in struct section and struct
+		 *    group_section. This is later used to compare if the reindexed
+		 *    section and group_section matches.
+		 * b. Maintain the secnames, symnames to later update
+		 *    group section members sh_link and sh_info.
+		 */
+		groupsec->groupindex = groupsec->index;
+		data = groupsec->data->d_buf;
+		end = groupsec->data->d_buf + groupsec->data->d_size;
+		data++; /* skip first flag word (e.g. GRP_COMDAT) */
+		gsec = malloc(sizeof(*gsec));
+		if (!gsec)
+			ERROR("malloc");
+		gsec->groupindex = groupsec->index;
+		/* Maintain names of all section link. Use this info after reindexing */
+		gsec->secnames = malloc((groupsec->data->d_size/sizeof(*data)) * sizeof(char **));
+		if (!gsec->secnames)
+			ERROR("malloc");
+		gsec->symnames = malloc((groupsec->data->d_size/sizeof(*data)) * sizeof(char **));
+		if (!gsec->symnames)
+			ERROR("malloc");
+
+		while (data < end) {
+			sec = find_section_by_index(&kelf->sections, *data);
+			if (!sec)
+				ERROR("group section not found");
+			sec->grouped = 1;
+			log_debug("marking section %s (%d) as grouped\n",
+				  sec->name, sec->index);
+
+			gsec->secnames[i] = strdup(sec->name);
+			tsym = find_symbol_by_index(&kelf->symbols, groupsec->sh.sh_info);
+			if (!tsym)
+				ERROR("symbol not found");
+			gsec->symnames[i] = strdup(tsym->name);
+			data++;
+			i++;
+		}
+		list_add_tail(&gsec->list, &kelf->groupsec);
+	}
+}
+
+/*
+ * kpatch-build reindexes the sections and symbols. When these are reindexed,
+ * group section needs reindexing as well.
+ *
+ * In s390x, expolines like __s390_indirect_jump_r1 are the referenced in
+ * .group sections.
+ */
+void kpatch_reindex_group_sections(struct kpatch_elf *kelf)
+{
+	struct section *sec, *subsec, *tsec;
+	struct symbol *tsym;
+	struct group_section *groupsec;
+	unsigned int *data, *end, i = 0;
+	unsigned int *newdata;
+
+	list_for_each_entry(groupsec, &kelf->groupsec, list) {
+		i = 0;
+		list_for_each_entry(sec, &kelf->sections, list) {
+			/* section's groupindex is set, only if it is a group section */
+			if (sec->sh.sh_type != SHT_GROUP)
+				continue;
+			if (sec->groupindex != groupsec->groupindex)
+				continue;
+			data = sec->data->d_buf;
+			end = sec->data->d_buf + sec->data->d_size;
+			newdata = malloc(sec->data->d_size);
+			if (!newdata)
+				ERROR("malloc");
+			newdata[0] = GRP_COMDAT;
+			data++;
+			while (data < end) {
+				subsec = find_section_by_name(&kelf->sections, groupsec->secnames[i]);
+				if (!subsec)
+					ERROR("group section");
+
+				tsym = find_symbol_by_name(&kelf->symbols, groupsec->symnames[i]);
+				if (!tsym)
+					ERROR("symbol not found");
+
+				/* Update the new index in the group section */
+				newdata[++i] = subsec->index;
+				tsec = find_section_by_name(&kelf->sections, ".symtab");
+				if (!tsec)
+					ERROR("section not found");
+				sec->sh.sh_link = tsec->index;
+				sec->sh.sh_info = tsym->index;
+				data++;
+			}
+			sec->data->d_buf = newdata;
+			break;
+		}
+	}
+}
+
 void kpatch_rebuild_rela_section_data(struct section *sec)
 {
 	struct rela *rela;
@@ -836,6 +952,45 @@ void kpatch_write_output_elf(struct kpatch_elf *kelf, Elf *elf, char *outfile,
 
 	elf_end(elfout);
 	close(fd);
+}
+
+/*
+ * Free the datastructures associated with group section handling
+ */
+void kpatch_free_groupsec(struct kpatch_elf *kelf)
+{
+	struct group_section *gsec, *safegsec;
+	struct section *sec, *safesec;
+	unsigned int *data, *end;
+	size_t i;
+
+	list_for_each_entry_safe(gsec, safegsec, &kelf->groupsec, list) {
+		i = 0;
+		list_for_each_entry_safe(sec, safesec, &kelf->sections, list) {
+			/* section's groupindex is set, only if it is a group section */
+			if (sec->sh.sh_type != SHT_GROUP)
+				continue;
+			if (sec->groupindex != gsec->groupindex)
+				continue;
+			data = sec->data->d_buf;
+			end = sec->data->d_buf + sec->data->d_size;
+			data++;
+			while (data < end) {
+				free(gsec->secnames[i]);
+				free(gsec->symnames[i]);
+				data++;
+				i++;
+			}
+			free(gsec->secnames);
+			free(gsec->symnames);
+			memset(gsec, 0, sizeof(*gsec));
+			free(gsec);
+			/* Free d_buf which is allocated in kpatch_reindex_group_sections */
+			free(sec->data->d_buf);
+			break;
+		}
+	}
+	INIT_LIST_HEAD(&kelf->groupsec);
 }
 
 /*
