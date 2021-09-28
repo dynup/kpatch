@@ -1149,6 +1149,7 @@ else
 	rm -f checksum.tmp
 	"$TOOLSDIR"/create-kpatch-module "$TEMPDIR"/patch/tmp_output.o "$TEMPDIR"/patch/output.o 2>&1 | logger 1
 	check_pipe_status create-kpatch-module
+	[[ "$rc" -ne 0 ]] && die "create-kpatch-module: exited with return code: $rc"
 fi
 
 cd "$TEMPDIR/patch" || die
@@ -1175,6 +1176,7 @@ if [[ "$USE_KLP" -eq 1 ]]; then
 	cp -f "$TEMPDIR/patch/$MODNAME.ko" "$TEMPDIR/patch/tmp.ko" || die
 	"$TOOLSDIR"/create-klp-module $extra_flags "$TEMPDIR/patch/tmp.ko" "$TEMPDIR/patch/$MODNAME.ko" 2>&1 | logger 1
 	check_pipe_status create-klp-module
+	[[ "$rc" -ne 0 ]] && die "create-klp-module: exited with return code: $rc"
 fi
 
 if [[ "$CONFIG_MODVERSIONS" -eq 1 ]]; then
