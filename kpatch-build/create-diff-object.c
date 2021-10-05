@@ -2993,7 +2993,7 @@ static int function_ptr_rela(const struct rela *rela)
 		rela->type == R_PPC64_TOC16_LO_DS));
 }
 
-static bool need_dynrela(struct lookup_table *table, const struct rela *rela)
+static bool need_dynrela(struct lookup_table *table, struct section *sec, const struct rela *rela)
 {
 	struct lookup_result symbol;
 
@@ -3002,7 +3002,11 @@ static bool need_dynrela(struct lookup_table *table, const struct rela *rela)
 	 * should never be converted to dynrelas.
 	 */
 	if (rela->type == R_PPC64_REL16_HA || rela->type == R_PPC64_REL16_LO ||
-	    rela->type == R_PPC64_REL64 || rela->type == R_PPC64_ENTRY)
+	    rela->type == R_PPC64_ENTRY)
+		return false;
+
+	/* v5.13+ kernels use relative jump labels */
+	if (rela->type == R_PPC64_REL64 && strcmp(sec->name, ".rela__jump_table"))
 		return false;
 
 	/*
@@ -3192,7 +3196,7 @@ static void kpatch_create_intermediate_sections(struct kpatch_elf *kelf,
 			 * internal symbol function pointer check which is done
 			 * via .toc indirection in need_dynrela().
 			 */
-			if (need_dynrela(table, rela))
+			if (need_dynrela(table, sec, rela))
 				toc_rela(rela)->need_dynrela = 1;
 		}
 	}
