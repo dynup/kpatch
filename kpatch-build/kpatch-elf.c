@@ -332,7 +332,24 @@ static void kpatch_find_func_profiling_calls(struct kpatch_elf *kelf)
 				break;
 			}
 		}
-#else
+#elif defined(__aarch64__)
+{
+		struct section *sec = find_section_by_name(&kelf->sections,
+				      "__patchable_function_entries");
+		/*
+		 * If we can't find the __patchable_function_entries section or
+		 * there are no relocations in it then not patchable.
+		 */
+		if (!sec || !sec->rela)
+			return;
+		list_for_each_entry(rela, &sec->rela->relas, list) {
+			if (rela->sym->sec && sym->sec == rela->sym->sec) {
+				sym->has_func_profiling = 1;
+				break;
+			}
+		}
+}
+#else /* x86_64 */
 		rela = list_first_entry(&sym->sec->rela->relas, struct rela,
 					list);
 		if ((rela->type != R_X86_64_NONE &&
