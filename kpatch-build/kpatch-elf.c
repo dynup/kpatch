@@ -604,6 +604,9 @@ struct kpatch_elf *kpatch_elf_open(const char *name)
 	if (!gelf_getehdr(kelf->elf, &ehdr))
 		ERROR("gelf_getehdr");
 	switch (ehdr.e_machine) {
+	case EM_AARCH64:
+		kelf->arch = AARCH64;
+		break;
 	case EM_PPC64:
 		kelf->arch = PPC64;
 		break;
