@@ -51,7 +51,7 @@ Supported Architectures
 
 - [x] x86-64
 - [x] ppc64le
-- [ ] arm64
+- [x] arm64
 - [ ] s390
 
 Installation

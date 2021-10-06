@@ -62,7 +62,9 @@
 
 #ifdef __powerpc64__
 #define ABSOLUTE_RELA_TYPE R_PPC64_ADDR64
-#else
+#elif defined(__aarch64__)
+#define ABSOLUTE_RELA_TYPE R_AARCH64_ABS64
+#elif defined(__x86_64__)
 #define ABSOLUTE_RELA_TYPE R_X86_64_64
 #endif
 
@@ -213,6 +215,28 @@ static struct rela *toc_rela(const struct rela *rela)
 	return find_rela_by_offset(rela->sym->sec->rela,
 				   (unsigned int)rela->addend);
 }
+
+#ifdef __aarch64__
+/*
+ * Mapping symbols are used to mark and label the transitions between code and
+ * data in elf files. They begin with a "$" dollar symbol. Don't correlate them
+ * as they often all have the same name either "$x" to mark the start of code
+ * or "$d" to mark the start of data.
+ */
+static bool kpatch_is_mapping_symbol(struct symbol *sym)
+{
+	if (sym->name && sym->name[0] == '$'
+		&& sym->type == STT_NOTYPE \
+		&& sym->bind == STB_LOCAL)
+		return 1;
+	return 0;
+}
+#else
+static int kpatch_is_mapping_symbol(struct symbol *sym)
+{
+	return 0;
+}
+#endif
 
 /*
  * When compiling with -ffunction-sections and -fdata-sections, almost every
@@ -560,6 +584,13 @@ static void kpatch_compare_correlated_section(struct section *sec)
 	/* Short circuit for mcount sections, we rebuild regardless */
 	if (!strcmp(sec->name, ".rela__mcount_loc") ||
 	    !strcmp(sec->name, "__mcount_loc")) {
+		sec->status = SAME;
+		goto out;
+	}
+
+	/* As above but for aarch64 */
+	if (!strcmp(sec->name, ".rela__patchable_function_entries") ||
+	    !strcmp(sec->name, "__patchable_function_entries")) {
 		sec->status = SAME;
 		goto out;
 	}
@@ -1028,6 +1059,9 @@ static void kpatch_correlate_symbols(struct list_head *symlist_orig,
 			 */
 			if (sym_orig->type == STT_NOTYPE &&
 			    !strncmp(sym_orig->name, ".LC", 3))
+				continue;
+
+			if (kpatch_is_mapping_symbol(sym_orig))
 				continue;
 
 			/* group section symbols must have correlated sections */
@@ -1539,7 +1573,7 @@ static void kpatch_replace_sections_syms(struct kpatch_elf *kelf)
 				continue;
 			}
 
-#ifdef __powerpc64__
+#if defined(__powerpc64__) || defined(__aarch64__)
 			add_off = 0;
 #else
 			if (rela->type == R_X86_64_PC32 ||
@@ -1571,7 +1605,8 @@ static void kpatch_replace_sections_syms(struct kpatch_elf *kelf)
 				end = sym->sym.st_value + sym->sym.st_size;
 
 				if (!is_text_section(sym->sec) &&
-				    rela->type == R_X86_64_32S &&
+				    (rela->type == R_X86_64_32S ||
+				     rela->type == R_AARCH64_ABS64) &&
 				    rela->addend == (long)sym->sec->sh.sh_size &&
 				    end == (long)sym->sec->sh.sh_size) {
 
@@ -2047,21 +2082,6 @@ static int parainstructions_group_size(struct kpatch_elf *kelf, int offset)
 	return size;
 }
 
-static int altinstructions_group_size(struct kpatch_elf *kelf, int offset)
-{
-	static int size = 0;
-	char *str;
-
-	if (!size) {
-		str = getenv("ALT_STRUCT_SIZE");
-		if (!str)
-			ERROR("ALT_STRUCT_SIZE not set");
-		size = atoi(str);
-	}
-
-	return size;
-}
-
 static int smp_locks_group_size(struct kpatch_elf *kelf, int offset)
 {
 	return 4;
@@ -2076,6 +2096,22 @@ static int static_call_sites_group_size(struct kpatch_elf *kelf, int offset)
 		str = getenv("STATIC_CALL_STRUCT_SIZE");
 		if (!str)
 			ERROR("STATIC_CALL_STRUCT_SIZE not set");
+		size = atoi(str);
+	}
+
+	return size;
+}
+#endif
+#if defined(__x86_64__) || defined(__aarch64__)
+static int altinstructions_group_size(struct kpatch_elf *kelf, int offset)
+{
+	static int size = 0;
+	char *str;
+
+	if (!size) {
+		str = getenv("ALT_STRUCT_SIZE");
+		if (!str)
+			ERROR("ALT_STRUCT_SIZE not set");
 		size = atoi(str);
 	}
 
@@ -2190,12 +2226,14 @@ static struct special_section special_sections[] = {
 		.group_size	= parainstructions_group_size,
 	},
 	{
-		.name		= ".altinstructions",
-		.group_size	= altinstructions_group_size,
-	},
-	{
 		.name		= ".static_call_sites",
 		.group_size	= static_call_sites_group_size,
+	},
+#endif
+#if defined(__x86_64__) || defined(__aarch64__)
+	{
+		.name		= ".altinstructions",
+		.group_size	= altinstructions_group_size,
 	},
 #endif
 #ifdef __powerpc64__
