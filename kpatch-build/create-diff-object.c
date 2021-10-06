@@ -1696,7 +1696,7 @@ static void kpatch_check_func_profiling_calls(struct kpatch_elf *kelf)
 		    (sym->parent && sym->parent->status == CHANGED))
 			continue;
 		if (!sym->twin->has_func_profiling) {
-			log_normal("function %s has no fentry/mcount call, unable to patch\n",
+			log_normal("function %s doesn't have patchable function entry, unable to patch\n",
 				   sym->name);
 			errs++;
 		}
@@ -3976,6 +3976,24 @@ static void kpatch_find_func_profiling_calls(struct kpatch_elf *kelf)
 			continue;
 
 		switch(kelf->arch) {
+		case AARCH64: {
+			struct section *sec = find_section_by_name(&kelf->sections,
+					      "__patchable_function_entries");
+			/*
+			 * If we can't find the __patchable_function_entries section or
+			 * there are no relocations in it then not patchable.
+			 */
+			if (!sec || !sec->rela)
+				return;
+			list_for_each_entry(rela, &sec->rela->relas, list) {
+				if (rela->sym->sec && sym->sec == rela->sym->sec) {
+					sym->has_func_profiling = 1;
+					break;
+				}
+			}
+
+			break;
+		}
 		case PPC64:
 			list_for_each_entry(rela, &sym->sec->rela->relas, list) {
 				if (!strcmp(rela->sym->name, "_mcount")) {
