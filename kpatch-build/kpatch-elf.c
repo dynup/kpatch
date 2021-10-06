@@ -142,6 +142,8 @@ unsigned int absolute_rela_type(struct kpatch_elf *kelf)
 		return R_X86_64_64;
 	case S390:
 		return R_390_64;
+	case AARCH64:
+		return R_AARCH64_ABS64;
 	default:
 		ERROR("unsupported arch");
 	}
@@ -206,6 +208,7 @@ long rela_target_offset(struct kpatch_elf *kelf, struct section *relasec,
 
 	switch(kelf->arch) {
 	case PPC64:
+	case AARCH64:
 		add_off = 0;
 		break;
 	case X86_64:
@@ -255,6 +258,8 @@ unsigned int insn_length(struct kpatch_elf *kelf, void *addr)
 
 	switch(kelf->arch) {
 
+	case AARCH64:
+		return 4;
 	case X86_64:
 		insn_init(&decoded_insn, addr, 1);
 		insn_get_length(&decoded_insn);
@@ -595,7 +600,7 @@ struct kpatch_elf *kpatch_elf_open(const char *name)
 		kelf->arch = S390;
 		break;
 	case EM_AARCH64:
-		kelf->arch = ARM64;
+		kelf->arch = AARCH64;
 		break;
 	default:
 		ERROR("Unsupported target architecture");
