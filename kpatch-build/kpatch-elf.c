@@ -594,6 +594,9 @@ struct kpatch_elf *kpatch_elf_open(const char *name)
 	case EM_S390:
 		kelf->arch = S390;
 		break;
+	case EM_AARCH64:
+		kelf->arch = ARM64;
+		break;
 	default:
 		ERROR("Unsupported target architecture");
 	}

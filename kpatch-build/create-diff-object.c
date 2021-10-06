@@ -1700,8 +1700,8 @@ static void kpatch_check_func_profiling_calls(struct kpatch_elf *kelf)
 		    (sym->parent && sym->parent->status == CHANGED))
 			continue;
 		if (!sym->twin->has_func_profiling) {
-			log_error("function %s has no fentry/mcount call, unable to patch\n",
-				  sym->name);
+			log_error("function %s doesn't have patchable function entry, unable to patch\n",
+				   sym->name);
 			errs++;
 		}
 	}
@@ -4178,6 +4178,10 @@ static void kpatch_find_func_profiling_calls(struct kpatch_elf *kelf)
 			if (insn[0] == 0xc0 && insn[1] == 0x04 &&
 				insn[2] == 0x00 && insn[3] == 0x00 &&
 				insn[4] == 0x00 && insn[5] == 0x00)
+				sym->has_func_profiling = 1;
+			break;
+		case AARCH64:
+			if (kpatch_symbol_has_pfe_entry(kelf, sym))
 				sym->has_func_profiling = 1;
 			break;
 		default:
