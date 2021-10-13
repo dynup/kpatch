@@ -986,6 +986,8 @@ static void kpatch_correlate_section(struct section *sec_orig,
 		kpatch_correlate_symbol(sec_orig->sym, sec_patched->sym);
 }
 
+static char *kpatch_section_function_name(struct section *sec);
+
 static void kpatch_correlate_sections(struct list_head *seclist_orig,
 		struct list_head *seclist_patched)
 {
@@ -995,8 +997,9 @@ static void kpatch_correlate_sections(struct list_head *seclist_orig,
 		if (sec_orig->twin)
 			continue;
 		list_for_each_entry(sec_patched, seclist_patched, list) {
-			if (kpatch_mangled_strcmp(sec_orig->name, sec_patched->name) ||
-			    sec_patched->twin)
+			if (sec_patched->twin ||
+			    kpatch_mangled_strcmp(kpatch_section_function_name(sec_orig),
+						  kpatch_section_function_name(sec_patched)))
 				continue;
 
 			if (is_special_static(is_rela_section(sec_orig) ?
