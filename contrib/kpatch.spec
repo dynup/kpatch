@@ -6,7 +6,7 @@
 
 Name: kpatch
 Summary: Dynamic kernel patching
-Version: 0.9.4
+Version: 0.9.5
 License: GPLv2
 Group: System Environment/Kernel
 URL: http://github.com/dynup/kpatch
@@ -104,6 +104,15 @@ rm -rf %{buildroot}
 %{_mandir}/man1/kpatch-build.1*
 
 %changelog
+* Wed Oct 13 Artem Savkov <asavkov@redhat.com> - 0.9.5
+- openEuler support
+- kpatch-build: Do not check KLP_REPLACE for kpatch.ko-based patches
+- create-diff-object: fix use after free in kpatch-check-relocations()
+- kpatch-build: Handle error in create-klp-module
+- create-diff-object: support ppc64le relative jump labels
+- kmod/patch: clean only rebuildable objs
+- kpatch-build: save environment varibles to file
+
 * Wed Aug 25 Yannick Cote <ycote@redhat.com> - 0.9.4
 - Support for multiple source files
 - Makefile tweaks for handling non-replace kpatch building
