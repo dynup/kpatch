@@ -677,9 +677,10 @@ usage() {
 	echo "		--skip-cleanup          Skip post-build cleanup" >&2
 	echo "		--skip-compiler-check   Skip compiler version matching check" >&2
 	echo "		                        (not recommended)" >&2
+	echo "		-p, --profile-data      specify profile data for PGO (clang only)" >&2
 }
 
-options="$(getopt -o ha:r:s:c:v:j:t:n:o:dR -l "help,archversion:,sourcerpm:,sourcedir:,config:,vmlinux:,jobs:,target:,name:,output:,oot-module:,oot-module-src:,debug,skip-gcc-check,skip-compiler-check,skip-cleanup,non-replace" -- "$@")" || die "getopt failed"
+options="$(getopt -o ha:r:s:c:v:j:t:n:o:dRp: -l "help,archversion:,sourcerpm:,sourcedir:,config:,vmlinux:,jobs:,target:,name:,output:,oot-module:,oot-module-src:,debug,skip-gcc-check,skip-compiler-check,skip-cleanup,non-replace,profile-data" -- "$@")" || die "getopt failed"
 
 eval set -- "$options"
 
@@ -760,6 +761,10 @@ while [[ $# -gt 0 ]]; do
 	--skip-compiler-check)
 		echo "WARNING: Skipping compiler version matching check (not recommended)"
 		SKIPCOMPILERCHECK=1
+		;;
+	-p|--profile-data)
+		PROFILE_DATA="$(readlink -f "$2")"
+		shift
 		;;
 	*)
 		[[ "$1" = "--" ]] && shift && continue
@@ -1056,6 +1061,16 @@ fi
 
 if [[ -n "$CONFIG_CC_IS_CLANG" ]]; then
 	echo "WARNING: Clang support is experimental"
+	if [[ -z "$PROFILE_DATA" ]] && [[ -n "$CONFIG_PGO_CLANG" ]]; then
+		die "Please specify profile-data for CONFIG_PGO_CLANG"
+	fi
+	if [[ -n "$PROFILE_DATA" ]] && [[ -z "$CONFIG_PGO_CLANG" ]]; then
+		echo "WARNING profile-data specified w/o CONFIG_PGO_CLANG, ignore it"
+	fi
+else
+	if [[ -n "$PROFILE_DATA" ]]; then
+		die "Only supports profile-data with Clang"
+	fi
 fi
 
 if [[ "$SKIPCOMPILERCHECK" -eq 0 ]]; then
@@ -1107,6 +1122,9 @@ declare -a MAKEVARS
 if [[ -n "$CONFIG_CC_IS_CLANG" ]]; then
 	MAKEVARS+=("CC=${KPATCH_CC_PREFIX}${CLANG}")
 	MAKEVARS+=("HOSTCC=clang")
+	if [[ -n "$CONFIG_PGO_CLANG" ]]; then
+		MAKEVARS+=("LLVM=1 CFLAGS_PGO_CLANG=-fprofile-use=$PROFILE_DATA")
+	fi
 else
 	MAKEVARS+=("CC=${KPATCH_CC_PREFIX}${GCC}")
 fi
