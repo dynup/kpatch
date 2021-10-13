@@ -45,6 +45,7 @@ SRCDIR="$CACHEDIR/src"
 RPMTOPDIR="$CACHEDIR/buildroot"
 VERSIONFILE="$CACHEDIR/version"
 TEMPDIR="$CACHEDIR/tmp"
+ENVFILE="$TEMPDIR/kpatch-build.env"
 LOGFILE="$CACHEDIR/build.log"
 RELEASE_FILE=/etc/os-release
 DEBUG=0
@@ -87,6 +88,10 @@ logger() {
 		# Log only to the logfile
 		cat >> "$LOGFILE"
 	fi
+}
+
+save_env() {
+	export -p | grep -wv -e 'OLDPWD=' -e 'PWD=' > "$ENVFILE"
 }
 
 verify_patch_files() {
@@ -432,6 +437,7 @@ find_special_section_data() {
 	[[ -z "$PRINTK_INDEX_STRUCT_SIZE" && "$CONFIG_PRINTK_INDEX" -ne 0 ]] && die "can't find special struct pi_entry size"
 	[[ -z "$STATIC_CALL_STRUCT_SIZE" ]] && kernel_version_gte 5.10.0 && die "can't find special struct static_call_site size"
 
+	save_env
 	return
 }
 
@@ -714,6 +720,7 @@ elif [[ "$DISTRO" = ubuntu ]] || [[ "$DISTRO" = debian ]]; then
 
 	export PATH="/usr/lib/ccache:$PATH"
 fi
+save_env
 
 find_dirs || die "can't find supporting tools"
 
@@ -927,6 +934,7 @@ find_special_section_data
 if [[ $DEBUG -ge 4 ]]; then
 	export KPATCH_GCC_DEBUG=1
 fi
+save_env
 
 echo "Building original source"
 [[ -n "$OOT_MODULE" ]] || ./scripts/setlocalversion --save-scmversion || die
@@ -959,10 +967,9 @@ cp -f "$SRCDIR/Module.symvers" "$TEMPDIR/Module.symvers" || die
 echo "Building patched source"
 apply_patches
 mkdir -p "$TEMPDIR/orig" "$TEMPDIR/patched"
-KPATCH_GCC_TEMPDIR="$TEMPDIR"
-export KPATCH_GCC_TEMPDIR
-KPATCH_GCC_SRCDIR="$SRCDIR"
-export KPATCH_GCC_SRCDIR
+export KPATCH_GCC_TEMPDIR="$TEMPDIR"
+export KPATCH_GCC_SRCDIR="$SRCDIR"
+save_env
 # $TARGETS used as list, no quotes.
 # shellcheck disable=SC2086
 KBUILD_MODPOST_WARN=1 make "${MAKEVARS[@]}" "-j$CPUS" $TARGETS 2>&1 | logger || die
@@ -1123,6 +1130,7 @@ export KCFLAGS="-I$DATADIR/patch $ARCH_KCFLAGS"
 if [[ "$USE_KLP" -eq 0 ]]; then
 	export KCPPFLAGS="-D__KPATCH_MODULE__"
 fi
+save_env
 
 echo "Building patch module: $MODNAME.ko"
 
@@ -1164,10 +1172,12 @@ for ((idx=0; idx<${#MAKEVARS[@]}; idx++)); do
     MAKEVARS[$idx]=${MAKEVARS[$idx]/${KPATCH_CC_PREFIX}/}
 done
 
-KPATCH_BUILD="$KPATCH_BUILD" KPATCH_NAME="$MODNAME" \
+export KPATCH_BUILD="$KPATCH_BUILD" KPATCH_NAME="$MODNAME" \
 KBUILD_EXTRA_SYMBOLS="$KBUILD_EXTRA_SYMBOLS" \
-KPATCH_LDFLAGS="$KPATCH_LDFLAGS" \
-	make "${MAKEVARS[@]}" 2>&1 | logger || die
+KPATCH_LDFLAGS="$KPATCH_LDFLAGS"
+save_env
+
+make "${MAKEVARS[@]}" 2>&1 | logger || die
 
 if [[ "$USE_KLP" -eq 1 ]]; then
 	if [[ "$USE_KLP_ARCH" -eq 0 ]]; then

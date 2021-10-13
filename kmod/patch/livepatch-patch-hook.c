@@ -104,10 +104,28 @@
  *  done, the scaffold structs are no longer needed.
  */
 
+/*
+ * lpatch is the kernel data structure that will be created on patch
+ * init, registered with the livepatch API on init, and finally
+ * unregistered when the patch exits.  Its struct klp_object *objs
+ * member must be dynamically allocated according to the number of
+ * target objects it will be patching.
+ */
 static struct klp_patch *lpatch;
 
 static LIST_HEAD(patch_objects);
 static int patch_objects_nr;
+
+/**
+ * struct patch_object - scaffolding structure tracking patch target objects
+ * @list:	list of patch_object (threaded onto patch_objects)
+ * @funcs:	list of patch_func associated with this object
+ * @relocs:	list of patch_reloc associated with this object
+ * @callbacks:	kernel struct of object callbacks
+ * @name:	patch target object name (NULL for vmlinux)
+ * @funcs_nr:	count of kpatch_patch_func added to @funcs
+ * @relocs_nr:	count of patch_reloc added to @relocs
+ */
 struct patch_object {
 	struct list_head list;
 	struct list_head funcs;
@@ -119,16 +137,36 @@ struct patch_object {
 	int funcs_nr, relocs_nr;
 };
 
+/**
+ * struct patch_func - scaffolding structure for kpatch_patch_func
+ * @list:	list of patch_func (threaded onto patch_object.funcs)
+ * @kfunc:	array of kpatch_patch_func
+ */
 struct patch_func {
 	struct list_head list;
 	struct kpatch_patch_func *kfunc;
 };
 
+/**
+ * struct patch_reloc - scaffolding structure for kpatch_patch_dynrela
+ * @list:	list of patch_reloc (threaded onto patch_object.relocs)
+ * @kdynrela:	array of kpatch_patch_dynrela
+ */
 struct patch_reloc {
 	struct list_head list;
 	struct kpatch_patch_dynrela *kdynrela;
 };
 
+/**
+ * patch_alloc_new_object() - creates and initializes a new patch_object
+ * @name:	target object name
+ *
+ * Return: pointer to new patch_object, NULL on failure.
+ *
+ * Does not check for previously created patch_objects with the same
+ * name.  Updates patch_objects_nr and threads new data structure onto
+ * the patch_objects list.
+ */
 static struct patch_object *patch_alloc_new_object(const char *name)
 {
 	struct patch_object *object;
@@ -147,6 +185,16 @@ static struct patch_object *patch_alloc_new_object(const char *name)
 	return object;
 }
 
+/**
+ * patch_find_object_by_name() - find or create a patch_object with a
+ * 				  given name
+ * @name:	target object name
+ *
+ * Return: pointer to patch_object, NULL on failure.
+ *
+ * Searches the patch_objects list for an already created instance with
+ * @name, otherwise tries to create it via patch_alloc_new_object()
+ */
 static struct patch_object *patch_find_object_by_name(const char *name)
 {
 	struct patch_object *object;
@@ -158,6 +206,17 @@ static struct patch_object *patch_find_object_by_name(const char *name)
 	return patch_alloc_new_object(name);
 }
 
+/**
+ * patch_add_func_to_object() - create scaffolding from kpatch_patch_func data
+ *
+ * @kfunc:	Individual kpatch_patch_func pointer
+ *
+ * Return: 0 on success, -ENOMEM on failure.
+ *
+ * Builds scaffolding data structures from .kpatch.funcs section's array
+ * of kpatch_patch_func structures.  Updates the associated
+ * patch_object's funcs_nr count.
+ */
 static int patch_add_func_to_object(struct kpatch_patch_func *kfunc)
 {
 	struct patch_func *func;
@@ -180,6 +239,17 @@ static int patch_add_func_to_object(struct kpatch_patch_func *kfunc)
 }
 
 #ifndef HAVE_ELF_RELOCS
+/**
+ * patch_add_reloc_to_object() - create scaffolding from kpatch_patch_dynrela data
+ *
+ * @kdynrela:	Individual kpatch_patch_dynrela pointer
+ *
+ * Return: 0 on success, -ENOMEM on failure.
+ *
+ * Builds scaffolding data structures from .kpatch.dynrelas section's array
+ * of kpatch_patch_dynrela structures.  Updates the associated
+ * patch_object's relocs_nr count.
+ */
 static int patch_add_reloc_to_object(struct kpatch_patch_dynrela *kdynrela)
 {
 	struct patch_reloc *reloc;
@@ -202,6 +272,9 @@ static int patch_add_reloc_to_object(struct kpatch_patch_dynrela *kdynrela)
 }
 #endif
 
+/**
+ * patch_free_scaffold() - tear down the temporary kpatch scaffolding
+ */
 static void patch_free_scaffold(void) {
 	struct patch_func *func, *safefunc;
 	struct patch_object *object, *safeobject;
@@ -227,6 +300,9 @@ static void patch_free_scaffold(void) {
 	}
 }
 
+/**
+ * patch_free_livepatch() - release the klp_patch and friends
+ */
 static void patch_free_livepatch(struct klp_patch *patch)
 {
 	struct klp_object *object;
@@ -246,12 +322,21 @@ static void patch_free_livepatch(struct klp_patch *patch)
 	}
 }
 
+/* Defined by kpatch.lds.S */
 extern struct kpatch_pre_patch_callback __kpatch_callbacks_pre_patch[], __kpatch_callbacks_pre_patch_end[];
 extern struct kpatch_post_patch_callback __kpatch_callbacks_post_patch[], __kpatch_callbacks_post_patch_end[];
 extern struct kpatch_pre_unpatch_callback __kpatch_callbacks_pre_unpatch[], __kpatch_callbacks_pre_unpatch_end[];
 extern struct kpatch_post_unpatch_callback __kpatch_callbacks_post_unpatch[], __kpatch_callbacks_post_unpatch_end[];
 
 #ifdef HAVE_CALLBACKS
+/**
+ * add_callbacks_to_patch_objects() - create patch_objects that have callbacks
+ *
+ * Return: 0 on success, -ENOMEM or -EINVAL on failure
+ *
+ * Iterates through all kpatch pre/post-(un)patch callback data
+ * structures and creates scaffolding patch_objects for them.
+ */
 static int add_callbacks_to_patch_objects(void)
 {
 	struct kpatch_pre_patch_callback *p_pre_patch_callback;
@@ -341,6 +426,7 @@ static inline int add_callbacks_to_patch_objects(void)
 }
 #endif /* HAVE_CALLBACKS */
 
+/* Defined by kpatch.lds.S */
 extern struct kpatch_patch_func __kpatch_funcs[], __kpatch_funcs_end[];
 #ifndef HAVE_ELF_RELOCS
 extern struct kpatch_patch_dynrela __kpatch_dynrelas[], __kpatch_dynrelas_end[];
@@ -359,6 +445,12 @@ static int __init patch_init(void)
 	struct patch_reloc *reloc;
 	struct klp_reloc *lrelocs, *lreloc;
 #endif
+
+
+	/*
+	 * Step 1 - read from output.o, create temporary scaffolding
+	 * data-structures
+	 */
 
 	/* organize functions and relocs by object in scaffold */
 	for (kfunc = __kpatch_funcs;
@@ -385,6 +477,16 @@ static int __init patch_init(void)
 
 	/* past this point, only possible return code is -ENOMEM */
 	ret = -ENOMEM;
+
+	/*
+	 * Step 2 - create livepatch klp_patch and friends
+	 *
+	 * There are two dynamically allocated parts:
+	 *
+	 *   klp_patch
+	 *     klp_object objs  [patch_objects_nr]  <= i
+	 *       klp_func funcs [object->funcs_nr]  <= j
+	 */
 
 	/* allocate and fill livepatch structures */
 	lpatch = kzalloc(sizeof(*lpatch), GFP_KERNEL);
@@ -455,6 +557,10 @@ static int __init patch_init(void)
 
 		i++;
 	}
+
+	/*
+	 * Step 3 - throw away scaffolding
+	 */
 
 	/*
 	 * Once the patch structure that the live patching API expects
