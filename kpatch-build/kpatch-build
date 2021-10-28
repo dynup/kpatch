@@ -540,13 +540,14 @@ usage() {
 	echo "		                        (can be specified multiple times)" >&2
 	echo "		-e, --oot-module        Enable patching out-of-tree module," >&2
 	echo "		                        specify current version of module" >&2
+	echo "		-p, --oot-module-src    Set OOT module source directory" >&2
 	echo "		-R, --non-replace       Disable replace patch (replace is on by default)" >&2
 	echo "		--skip-cleanup          Skip post-build cleanup" >&2
 	echo "		--skip-compiler-check   Skip compiler version matching check" >&2
 	echo "		                        (not recommended)" >&2
 }
 
-options="$(getopt -o ha:r:s:c:v:j:t:n:o:de:R -l "help,archversion:,sourcerpm:,sourcedir:,config:,vmlinux:,jobs:,target:,name:,output:,oot-module:,debug,skip-gcc-check,skip-compiler-check,skip-cleanup,non-replace" -- "$@")" || die "getopt failed"
+options="$(getopt -o ha:p:r:s:c:v:j:t:n:o:de:R -l "help,archversion:,oot-module-src:,sourcerpm:,sourcedir:,config:,vmlinux:,jobs:,target:,name:,output:,oot-module:,debug,skip-gcc-check,skip-compiler-check,skip-cleanup,non-replace" -- "$@")" || die "getopt failed"
 
 eval set -- "$options"
 
@@ -609,6 +610,11 @@ while [[ $# -gt 0 ]]; do
 		OOT_MODULE="$(readlink -f "$2")"
 		shift
 		;;
+	-p|--oot-module-src)
+		[[ ! -d "$2" ]] && die "OOT module source dir '$2' not found"
+		OOT_SOURCE="$(readlink -f "$2")"
+		shift
+		;;
 	-R|--non-replace)
 		KLP_REPLACE=0
 		;;
@@ -662,6 +668,16 @@ if [[ -n "$OOT_MODULE" ]] &&  [[ -z "$USERSRCDIR" ]]; then
 	exit 1
 fi
 
+
+if [[ -n "$OOT_MODULE" ]] &&  [[ -z "$OOT_SOURCE" ]]; then
+	if [[ -e "$(dirname "$OOT_MODULE")/Makefile" ]]; then
+		OOT_SOURCE="$(dirname "$OOT_MODULE")"
+	else 
+		warn "--oot-module requires --oot-module-src"
+		exit 1
+	fi
+fi
+
 # ensure cachedir and tempdir are setup properly and cleaned
 mkdir -p "$TEMPDIR" || die "Couldn't create $TEMPDIR"
 rm -rf "${TEMPDIR:?}"/*
@@ -672,7 +688,9 @@ if [[ -n "$USERSRCDIR" ]]; then
 		warn "--archversion is incompatible with --sourcedir"
 		exit 1
 	fi
-	SRCDIR="$USERSRCDIR"
+
+	[[ -z "$OOT_MODULE" ]] && SRCDIR="$USERSRCDIR" || SRCDIR="$OOT_SOURCE"
+	
 
 	if [[ -z "$OOT_MODULE" ]]; then
 		[[ -z "$VMLINUX" ]] && VMLINUX="$SRCDIR"/vmlinux
@@ -914,6 +932,7 @@ if [[ "$SKIPCOMPILERCHECK" -eq 0 ]]; then
 fi
 
 echo "Testing patch file(s)"
+
 cd "$SRCDIR" || die
 verify_patch_files
 apply_patches
@@ -1050,9 +1069,12 @@ ERROR=0
 
 # Prepare OOT module symvers file
 if [[ -n "$OOT_MODULE" ]]; then
-    BUILDDIR="/lib/modules/$ARCHVERSION/build/"
-    cp -f "$SRCDIR/Module.symvers" "$TEMPDIR/Module.symvers" || die
-    awk '{ print $1 "\t" $2 "\t" $3 "\t" $4}' "${BUILDDIR}/Module.symvers" >> "$TEMPDIR/Module.symvers"
+	cp -f "$SRCDIR/Module.symvers" "$TEMPDIR/Module.symvers" || die
+	# merge host symbols only if we do compile for host kernel
+	if [[ -e "/lib/modules/$ARCHVERSION/build/" ]]; then
+		BUILDDIR="/lib/modules/$ARCHVERSION/build/"
+		awk '{ print $1 "\t" $2 "\t" $3 "\t" $4}' "${BUILDDIR}/Module.symvers" >> "$TEMPDIR/Module.symvers"
+	fi
 fi
 
 for i in $FILES; do
@@ -1161,8 +1183,11 @@ else
 fi
 
 cd "$TEMPDIR/patch" || die
+
 if [[ -z "$OOT_MODULE" ]]; then
 	KPATCH_BUILD="$SRCDIR"
+elif [[ ! -e "/lib/modules/$ARCHVERSION/build"  ]]; then
+	KPATCH_BUILD="$USERSRCDIR"
 else
 	KPATCH_BUILD="/lib/modules/$ARCHVERSION/build"
 fi
