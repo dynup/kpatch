@@ -40,6 +40,8 @@ Table of contents
 - [How it works](#how-it-works)
 	- [kpatch-build](#kpatch-build)
 	- [Patching](#patching)
+- [Backporting](#backporting)
+	- [s390x backporting](#s390x-backporting)
 - [Limitations](#limitations)
 - [Frequently Asked Questions](#frequently-asked-questions)
 - [Get involved](#get-involved)
@@ -52,7 +54,7 @@ Supported Architectures
 - [x] x86-64
 - [x] ppc64le
 - [ ] arm64
-- [ ] s390
+- [x] s390x
 
 Installation
 ------------
@@ -382,6 +384,34 @@ call at the beginning of every function, created by the gcc `-mfentry` flag.
 The ftrace handler then modifies the return instruction pointer (IP)
 address on the stack and returns to ftrace, which then restores the original
 function's arguments and stack, and "returns" to the new function.
+
+
+Backporting
+-----------
+
+### s390x backporting
+
+**Prerequisite gcc patches (all backported to gcc-11 branch):**
+- gcc-mirror/gcc@a1c1b7a IBM Z: Define NO_PROFILE_COUNTERS
+- gcc-mirror/gcc@0990d93 IBM Z: Use @PLT symbols for local functions in 64-bit mode
+- gcc-mirror/gcc@935b522 S/390: New option -mpic-data-is-text-relative
+
+**Prerequisite kernel patches:**
+**v5.16:**
+- torvalds/linux@f6ac18f sched: Improve try_invoke_on_locked_down_task()
+- torvalds/linux@9b3c4ab sched,rcu: Rework try_invoke_on_locked_down_task()
+- torvalds/linux@00619f7 sched,livepatch: Use task_call_func()
+- torvalds/linux@8850cb6 sched: Simplify wake_up_*idle*()
+- torvalds/linux@5de62ea sched,livepatch: Use wake_up_if_idle()
+- torvalds/linux@96611c2 sched: Improve wake_up_all_idle_cpus() take #2
+
+**v5.14:**
+- torvalds/linux@7561c14 s390/vdso: add .got.plt in vdso linker script
+
+**Recommended kernel patches:**
+**v5.15**
+- torvalds/linux@de5012b s390/ftrace: implement hotpatching
+- torvalds/linux@67ccddf ftrace: Introduce ftrace_need_init_nop()
 
 
 Limitations
