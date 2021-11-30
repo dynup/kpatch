@@ -333,8 +333,8 @@ clang_version_check() {
 
 find_special_section_data_ppc64le() {
 
-	[[ "$CONFIG_JUMP_LABEL" -eq 0 ]] && AWK_OPTIONS="-vskip_j=1"
-	[[ "$CONFIG_PRINTK_INDEX" -eq 0 ]] && AWK_OPTIONS="$AWK_OPTIONS -vskip_i=1"
+	[[ -z "$CONFIG_JUMP_LABEL" ]] && AWK_OPTIONS="-vskip_j=1"
+	[[ -z "$CONFIG_PRINTK_INDEX" ]] && AWK_OPTIONS="$AWK_OPTIONS -vskip_i=1"
 
 	SPECIAL_VARS="$(readelf -wi "$VMLINUX" |
 		gawk --non-decimal-data '
@@ -369,8 +369,8 @@ find_special_section_data_ppc64le() {
 	[[ -z "$FIXUP_STRUCT_SIZE" ]] && die "can't find special struct fixup_entry size"
 	[[ -z "$BUG_STRUCT_SIZE" ]] && die "can't find special struct bug_entry size"
 	[[ -z "$EX_STRUCT_SIZE" ]]  && die "can't find special struct exception_table_entry size"
-	[[ -z "$JUMP_STRUCT_SIZE" && "$CONFIG_JUMP_LABEL" -ne 0 ]]  && die "can't find special struct jump_entry size"
-	[[ -z "$PRINTK_INDEX_STRUCT_SIZE" && "$CONFIG_PRINTK_INDEX" -ne 0 ]]  && die "can't find special struct pi_entry size"
+	[[ -z "$JUMP_STRUCT_SIZE" ]] && [[ -n "$CONFIG_JUMP_LABEL" ]] && die "can't find special struct jump_entry size"
+	[[ -z "$PRINTK_INDEX_STRUCT_SIZE" ]] && [[ -n "$CONFIG_PRINTK_INDEX" ]] && die "can't find special struct pi_entry size"
 
 	return
 }
@@ -381,10 +381,10 @@ find_special_section_data() {
 		return
 	fi
 
-	[[ "$CONFIG_PARAVIRT" -eq 0 ]] && AWK_OPTIONS="-vskip_p=1"
-	[[ "$CONFIG_UNWINDER_ORC" -eq 0 ]] && AWK_OPTIONS="$AWK_OPTIONS -vskip_o=1"
-	[[ "$CONFIG_JUMP_LABEL" -eq 0 ]] && AWK_OPTIONS="$AWK_OPTIONS -vskip_j=1"
-	[[ "$CONFIG_PRINTK_INDEX" -eq 0 ]] && AWK_OPTIONS="$AWK_OPTIONS -vskip_i=1"
+	[[ -z "$CONFIG_PARAVIRT" ]] && AWK_OPTIONS="-vskip_p=1"
+	[[ -z "$CONFIG_UNWINDER_ORC" ]] && AWK_OPTIONS="$AWK_OPTIONS -vskip_o=1"
+	[[ -z "$CONFIG_JUMP_LABEL" ]] && AWK_OPTIONS="$AWK_OPTIONS -vskip_j=1"
+	[[ -z "$CONFIG_PRINTK_INDEX" ]] && AWK_OPTIONS="$AWK_OPTIONS -vskip_i=1"
 	! kernel_version_gte 5.10.0 && AWK_OPTIONS="$AWK_OPTIONS -vskip_s=1"
 
 	# If $AWK_OPTIONS are blank gawk would treat "" as a blank script
@@ -431,10 +431,10 @@ find_special_section_data() {
 	[[ -z "$ALT_STRUCT_SIZE" ]] && die "can't find special struct alt_instr size"
 	[[ -z "$BUG_STRUCT_SIZE" ]] && die "can't find special struct bug_entry size"
 	[[ -z "$EX_STRUCT_SIZE" ]]  && die "can't find special struct paravirt_patch_site size"
-	[[ -z "$PARA_STRUCT_SIZE" && "$CONFIG_PARAVIRT" -ne 0 ]] && die "can't find special struct paravirt_patch_site size"
-	[[ -z "$ORC_STRUCT_SIZE" && "$CONFIG_UNWINDER_ORC" -ne 0 ]] && die "can't find special struct orc_entry size"
-	[[ -z "$JUMP_STRUCT_SIZE" && "$CONFIG_JUMP_LABEL" -ne 0 ]] && die "can't find special struct jump_entry size"
-	[[ -z "$PRINTK_INDEX_STRUCT_SIZE" && "$CONFIG_PRINTK_INDEX" -ne 0 ]] && die "can't find special struct pi_entry size"
+	[[ -z "$PARA_STRUCT_SIZE" ]] && [[ -n "$CONFIG_PARAVIRT" ]] && die "can't find special struct paravirt_patch_site size"
+	[[ -z "$ORC_STRUCT_SIZE" ]] && [[ -n "$CONFIG_UNWINDER_ORC" ]] && die "can't find special struct orc_entry size"
+	[[ -z "$JUMP_STRUCT_SIZE" ]] && [[ -n "$CONFIG_JUMP_LABEL" ]] && die "can't find special struct jump_entry size"
+	[[ -z "$PRINTK_INDEX_STRUCT_SIZE" ]] && [[ -n "$CONFIG_PRINTK_INDEX" ]] && die "can't find special struct pi_entry size"
 	[[ -z "$STATIC_CALL_STRUCT_SIZE" ]] && kernel_version_gte 5.10.0 && die "can't find special struct static_call_site size"
 
 	save_env
@@ -841,21 +841,20 @@ if [[ -z "$OOT_MODULE" && ! "$CONFIGFILE" -ef "$KERNEL_SRCDIR"/.config ]] ; then
 fi
 
 # kernel option checking
-grep -q "CONFIG_DEBUG_INFO=y" "$CONFIGFILE" || die "kernel doesn't have 'CONFIG_DEBUG_INFO' enabled"
+
+# Don't check external file.
+# shellcheck disable=SC1090
+source "$CONFIGFILE"
+
+[[ -z "$CONFIG_DEBUG_INFO" ]] && die "kernel doesn't have 'CONFIG_DEBUG_INFO' enabled"
 
 # Build variables - Set some defaults, then adjust features
 # according to .config and kernel version
 KPATCH_LDFLAGS=""
 USE_KLP=0
 USE_KLP_ARCH=0
-CONFIG_PARAVIRT=0
-CONFIG_UNWINDER_ORC=0
-CONFIG_JUMP_LABEL=0
-CONFIG_MODVERSIONS=0
-CONFIG_CC_IS_CLANG=0
-CONFIG_LD_IS_LLD=0
 
-if grep -q "CONFIG_LIVEPATCH=y" "$CONFIGFILE" && (kernel_is_rhel || kernel_version_gte 4.9.0); then
+if [[ -n "$CONFIG_LIVEPATCH" ]] && (kernel_is_rhel || kernel_version_gte 4.9.0); then
 
 	USE_KLP=1
 
@@ -881,24 +880,16 @@ else
 	KBUILD_EXTRA_SYMBOLS="$SYMVERSFILE"
 fi
 
-# optional kernel configs:
-grep -q "CONFIG_PARAVIRT=y"     "$CONFIGFILE" && CONFIG_PARAVIRT=1
-grep -q "CONFIG_UNWINDER_ORC=y" "$CONFIGFILE" && CONFIG_UNWINDER_ORC=1
-grep -q "CONFIG_JUMP_LABEL=y"   "$CONFIGFILE" && CONFIG_JUMP_LABEL=1
-grep -q "CONFIG_MODVERSIONS=y"  "$CONFIGFILE" && CONFIG_MODVERSIONS=1
-grep -q "CONFIG_CC_IS_CLANG=y"  "$CONFIGFILE" && CONFIG_CC_IS_CLANG=1
-grep -q "CONFIG_LD_IS_LLD=y"    "$CONFIGFILE" && CONFIG_LD_IS_LLD=1
-
 # unsupported kernel option checking
-grep -q "CONFIG_DEBUG_INFO_SPLIT=y" "$CONFIGFILE" && die "kernel option 'CONFIG_DEBUG_INFO_SPLIT' not supported"
-grep -q "CONFIG_GCC_PLUGIN_LATENT_ENTROPY=y" "$CONFIGFILE" && die "kernel option 'CONFIG_GCC_PLUGIN_LATENT_ENTROPY' not supported"
-grep -q "CONFIG_GCC_PLUGIN_RANDSTRUCT=y" "$CONFIGFILE" && die "kernel option 'CONFIG_GCC_PLUGIN_RANDSTRUCT' not supported"
+[[ -n "$CONFIG_DEBUG_INFO_SPLIT" ]] && die "kernel option 'CONFIG_DEBUG_INFO_SPLIT' not supported"
+[[ -n "$CONFIG_GCC_PLUGIN_LATENT_ENTROPY" ]] && die "kernel option 'CONFIG_GCC_PLUGIN_LATENT_ENTROPY' not supported"
+[[ -n "$CONFIG_GCC_PLUGIN_RANDSTRUCT" ]] && die "kernel option 'CONFIG_GCC_PLUGIN_RANDSTRUCT' not supported"
 
 # CONFIG_DEBUG_INFO_BTF invokes pahole, for which some versions don't
 # support extended ELF sections.  Disable the BTF typeinfo generation in
 # link-vmlinux.sh and Makefile.modfinal since kpatch doesn't care about
 # that anyway.
-if grep -q "CONFIG_DEBUG_INFO_BTF=y" "$CONFIGFILE" ; then
+if [[ -n "$CONFIG_DEBUG_INFO_BTF" ]]; then
 	cp -f "$KERNEL_SRCDIR/scripts/link-vmlinux.sh" "$TEMPDIR/link-vmlinux.sh" || die
 	sed -i 's/CONFIG_DEBUG_INFO_BTF/DISABLED_FOR_KPATCH_BUILD/g' "$KERNEL_SRCDIR"/scripts/link-vmlinux.sh || die
 
@@ -908,7 +899,7 @@ if grep -q "CONFIG_DEBUG_INFO_BTF=y" "$CONFIGFILE" ; then
 	fi
 fi
 
-if [[ "$CONFIG_CC_IS_CLANG" -eq 1 ]]; then
+if [[ -n "$CONFIG_CC_IS_CLANG" ]]; then
 	echo "WARNING: Clang support is experimental"
 fi
 
@@ -918,10 +909,10 @@ if [[ "$SKIPCOMPILERCHECK" -eq 0 ]]; then
 	else
 		target="$VMLINUX"
 	fi
-	if [[ "$CONFIG_CC_IS_CLANG" -eq 0 ]]; then
-		gcc_version_check "$target" || die
-	else
+	if [[ -n "$CONFIG_CC_IS_CLANG" ]]; then
 		clang_version_check "$target" || die
+	else
+		gcc_version_check "$target" || die
 	fi
 fi
 
@@ -954,14 +945,14 @@ unset KPATCH_GCC_TEMPDIR
 
 KPATCH_CC_PREFIX="$TOOLSDIR/kpatch-cc "
 declare -a MAKEVARS
-if [ "$CONFIG_CC_IS_CLANG" -eq 1 ]; then
+if [[ -n "$CONFIG_CC_IS_CLANG" ]]; then
 	MAKEVARS+=("CC=${KPATCH_CC_PREFIX}clang")
 	MAKEVARS+=("HOSTCC=clang")
 else
 	MAKEVARS+=("CC=${KPATCH_CC_PREFIX}gcc")
 fi
 
-if [ "$CONFIG_LD_IS_LLD" -eq 1 ]; then
+if [[ -n "$CONFIG_LD_IS_LLD" ]]; then
 	MAKEVARS+=("LD=${KPATCH_CC_PREFIX}ld.lld")
 	MAKEVARS+=("HOSTLD=ld.lld")
 else
@@ -999,7 +990,7 @@ fi
 
 grep -q vmlinux "$KERNEL_SRCDIR/Module.symvers" || die "truncated $KERNEL_SRCDIR/Module.symvers file"
 
-if [[ "$CONFIG_MODVERSIONS" -eq 1 ]]; then
+if [[ -n "$CONFIG_MODVERSIONS" ]]; then
     while read -ra sym_line; do
         if [[ ${#sym_line[@]} -lt 4 ]]; then
             die "Malformed ${TEMPDIR}/Module.symvers file"
@@ -1195,7 +1186,7 @@ if [[ "$USE_KLP" -eq 1 ]]; then
 	[[ "$rc" -ne 0 ]] && die "create-klp-module: exited with return code: $rc"
 fi
 
-if [[ "$CONFIG_MODVERSIONS" -eq 1 ]]; then
+if [[ -n "$CONFIG_MODVERSIONS" ]]; then
     # Check that final module does not reference symbols with different version
     # than the target kernel
     KP_MOD_VALID=true
