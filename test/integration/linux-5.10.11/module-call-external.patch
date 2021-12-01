@@ -1,16 +1,18 @@
-diff -Nupr src.orig/fs/nfsd/export.c src/fs/nfsd/export.c
---- src.orig/fs/nfsd/export.c	2021-01-28 04:47:10.905473196 -0500
-+++ src/fs/nfsd/export.c	2021-01-28 04:55:55.117394790 -0500
-@@ -1234,6 +1234,8 @@ static void exp_flags(struct seq_file *m
+diff --git a/fs/nfsd/export.c b/fs/nfsd/export.c
+index 21e404e7cb68..3a282338d6d9 100644
+--- a/fs/nfsd/export.c
++++ b/fs/nfsd/export.c
+@@ -1234,6 +1234,9 @@ static void exp_flags(struct seq_file *m, int flag, int fsid,
  	}
  }
  
 +extern char *kpatch_string(void);
 +
++__attribute__((optimize("-fno-optimize-sibling-calls")))
  static int e_show(struct seq_file *m, void *p)
  {
  	struct cache_head *cp = p;
-@@ -1243,6 +1245,7 @@ static int e_show(struct seq_file *m, vo
+@@ -1243,6 +1246,7 @@ static int e_show(struct seq_file *m, void *p)
  	if (p == SEQ_START_TOKEN) {
  		seq_puts(m, "# Version 1.1\n");
  		seq_puts(m, "# Path Client(Flags) # IPs\n");
@@ -18,10 +20,11 @@ diff -Nupr src.orig/fs/nfsd/export.c src/fs/nfsd/export.c
  		return 0;
  	}
  
-diff -Nupr src.orig/net/netlink/af_netlink.c src/net/netlink/af_netlink.c
---- src.orig/net/netlink/af_netlink.c	2021-01-28 04:45:47.818280959 -0500
-+++ src/net/netlink/af_netlink.c	2021-01-28 04:55:55.134394639 -0500
-@@ -2898,4 +2898,9 @@ panic:
+diff --git a/net/netlink/af_netlink.c b/net/netlink/af_netlink.c
+index daca50d6bb12..a657a0e073f8 100644
+--- a/net/netlink/af_netlink.c
++++ b/net/netlink/af_netlink.c
+@@ -2898,4 +2898,9 @@ static int __init netlink_proto_init(void)
  	panic("netlink_init: Cannot allocate nl_table\n");
  }
  

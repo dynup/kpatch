@@ -1,7 +1,8 @@
-diff -Nupr src.orig/drivers/tty/n_tty.c src/drivers/tty/n_tty.c
---- src.orig/drivers/tty/n_tty.c	2021-01-28 04:45:56.804193597 -0500
-+++ src/drivers/tty/n_tty.c	2021-01-28 04:59:56.004262703 -0500
-@@ -2295,7 +2295,7 @@ static ssize_t n_tty_read(struct tty_str
+diff --git a/drivers/tty/n_tty.c b/drivers/tty/n_tty.c
+index c2869489ba68..7a46fc7a88f1 100644
+--- a/drivers/tty/n_tty.c
++++ b/drivers/tty/n_tty.c
+@@ -2295,7 +2295,7 @@ static ssize_t n_tty_read(struct tty_struct *tty, struct file *file,
   *		  lock themselves)
   */
  
@@ -10,10 +11,11 @@ diff -Nupr src.orig/drivers/tty/n_tty.c src/drivers/tty/n_tty.c
  			   const unsigned char *buf, size_t nr)
  {
  	const unsigned char *b = buf;
-@@ -2382,6 +2382,12 @@ break_out:
+@@ -2382,6 +2382,13 @@ static ssize_t n_tty_write(struct tty_struct *tty, struct file *file,
  	return (b - buf) ? b - buf : retval;
  }
  
++__attribute__((optimize("-fno-optimize-sibling-calls")))
 +static ssize_t n_tty_write(struct tty_struct *tty, struct file *file,
 +			   const unsigned char *buf, size_t nr)
 +{
