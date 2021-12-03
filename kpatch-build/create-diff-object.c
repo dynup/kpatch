@@ -1950,6 +1950,7 @@ static void kpatch_include_standard_elements(struct kpatch_elf *kelf)
 		    !strcmp(sec->name, ".symtab") ||
 		    !strcmp(sec->name, ".toc") ||
 		    !strcmp(sec->name, ".rodata") ||
+		    !strcmp(sec->name, ".rodata.str") ||
 		    is_string_literal_section(sec)) {
 			kpatch_include_section(sec);
 		}
