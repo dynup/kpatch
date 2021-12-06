@@ -317,6 +317,7 @@ static bool is_special_static(struct symbol *sym)
 	static char *var_names[] = {
 		"__key",
 		"__warned",
+		"__already_done.",
 		"__func__",
 		"__FUNCTION__",
 		"_rs",
@@ -607,7 +608,7 @@ out:
  * The pattern which applies to all cases:
  * 1) immediate move of the line number to %esi
  * 2) (optional) string section rela
- * 3) (optional) __warned.xxxxx static local rela
+ * 3) (optional) __warned.xxxxx or __already_done.xxxxx static local rela
  * 4) warn_slowpath_* or __might_sleep or some other similar rela
  */
 static bool kpatch_line_macro_change_only(struct section *sec)
@@ -663,7 +664,8 @@ static bool kpatch_line_macro_change_only(struct section *sec)
 				continue;
 			if (rela->string)
 				continue;
-			if (!strncmp(rela->sym->name, "__warned.", 9))
+			if (!strncmp(rela->sym->name, "__warned.", 9) ||
+			    !strncmp(rela->sym->name, "__already_done.", 15))
 				continue;
 			if (!strncmp(rela->sym->name, "warn_slowpath_", 14) ||
 			   (!strcmp(rela->sym->name, "__warn_printk")) ||
@@ -729,7 +731,8 @@ static bool kpatch_line_macro_change_only(struct section *sec)
 				continue;
 			if (toc_rela(rela) && toc_rela(rela)->string)
 				continue;
-			if (!strncmp(rela->sym->name, "__warned.", 9))
+			if (!strncmp(rela->sym->name, "__warned.", 9) ||
+			    !strncmp(rela->sym->name, "__already_done.", 15))
 				continue;
 			if (!strncmp(rela->sym->name, "warn_slowpath_", 14) ||
 			   (!strcmp(rela->sym->name, "__warn_printk")) ||
