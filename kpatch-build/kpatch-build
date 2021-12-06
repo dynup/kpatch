@@ -845,7 +845,6 @@ grep -q "CONFIG_DEBUG_INFO=y" "$CONFIGFILE" || die "kernel doesn't have 'CONFIG_
 
 # Build variables - Set some defaults, then adjust features
 # according to .config and kernel version
-KBUILD_EXTRA_SYMBOLS=""
 KPATCH_LDFLAGS=""
 USE_KLP=0
 USE_KLP_ARCH=0
