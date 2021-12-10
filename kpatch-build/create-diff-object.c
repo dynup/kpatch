@@ -3401,6 +3401,11 @@ static void kpatch_create_callbacks_objname_rela(struct kpatch_elf *kelf, char *
 	}
 }
 
+/*
+ * Allocate the mcount/patchable_function_entry sections which must be done
+ * before the patched object is torn down so that the section flags can be
+ * copied.
+ */
 static void kpatch_alloc_mcount_sections(struct kpatch_elf *kelf, struct kpatch_elf *kelfout)
 {
 	int nr;
@@ -3413,10 +3418,30 @@ static void kpatch_alloc_mcount_sections(struct kpatch_elf *kelf, struct kpatch_
 			nr++;
 
 	/* create text/rela section pair */
+#ifdef __aarch64__
+{
+	struct section *sec, *tmp;
+
+	sec = create_section_pair(kelfout, "__patchable_function_entries", sizeof(void*), nr);
+
+	/*
+	 * Depending on the compiler the __patchable_function_entries section
+	 * can be ordered or not, copy this flag to the section we created to
+	 * avoid:
+	 * ld: __patchable_function_entries has both ordered [...] and unordered [...] sections
+	 */
+	tmp = find_section_by_name(&kelf->sections, "__patchable_function_entries");
+	sec->sh.sh_flags |= (tmp->sh.sh_flags & SHF_LINK_ORDER);
+	sec->sh.sh_flags = 1;
+}
+#else /* !__aarch64__ */
 	create_section_pair(kelfout, "__mcount_loc", sizeof(void*), nr);
+#endif
 }
 
 /*
+ * Populate the mcount sections allocated by kpatch_alloc_mcount_sections()
+ * previously.
  * This function basically reimplements the functionality of the Linux
  * recordmcount script, so that patched functions can be recognized by ftrace.
  *
@@ -3428,12 +3453,16 @@ static void kpatch_populate_mcount_sections(struct kpatch_elf *kelf)
 	int nr, index;
 	struct section *sec, *relasec;
 	struct symbol *sym;
-	struct rela *rela, *mcount_rela;
+	struct rela *mcount_rela;
 	void **funcs;
 	unsigned long insn_offset;
 
 
+#ifdef __aarch64__
+	sec = find_section_by_name(&kelf->sections, "__patchable_function_entries");
+#else /* !__aarch64__ */
 	sec = find_section_by_name(&kelf->sections, "__mcount_loc");
+#endif
 	relasec = sec->rela;
 	nr = (int) (sec->data->d_size / sizeof(void *));
 
@@ -3450,8 +3479,8 @@ static void kpatch_populate_mcount_sections(struct kpatch_elf *kelf)
 		}
 
 #ifdef __x86_64__
-
-		rela = list_first_entry(&sym->sec->rela->relas, struct rela, list);
+{
+		struct rela *rela = list_first_entry(&sym->sec->rela->relas, struct rela, list);
 
 		/*
 		 * For "call fentry", the relocation points to 1 byte past the
@@ -3491,9 +3520,37 @@ static void kpatch_populate_mcount_sections(struct kpatch_elf *kelf)
 
 			rela->type = R_X86_64_PC32;
 		}
+}
+#elif defined(__aarch64__)
+{
+		unsigned char *insn;
+		int i;
 
+		insn = sym->sec->data->d_buf;
+		insn_offset = 0;
+
+		/*
+		 * If BTI (Branch Target Identification) is enabled then there
+		 * might be an additional 'BTI C' instruction before the two
+		 * patchable function entry 'NOP's.
+		 * i.e. 0xd503245f (little endian)
+		 */
+		if (insn[0] == 0x5f) {
+			if (insn[1] != 0x24 || insn[2] != 0x03 || insn[3] != 0xd5)
+				ERROR("%s: unexpected instruction in patch section of function", sym->name);
+			insn_offset += 4;
+			insn += 4;
+		}
+		for (i = 0; i < 8; i += 4) {
+			/* We expect a NOP i.e. 0xd503201f (little endian) */
+			if (insn[i] != 0x1f || insn[i + 1] != 0x20 ||
+			    insn[i + 2] != 0x03 || insn [i + 3] != 0xd5)
+				ERROR("%s: unexpected instruction in patch section of function", sym->name);
+		}
+}
 #else /* __powerpc64__ */
 {
+		struct rela *rela;
 		bool found = false;
 
 		list_for_each_entry(rela, &sym->sec->rela->relas, list)
