@@ -569,7 +569,7 @@ Yes! There's a few requirements, and the feature is still in its infancy.
 
 1. You need to use the `--oot-module` flag to specify the version of the
 module that's currently running on the machine.
-2. `--sourcedir` has to be passed with a directory containing the same
+2. `--oot-module-src` has to be passed with a directory containing the same
 version of code as the running module, all set up and ready to build with a
 `make` command. For example, some modules need `autogen.sh` and
 `./configure` to have been run with the appropriate flags to match the
@@ -585,7 +585,7 @@ built separately.
 
 ***Sample invocation***
 
-`kpatch-build --sourcedir ~/test/ --target default --oot-module /lib/modules/$(uname -r)/extra/test.ko test.patch`
+`kpatch-build --oot-module-src ~/test/ --target default --oot-module /lib/modules/$(uname -r)/extra/test.ko test.patch`
 
 
 Get involved

@@ -41,7 +41,7 @@ SCRIPTDIR="$(readlink -f "$(dirname "$(type -p "$0")")")"
 ARCH="$(uname -m)"
 CPUS="$(getconf _NPROCESSORS_ONLN)"
 CACHEDIR="${CACHEDIR:-$HOME/.kpatch}"
-SRCDIR="$CACHEDIR/src"
+KERNEL_SRCDIR="$CACHEDIR/src"
 RPMTOPDIR="$CACHEDIR/buildroot"
 VERSIONFILE="$CACHEDIR/version"
 TEMPDIR="$CACHEDIR/tmp"
@@ -138,27 +138,27 @@ remove_patches() {
 	for (( ; APPLIED_PATCHES>0; APPLIED_PATCHES-- )); do
 		idx=$(( APPLIED_PATCHES - 1))
 		patch="${PATCH_LIST[$idx]}"
-		patch -p1 -R -d "$SRCDIR" < "$patch" &> /dev/null
+		patch -p1 -R -d "$BUILDDIR" < "$patch" &> /dev/null
 	done
 
-	# If $SRCDIR was a git repo, make sure git actually sees that
+	# If $BUILDDIR was a git repo, make sure git actually sees that
 	# we've reverted our patch(es).
-	[[ -d "$SRCDIR/.git" ]] && (cd "$SRCDIR" && git update-index -q --refresh)
+	[[ -d "$BUILDDIR/.git" ]] && (cd "$BUILDDIR" && git update-index -q --refresh)
 }
 
 cleanup() {
-	rm -f "$SRCDIR/.scmversion"
+	rm -f "$BUILDDIR/.scmversion"
 
 	remove_patches
 
 	# restore original vmlinux if it was overwritten by sourcedir build
-	[[ -e "$TEMPDIR/vmlinux" ]] && mv -f "$TEMPDIR/vmlinux" "$SRCDIR/"
+	[[ -e "$TEMPDIR/vmlinux" ]] && mv -f "$TEMPDIR/vmlinux" "$KERNEL_SRCDIR/"
 
 	# restore original link-vmlinux.sh if we updated it for the build
-	[[ -e "$TEMPDIR/link-vmlinux.sh" ]] && mv -f "$TEMPDIR/link-vmlinux.sh" "$SRCDIR/scripts"
+	[[ -e "$TEMPDIR/link-vmlinux.sh" ]] && mv -f "$TEMPDIR/link-vmlinux.sh" "$KERNEL_SRCDIR/scripts"
 
 	# restore original Makefile.modfinal if we updated it for the build
-	[[ -e "$TEMPDIR/Makefile.modfinal" ]] && mv -f "$TEMPDIR/Makefile.modfinal" "$SRCDIR/scripts"
+	[[ -e "$TEMPDIR/Makefile.modfinal" ]] && mv -f "$TEMPDIR/Makefile.modfinal" "$KERNEL_SRCDIR/scripts"
 
 	[[ "$DEBUG" -eq 0 ]] && rm -rf "$TEMPDIR"
 	rm -rf "$RPMTOPDIR"
@@ -538,15 +538,16 @@ usage() {
 	echo "		-d, --debug             Enable 'xtrace' and keep scratch files" >&2
 	echo "		                        in <CACHEDIR>/tmp" >&2
 	echo "		                        (can be specified multiple times)" >&2
-	echo "		-e, --oot-module        Enable patching out-of-tree module," >&2
+	echo "		--oot-module            Enable patching out-of-tree module," >&2
 	echo "		                        specify current version of module" >&2
+	echo "		--oot-module-src        Specify out-of-tree module source directory" >&2
 	echo "		-R, --non-replace       Disable replace patch (replace is on by default)" >&2
 	echo "		--skip-cleanup          Skip post-build cleanup" >&2
 	echo "		--skip-compiler-check   Skip compiler version matching check" >&2
 	echo "		                        (not recommended)" >&2
 }
 
-options="$(getopt -o ha:r:s:c:v:j:t:n:o:de:R -l "help,archversion:,sourcerpm:,sourcedir:,config:,vmlinux:,jobs:,target:,name:,output:,oot-module:,debug,skip-gcc-check,skip-compiler-check,skip-cleanup,non-replace" -- "$@")" || die "getopt failed"
+options="$(getopt -o ha:r:s:c:v:j:t:n:o:dR -l "help,archversion:,sourcerpm:,sourcedir:,config:,vmlinux:,jobs:,target:,name:,output:,oot-module:,oot-module-src:,debug,skip-gcc-check,skip-compiler-check,skip-cleanup,non-replace" -- "$@")" || die "getopt failed"
 
 eval set -- "$options"
 
@@ -604,9 +605,14 @@ while [[ $# -gt 0 ]]; do
 			echo "DEBUG mode enabled"
 		fi
 		;;
-	-e|--oot-module)
+	--oot-module)
 		[[ ! -f "$2" ]] && die "out-of-tree module '$2' not found"
 		OOT_MODULE="$(readlink -f "$2")"
+		shift
+		;;
+	--oot-module-src)
+		[[ ! -d "$2" ]] && die "out-of-tree module source dir '$2' not found"
+		OOT_MODULE_SRCDIR="$(readlink -f "$2")"
 		shift
 		;;
 	-R|--non-replace)
@@ -657,8 +663,8 @@ if [[ -n "$SRCRPM" ]]; then
 	ARCHVERSION="${ARCHVERSION#alt-}"
 fi
 
-if [[ -n "$OOT_MODULE" ]] &&  [[ -z "$USERSRCDIR" ]]; then
-	warn "--oot-module requires --sourcedir"
+if [[ -n "$OOT_MODULE" ]] &&  [[ -z "$OOT_MODULE_SRCDIR" ]]; then
+	warn "--oot-module requires --oot-module-src"
 	exit 1
 fi
 
@@ -672,20 +678,29 @@ if [[ -n "$USERSRCDIR" ]]; then
 		warn "--archversion is incompatible with --sourcedir"
 		exit 1
 	fi
-	SRCDIR="$USERSRCDIR"
+	KERNEL_SRCDIR="$USERSRCDIR"
 
-	if [[ -z "$OOT_MODULE" ]]; then
-		[[ -z "$VMLINUX" ]] && VMLINUX="$SRCDIR"/vmlinux
-		[[ ! -e "$VMLINUX" ]] && die "can't find vmlinux"
+	[[ -z "$VMLINUX" ]] && VMLINUX="$KERNEL_SRCDIR"/vmlinux
+	[[ ! -e "$VMLINUX" ]] && die "can't find vmlinux"
 
-		# Extract the target kernel version from vmlinux in this case.
-		ARCHVERSION="$(strings "$VMLINUX" | grep -m 1 -e "^Linux version" | awk '{ print($3); }')"
-	else
-		ARCHVERSION="$(modinfo -F vermagic "$OOT_MODULE" | awk '{print $1}')"
-	fi
+	# Extract the target kernel version from vmlinux in this case.
+	ARCHVERSION="$(strings "$VMLINUX" | grep -m 1 -e "^Linux version" | awk '{ print($3); }')"
+fi
+
+if [[ -n "$OOT_MODULE" ]]; then
+	ARCHVERSION="$(modinfo -F vermagic "$OOT_MODULE" | awk '{print $1}')"
 fi
 
 [[ -z "$ARCHVERSION" ]] && ARCHVERSION="$(uname -r)"
+
+if [[ -n "$OOT_MODULE" ]]; then
+	if [[ -z "$USERSRCDIR" ]]; then
+		KERNEL_SRCDIR="/lib/modules/$ARCHVERSION/build/"
+	fi
+	BUILDDIR="$OOT_MODULE_SRCDIR"
+else
+	BUILDDIR="$KERNEL_SRCDIR"
+fi
 
 [[ "$SKIPCLEANUP" -eq 0 ]] && trap cleanup EXIT INT TERM HUP
 
@@ -728,18 +743,16 @@ if [[ -n "$USERSRCDIR" ]]; then
 	echo "Using source directory at $USERSRCDIR"
 
 	# save original vmlinux before it gets overwritten by sourcedir build
-	if [[ -z "$OOT_MODULE" ]] && [[ "$VMLINUX" -ef "$SRCDIR"/vmlinux ]]; then
+	if [[ "$VMLINUX" -ef "$KERNEL_SRCDIR"/vmlinux ]]; then
 		cp -f "$VMLINUX" "$TEMPDIR/vmlinux" || die
 		VMLINUX="$TEMPDIR/vmlinux"
 	fi
-
-	# For external modules, use the running kernel's config
-	if [[ -n "$OOT_MODULE" ]] && [[ -z "$CONFIGFILE" ]]; then
+elif [[ -n "$OOT_MODULE" ]]; then
+	if [[ -z "${CONFIGFILE}" ]]; then
 		CONFIGFILE="/boot/config-${ARCHVERSION}"
 	fi
-
-elif [[ -e "$SRCDIR"/.config ]] && [[ -e "$VERSIONFILE" ]] && [[ "$(cat "$VERSIONFILE")" = "$ARCHVERSION" ]]; then
-	echo "Using cache at $SRCDIR"
+elif [[ -e "$KERNEL_SRCDIR"/.config ]] && [[ -e "$VERSIONFILE" ]] && [[ "$(cat "$VERSIONFILE")" = "$ARCHVERSION" ]]; then
+	echo "Using cache at $KERNEL_SRCDIR"
 
 else
 	if [[ "$DISTRO" = fedora ]] || [[ "$DISTRO" = rhel ]] || [[ "$DISTRO" = ol ]] || [[ "$DISTRO" = centos ]]; then
@@ -765,19 +778,19 @@ else
 		rpmbuild -D "_topdir $RPMTOPDIR" -bp --nodeps "--target=$(uname -m)" "$RPMTOPDIR"/SPECS/kernel$ALT.spec 2>&1 | logger ||
 			die "rpmbuild -bp failed.  you may need to run 'yum-builddep kernel' first."
 
-		mv "$RPMTOPDIR"/BUILD/kernel-*/linux-* "$SRCDIR" 2>&1 | logger || die
+		mv "$RPMTOPDIR"/BUILD/kernel-*/linux-* "$KERNEL_SRCDIR" 2>&1 | logger || die
 		rm -rf "$RPMTOPDIR"
-		rm -rf "$SRCDIR/.git"
+		rm -rf "$KERNEL_SRCDIR/.git"
 
 		if [[ "$ARCHVERSION" == *-* ]]; then
-			sed -i "s/^EXTRAVERSION.*/EXTRAVERSION = -${ARCHVERSION##*-}/" "$SRCDIR/Makefile" || die
+			sed -i "s/^EXTRAVERSION.*/EXTRAVERSION = -${ARCHVERSION##*-}/" "$KERNEL_SRCDIR/Makefile" || die
 		fi
 
 		echo "$ARCHVERSION" > "$VERSIONFILE" || die
 
-		[[ -z "$CONFIGFILE" ]] && CONFIGFILE="$SRCDIR/configs/kernel$ALT-$KVER-$ARCH.config"
+		[[ -z "$CONFIGFILE" ]] && CONFIGFILE="$KERNEL_SRCDIR/configs/kernel$ALT-$KVER-$ARCH.config"
 
-		(cd "$SRCDIR" && make mrproper 2>&1 | logger) || die
+		(cd "$KERNEL_SRCDIR" && make mrproper 2>&1 | logger) || die
 
 	elif [[ "$DISTRO" = ubuntu ]] || [[ "$DISTRO" = debian ]]; then
 
@@ -806,14 +819,14 @@ else
 		echo "Downloading and unpacking the kernel source for $ARCHVERSION"
 		# Download source deb pkg
 		(dget -u "$url/${pkgname}/${dscname}" 2>&1) | logger || die "dget: Could not fetch/unpack $url/${pkgname}/${dscname}"
-		mv "${pkgname}-$KVER" "$SRCDIR" || die
+		mv "${pkgname}-$KVER" "$KERNEL_SRCDIR" || die
 		[[ -z "$CONFIGFILE" ]] && CONFIGFILE="/boot/config-${ARCHVERSION}"
 		if [[ "$ARCHVERSION" == *-* ]]; then
-			echo "-${ARCHVERSION#*-}" > "$SRCDIR/localversion" || die
+			echo "-${ARCHVERSION#*-}" > "$KERNEL_SRCDIR/localversion" || die
 		fi
 		# for some reason the Ubuntu kernel versions don't follow the
 		# upstream SUBLEVEL; they are always at SUBLEVEL 0
-		sed -i "s/^SUBLEVEL.*/${sublevel}/" "$SRCDIR/Makefile" || die
+		sed -i "s/^SUBLEVEL.*/${sublevel}/" "$KERNEL_SRCDIR/Makefile" || die
 		echo "$ARCHVERSION" > "$VERSIONFILE" || die
 
 	else
@@ -821,10 +834,10 @@ else
 	fi
 fi
 
-[[ -z "$CONFIGFILE" ]] && CONFIGFILE="$SRCDIR"/.config
+[[ -z "$CONFIGFILE" ]] && CONFIGFILE="$KERNEL_SRCDIR"/.config
 [[ ! -e "$CONFIGFILE" ]] && die "can't find config file"
-if [[ ! "$CONFIGFILE" -ef "$SRCDIR"/.config ]] ; then
-	cp -f "$CONFIGFILE" "$SRCDIR/.config" || die
+if [[ -z "$OOT_MODULE" && ! "$CONFIGFILE" -ef "$KERNEL_SRCDIR"/.config ]] ; then
+	cp -f "$CONFIGFILE" "$KERNEL_SRCDIR/.config" || die
 fi
 
 # kernel option checking
@@ -832,7 +845,6 @@ grep -q "CONFIG_DEBUG_INFO=y" "$CONFIGFILE" || die "kernel doesn't have 'CONFIG_
 
 # Build variables - Set some defaults, then adjust features
 # according to .config and kernel version
-KBUILD_EXTRA_SYMBOLS=""
 KPATCH_LDFLAGS=""
 USE_KLP=0
 USE_KLP_ARCH=0
@@ -887,12 +899,12 @@ grep -q "CONFIG_GCC_PLUGIN_RANDSTRUCT=y" "$CONFIGFILE" && die "kernel option 'CO
 # link-vmlinux.sh and Makefile.modfinal since kpatch doesn't care about
 # that anyway.
 if grep -q "CONFIG_DEBUG_INFO_BTF=y" "$CONFIGFILE" ; then
-	cp -f "$SRCDIR/scripts/link-vmlinux.sh" "$TEMPDIR/link-vmlinux.sh" || die
-	sed -i 's/CONFIG_DEBUG_INFO_BTF/DISABLED_FOR_KPATCH_BUILD/g' "$SRCDIR"/scripts/link-vmlinux.sh || die
+	cp -f "$KERNEL_SRCDIR/scripts/link-vmlinux.sh" "$TEMPDIR/link-vmlinux.sh" || die
+	sed -i 's/CONFIG_DEBUG_INFO_BTF/DISABLED_FOR_KPATCH_BUILD/g' "$KERNEL_SRCDIR"/scripts/link-vmlinux.sh || die
 
-	if [[ -e "$SRCDIR/scripts/Makefile.modfinal" ]]; then
-		cp -f "$SRCDIR/scripts/Makefile.modfinal" "$TEMPDIR/Makefile.modfinal" || die
-		sed -i 's/CONFIG_DEBUG_INFO_BTF_MODULES/DISABLED_FOR_KPATCH_BUILD/g' "$SRCDIR"/scripts/Makefile.modfinal || die
+	if [[ -e "$KERNEL_SRCDIR/scripts/Makefile.modfinal" ]]; then
+		cp -f "$KERNEL_SRCDIR/scripts/Makefile.modfinal" "$TEMPDIR/Makefile.modfinal" || die
+		sed -i 's/CONFIG_DEBUG_INFO_BTF_MODULES/DISABLED_FOR_KPATCH_BUILD/g' "$KERNEL_SRCDIR"/scripts/Makefile.modfinal || die
 	fi
 fi
 
@@ -914,7 +926,7 @@ if [[ "$SKIPCOMPILERCHECK" -eq 0 ]]; then
 fi
 
 echo "Testing patch file(s)"
-cd "$SRCDIR" || die
+cd "$BUILDDIR" || die
 verify_patch_files
 apply_patches
 remove_patches
@@ -962,13 +974,13 @@ fi
 make "${MAKEVARS[@]}" "-j$CPUS" $TARGETS 2>&1 | logger || die
 
 # Save original module symvers
-cp -f "$SRCDIR/Module.symvers" "$TEMPDIR/Module.symvers" || die
+cp -f "$BUILDDIR/Module.symvers" "$TEMPDIR/Module.symvers" || die
 
 echo "Building patched source"
 apply_patches
 mkdir -p "$TEMPDIR/orig" "$TEMPDIR/patched"
 export KPATCH_GCC_TEMPDIR="$TEMPDIR"
-export KPATCH_GCC_SRCDIR="$SRCDIR"
+export KPATCH_GCC_SRCDIR="$BUILDDIR"
 save_env
 # $TARGETS used as list, no quotes.
 # shellcheck disable=SC2086
@@ -985,7 +997,7 @@ if [[ ! -e "$TEMPDIR/changed_objs" ]]; then
 	die "no changed objects found"
 fi
 
-[[ -n "$OOT_MODULE" ]] || grep -q vmlinux "$SRCDIR/Module.symvers" || die "truncated $SRCDIR/Module.symvers file"
+grep -q vmlinux "$KERNEL_SRCDIR/Module.symvers" || die "truncated $KERNEL_SRCDIR/Module.symvers file"
 
 if [[ "$CONFIG_MODVERSIONS" -eq 1 ]]; then
     while read -ra sym_line; do
@@ -995,9 +1007,9 @@ if [[ "$CONFIG_MODVERSIONS" -eq 1 ]]; then
 
         sym=${sym_line[1]}
 
-        read -ra patched_sym_line <<< "$(grep "\s$sym\s" "$SRCDIR/Module.symvers")"
+        read -ra patched_sym_line <<< "$(grep "\s$sym\s" "$BUILDDIR/Module.symvers")"
         if [[ ${#patched_sym_line[@]} -lt 4 ]]; then
-            die "Malformed symbol entry for ${sym} in ${SRCDIR}/Module.symvers file"
+            die "Malformed symbol entry for ${sym} in ${BUILDDIR}/Module.symvers file"
         fi
 
         # Assume that both original and patched symvers have the same format.
@@ -1015,7 +1027,7 @@ fi
 for i in $(cat "$TEMPDIR/changed_objs")
 do
 	mkdir -p "$TEMPDIR/patched/$(dirname "$i")" || die
-	cp -f "$SRCDIR/$i" "$TEMPDIR/patched/$i" || die
+	cp -f "$BUILDDIR/$i" "$TEMPDIR/patched/$i" || die
 done
 
 echo "Extracting new and modified ELF sections"
@@ -1050,9 +1062,8 @@ ERROR=0
 
 # Prepare OOT module symvers file
 if [[ -n "$OOT_MODULE" ]]; then
-    BUILDDIR="/lib/modules/$ARCHVERSION/build/"
-    cp -f "$SRCDIR/Module.symvers" "$TEMPDIR/Module.symvers" || die
-    awk '{ print $1 "\t" $2 "\t" $3 "\t" $4}' "${BUILDDIR}/Module.symvers" >> "$TEMPDIR/Module.symvers"
+    cp -f "$OOT_MODULE_SRCDIR/Module.symvers" "$TEMPDIR/Module.symvers" || die
+    awk '{ print $1 "\t" $2 "\t" $3 "\t" $4}' "${KERNEL_SRCDIR}/Module.symvers" >> "$TEMPDIR/Module.symvers"
 fi
 
 for i in $FILES; do
@@ -1065,7 +1076,7 @@ for i in $FILES; do
 	[[ "$i" = usr/initramfs_data.o ]] && continue
 
 	mkdir -p "output/$(dirname "$i")"
-	cd "$SRCDIR" || die
+	cd "$BUILDDIR" || die
 	find_kobj "$i"
 	cd "$TEMPDIR" || die
 	if [[ -e "orig/$i" ]]; then
@@ -1073,7 +1084,7 @@ for i in $FILES; do
 			KOBJFILE_NAME=vmlinux
 			KOBJFILE_PATH="$VMLINUX"
 			SYMTAB="${TEMPDIR}/${KOBJFILE_NAME}.symtab"
-			SYMVERS_FILE="$SRCDIR/Module.symvers"
+			SYMVERS_FILE="$BUILDDIR/Module.symvers"
 		elif [[ "$(basename "$KOBJFILE")" = "$(basename "$OOT_MODULE")" ]]; then
 			KOBJFILE_NAME="$(basename --suffix=.ko "$OOT_MODULE")"
 			KOBJFILE_PATH="$OOT_MODULE"
@@ -1084,7 +1095,7 @@ for i in $FILES; do
 			KOBJFILE_NAME="${KOBJFILE_NAME//-/_}"
 			KOBJFILE_PATH="${TEMPDIR}/module/$KOBJFILE"
 			SYMTAB="${KOBJFILE_PATH}.symtab"
-			SYMVERS_FILE="$SRCDIR/Module.symvers"
+			SYMVERS_FILE="$BUILDDIR/Module.symvers"
 		fi
 
 		readelf -s --wide "$KOBJFILE_PATH" > "$SYMTAB"
@@ -1138,7 +1149,7 @@ if [[ -z "$USERSRCDIR" ]] && [[ "$DISTRO" = ubuntu ]]; then
 	# UBUNTU: add UTS_UBUNTU_RELEASE_ABI to utsrelease.h after regenerating it
 	UBUNTU_ABI="${ARCHVERSION#*-}"
 	UBUNTU_ABI="${UBUNTU_ABI%-*}"
-	echo "#define UTS_UBUNTU_RELEASE_ABI $UBUNTU_ABI" >> "$SRCDIR"/include/generated/utsrelease.h
+	echo "#define UTS_UBUNTU_RELEASE_ABI $UBUNTU_ABI" >> "$KERNEL_SRCDIR"/include/generated/utsrelease.h
 fi
 
 cd "$TEMPDIR/output" || die
@@ -1161,18 +1172,13 @@ else
 fi
 
 cd "$TEMPDIR/patch" || die
-if [[ -z "$OOT_MODULE" ]]; then
-	KPATCH_BUILD="$SRCDIR"
-else
-	KPATCH_BUILD="/lib/modules/$ARCHVERSION/build"
-fi
 
 # We no longer need kpatch-cc
 for ((idx=0; idx<${#MAKEVARS[@]}; idx++)); do
     MAKEVARS[$idx]=${MAKEVARS[$idx]/${KPATCH_CC_PREFIX}/}
 done
 
-export KPATCH_BUILD="$KPATCH_BUILD" KPATCH_NAME="$MODNAME" \
+export KPATCH_BUILD="$BUILDDIR" KPATCH_NAME="$MODNAME" \
 KBUILD_EXTRA_SYMBOLS="$KBUILD_EXTRA_SYMBOLS" \
 KPATCH_LDFLAGS="$KPATCH_LDFLAGS"
 save_env
