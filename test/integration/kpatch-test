@@ -383,7 +383,7 @@ if [ "${DYNDEBUG_ENABLED}" == "1" ]; then
 	sudo sh -c "echo \"func klp_try_switch_task ${prev_dyndebug}\" > ${DYNDEBUG_CONTROL} 2>/dev/null"
 fi
 
-if new_dmesg | grep -q "Call Trace"; then
+if new_dmesg | grep -q -i "Call Trace"; then
 	new_dmesg > dmesg.log
 	error "kernel error detected in printk buffer"
 fi
