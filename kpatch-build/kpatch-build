@@ -58,6 +58,13 @@ APPLIED_PATCHES=0
 OOT_MODULE=
 KLP_REPLACE=1
 
+GCC="${CROSS_COMPILE:-}gcc"
+CLANG="${CROSS_COMPILE:-}clang"
+LD="${CROSS_COMPILE:-}ld"
+LLD="${CROSS_COMPILE:-}ld.lld"
+READELF="${CROSS_COMPILE:-}readelf"
+OBJCOPY="${CROSS_COMPILE:-}objcopy"
+
 warn() {
 	echo "ERROR: $1" >&2
 }
@@ -267,7 +274,7 @@ find_core_symvers() {
 }
 
 gcc_version_from_file() {
-	readelf -p .comment "$1" | grep -m 1 -o 'GCC:.*'
+	"$READELF" -p .comment "$1" | grep -m 1 -o 'GCC:.*'
 }
 
 gcc_version_check() {
@@ -278,7 +285,7 @@ gcc_version_check() {
 	# gcc --version varies between distributions therefore extract version
 	# by compiling a test file and compare it to vmlinux's version.
 	echo 'void main(void) {}' > "$c"
-	out="$(gcc -c -pg -ffunction-sections -o "$o" "$c" 2>&1)"
+	out="$("$GCC" -c -pg -ffunction-sections -o "$o" "$c" 2>&1)"
 	gccver="$(gcc_version_from_file "$o")"
 	kgccver="$(gcc_version_from_file "$target")"
 
@@ -288,7 +295,7 @@ gcc_version_check() {
 		return 1
 	fi
 
-	out="$(gcc -c -gz=none -o "$o" "$c" 2>&1)"
+	out="$("$GCC" -c -gz=none -o "$o" "$c" 2>&1)"
 	if [[ -z "$out" ]]; then
 		DEBUG_KCFLAGS="-gz=none"
 	fi
@@ -308,14 +315,14 @@ gcc_version_check() {
 }
 
 clang_version_from_file() {
-	readelf -p .comment "$1" | grep -m 1 -Eo 'clang version [0-9.]+'
+	"$READELF" -p .comment "$1" | grep -m 1 -Eo 'clang version [0-9.]+'
 }
 
 clang_version_check() {
 	local target="$1"
 	local clangver kclangver
 
-	clangver=$(clang --version | grep -m 1 -Eo 'clang version [0-9.]+')
+	clangver=$("$CLANG" --version | grep -m 1 -Eo 'clang version [0-9.]+')
 	kclangver="$(clang_version_from_file "$target")"
 
 	# ensure clang version matches that used to build the kernel
@@ -360,7 +367,7 @@ find_special_section_data() {
 	local SPECIAL_VARS
 	# If $AWK_OPTIONS are blank gawk would treat "" as a blank script
 	# shellcheck disable=SC2086
-	SPECIAL_VARS="$(readelf -wi "$VMLINUX" |
+	SPECIAL_VARS="$("$READELF" -wi "$VMLINUX" |
 		gawk --non-decimal-data $AWK_OPTIONS '
 		BEGIN { a = b = e = f = i = j = o = p = s = 0 }
 
@@ -929,17 +936,17 @@ unset KPATCH_GCC_TEMPDIR
 KPATCH_CC_PREFIX="$TOOLSDIR/kpatch-cc "
 declare -a MAKEVARS
 if [[ -n "$CONFIG_CC_IS_CLANG" ]]; then
-	MAKEVARS+=("CC=${KPATCH_CC_PREFIX}clang")
+	MAKEVARS+=("CC=${KPATCH_CC_PREFIX}${CLANG}")
 	MAKEVARS+=("HOSTCC=clang")
 else
-	MAKEVARS+=("CC=${KPATCH_CC_PREFIX}gcc")
+	MAKEVARS+=("CC=${KPATCH_CC_PREFIX}${GCC}")
 fi
 
 if [[ -n "$CONFIG_LD_IS_LLD" ]]; then
-	MAKEVARS+=("LD=${KPATCH_CC_PREFIX}ld.lld")
+	MAKEVARS+=("LD=${KPATCH_CC_PREFIX}${LLD}")
 	MAKEVARS+=("HOSTLD=ld.lld")
 else
-	MAKEVARS+=("LD=${KPATCH_CC_PREFIX}ld")
+	MAKEVARS+=("LD=${KPATCH_CC_PREFIX}${LD}")
 fi
 
 
@@ -1072,7 +1079,7 @@ for i in $FILES; do
 			SYMVERS_FILE="$BUILDDIR/Module.symvers"
 		fi
 
-		readelf -s --wide "$KOBJFILE_PATH" > "$SYMTAB"
+		"$READELF" -s --wide "$KOBJFILE_PATH" > "$SYMTAB"
 		if [[ "$ARCH" = "ppc64le" ]]; then
 			sed -ri 's/\s+\[<localentry>: 8\]//' "$SYMTAB"
 		fi
@@ -1129,7 +1136,7 @@ fi
 cd "$TEMPDIR/output" || die
 # $KPATCH_LDFLAGS and result of find used as list, no quotes.
 # shellcheck disable=SC2086,SC2046
-ld -r $KPATCH_LDFLAGS -o ../patch/tmp_output.o $(find . -name "*.o") 2>&1 | logger || die
+"$LD" -r $KPATCH_LDFLAGS -o ../patch/tmp_output.o $(find . -name "*.o") 2>&1 | logger || die
 
 if [[ "$USE_KLP" -eq 1 ]]; then
 	cp -f "$TEMPDIR"/patch/tmp_output.o "$TEMPDIR"/patch/output.o || die
@@ -1138,7 +1145,7 @@ if [[ "$USE_KLP" -eq 1 ]]; then
 else
 	# Add .kpatch.checksum for kpatch script
 	md5sum ../patch/tmp_output.o | awk '{printf "%s\0", $1}' > checksum.tmp || die
-	objcopy --add-section .kpatch.checksum=checksum.tmp --set-section-flags .kpatch.checksum=alloc,load,contents,readonly  ../patch/tmp_output.o || die
+	"$OBJCOPY" --add-section .kpatch.checksum=checksum.tmp --set-section-flags .kpatch.checksum=alloc,load,contents,readonly  ../patch/tmp_output.o || die
 	rm -f checksum.tmp
 	"$TOOLSDIR"/create-kpatch-module "$TEMPDIR"/patch/tmp_output.o "$TEMPDIR"/patch/output.o 2>&1 | logger 1
 	check_pipe_status create-kpatch-module
@@ -1154,7 +1161,8 @@ done
 
 export KPATCH_BUILD="$KERNEL_SRCDIR" KPATCH_NAME="$MODNAME" \
 KBUILD_EXTRA_SYMBOLS="$KBUILD_EXTRA_SYMBOLS" \
-KPATCH_LDFLAGS="$KPATCH_LDFLAGS"
+KPATCH_LDFLAGS="$KPATCH_LDFLAGS" \
+CROSS_COMPILE="$CROSS_COMPILE"
 save_env
 
 make "${MAKEVARS[@]}" 2>&1 | logger || die
@@ -1192,7 +1200,7 @@ if [[ -n "$CONFIG_MODVERSIONS" ]]; then
     fi
 fi
 
-readelf --wide --symbols "$TEMPDIR/patch/$MODNAME.ko" 2>/dev/null | \
+"$READELF" --wide --symbols "$TEMPDIR/patch/$MODNAME.ko" 2>/dev/null | \
 	sed -r 's/\s+\[<localentry>: 8\]//' | \
 	awk '($4=="FUNC" || $4=="OBJECT") && ($5=="GLOBAL" || $5=="WEAK") && $7!="UND" {print $NF}' \
 	>"${TEMPDIR}"/new_symbols
