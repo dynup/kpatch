@@ -911,6 +911,8 @@ do {								\
 		log_debug("renaming %s %s to %s\n",		\
 			  kindstr, e2->name, e1->name);		\
 		e2->name = strdup(e1->name);			\
+		if (!e2->name)				        \
+			ERROR("strdup");			\
 	}							\
 } while (0)
 
@@ -3461,6 +3463,8 @@ static void kpatch_create_mcount_sections(struct kpatch_elf *kelf)
 
 			/* Make a writable copy of the text section data */
 			newdata = malloc(sym->sec->data->d_size);
+			if (!newdata)
+				ERROR("malloc");
 			memcpy(newdata, sym->sec->data->d_buf, sym->sec->data->d_size);
 			sym->sec->data->d_buf = newdata;
 			insn = newdata;
