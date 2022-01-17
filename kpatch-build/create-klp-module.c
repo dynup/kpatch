@@ -326,6 +326,8 @@ static void create_klp_arch_sections(struct kpatch_elf *kelf, char *strings)
 
 		new_size = old_size + base->data->d_size;
 		sec->data->d_buf = realloc(sec->data->d_buf, new_size);
+		if (!sec->data->d_buf)
+			ERROR("realloc");
 		sec->data->d_size = new_size;
 		sec->sh.sh_size = sec->data->d_size;
 		memcpy(sec->data->d_buf + old_size,
