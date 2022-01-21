@@ -2083,6 +2083,11 @@ static int static_call_sites_group_size(struct kpatch_elf *kelf, int offset)
 
 	return size;
 }
+
+static int retpoline_sites_group_size(struct kpatch_elf *kelf, int offset)
+{
+	return 4;
+}
 #endif
 #ifdef __powerpc64__
 static int fixup_entry_group_size(struct kpatch_elf *kelf, int offset)
@@ -2198,6 +2203,10 @@ static struct special_section special_sections[] = {
 	{
 		.name		= ".static_call_sites",
 		.group_size	= static_call_sites_group_size,
+	},
+	{
+		.name		= ".retpoline_sites",
+		.group_size	= retpoline_sites_group_size,
 	},
 #endif
 #ifdef __powerpc64__
