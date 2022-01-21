@@ -10,11 +10,10 @@ SOURCES = create-diff-object.c kpatch-elf.c \
 		  create-kpatch-module.c \
 		  create-kpatch-module.c lookup.c
 
-ifeq ($(ARCH),x86_64)
 SOURCES += insn/insn.c insn/inat.c
 INSN     = insn/insn.o insn/inat.o
 insn/%.o: CFLAGS := $(filter-out -Wconversion, $(CFLAGS))
-else ifeq ($(ARCH),ppc64le)
+ifeq ($(ARCH),ppc64le)
 SOURCES += gcc-plugins/ppc64le-plugin.c
 PLUGIN   = gcc-plugins/ppc64le-plugin.so
 TARGETS += $(PLUGIN)
@@ -22,7 +21,7 @@ GCC_PLUGINS_DIR := $(shell gcc -print-file-name=plugin)
 PLUGIN_CFLAGS := $(filter-out -Wconversion, $(CFLAGS))
 PLUGIN_CFLAGS += -shared -I$(GCC_PLUGINS_DIR)/include \
 		   -Igcc-plugins -fPIC -fno-rtti -O2 -Wall
-else
+else ifneq ($(ARCH),x86_64)
 $(error Unsupported architecture ${ARCH}, check https://github.com/dynup/kpatch/#supported-architectures)
 endif
 

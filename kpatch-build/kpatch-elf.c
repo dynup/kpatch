@@ -132,6 +132,19 @@ struct rela *find_rela_by_offset(struct section *relasec, unsigned int offset)
 	return NULL;
 }
 
+unsigned int absolute_rela_type(struct kpatch_elf *kelf)
+{
+	switch(kelf->arch) {
+	case PPC64:
+		return R_PPC64_ADDR64;
+	case X86_64:
+		return R_X86_64_64;
+	default:
+		ERROR("unsupported arch");
+	}
+	return 0;
+}
+
 /* returns the offset of the string in the string table */
 int offset_of_string(struct list_head *list, char *name)
 {
@@ -323,6 +336,7 @@ struct kpatch_elf *kpatch_elf_open(const char *name)
 	int fd;
 	struct kpatch_elf *kelf;
 	struct section *sec;
+	GElf_Ehdr ehdr;
 
 	fd = open(name, O_RDONLY);
 	if (fd == -1)
@@ -354,6 +368,18 @@ struct kpatch_elf *kpatch_elf_open(const char *name)
 		kpatch_create_rela_list(kelf, sec);
 	}
 
+	if (!gelf_getehdr(kelf->elf, &ehdr))
+		ERROR("gelf_getehdr");
+	switch (ehdr.e_machine) {
+	case EM_PPC64:
+		kelf->arch = PPC64;
+		break;
+	case EM_X86_64:
+		kelf->arch = X86_64;
+		break;
+	default:
+		ERROR("Unsupported target architecture");
+	}
 	return kelf;
 }
 
