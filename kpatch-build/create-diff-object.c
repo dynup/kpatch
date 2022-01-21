@@ -3665,6 +3665,35 @@ static void kpatch_no_sibling_calls_ppc64le(struct kpatch_elf *kelf)
 #endif
 }
 
+/* Check which functions have fentry/mcount calls; save this info for later use. */
+static void kpatch_find_func_profiling_calls(struct kpatch_elf *kelf)
+{
+	struct symbol *sym;
+	struct rela *rela;
+	list_for_each_entry(sym, &kelf->symbols, list) {
+		if (sym->type != STT_FUNC || !sym->sec || !sym->sec->rela)
+			continue;
+#ifdef __powerpc64__
+		list_for_each_entry(rela, &sym->sec->rela->relas, list) {
+			if (!strcmp(rela->sym->name, "_mcount")) {
+				sym->has_func_profiling = 1;
+				break;
+			}
+		}
+#else
+		rela = list_first_entry(&sym->sec->rela->relas, struct rela,
+					list);
+		if ((rela->type != R_X86_64_NONE &&
+		     rela->type != R_X86_64_PC32 &&
+		     rela->type != R_X86_64_PLT32) ||
+		    strcmp(rela->sym->name, "__fentry__"))
+			continue;
+
+		sym->has_func_profiling = 1;
+#endif
+	}
+}
+
 struct arguments {
 	char *args[7];
 	bool debug, klp_arch;
@@ -3741,7 +3770,9 @@ int main(int argc, char *argv[])
 	childobj = basename(orig_obj);
 
 	kelf_orig = kpatch_elf_open(orig_obj);
+	kpatch_find_func_profiling_calls(kelf_orig);
 	kelf_patched = kpatch_elf_open(patched_obj);
+	kpatch_find_func_profiling_calls(kelf_patched);
 
 	kpatch_compare_elf_headers(kelf_orig->elf, kelf_patched->elf);
 	kpatch_check_program_headers(kelf_orig->elf);
