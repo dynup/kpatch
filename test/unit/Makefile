@@ -1,13 +1,17 @@
-ARCH    = $(shell uname -m)
-OBJDIR ?= objs/$(ARCH)
+ARCHES ?= ppc64le x86_64
 
-.PHONY: all clean
+.PHONY: all clean submodule-check
 
-all: Makefile.include
+all: $(addsuffix -test,$(ARCHES))
+clean: $(addsuffix -clean,$(ARCHES))
+
+submodule-check:
 	@cd $(shell git rev-parse --show-toplevel) && \
 		git diff-index --quiet HEAD test/unit/objs || \
 		echo -e "\nWARNING: unit tests are out of date - run \"git submodule update\"\n"
-	$(MAKE) -C $(OBJDIR)
 
-clean: Makefile.include
-	if [ -d $(OBJDIR) ]; then $(MAKE) -C $(OBJDIR) clean; fi
+%-test: Makefile.include submodule-check
+	$(MAKE) -C objs/$*
+
+%-clean: Makefile.include
+	if [ -d objs/$* ]; then $(MAKE) -C objs/$* clean; fi
