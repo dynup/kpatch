@@ -131,7 +131,7 @@ static bool locals_match(struct lookup_table *table, int idx,
 			break;
 		if (sym->bind != STB_LOCAL)
 			continue;
-		if (sym->type != STT_FUNC && table_sym->type != STT_OBJECT)
+		if (sym->type != STT_FUNC && sym->type != STT_OBJECT)
 			continue;
 		/*
 		 * Symbols which get discarded at link time are missing from
