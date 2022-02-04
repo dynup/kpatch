@@ -132,6 +132,19 @@ struct rela *find_rela_by_offset(struct section *relasec, unsigned int offset)
 	return NULL;
 }
 
+unsigned int absolute_rela_type(struct kpatch_elf *kelf)
+{
+	switch(kelf->arch) {
+	case PPC64:
+		return R_PPC64_ADDR64;
+	case X86_64:
+		return R_X86_64_64;
+	default:
+		ERROR("unsupported arch");
+	}
+	return 0;
+}
+
 /* returns the offset of the string in the string table */
 int offset_of_string(struct list_head *list, char *name)
 {
@@ -317,41 +330,13 @@ void kpatch_create_symbol_list(struct kpatch_elf *kelf)
 
 }
 
-/* Check which functions have fentry/mcount calls; save this info for later use. */
-static void kpatch_find_func_profiling_calls(struct kpatch_elf *kelf)
-{
-	struct symbol *sym;
-	struct rela *rela;
-	list_for_each_entry(sym, &kelf->symbols, list) {
-		if (sym->type != STT_FUNC || !sym->sec || !sym->sec->rela)
-			continue;
-#ifdef __powerpc64__
-		list_for_each_entry(rela, &sym->sec->rela->relas, list) {
-			if (!strcmp(rela->sym->name, "_mcount")) {
-				sym->has_func_profiling = 1;
-				break;
-			}
-		}
-#else
-		rela = list_first_entry(&sym->sec->rela->relas, struct rela,
-					list);
-		if ((rela->type != R_X86_64_NONE &&
-		     rela->type != R_X86_64_PC32 &&
-		     rela->type != R_X86_64_PLT32) ||
-		    strcmp(rela->sym->name, "__fentry__"))
-			continue;
-
-		sym->has_func_profiling = 1;
-#endif
-	}
-}
-
 struct kpatch_elf *kpatch_elf_open(const char *name)
 {
 	Elf *elf;
 	int fd;
 	struct kpatch_elf *kelf;
 	struct section *sec;
+	GElf_Ehdr ehdr;
 
 	fd = open(name, O_RDONLY);
 	if (fd == -1)
@@ -383,7 +368,18 @@ struct kpatch_elf *kpatch_elf_open(const char *name)
 		kpatch_create_rela_list(kelf, sec);
 	}
 
-	kpatch_find_func_profiling_calls(kelf);
+	if (!gelf_getehdr(kelf->elf, &ehdr))
+		ERROR("gelf_getehdr");
+	switch (ehdr.e_machine) {
+	case EM_PPC64:
+		kelf->arch = PPC64;
+		break;
+	case EM_X86_64:
+		kelf->arch = X86_64;
+		break;
+	default:
+		ERROR("Unsupported target architecture");
+	}
 	return kelf;
 }
 

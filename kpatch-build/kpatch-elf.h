@@ -109,8 +109,14 @@ struct string {
 	char *name;
 };
 
+enum architecture {
+	PPC64  = 0x1 << 0,
+	X86_64 = 0x1 << 1,
+};
+
 struct kpatch_elf {
 	Elf *elf;
+	enum architecture arch;
 	struct list_head sections;
 	struct list_head symbols;
 	struct list_head strings;
@@ -142,6 +148,7 @@ struct rela *find_rela_by_offset(struct section *relasec, unsigned int offset);
 		list_add_tail(&(_new)->list, (_list)); \
 }
 
+unsigned int absolute_rela_type(struct kpatch_elf *kelf);
 int offset_of_string(struct list_head *list, char *name);
 
 #ifndef R_PPC64_ENTRY
