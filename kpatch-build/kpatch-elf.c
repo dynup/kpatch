@@ -257,6 +257,8 @@ unsigned int insn_length(struct kpatch_elf *kelf, void *addr)
 	char *insn = addr;
 
 	switch(kelf->arch) {
+	case AARCH64:
+		return 4;
 
 	case X86_64:
 		insn_init(&decoded_insn, addr, 1);
