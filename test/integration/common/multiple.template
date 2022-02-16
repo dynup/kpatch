@@ -1,6 +1,5 @@
 SCRIPTDIR="$(readlink -f $(dirname $(type -p $0)))"
 ROOTDIR="$(readlink -f $SCRIPTDIR/../../..)"
-KPATCH="sudo $ROOTDIR/kpatch/kpatch"
 
 MODULE_PREFIX="test-"
 MODULE_POSTFIX=".ko"
