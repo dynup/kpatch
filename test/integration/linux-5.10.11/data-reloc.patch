@@ -1,0 +1,20 @@
+diff --git a/drivers/usb/serial/ir-usb.c b/drivers/usb/serial/ir-usb.c
+index 172261a908d8..4fdd666cc75a 100644
+--- a/drivers/usb/serial/ir-usb.c
++++ b/drivers/usb/serial/ir-usb.c
+@@ -194,10 +194,15 @@ static u8 ir_xbof_change(u8 xbof)
+ 	return(result);
+ }
+ 
++#include "usb-wwan.h"
+ static int ir_startup(struct usb_serial *serial)
+ {
+ 	struct usb_irda_cs_descriptor *irda_desc;
+ 	int rates;
++	volatile int i = 0;
++	static volatile void *funcs[] = {usb_wwan_open, usb_wwan_close};
++
++	printk("kpatch: usb_wwan_open=%p\n", funcs[i]);
+ 
+ 	irda_desc = irda_usb_find_class_desc(serial, 0);
+ 	if (!irda_desc) {

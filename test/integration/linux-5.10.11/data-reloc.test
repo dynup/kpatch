@@ -1,0 +1,5 @@
+sudo modprobe usb_wwan
+sudo modprobe ir-usb
+sleep 5
+
+$KPATCH load test-data-reloc.ko
