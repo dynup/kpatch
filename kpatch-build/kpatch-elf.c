@@ -263,6 +263,10 @@ void kpatch_create_section_list(struct kpatch_elf *kelf)
 
 		sec->index = (unsigned int)elf_ndxscn(scn);
 
+
+		if (sec->sh.sh_type == SHT_SYMTAB_SHNDX)
+			kelf->symtab_shndx = sec->data;
+
 		log_debug("ndx %02d, data %p, size %zu, name %s\n",
 			sec->index, sec->data->d_buf, sec->data->d_size,
 			sec->name);
@@ -278,6 +282,7 @@ void kpatch_create_symbol_list(struct kpatch_elf *kelf)
 	struct section *symtab;
 	struct symbol *sym;
 	unsigned int symbols_nr, index = 0;
+	Elf32_Word shndx;
 
 	symtab = find_section_by_name(&kelf->sections, ".symtab");
 	if (!symtab)
@@ -305,10 +310,16 @@ void kpatch_create_symbol_list(struct kpatch_elf *kelf)
 		sym->type = GELF_ST_TYPE(sym->sym.st_info);
 		sym->bind = GELF_ST_BIND(sym->sym.st_info);
 
-		if (sym->sym.st_shndx > SHN_UNDEF &&
-		    sym->sym.st_shndx < SHN_LORESERVE) {
-			sym->sec = find_section_by_index(&kelf->sections,
-					sym->sym.st_shndx);
+		shndx = sym->sym.st_shndx;
+		if (shndx == SHN_XINDEX &&
+		    !gelf_getsymshndx(symtab->data, kelf->symtab_shndx, sym->index, &sym->sym, &shndx))
+			ERROR("couldn't find extended section index for symbol %s; idx=%d",
+			      sym->name, sym->index);
+
+		if ((sym->sym.st_shndx > SHN_UNDEF &&
+		    sym->sym.st_shndx < SHN_LORESERVE) ||
+		    sym->sym.st_shndx == SHN_XINDEX) {
+			sym->sec = find_section_by_index(&kelf->sections, shndx);
 			if (!sym->sec)
 				ERROR("couldn't find section for symbol %s\n",
 					sym->name);
