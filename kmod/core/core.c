@@ -88,6 +88,12 @@ struct kpatch_apply_patch_args {
 	bool replace;
 };
 
+struct stack_trace {
+	unsigned int nr_entries, max_entries;
+	unsigned long *entries;
+	int skip;	/* input argument: How many entries to skip */
+};
+
 /* this is a double loop, use goto instead of break */
 #define do_for_each_linked_func(kpmod, func) {				\
 	struct kpatch_object *_object;					\
@@ -142,6 +148,10 @@ static atomic_t kpatch_state;
 
 static int (*kpatch_set_memory_rw)(unsigned long addr, int numpages);
 static int (*kpatch_set_memory_ro)(unsigned long addr, int numpages);
+
+static unsigned int (*kpatch_stack_trace_save_tsk)(struct task_struct *task,
+				  unsigned long *store, unsigned int size,
+				  unsigned int skipnr);
 
 #define MAX_STACK_TRACE_DEPTH   64
 static unsigned long stack_entries[MAX_STACK_TRACE_DEPTH];
@@ -282,7 +292,7 @@ static int kpatch_verify_activeness_safety(struct kpatch_module *kpmod,
 	do_each_thread(g, t) {
 
 		trace.nr_entries = 0;
-		save_stack_trace_tsk(t, &trace);
+		kpatch_stack_trace_save_tsk(t, trace.entries, trace.max_entries, trace.skip);
 		if (trace.nr_entries >= trace.max_entries) {
 			ret = -EBUSY;
 			pr_err("more than %u trace entries!\n",
@@ -1286,6 +1296,12 @@ static struct notifier_block kpatch_module_nb_going = {
 static int kpatch_init(void)
 {
 	int ret;
+
+	kpatch_stack_trace_save_tsk = (void *)kallsyms_lookup_name("stack_trace_save_tsk");
+	if (!kpatch_stack_trace_save_tsk) {
+		pr_err("can't find stack_trace_save_tsk symbol\n");
+		return -ENXIO;
+	}
 
 	kpatch_set_memory_rw = (void *)kallsyms_lookup_name("set_memory_rw");
 	if (!kpatch_set_memory_rw) {
