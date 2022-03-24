@@ -2341,6 +2341,16 @@ static bool should_keep_jump_label(struct lookup_table *lookup,
 	}
 
 	/* The static key lives in vmlinux or the patch module itself */
+
+	/*
+	 * If the jump label key lives in the '__dyndbg' section, make sure
+	 * the section gets included, because we don't use klp relocs for
+	 * dynamic debug symbols.  For an example of such a key, see
+	 * DYNAMIC_DEBUG_BRANCH().
+	 */
+	if (dynamic_debug)
+		kpatch_include_symbol(key->sym);
+
 	return true;
 }
 
