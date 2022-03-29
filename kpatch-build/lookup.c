@@ -272,12 +272,14 @@ static void symtab_read(struct lookup_table *table, char *path)
 		 * tables.  .dynsym is just a subset of .symtab, so skip it to
 		 * avoid duplicates.
 		 */
-		if (strstr(line, ".dynsym")) {
-			skip = true;
-			continue;
-		} else if (strstr(line, ".symtab")) {
-			skip = false;
-			continue;
+		if (!strncmp(line, "Symbol table ", 13)) {
+			if (strstr(line, ".dynsym")) {
+				skip = true;
+				continue;
+			} else if (strstr(line, ".symtab")) {
+				skip = false;
+				continue;
+			}
 		}
 		if (skip)
 			continue;
