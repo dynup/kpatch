@@ -937,6 +937,10 @@ if [[ "$ARCH" = "ppc64le" ]]; then
 	ARCH_KCFLAGS="-mcmodel=large -fplugin=$PLUGINDIR/ppc64le-plugin.so"
 fi
 
+if [[ "$ARCH" = "s390x" ]]; then
+	ARCH_KCFLAGS="-mno-pic-data-is-text-relative -fno-section-anchors"
+fi
+
 export KCFLAGS="-I$DATADIR/patch -ffunction-sections -fdata-sections \
 		$ARCH_KCFLAGS $DEBUG_KCFLAGS"
 
