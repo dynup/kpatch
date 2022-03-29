@@ -163,6 +163,8 @@ static bool is_gcc6_localentry_bundled_sym(struct kpatch_elf *kelf,
 			sym->sym.st_value == 8);
 	case X86_64:
 		return false;
+	case S390:
+		return false;
 	default:
 		ERROR("unsupported arch");
 	}
@@ -304,8 +306,7 @@ static bool is_dynamic_debug_symbol(struct symbol *sym)
 
 static bool is_string_literal_section(struct section *sec)
 {
-	return !strncmp(sec->name, ".rodata.", 8) &&
-	       strstr(sec->name, ".str1.");
+	return !strncmp(sec->name, ".rodata.", 8) && strstr(sec->name, ".str");
 }
 
 /*
@@ -2105,6 +2106,17 @@ static int fixup_barrier_nospec_group_size(struct kpatch_elf *kelf, int offset)
 }
 
 /*
+ * .s390_indirect_jump, .s390_indirect_call, .s390_indirect_branches,
+ * .s390_return_reg, .s390_return_mem contains indirect branch locations. This
+ * is an array of 32 bit elements. These sections could be used during runtime
+ * to replace the expolines with the normal indirect jump.
+ */
+static int s390_expolines_group_size(struct kpatch_elf *kelf, int offset)
+{
+	return 4;
+}
+
+/*
  * The rela groups in the .fixup section vary in size.  The beginning of each
  * .fixup rela group is referenced by the __ex_table section. To find the size
  * of a .fixup rela group, we have to traverse the __ex_table relas.
@@ -2157,27 +2169,27 @@ static int fixup_group_size(struct kpatch_elf *kelf, int offset)
 static struct special_section special_sections[] = {
 	{
 		.name		= "__bug_table",
-		.arch		= X86_64 | PPC64,
+		.arch		= X86_64 | PPC64 | S390,
 		.group_size	= bug_table_group_size,
 	},
 	{
 		.name		= ".fixup",
-		.arch		= X86_64 | PPC64,
+		.arch		= X86_64 | PPC64 | S390,
 		.group_size	= fixup_group_size,
 	},
 	{
 		.name		= "__ex_table", /* must come after .fixup */
-		.arch		= X86_64 | PPC64,
+		.arch		= X86_64 | PPC64 | S390,
 		.group_size	= ex_table_group_size,
 	},
 	{
 		.name		= "__jump_table",
-		.arch		= X86_64 | PPC64,
+		.arch		= X86_64 | PPC64 | S390,
 		.group_size	= jump_table_group_size,
 	},
 	{
 		.name		= ".printk_index",
-		.arch		= X86_64 | PPC64,
+		.arch		= X86_64 | PPC64 | S390,
 		.group_size	= printk_index_group_size,
 	},
 	{
@@ -2192,7 +2204,7 @@ static struct special_section special_sections[] = {
 	},
 	{
 		.name		= ".altinstructions",
-		.arch		= X86_64,
+		.arch		= X86_64 | S390,
 		.group_size	= altinstructions_group_size,
 	},
 	{
@@ -2229,6 +2241,31 @@ static struct special_section special_sections[] = {
 		.name		= "__barrier_nospec_fixup",
 		.arch		= PPC64,
 		.group_size	= fixup_barrier_nospec_group_size,
+	},
+	{
+		.name = ".s390_return_mem",
+		.arch = S390,
+		.group_size = s390_expolines_group_size,
+	},
+	{
+		.name = ".s390_return_reg",
+		.arch = S390,
+		.group_size = s390_expolines_group_size,
+	},
+	{
+		.name = ".s390_indirect_call",
+		.arch = S390,
+		.group_size = s390_expolines_group_size,
+	},
+	{
+		.name = ".s390_indirect_branches",
+		.arch = S390,
+		.group_size = s390_expolines_group_size,
+	},
+	{
+		.name = ".s390_indirect_jump",
+		.arch = S390,
+		.group_size = s390_expolines_group_size,
 	},
 	{},
 };
@@ -3024,6 +3061,11 @@ static bool kpatch_is_core_module_symbol(char *name)
 		!strcmp(name, "kpatch_shadow_get"));
 }
 
+static bool is_expoline(struct kpatch_elf *kelf, char *name)
+{
+	return kelf->arch == S390 && !strncmp(name, "__s390_indirect_jump_r", 22);
+}
+
 static int function_ptr_rela(const struct rela *rela)
 {
 	const struct rela *rela_toc = toc_rela(rela);
@@ -3080,6 +3122,13 @@ static bool need_dynrela(struct kpatch_elf *kelf, struct lookup_table *table,
 	 * relas.  They should be exported.
 	 */
 	if (kpatch_is_core_module_symbol(rela->sym->name))
+		return false;
+
+       /*
+        * Allow references to s390 expolines to remain as normal relas.  They
+        * will be generated in the module by the kernel module link.
+        */
+	if (is_expoline(kelf, rela->sym->name))
 		return false;
 
 	if (rela->sym->sec) {
@@ -3548,6 +3597,10 @@ static void kpatch_create_mcount_sections(struct kpatch_elf *kelf)
 			rela->type = R_X86_64_PC32;
 			break;
 		}
+		case S390: {
+			insn_offset = sym->sym.st_value;
+			break;
+		}
 		default:
 			ERROR("unsupported arch");
 		}
@@ -3713,6 +3766,7 @@ static void kpatch_find_func_profiling_calls(struct kpatch_elf *kelf)
 {
 	struct symbol *sym;
 	struct rela *rela;
+	unsigned char *insn;
 	list_for_each_entry(sym, &kelf->symbols, list) {
 		if (sym->type != STT_FUNC || !sym->sec || !sym->sec->rela)
 			continue;
@@ -3736,6 +3790,14 @@ static void kpatch_find_func_profiling_calls(struct kpatch_elf *kelf)
 				continue;
 
 			sym->has_func_profiling = 1;
+			break;
+		case S390:
+			/* Check for compiler generated fentry nop - jgnop 0 */
+			insn = sym->sec->data->d_buf;
+			if (insn[0] == 0xc0 && insn[1] == 0x04 &&
+				insn[2] == 0x00 && insn[3] == 0x00 &&
+				insn[4] == 0x00 && insn[5] == 0x00)
+				sym->has_func_profiling = 1;
 			break;
 		default:
 			ERROR("unsupported arch");

@@ -343,12 +343,18 @@ find_special_section_data() {
 	check[e]=true						# exception_table_entry
 
 	# Arch-specific features, without kernel CONFIG_ toggle
-	if [[ "$ARCH" = "x86_64" ]]; then
-		check[a]=true					# alt_instr
-		kernel_version_gte 5.10.0 && check[s]=true	# static_call_site
-	elif [[ "$ARCH" = "ppc64le" ]]; then
-		check[f]=true					# fixup_entry
-	fi
+	case "$ARCH" in
+		"x86_64")
+			check[a]=true					# alt_instr
+			kernel_version_gte 5.10.0 && check[s]=true	# static_call_site
+			;;
+		"ppc64le")
+			check[f]=true					# fixup_entry
+			;;
+		"s390x")
+			check[a]=true					# alt_instr
+			;;
+	esac
 
 	# Kernel CONFIG_ features
 	[[ -n "$CONFIG_PRINTK_INDEX" ]] && check[i]=true	# pi_entry
@@ -856,6 +862,7 @@ trace_on
 	die "openEuler kernel doesn't have 'CONFIG_LIVEPATCH_PER_TASK_CONSISTENCY' enabled"
 
 [[ -z "$CONFIG_DEBUG_INFO" ]] && die "kernel doesn't have 'CONFIG_DEBUG_INFO' enabled"
+[[ "$ARCH" = "s390x" ]] && [[ -z "$CONFIG_EXPOLINE_EXTERN" ]] && [[ -n "$CONFIG_EXPOLINE" ]] && die "kernel doesn't have 'CONFIG_EXPOLINE_EXTERN' enabled"
 
 # Build variables - Set some defaults, then adjust features
 # according to .config and kernel version
