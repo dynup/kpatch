@@ -672,7 +672,7 @@ static bool kpatch_line_macro_change_only(struct kpatch_elf *kelf,
 {
 	unsigned long offset, insn1_len, insn2_len;
 	void *data1, *data2, *insn1, *insn2;
-	struct rela *rela;
+	struct rela *r, *rela;
 	bool found, found_any = false;
 
 	if (sec->status != CHANGED ||
@@ -720,12 +720,16 @@ static bool kpatch_line_macro_change_only(struct kpatch_elf *kelf,
 			return false;
 
 		found = false;
-		list_for_each_entry(rela, &sec->rela->relas, list) {
+		list_for_each_entry(r, &sec->rela->relas, list) {
 
-			if (rela->offset < offset + insn1_len)
+			if (r->offset < offset + insn1_len)
 				continue;
 
-			if (toc_rela(rela) && toc_rela(rela)->string)
+			rela = toc_rela(r);
+			if (!rela)
+				continue;
+
+			if (rela->string)
 				continue;
 
 			if (!strncmp(rela->sym->name, "__warned.", 9) ||
