@@ -733,7 +733,8 @@ static bool kpatch_line_macro_change_only(struct kpatch_elf *kelf,
 				continue;
 
 			if (!strncmp(rela->sym->name, "__warned.", 9) ||
-			    !strncmp(rela->sym->name, "__already_done.", 15))
+			    !strncmp(rela->sym->name, "__already_done.", 15) ||
+			    !strncmp(rela->sym->name, "__func__.", 9))
 				continue;
 
 			if (!strncmp(rela->sym->name, "warn_slowpath_", 14) ||
@@ -742,7 +743,10 @@ static bool kpatch_line_macro_change_only(struct kpatch_elf *kelf,
 			    !strcmp(rela->sym->name, "___might_sleep") ||
 			    !strcmp(rela->sym->name, "__might_fault") ||
 			    !strcmp(rela->sym->name, "printk") ||
-			    !strcmp(rela->sym->name, "lockdep_rcu_suspicious")) {
+			    !strcmp(rela->sym->name, "lockdep_rcu_suspicious") ||
+			    !strcmp(rela->sym->name, "__btrfs_abort_transaction") ||
+			    !strcmp(rela->sym->name, "__btrfs_handle_fs_error") ||
+			    !strcmp(rela->sym->name, "__btrfs_panic")) {
 				found = true;
 				break;
 			}
