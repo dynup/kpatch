@@ -5,6 +5,7 @@
 *.ko.cmd
 *.mod.c
 *.swp
+*.swo
 *.d
 *.so
 .tmp_versions
