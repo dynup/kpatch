@@ -579,17 +579,29 @@ out:
 
 static unsigned int insn_length(struct kpatch_elf *kelf, void *addr)
 {
-	struct insn insn;
+	struct insn decoded_insn;
+	char *insn = addr;
 
 	switch(kelf->arch) {
 
 	case X86_64:
-		insn_init(&insn, addr, 1);
-		insn_get_length(&insn);
-		return insn.length;
+		insn_init(&decoded_insn, addr, 1);
+		insn_get_length(&decoded_insn);
+		return decoded_insn.length;
 
 	case PPC64:
 		return 4;
+
+	case S390:
+		switch(insn[0] >> 6) {
+		case 0:
+			return 2;
+		case 1:
+		case 2:
+			return 4;
+		case 3:
+			return 6;
+		}
 
 	default:
 		ERROR("unsupported arch");
@@ -636,6 +648,12 @@ static bool insn_is_load_immediate(struct kpatch_elf *kelf, void *addr)
 		if (insn[3] == 0x38 && insn[2] == 0xa0)
 			return true;
 
+		break;
+
+	case S390:
+		/* lghi %r4, imm */
+		if (insn[0] == 0xa7 && insn[1] == 0x49)
+			return true;
 		break;
 
 	default:
