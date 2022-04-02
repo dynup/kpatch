@@ -610,26 +610,30 @@ static unsigned int insn_length(struct kpatch_elf *kelf, void *addr)
  */
 static bool insn_is_load_immediate(struct kpatch_elf *kelf, void *addr)
 {
-	struct insn insn;
-	unsigned int instr;
+	unsigned char *insn = addr;
 
 	switch(kelf->arch) {
 
 	case X86_64:
-		insn_init(&insn, addr, 1);
-		insn_get_opcode(&insn);
-
-		if (insn.opcode.value == 0xba)	/* mov $imm, %edx */
+		/* mov $imm, %edx */
+		if (insn[0] == 0xba)
 			return true;
-		if (insn.opcode.value == 0xbe)	/* mov $imm, %esi */
+
+		/* mov $imm, %esi */
+		if (insn[0] == 0xbe)
 			return true;
 
 		break;
 
 	case PPC64:
-		instr = *(unsigned int *)addr >> 16;
+		/*
+		 * ppc64le insns are LE-encoded:
+		 *
+		 *   47 14 a0 38     li      r5,5191
+		 */
 
-		if (instr == 0x38a0)		/* li r5, imm */
+		/* li r5, imm */
+		if (insn[3] == 0x38 && insn[2] == 0xa0)
 			return true;
 
 		break;
