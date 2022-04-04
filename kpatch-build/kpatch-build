@@ -638,10 +638,6 @@ if [[ $DEBUG -eq 1 ]] || [[ $DEBUG -ge 3 ]]; then
 	set -o xtrace
 fi
 
-if [[ -n "$ARCHVERSION" ]] && [[ -n "$VMLINUX" ]]; then
-	die "--archversion is incompatible with --vmlinux"
-fi
-
 if [[ -n "$SRCRPM" ]]; then
 	if  [[ -n "$ARCHVERSION" ]]; then
 		warn "--archversion is incompatible with --sourcerpm"
@@ -664,17 +660,23 @@ rm -rf "${TEMPDIR:?}"/*
 rm -f "$LOGFILE"
 
 if [[ -n "$USERSRCDIR" ]]; then
-	if [[ -n "$ARCHVERSION" ]]; then
-		warn "--archversion is incompatible with --sourcedir"
-		exit 1
-	fi
 	KERNEL_SRCDIR="$USERSRCDIR"
 
 	[[ -z "$VMLINUX" ]] && VMLINUX="$KERNEL_SRCDIR"/vmlinux
 	[[ ! -e "$VMLINUX" ]] && die "can't find vmlinux"
 
 	# Extract the target kernel version from vmlinux in this case.
-	ARCHVERSION="$(strings "$VMLINUX" | grep -m 1 -e "^Linux version" | awk '{ print($3); }')"
+	VMLINUX_VER="$(strings "$VMLINUX" | grep -m 1 -e "^Linux version" | awk '{ print($3); }')"
+	if [[ -n "$ARCHVERSION" ]]; then
+		if [[ -n "$VMLINUX_VER" ]] && [[ "$ARCHVERSION" != "$VMLINUX_VER" ]]; then
+			die "Kernel version mismatch: $ARCHVERSION was specified but vmlinux was built for $VMLINUX_VER"
+		fi
+	else
+		if [[ -z "$VMLINUX_VER" ]]; then
+			die "Unable to determine the kernel version from vmlinux"
+		fi
+		ARCHVERSION="$VMLINUX_VER"
+	fi
 fi
 
 if [[ -n "$OOT_MODULE" ]]; then
