@@ -617,8 +617,13 @@ static unsigned int insn_length(struct kpatch_elf *kelf, void *addr)
  * ok, we'll find them later when someone notices a function falsely being
  * reported as changed ;-)
  *
- * (Alternatively we may want to consider just checking all registers which can
- * be used as function arguments.)
+ * Right now we're only checking immediate loads to the registers corresponding
+ * to function arguments 2 and 3 for each respective arch's calling convention.
+ * (Argument 1 is typically the printf format string).  Eventually we might
+ * want to consider just checking *all* registers which could conceivably be
+ * used as function arguments.  But in practice, arg2 and arg3 seem to be the
+ * main ones, so for now, take a more conservative approach at the risk of
+ * failing to detect some of the more obscure __LINE__-only changed functions.
  */
 static bool insn_is_load_immediate(struct kpatch_elf *kelf, void *addr)
 {
@@ -627,12 +632,12 @@ static bool insn_is_load_immediate(struct kpatch_elf *kelf, void *addr)
 	switch(kelf->arch) {
 
 	case X86_64:
-		/* mov $imm, %edx */
-		if (insn[0] == 0xba)
+		/* arg2: mov $imm, %esi */
+		if (insn[0] == 0xbe)
 			return true;
 
-		/* mov $imm, %esi */
-		if (insn[0] == 0xbe)
+		/* arg3: mov $imm, %edx */
+		if (insn[0] == 0xba)
 			return true;
 
 		break;
@@ -641,19 +646,29 @@ static bool insn_is_load_immediate(struct kpatch_elf *kelf, void *addr)
 		/*
 		 * ppc64le insns are LE-encoded:
 		 *
+		 *   0a 00 80 38     li      r4,10
 		 *   47 14 a0 38     li      r5,5191
 		 */
 
-		/* li r5, imm */
+		/* arg2: li r4, imm */
+		if (insn[3] == 0x38 && insn[2] == 0x80)
+			return true;
+
+		/* arg3: li r5, imm */
 		if (insn[3] == 0x38 && insn[2] == 0xa0)
 			return true;
 
 		break;
 
 	case S390:
-		/* lghi %r4, imm */
+		/* arg2: lghi %r3, imm */
+		if (insn[0] == 0xa7 && insn[1] == 0x39)
+			return true;
+
+		/* arg3: lghi %r4, imm */
 		if (insn[0] == 0xa7 && insn[1] == 0x49)
 			return true;
+
 		break;
 
 	default:
