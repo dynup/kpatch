@@ -506,10 +506,10 @@ find_kobj() {
 }
 
 # Only allow alphanumerics and '_' and '-' in the module name.  Everything else
-# is replaced with '-'.  Also truncate to 48 chars so the full name fits in the
-# kernel's 56-byte module name array.
+# is replaced with '-'.  Also truncate to 55 chars so the full name + NUL
+# terminator fits in the kernel's 56-byte module name array.
 module_name_string() {
-	echo "${1//[^a-zA-Z0-9_-]/-}" | cut -c 1-48
+	echo "${1//[^a-zA-Z0-9_-]/-}" | cut -c 1-55
 }
 
 usage() {
