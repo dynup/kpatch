@@ -3037,6 +3037,9 @@ static bool need_dynrela(struct kpatch_elf *kelf, struct lookup_table *table,
 {
 	struct lookup_result symbol;
 
+	if (is_debug_section(sec))
+		return false;
+
 	/*
 	 * These references are treated specially by the module loader and
 	 * should never be converted to dynrelas.
