@@ -577,14 +577,116 @@ out:
 		log_debug("section %s has changed\n", sec->name);
 }
 
+static unsigned int insn_length(struct kpatch_elf *kelf, void *addr)
+{
+	struct insn decoded_insn;
+	char *insn = addr;
+
+	switch(kelf->arch) {
+
+	case X86_64:
+		insn_init(&decoded_insn, addr, 1);
+		insn_get_length(&decoded_insn);
+		return decoded_insn.length;
+
+	case PPC64:
+		return 4;
+
+	case S390:
+		switch(insn[0] >> 6) {
+		case 0:
+			return 2;
+		case 1:
+		case 2:
+			return 4;
+		case 3:
+			return 6;
+		}
+
+	default:
+		ERROR("unsupported arch");
+	}
+
+	return 0;
+}
+
 /*
- * Determine if a section has changed only due to a WARN* or might_sleep
- * macro call's embedding of the line number into an instruction operand.
+ * This function is not comprehensive, i.e. it doesn't detect immediate loads
+ * to *all* registers.  It only detects those which have been found in the wild
+ * to be involved in the load of a __LINE__ immediate.  If we miss some, that's
+ * ok, we'll find them later when someone notices a function falsely being
+ * reported as changed ;-)
+ *
+ * Right now we're only checking immediate loads to the registers corresponding
+ * to function arguments 2 and 3 for each respective arch's calling convention.
+ * (Argument 1 is typically the printf format string).  Eventually we might
+ * want to consider just checking *all* registers which could conceivably be
+ * used as function arguments.  But in practice, arg2 and arg3 seem to be the
+ * main ones, so for now, take a more conservative approach at the risk of
+ * failing to detect some of the more obscure __LINE__-only changed functions.
+ */
+static bool insn_is_load_immediate(struct kpatch_elf *kelf, void *addr)
+{
+	unsigned char *insn = addr;
+
+	switch(kelf->arch) {
+
+	case X86_64:
+		/* arg2: mov $imm, %esi */
+		if (insn[0] == 0xbe)
+			return true;
+
+		/* arg3: mov $imm, %edx */
+		if (insn[0] == 0xba)
+			return true;
+
+		break;
+
+	case PPC64:
+		/*
+		 * ppc64le insns are LE-encoded:
+		 *
+		 *   0a 00 80 38     li      r4,10
+		 *   47 14 a0 38     li      r5,5191
+		 */
+
+		/* arg2: li r4, imm */
+		if (insn[3] == 0x38 && insn[2] == 0x80)
+			return true;
+
+		/* arg3: li r5, imm */
+		if (insn[3] == 0x38 && insn[2] == 0xa0)
+			return true;
+
+		break;
+
+	case S390:
+		/* arg2: lghi %r3, imm */
+		if (insn[0] == 0xa7 && insn[1] == 0x39)
+			return true;
+
+		/* arg3: lghi %r4, imm */
+		if (insn[0] == 0xa7 && insn[1] == 0x49)
+			return true;
+
+		break;
+
+	default:
+		ERROR("unsupported arch");
+	}
+
+	return false;
+}
+
+/*
+ * Determine if a section has changed only due to a __LINE__ number change,
+ * e.g. a WARN() or might_sleep() macro's embedding of the line number into an
+ * instruction operand.
  *
  * Warning: Hackery lies herein.  It's hopefully justified by the fact that
  * this issue is very common.
  *
- * Example WARN*:
+ * Example WARN():
  *
  *  938:   be 70 00 00 00          mov    $0x70,%esi
  *  93d:   48 c7 c7 00 00 00 00    mov    $0x0,%rdi
@@ -601,173 +703,104 @@ out:
  *                         517: R_X86_64_32S       .rodata.do_select.str1.8+0x98
  *  51b:   e8 00 00 00 00          callq  520 <do_select+0x520>
  *                         51c: R_X86_64_PC32      ___might_sleep-0x4
- *
- * The pattern which applies to all cases:
- * 1) immediate move of the line number to %esi
- * 2) (optional) string section rela
- * 3) (optional) __warned.xxxxx or __already_done.xxxxx static local rela
- * 4) warn_slowpath_* or __might_sleep or some other similar rela
  */
-static bool kpatch_line_macro_change_only_x86_64(struct section *sec)
-{
-	struct insn insn1, insn2;
-	unsigned long start1, start2, size, offset, length;
-	struct rela *rela;
-	int lineonly = 0, found;
-
-	if (sec->status != CHANGED ||
-	    is_rela_section(sec) ||
-	    !is_text_section(sec) ||
-	    sec->sh.sh_size != sec->twin->sh.sh_size ||
-	    !sec->rela ||
-	    sec->rela->status != SAME)
-		return false;
-
-	start1 = (unsigned long)sec->twin->data->d_buf;
-	start2 = (unsigned long)sec->data->d_buf;
-	size = sec->sh.sh_size;
-	for (offset = 0; offset < size; offset += length) {
-		insn_init(&insn1, (void *)(start1 + offset), 1);
-		insn_init(&insn2, (void *)(start2 + offset), 1);
-		insn_get_length(&insn1);
-		insn_get_length(&insn2);
-		length = insn1.length;
-
-		if (!insn1.length || !insn2.length)
-			ERROR("can't decode instruction in section %s at offset 0x%lx",
-			      sec->name, offset);
-
-		if (insn1.length != insn2.length)
-			return false;
-
-		if (!memcmp((void *)start1 + offset, (void *)start2 + offset,
-			    length))
-			continue;
-
-		/* verify it's a mov immediate to %edx or %esi */
-		insn_get_opcode(&insn1);
-		insn_get_opcode(&insn2);
-		if (!(insn1.opcode.value == 0xba && insn2.opcode.value == 0xba) &&
-		    !(insn1.opcode.value == 0xbe && insn2.opcode.value == 0xbe))
-			return false;
-
-		/*
-		 * Verify zero or more string relas followed by a
-		 * warn_slowpath_* or another similar rela.
-		 */
-		found = 0;
-		list_for_each_entry(rela, &sec->rela->relas, list) {
-			if (rela->offset < offset + length)
-				continue;
-			if (rela->string)
-				continue;
-			if (!strncmp(rela->sym->name, "__warned.", 9) ||
-			    !strncmp(rela->sym->name, "__already_done.", 15))
-				continue;
-			if (!strncmp(rela->sym->name, "warn_slowpath_", 14) ||
-			   (!strcmp(rela->sym->name, "__warn_printk")) ||
-			   (!strcmp(rela->sym->name, "__might_sleep")) ||
-			   (!strcmp(rela->sym->name, "___might_sleep")) ||
-			   (!strcmp(rela->sym->name, "__might_fault")) ||
-			   (!strcmp(rela->sym->name, "printk")) ||
-			   (!strcmp(rela->sym->name, "lockdep_rcu_suspicious"))) {
-				found = 1;
-				break;
-			}
-			return false;
-		}
-		if (!found)
-			return false;
-
-		lineonly = 1;
-	}
-
-	if (!lineonly)
-		ERROR("no instruction changes detected for changed section %s",
-		      sec->name);
-
-	return true;
-}
-
-#define PPC_INSTR_LEN 4
-#define PPC_RA_OFFSET 16
-
-static bool kpatch_line_macro_change_only_ppc64le(struct section *sec)
-{
-	unsigned long start1, start2, size, offset;
-	unsigned int instr1, instr2;
-	struct rela *rela;
-	int lineonly = 0, found;
-
-	if (sec->status != CHANGED ||
-	    is_rela_section(sec) ||
-	    !is_text_section(sec) ||
-	    sec->sh.sh_size != sec->twin->sh.sh_size ||
-	    !sec->rela ||
-	    sec->rela->status != SAME)
-		return false;
-
-	start1 = (unsigned long)sec->twin->data->d_buf;
-	start2 = (unsigned long)sec->data->d_buf;
-	size = sec->sh.sh_size;
-	for (offset = 0; offset < size; offset += PPC_INSTR_LEN) {
-		if (!memcmp((void *)start1 + offset, (void *)start2 + offset,
-			    PPC_INSTR_LEN))
-			continue;
-
-		instr1 = *(unsigned int *)(start1 + offset) >> PPC_RA_OFFSET;
-		instr2 = *(unsigned int *)(start2 + offset) >> PPC_RA_OFFSET;
-
-		/* verify it's a load immediate to r5 */
-		if (!(instr1 == 0x38a0 && instr2 == 0x38a0))
-			return false;
-
-		found = 0;
-		list_for_each_entry(rela, &sec->rela->relas, list) {
-			if (rela->offset < offset + PPC_INSTR_LEN)
-				continue;
-			if (toc_rela(rela) && toc_rela(rela)->string)
-				continue;
-			if (!strncmp(rela->sym->name, "__warned.", 9) ||
-			    !strncmp(rela->sym->name, "__already_done.", 15))
-				continue;
-			if (!strncmp(rela->sym->name, "warn_slowpath_", 14) ||
-			   (!strcmp(rela->sym->name, "__warn_printk")) ||
-			   (!strcmp(rela->sym->name, "__might_sleep")) ||
-			   (!strcmp(rela->sym->name, "___might_sleep")) ||
-			   (!strcmp(rela->sym->name, "__might_fault")) ||
-			   (!strcmp(rela->sym->name, "printk")) ||
-			   (!strcmp(rela->sym->name, "lockdep_rcu_suspicious"))) {
-				found = 1;
-				break;
-			}
-			return false;
-		}
-		if (!found)
-			return false;
-
-		lineonly = 1;
-	}
-
-	if (!lineonly)
-		ERROR("no instruction changes detected for changed section %s",
-		      sec->name);
-
-	return true;
-}
-
 static bool kpatch_line_macro_change_only(struct kpatch_elf *kelf,
 					  struct section *sec)
 {
-	switch(kelf->arch) {
-	case PPC64:
-		return kpatch_line_macro_change_only_ppc64le(sec);
-	case X86_64:
-		return kpatch_line_macro_change_only_x86_64(sec);
-	default:
-		ERROR("unsupported arch");
+	unsigned long offset, insn1_len, insn2_len;
+	void *data1, *data2, *insn1, *insn2;
+	struct rela *r, *rela;
+	bool found, found_any = false;
+
+	if (sec->status != CHANGED ||
+	    is_rela_section(sec) ||
+	    !is_text_section(sec) ||
+	    sec->sh.sh_size != sec->twin->sh.sh_size ||
+	    !sec->rela ||
+	    sec->rela->status != SAME)
+		return false;
+
+	data1 = sec->twin->data->d_buf;
+	data2 = sec->data->d_buf;
+	for (offset = 0; offset < sec->sh.sh_size; offset += insn1_len) {
+
+		insn1 = data1 + offset;
+		insn2 = data2 + offset;
+
+		insn1_len = insn_length(kelf, insn1);
+		insn2_len = insn_length(kelf, insn2);
+
+		if (!insn1_len || !insn2_len)
+			ERROR("can't decode instruction in section %s at offset 0x%lx",
+			      sec->name, offset);
+
+		if (insn1_len != insn2_len)
+			return false;
+
+		if (!memcmp(insn1, insn2, insn1_len))
+			continue;
+
+		/*
+		 * Here we found a difference between two instructions of the
+		 * same length.  Only ignore the change if:
+		 *
+		 *   a) the instructions match a known pattern of a '__LINE__'
+		 *      macro immediate value which was embedded in the
+		 *      instruction; and
+		 *
+		 *   b) the instructions are followed by certain expected
+		 *      relocations.
+		 */
+
+		if (!insn_is_load_immediate(kelf, insn1) ||
+		    !insn_is_load_immediate(kelf, insn2))
+			return false;
+
+		found = false;
+		list_for_each_entry(r, &sec->rela->relas, list) {
+
+			if (r->offset < offset + insn1_len)
+				continue;
+
+			rela = toc_rela(r);
+			if (!rela)
+				continue;
+
+			if (rela->string)
+				continue;
+
+			if (!strncmp(rela->sym->name, "__warned.", 9) ||
+			    !strncmp(rela->sym->name, "__already_done.", 15) ||
+			    !strncmp(rela->sym->name, "__func__.", 9))
+				continue;
+
+			if (!strncmp(rela->sym->name, "warn_slowpath_", 14) ||
+			    !strcmp(rela->sym->name, "__warn_printk") ||
+			    !strcmp(rela->sym->name, "__might_sleep") ||
+			    !strcmp(rela->sym->name, "___might_sleep") ||
+			    !strcmp(rela->sym->name, "__might_fault") ||
+			    !strcmp(rela->sym->name, "printk") ||
+			    !strcmp(rela->sym->name, "_printk") ||
+			    !strcmp(rela->sym->name, "lockdep_rcu_suspicious") ||
+			    !strcmp(rela->sym->name, "__btrfs_abort_transaction") ||
+			    !strcmp(rela->sym->name, "__btrfs_handle_fs_error") ||
+			    !strcmp(rela->sym->name, "__btrfs_panic")) {
+				found = true;
+				break;
+			}
+			return false;
+		}
+		if (!found)
+			return false;
+
+		found_any = true;
 	}
-	return false;
+
+	if (!found_any)
+		ERROR("no instruction changes detected for changed section %s",
+		      sec->name);
+
+	return true;
 }
 
 /*
@@ -2341,6 +2374,16 @@ static bool should_keep_jump_label(struct lookup_table *lookup,
 	}
 
 	/* The static key lives in vmlinux or the patch module itself */
+
+	/*
+	 * If the jump label key lives in the '__dyndbg' section, make sure
+	 * the section gets included, because we don't use klp relocs for
+	 * dynamic debug symbols.  For an example of such a key, see
+	 * DYNAMIC_DEBUG_BRANCH().
+	 */
+	if (dynamic_debug)
+		kpatch_include_symbol(key->sym);
+
 	return true;
 }
 
