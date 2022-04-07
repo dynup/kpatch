@@ -1054,18 +1054,9 @@ static void kpatch_correlate_symbols(struct list_head *symlist_orig,
 				continue;
 
 			/*
-			 * The .LCx symbols point to strings, usually used for
-			 * the bug table.  Don't correlate and compare the
-			 * symbols themselves, because the suffix number might
-			 * change.
-			 *
-			 * If the symbol is used by the bug table (usual case),
-			 * it may get pulled in by
-			 * kpatch_regenerate_special_section().
-			 *
-			 * If the symbol is used outside of the bug table (not
-			 * sure if this actually happens anywhere), any string
-			 * changes will be detected elsewhere in rela_equal().
+			 * The .LCx symbols point to string literals in
+			 * '.rodata.<func>.str1.*' sections.  They get included
+			 * in kpatch_include_standard_elements().
 			 */
 			if (sym_orig->type == STT_NOTYPE &&
 			    !strncmp(sym_orig->name, ".LC", 3))
@@ -1781,9 +1772,16 @@ static void kpatch_include_symbol(struct symbol *sym)
 		kpatch_include_section(sym->sec);
 }
 
+static bool is_string_literal_section(struct section *sec)
+{
+	return !strncmp(sec->name, ".rodata.", 8) &&
+	       strstr(sec->name, ".str1.");
+}
+
 static void kpatch_include_standard_elements(struct kpatch_elf *kelf)
 {
 	struct section *sec;
+	struct symbol *sym;
 
 	list_for_each_entry(sec, &kelf->sections, list) {
 		/*
@@ -1813,11 +1811,14 @@ static void kpatch_include_standard_elements(struct kpatch_elf *kelf)
 		    !strcmp(sec->name, ".symtab") ||
 		    !strcmp(sec->name, ".toc") ||
 		    !strcmp(sec->name, ".rodata") ||
-		    (!strncmp(sec->name, ".rodata.", 8) &&
-		     strstr(sec->name, ".str1."))) {
+		    is_string_literal_section(sec)) {
 			kpatch_include_section(sec);
 		}
 	}
+
+	list_for_each_entry(sym, &kelf->symbols, list)
+		if (sym->sec && is_string_literal_section(sym->sec))
+			sym->include = 1;
 
 	/* include the NULL symbol */
 	list_entry(kelf->symbols.next, struct symbol, list)->include = 1;
@@ -3078,6 +3079,9 @@ static bool need_dynrela(struct kpatch_elf *kelf, struct lookup_table *table,
 			 struct section *sec, const struct rela *rela)
 {
 	struct lookup_result symbol;
+
+	if (is_debug_section(sec))
+		return false;
 
 	/*
 	 * These references are treated specially by the module loader and
