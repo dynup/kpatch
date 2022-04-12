@@ -6,7 +6,7 @@
 
 Name: kpatch
 Summary: Dynamic kernel patching
-Version: 0.9.5
+Version: 0.9.6
 License: GPLv2
 Group: System Environment/Kernel
 URL: http://github.com/dynup/kpatch
@@ -104,6 +104,18 @@ rm -rf %{buildroot}
 %{_mandir}/man1/kpatch-build.1*
 
 %changelog
+* Tue Apr 12 Joe Lawrence <joe.lawrence@redhat.com> - 0.9.6
+* Allow OOT modules to be built with non-distro kernels
+* Add cross-arch unit testing support
+* Support ELF extended symbol section indexes
+* Allow setting kernel version if --sourcedir and --vmlinux are used
+* Cleanup and enhance __LINE__ macro detection for all arches
+* Fix segfault on .LCx string literal symbols
+* Include __dyndbg section when referenced by jump table
+* Honor user provided KBUILD_EXTRA_SYMBOLS
+* Support .retpoline_sites section
+* Add native compiler selection via CROSS_COMPILE
+
 * Wed Oct 13 Artem Savkov <asavkov@redhat.com> - 0.9.5
 - openEuler support
 - kpatch-build: Do not check KLP_REPLACE for kpatch.ko-based patches
