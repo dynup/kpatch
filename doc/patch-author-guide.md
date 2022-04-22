@@ -874,3 +874,14 @@ To track down specifically what caused a symbol CRC change, tools like
 detailed symbol definition report.  For a kpatch-build, kabi-dw can be modified
 to operate on .o object files (not just .ko and vmlinux files) and the
 `$CACHEDIR/tmp/{orig, patched}` directories compared.
+
+System calls
+------------
+
+Attempting to patch a syscall typically results in an error, due to a missing
+fentry hook in the inner `__do_sys##name()` function.  The fentry hook is
+missing because of the 'inline' annotation, which invokes 'notrace'.
+
+This problem can be worked around by adding `#include "kpatch-syscall.h"` and
+replacing the use of the `SYSCALL_DEFINE1` (or similar) macro with the
+`KPATCH_` prefixed version.
