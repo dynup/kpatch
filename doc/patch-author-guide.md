@@ -9,7 +9,27 @@ There are many pitfalls that can be encountered when creating a live patch.
 This document attempts to guide the patch creation process.  It's a work in
 progress.  If you find it useful, please contribute!
 
-Patch Analysis
+Table of contents
+=================
+
+- [Patch analysis](#patch-analysis)
+- [kpatch vs livepatch vs kGraft](#kpatch-vs-livepatch-vs-kgraft)
+- [Patch upgrades](#patch-upgrades)
+- [Data structure changes](#data-structure-changes)
+- [Data semantic changes](#data-semantic-changes)
+- [Init code changes](#init-code-changes)
+- [Header file changes](#header-file-changes)
+- [Dealing with unexpected changed functions](#dealing-with-unexpected-changed-functions)
+- [Removing references to static local variables](#removing-references-to-static-local-variables)
+- [Code removal](#code-removal)
+- [Once macros](#once-macros)
+- [inline implies notrace](#inline-implies-notrace)
+- [Jump labels](#jump-labels)
+- [Sibling calls](#sibling-calls)
+- [Exported symbol versioning](#exported-symbol-versioning)
+- [System calls](#system-calls)
+
+Patch analysis
 --------------
 
 kpatch provides _some_ guarantees, but it does not guarantee that all patches
