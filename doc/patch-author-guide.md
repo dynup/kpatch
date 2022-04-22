@@ -759,6 +759,10 @@ if (static_key_enabled(&false_key))
 if (likely(static_key_enabled(&key)))
 ```
 
+Note that with Linux 5.8+, jump labels in patched functions are now supported
+when the static key was originally defined in the kernel proper (vmlinux).  The
+above error will not be seen unless the static key lives in a module.
+
 Sibling calls
 -------------
 
