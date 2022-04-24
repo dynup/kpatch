@@ -750,9 +750,13 @@ elif [[ -e "$KERNEL_SRCDIR"/.config ]] && [[ -e "$VERSIONFILE" ]] && [[ "$(cat "
 	echo "Using cache at $KERNEL_SRCDIR"
 
 else
-	if [[ "$DISTRO" = fedora ]] || [[ "$DISTRO" = rhel ]] || [[ "$DISTRO" = ol ]] || [[ "$DISTRO" = centos ]]; then
+	if [[ "$DISTRO" = fedora ]] || [[ "$DISTRO" = rhel ]] || [[ "$DISTRO" = ol ]] || [[ "$DISTRO" = centos ]] || [[ "$DISTRO" = openEuler ]]; then
 
-		echo "Fedora/Red Hat distribution detected"
+		[[ "$DISTRO" = fedora ]] && echo "Fedora distribution detected"
+		[[ "$DISTRO" = rhel ]] && echo "RHEL distribution detected"
+		[[ "$DISTRO" = ol ]] && echo "Oracle Linux distribution detected"
+		[[ "$DISTRO" = centos ]] && echo "CentOS distribution detected"
+		[[ "$DISTRO" = openEuler ]] && echo "OpenEuler distribution detected"
 
 		clean_cache
 
@@ -773,7 +777,13 @@ else
 		rpmbuild -D "_topdir $RPMTOPDIR" -bp --nodeps "--target=$(uname -m)" "$RPMTOPDIR"/SPECS/kernel$ALT.spec 2>&1 | logger ||
 			die "rpmbuild -bp failed.  you may need to run 'yum-builddep kernel' first."
 
-		mv "$RPMTOPDIR"/BUILD/kernel-*/linux-* "$KERNEL_SRCDIR" 2>&1 | logger || die
+		if [[ "$DISTRO" = openEuler ]]; then
+			# openEuler has two directories with the same content after 'rpm -D'
+			# openEuler 21.09 has linux-* and linux-*-source while openEuler 20.03 has linux-* and linux-*-Source
+			mv "$RPMTOPDIR"/BUILD/kernel-*/linux-*[sS]ource "$KERNEL_SRCDIR" 2>&1 | logger || die
+		else
+			mv "$RPMTOPDIR"/BUILD/kernel-*/linux-* "$KERNEL_SRCDIR" 2>&1 | logger || die
+		fi
 		rm -rf "$RPMTOPDIR"
 		rm -rf "$KERNEL_SRCDIR/.git"
 
@@ -783,7 +793,11 @@ else
 
 		echo "$ARCHVERSION" > "$VERSIONFILE" || die
 
-		[[ -z "$CONFIGFILE" ]] && CONFIGFILE="$KERNEL_SRCDIR/configs/kernel$ALT-$KVER-$ARCH.config"
+		if [[ "$DISTRO" = openEuler ]]; then
+			[[ -z "$CONFIGFILE" ]] && CONFIGFILE="/boot/config-${ARCHVERSION}"
+		else
+			[[ -z "$CONFIGFILE" ]] && CONFIGFILE="$KERNEL_SRCDIR/configs/kernel$ALT-$KVER-$ARCH.config"
+		fi
 
 		(cd "$KERNEL_SRCDIR" && make mrproper 2>&1 | logger) || die
 
@@ -840,6 +854,9 @@ fi
 # Don't check external file.
 # shellcheck disable=SC1090
 source "$CONFIGFILE"
+
+[[ "$DISTRO" = openEuler ]] && [[ -z "$CONFIG_LIVEPATCH_PER_TASK_CONSISTENCY" ]] && \
+	die "openEuler kernel doesn't have 'CONFIG_LIVEPATCH_PER_TASK_CONSISTENCY' enabled"
 
 [[ -z "$CONFIG_DEBUG_INFO" ]] && die "kernel doesn't have 'CONFIG_DEBUG_INFO' enabled"
 
