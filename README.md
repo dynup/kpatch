@@ -25,21 +25,10 @@ Table of contents
 
 - [Supported Architectures](#supported-architectures)
 - [Installation](#installation)
-	- [Prerequisites](#prerequisites)
-		- [Fedora, RHEL, CentOS](#fedora-rhel-centos)
-		- [Oracle Linux 7](#oracle-linux-7)
-		- [Ubuntu](#ubuntu)
-		- [Debian 9 (Stretch)](#debian-9-stretch)
-		- [Debian 8 (Jessie)](#debian-8-jessie)
-		- [Debian 7 (Lenny)](#debian-7-lenny)
-		- [Gentoo](#gentoo)
-	- [Build](#build)
-	- [Install](#install)
 - [Quick start](#quick-start)
 - [Patch Author Guide](#patch-author-guide)
 - [How it works](#how-it-works)
 	- [kpatch-build](#kpatch-build)
-	- [Patching](#patching)
 - [Limitations](#limitations)
 - [Frequently Asked Questions](#frequently-asked-questions)
 - [Get involved](#get-involved)
@@ -57,197 +46,16 @@ Supported Architectures
 Installation
 ------------
 
-### Prerequisites
-
-Before starting, see [Supported Architectures](#supported-architectures) and check if your device's architecture is supported.
-
-#### Fedora, RHEL, CentOS
-
-*NOTE: You'll need about 15GB of free disk space for the kpatch-build cache in
-`~/.kpatch` and for ccache.*
-
-Install the dependencies for compiling kpatch and running kpatch-build:
-
-```bash
-source test/integration/lib.sh
-# Will request root privileges
-kpatch_dependencies
-```
-
-#### Oracle Linux 7
-
-*NOTE: You'll need about 15GB of free disk space for the kpatch-build cache in
-`~/.kpatch` and for ccache.*
-
-Install the dependencies for compiling kpatch:
-
-```bash
-UNAME=$(uname -r)
-sudo yum install gcc kernel-devel-${UNAME%.*} elfutils elfutils-devel
-```
-
-Install the dependencies for the "kpatch-build" command:
-
-```bash
-sudo yum install pesign yum-utils zlib-devel \
-  binutils-devel newt-devel python-devel perl-ExtUtils-Embed \
-  audit-libs numactl-devel pciutils-devel bison patchutils
-
-# enable ol7_optional_latest repo
-sudo yum-config-manager --enable ol7_optional_latest
-
-sudo yum-builddep kernel-${UNAME%.*}
-
-# manually install kernel debuginfo packages
-rpm -ivh https://oss.oracle.com/ol7/debuginfo/kernel-debuginfo-$(uname -r).rpm
-rpm -ivh https://oss.oracle.com/ol7/debuginfo/kernel-debuginfo-common-x86_64-$(uname -r).rpm
-
-# optional, but highly recommended - enable EPEL 7
-sudo yum install ccache
-ccache --max-size=5G
-```
-
-#### Ubuntu
-
-*NOTE: You'll need about 15GB of free disk space for the kpatch-build cache in
-`~/.kpatch` and for ccache.*
-
-Install the dependencies for compiling kpatch and running kpatch-build
-
-```bash
-source test/integration/lib.sh
-# required on ppc64le
-# e.g., on Ubuntu 18.04 for gcc-7.3
-apt-get install gcc-7-plugin-dev
-# Will request root privileges
-kpatch_dependencies
-```
-
-#### Debian 9 (Stretch)
-
-Since Stretch the stock kernel can be used without changes, however the
-version of kpatch in Stretch is too old so you still need to build it
-manually. Follow the instructions for Debian Jessie (next section) but skip
-building a custom kernel/rebooting.
-
-#### Debian 8 (Jessie)
-
-*NOTE: You'll need about 15GB of free disk space for the kpatch-build cache in
-`~/.kpatch` and for ccache.*
-
-Install the dependencies for compiling kpatch:
-
-    apt-get install make gcc libelf-dev build-essential
-
-Install and prepare the kernel sources:
-
-```bash
-apt-get install linux-source-$(uname -r)
-cd /usr/src && tar xvf linux-source-$(uname -r).tar.xz && ln -s linux-source-$(uname -r) linux && cd linux
-cp /boot/config-$(uname -r) .config
-for OPTION in CONFIG_KALLSYMS_ALL CONFIG_FUNCTION_TRACER ; do sed -i "s/# $OPTION is not set/$OPTION=y/g" .config ; done
-sed -i "s/^SUBLEVEL.*/SUBLEVEL =/" Makefile
-make -j`getconf _NPROCESSORS_CONF` deb-pkg KDEB_PKGVERSION=$(uname -r).9-1
-```
-
-Install the kernel packages and reboot
-
-    dpkg -i /usr/src/*.deb
-    reboot
-
-Install the dependencies for the "kpatch-build" command:
-
-    apt-get install dpkg-dev
-    apt-get build-dep linux
-
-    # required on ppc64le
-    # e.g., on stretch for gcc-6.3
-    apt-get install gcc-6-plugin-dev
-
-    # optional, but highly recommended
-    apt-get install ccache
-    ccache --max-size=5G
-
-#### Debian 7 (Lenny)
-
-*NOTE: You'll need about 15GB of free disk space for the kpatch-build cache in
-`~/.kpatch` and for ccache.*
-
-Add backports repositories:
-
-```bash
-echo "deb http://http.debian.net/debian wheezy-backports main" > /etc/apt/sources.list.d/wheezy-backports.list
-echo "deb http://packages.incloudus.com backports-incloudus main" > /etc/apt/sources.list.d/incloudus.list
-wget http://packages.incloudus.com/incloudus/incloudus.pub -O- | apt-key add -
-aptitude update
-```
-
-Install the linux kernel, symbols and gcc 4.9:
-
-    aptitude install -t wheezy-backports -y initramfs-tools
-    aptitude install -y gcc gcc-4.9 g++-4.9 linux-image-3.14 linux-image-3.14-dbg
-
-Configure gcc 4.9 as the default gcc compiler:
-
-    update-alternatives --install /usr/bin/gcc gcc /usr/bin/gcc-4.7 20
-    update-alternatives --install /usr/bin/gcc gcc /usr/bin/gcc-4.9 50
-    update-alternatives --install /usr/bin/g++ g++ /usr/bin/g++-4.7 20
-    update-alternatives --install /usr/bin/g++ g++ /usr/bin/g++-4.9 50
-
-Install kpatch and these dependencies:
-
-    aptitude install kpatch
-
-Configure ccache (installed by kpatch package):
-
-    ccache --max-size=5G
-
-#### Gentoo
-
-*NOTE: You'll need about 15GB of free disk space for the kpatch-build cache in
-`~/.kpatch` and for ccache.*
-
-Install Kpatch and Kpatch dependencies:
-
-```bash
-emerge --ask sys-kernel/kpatch
-```
-
-Install ccache (optional):
-
-```bash
-emerge --ask dev-util/ccache
-```
-
-Configure ccache:
-
-```bash
-ccache --max-size=5G
-```
-
-### Build
-
-Compile kpatch:
-
-    make
-
-
-### Install
-
-OPTIONAL: Install kpatch to `/usr/local`:
-
-    sudo make install
-
-Alternatively, the kpatch and kpatch-build scripts can be run directly from the
-git tree.
+See [INSTALL.md](doc/INSTALL.md).
 
 
 Quick start
 -----------
 
 > NOTE: While kpatch is designed to work with any recent Linux
-kernel on any distribution, the `kpatch-build` command has **ONLY** been tested
-and confirmed to work on Fedora 20 and later, RHEL 7, Oracle Linux 7, CentOS 7 and Ubuntu 14.04.
+kernel on any distribution, `kpatch-build` has specifically been tested and
+confirmed to work on Fedora and RHEL.  It has also been known to work on Oracle
+Linux, Ubuntu, Debian, and Gentoo.
 
 First, make a source code patch against the kernel tree using diff, git, or
 quilt.
@@ -272,7 +80,7 @@ CAPS so we can see it better:
 
 Build the patch module:
 
-    $ kpatch-build -t vmlinux meminfo-string.patch
+    $ kpatch-build meminfo-string.patch
     Using cache at /home/jpoimboe/.kpatch/3.13.10-200.fc20.x86_64/src
     Testing patch file
     checking file fs/proc/meminfo.c
@@ -282,22 +90,14 @@ Build the patch module:
     Rebuilding changed objects
     Extracting new and modified ELF sections
     meminfo.o: changed function: meminfo_proc_show
-    Building patch module: kpatch-meminfo-string.ko
+    Building patch module: livepatch-meminfo-string.ko
     SUCCESS
-
-> NOTE: The `-t vmlinux` option is used to tell `kpatch-build` to only look for
-> changes in the `vmlinux` base kernel image, which is much faster than also
-> compiling all the kernel modules.  If your patch affects a kernel module, you
-> can either omit this option to build everything, and have `kpatch-build`
-> detect which modules changed, or you can specify the affected kernel build
-> targets with multiple `-t` options.
 
 That outputs a patch module named `kpatch-meminfo-string.ko` in the current
 directory.  Now apply it to the running kernel:
 
     $ sudo kpatch load kpatch-meminfo-string.ko
-    loading core module: /usr/local/lib/modules/3.13.10-200.fc20.x86_64/kpatch/kpatch.ko
-    loading patch module: kpatch-meminfo-string.ko
+    loading patch module: livepatch-meminfo-string.ko
 
 Done!  The kernel is now patched.
 
@@ -305,7 +105,7 @@ Done!  The kernel is now patched.
     VMALLOCCHUNK:   34359337092 kB
 
 
-Patch Author Guide
+Patch author guide
 ------------------
 
 Unfortunately, live patching isn't always as easy as the previous example, and
@@ -318,21 +118,17 @@ How it works
 ------------
 
 kpatch works at a function granularity: old functions are replaced with new
-ones.  It has four main components:
+ones.  It has three main components:
 
 - **kpatch-build**: a collection of tools which convert a source diff patch to
   a patch module.  They work by compiling the kernel both with and without
   the source patch, comparing the binaries, and generating a patch module
   which includes new binary versions of the functions to be replaced.
 
-- **patch module**: a kernel module (.ko file) which includes the
-  replacement functions and metadata about the original functions.
-
-- **kpatch core module**: a kernel module (.ko file) which provides an
-  interface for the patch modules to register new functions for
-  replacement.  It uses the kernel ftrace subsystem to hook into the original
-  function's mcount call instruction, so that a call to the original function
-  is redirected to the replacement function.
+- **patch module**: a kernel livepatch module (.ko file) which includes the
+  replacement functions and metadata about the original functions.  Upon
+  loading, it registers itself with the kernel livepatch infrastructure
+  (CONFIG\_LIVEPATCH) which does the patching.
 
 - **kpatch utility:** a command-line tool which allows a user to manage a
   collection of patch modules.  One or more patch modules may be
@@ -369,23 +165,11 @@ The primary steps in kpatch-build are:
 - Generate the patch module
 
 
-### Patching
-
-The patch modules register with the core module (`kpatch.ko`).
-They provide information about original functions that need to be replaced, and
-corresponding function pointers to the replacement functions.
-
-The core module registers a handler function with ftrace.  The
-handler function is called by ftrace immediately before the original
-function begins executing.  This occurs with the help of the reserved mcount
-call at the beginning of every function, created by the gcc `-mfentry` flag.
-The ftrace handler then modifies the return instruction pointer (IP)
-address on the stack and returns to ftrace, which then restores the original
-function's arguments and stack, and "returns" to the new function.
-
-
 Limitations
 -----------
+
+- NOTE: Many of these limitations can be worked around with creative solutions.
+  For more details, see the [Patch Author Guide](doc/patch-author-guide.md).
 
 - Patches which modify init functions (annotated with `__init`) are not
   supported.  kpatch-build will return an error if the patch attempts
@@ -418,20 +202,6 @@ Limitations
 Frequently Asked Questions
 --------------------------
 
-**Q. What's the relationship between kpatch and the upstream Linux live kernel
-patching component (livepatch)?**
-
-Starting with Linux 4.0, the Linux kernel has livepatch, which is a new
-converged live kernel patching framework.  Livepatch is similar in
-functionality to the kpatch core module, though it doesn't yet have all the
-features that kpatch does.
-
-kpatch-build already works with both livepatch and kpatch.  If your kernel has
-CONFIG\_LIVEPATCH enabled, it detects that and builds a patch module in the
-livepatch format.  Otherwise it builds a kpatch patch module.
-
-The kpatch script also supports both patch module formats.
-
 **Q. Isn't this just a virus/rootkit injection framework?**
 
 kpatch uses kernel modules to replace code.  It requires the `CAP_SYS_MODULE`
@@ -440,92 +210,35 @@ ability to arbitrarily modify the kernel, with or without kpatch.
 
 **Q. How can I detect if somebody has patched the kernel?**
 
-When a patch module is loaded, the `TAINT_USER` or `TAINT_LIVEPATCH` flag is
-set.  (The latter flag was introduced in Linux version 4.0.)  To test for
-these flags, `cat /proc/sys/kernel/tainted` and check to see if the value of
-`TAINT_USER` (64) or `TAINT_LIVEPATCH` (32768) has been OR'ed in.
+If a patch is currently applied, you can see it in `/sys/kernel/livepatch`.
+
+Also, if a patch has been previously applied, the `TAINT_LIVEPATCH` flag is
+set.  To test for these flags, `cat /proc/sys/kernel/tainted` and check to see
+if the value of `TAINT_LIVEPATCH` (32768) has been OR'ed in.
 
 Note that the `TAINT_OOT_MODULE` flag (4096) will also be set, since the patch
 module is built outside the Linux kernel source tree.
 
-If your patch module is unsigned, the `TAINT_FORCED_MODULE` flag (2) will also
-be set.  Starting with Linux 3.15, this will be changed to the more specific
-`TAINT_UNSIGNED_MODULE` (8192).
-
-Linux versions starting with 4.9 also support a per-module `TAINT_LIVEPATCH`
-taint flag. This can be checked by verifying the output of
-`cat /sys/module/<kpatch module>/taint` -- a 'K' character indicates the
-presence of `TAINT_LIVEPATCH`.
+If your patch module is unsigned, the `TAINT_UNSIGNED_MODULE` flag (8192) will
+also be set.
 
 **Q. Will it destabilize my system?**
 
-No, as long as the patch is chosen carefully.  See the Limitations section
-above.
-
-**Q. Why does kpatch use ftrace to jump to the replacement function instead of
-adding the jump directly?**
-
-ftrace owns the first "call mcount" instruction of every kernel function.  In
-order to keep compatibility with ftrace, we go through ftrace rather than
-updating the instruction directly.  This approach also ensures that the code
-modification path is reliable, since ftrace has been doing it successfully for
-years.
-
-**Q. Is kpatch compatible with \<insert kernel debugging subsystem here\>?**
-
-We aim to be good kernel citizens and maintain compatibility.  A kpatch
-replacement function is no different than a function loaded by any other kernel
-module.  Each replacement function has its own symbol name and kallsyms entry,
-so it looks like a normal function to the kernel.
-
-- **oops stack traces**: Yes.  If the replacement function is involved in an
-  oops, the stack trace will show the function and kernel module name of the
-  replacement function, just like any other kernel module function.  The oops
-  message will also show the taint flag (see the FAQ "How can I detect if
-  somebody has patched the kernel" for specifics).
-- **kdump/crash**: Yes.  Replacement functions are normal functions, so crash
-  will have no issues.
-- **ftrace**: Yes, but certain uses of ftrace which involve opening the
-  `/sys/kernel/debug/tracing/trace` file or using `trace-cmd record` can result
-  in a tiny window of time where a patch gets temporarily disabled.  Therefore
-  it's a good idea to avoid using ftrace on a patched system until this issue
-  is resolved.
-- **systemtap/kprobes**: Some incompatibilities exist.
-  - If you setup a kprobe module at the beginning of a function before loading
-    a kpatch module, and they both affect the same function, kprobes "wins"
-    until the kprobe has been unregistered.  This is tracked in issue
-    [#47](https://github.com/dynup/kpatch/issues/47).
-  - Setting a kretprobe before loading a kpatch module could be unsafe.  See
-    issue [#67](https://github.com/dynup/kpatch/issues/67).
-- **perf**: Yes.
-- **tracepoints**: Patches to a function which uses tracepoints will result in
-  the tracepoints being effectively disabled as long as the patch is applied.
+No, as long as the patch is created carefully.  See the Limitations section
+above and the [Patch Author Guide](doc/patch-author-guide.md).
 
 **Q. Why not use something like kexec instead?**
 
-If you want to avoid a hardware reboot, but are ok with restarting processes,
-kexec is a good alternative.
+If you want to avoid a hardware reboot, but are ok with restarting processes or
+using CRIU, kexec is a good alternative.
 
 **Q. If an application can't handle a reboot, it's designed wrong.**
 
 That's a good poi... [system reboots]
 
-**Q. What changes are needed in other upstream projects?**
-
-We hope to make the following changes to other projects:
-
-- kernel:
-	- ftrace improvements to close any windows that would allow a patch to
-	  be inadvertently disabled
-
-**Q. Is it possible to register a function that gets called atomically with
-`stop_machine` when the patch module loads and unloads?**
-
-We do have plans to implement something like that.
-
 **Q. What kernels are supported?**
 
-kpatch needs gcc >= 4.8 and Linux >= 3.9.
+kpatch needs gcc >= 4.8 and Linux >= 4.0.
 
 **Q. Is it possible to remove a patch?**
 
@@ -538,7 +251,8 @@ Yes, but to prevent any unexpected interactions between multiple patch modules,
 it's recommended that patch upgrades are cumulative, so that each patch is a
 superset of the previous patch.  This can be achieved by combining the new
 patch with the previous patch using `combinediff` before running
-`kpatch-build`.
+`kpatch-build`.  It's also recommended to use livepatch atomic "replace" mode,
+which is the default.
 
 **Q. Why did kpatch-build detect a changed function that wasn't touched by the
 source patch?**
@@ -549,15 +263,7 @@ There could be a variety of reasons for this, such as:
 - The compiler decided to inline a changed function, resulting in the outer
   function getting recompiled.  This is common in the case where the inner
   function is static and is only called once.
-
-**Q. How do I patch a function which is always on the stack of at least one
-task, such as schedule(), sys_poll(), sys_select(), sys_read(),
-sys_nanosleep(), etc?**
-
-- If you're sure it would be safe for the old function and the new function to
-  run simultaneously, use the `KPATCH_FORCE_UNSAFE` macro to skip the
-  activeness safety check for the function.  See `kmod/patch/kpatch-macros.h`
-  for more details.
+- A bug in kpatch-build's detection of `__LINE__` macro usage.
 
 **Q. Are patching of kernel modules supported?**
 
@@ -591,13 +297,12 @@ built separately.
 Get involved
 ------------
 
-If you have questions or feedback, join the #kpatch IRC channel on [Libera](https://libera.chat) and
-say hi.  We also have a [mailing list](https://www.redhat.com/mailman/listinfo/kpatch).
+If you have questions or feedback, join the #kpatch IRC channel on
+[Libera](https://libera.chat) and say hi.
 
 Contributions are very welcome.  Feel free to open issues or PRs on github.
-For big PRs, it's a good idea to discuss them first in github issues or on the
-[mailing list](https://www.redhat.com/mailman/listinfo/kpatch) before you write
-a lot of code.
+For big PRs, it's a good idea to discuss them first in github
+issues/discussions or on IRC before you write a lot of code.
 
 
 License
