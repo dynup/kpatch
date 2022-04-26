@@ -9,7 +9,27 @@ There are many pitfalls that can be encountered when creating a live patch.
 This document attempts to guide the patch creation process.  It's a work in
 progress.  If you find it useful, please contribute!
 
-Patch Analysis
+Table of contents
+=================
+
+- [Patch analysis](#patch-analysis)
+- [kpatch vs livepatch vs kGraft](#kpatch-vs-livepatch-vs-kgraft)
+- [Patch upgrades](#patch-upgrades)
+- [Data structure changes](#data-structure-changes)
+- [Data semantic changes](#data-semantic-changes)
+- [Init code changes](#init-code-changes)
+- [Header file changes](#header-file-changes)
+- [Dealing with unexpected changed functions](#dealing-with-unexpected-changed-functions)
+- [Removing references to static local variables](#removing-references-to-static-local-variables)
+- [Code removal](#code-removal)
+- [Once macros](#once-macros)
+- [inline implies notrace](#inline-implies-notrace)
+- [Jump labels](#jump-labels)
+- [Sibling calls](#sibling-calls)
+- [Exported symbol versioning](#exported-symbol-versioning)
+- [System calls](#system-calls)
+
+Patch analysis
 --------------
 
 kpatch provides _some_ guarantees, but it does not guarantee that all patches
@@ -759,6 +779,10 @@ if (static_key_enabled(&false_key))
 if (likely(static_key_enabled(&key)))
 ```
 
+Note that with Linux 5.8+, jump labels in patched functions are now supported
+when the static key was originally defined in the kernel proper (vmlinux).  The
+above error will not be seen unless the static key lives in a module.
+
 Sibling calls
 -------------
 
@@ -870,3 +894,14 @@ To track down specifically what caused a symbol CRC change, tools like
 detailed symbol definition report.  For a kpatch-build, kabi-dw can be modified
 to operate on .o object files (not just .ko and vmlinux files) and the
 `$CACHEDIR/tmp/{orig, patched}` directories compared.
+
+System calls
+------------
+
+Attempting to patch a syscall typically results in an error, due to a missing
+fentry hook in the inner `__do_sys##name()` function.  The fentry hook is
+missing because of the 'inline' annotation, which invokes 'notrace'.
+
+This problem can be worked around by adding `#include "kpatch-syscall.h"` and
+replacing the use of the `SYSCALL_DEFINE1` (or similar) macro with the
+`KPATCH_` prefixed version.
