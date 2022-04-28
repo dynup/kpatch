@@ -206,21 +206,6 @@ rhel_kernel_version_gte() {
 }
 
 # klp.arch relocations were supported prior to v5.8
-# and prior to 4.18.0-240.el8
-use_klp_arch()
-{
-	if kernel_is_rhel; then
-		! rhel_kernel_version_gte 4.18.0-240.el8
-	else
-		! kernel_version_gte 5.8.0
-	fi
-}
-
-rhel_kernel_version_gte() {
-        [  "${ARCHVERSION}" = "$(echo -e "${ARCHVERSION}\\n$1" | sort -rV | head -n1)" ]
-}
-
-# klp.arch relocations were supported prior to v5.8
 # and prior to 4.18.0-284.el8
 use_klp_arch()
 {
