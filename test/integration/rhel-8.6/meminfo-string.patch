@@ -1,0 +1,12 @@
+diff -Nupr src.orig/fs/proc/meminfo.c src/fs/proc/meminfo.c
+--- src.orig/fs/proc/meminfo.c	2022-04-29 16:08:21.409780550 -0400
++++ src/fs/proc/meminfo.c	2022-04-29 16:09:03.079928840 -0400
+@@ -124,7 +124,7 @@ static int meminfo_proc_show(struct seq_
+ 	seq_printf(m, "VmallocTotal:   %8lu kB\n",
+ 		   (unsigned long)VMALLOC_TOTAL >> 10);
+ 	show_val_kb(m, "VmallocUsed:    ", 0ul);
+-	show_val_kb(m, "VmallocChunk:   ", 0ul);
++	show_val_kb(m, "VMALLOCCHUNK:   ", 0ul);
+ 	show_val_kb(m, "Percpu:         ", pcpu_nr_pages());
+ 
+ #ifdef CONFIG_MEMORY_FAILURE
