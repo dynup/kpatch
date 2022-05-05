@@ -20,7 +20,7 @@ Prerequisites
 -------------
 
 Before starting, see [Supported
-Architectures](README.md#supported-architectures) and check if your device's
+Architectures](../README.md#supported-architectures) and check if your device's
 architecture is supported.
 
 ### Fedora, RHEL, CentOS
