@@ -152,6 +152,9 @@ struct rela *find_rela_by_offset(struct section *relasec, unsigned int offset);
 
 unsigned int absolute_rela_type(struct kpatch_elf *kelf);
 int offset_of_string(struct list_head *list, char *name);
+long rela_target_offset(struct kpatch_elf *kelf, struct section *relasec,
+			struct rela *rela);
+unsigned int insn_length(struct kpatch_elf *kelf, void *addr);
 
 #ifndef R_PPC64_ENTRY
 #define R_PPC64_ENTRY   118

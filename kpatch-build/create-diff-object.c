@@ -48,7 +48,6 @@
 
 #include "list.h"
 #include "lookup.h"
-#include "asm/insn.h"
 #include "kpatch-patch.h"
 #include "kpatch-elf.h"
 #include "kpatch-intermediate.h"
@@ -575,39 +574,6 @@ static void kpatch_compare_correlated_section(struct section *sec)
 out:
 	if (sec->status == CHANGED)
 		log_debug("section %s has changed\n", sec->name);
-}
-
-static unsigned int insn_length(struct kpatch_elf *kelf, void *addr)
-{
-	struct insn decoded_insn;
-	char *insn = addr;
-
-	switch(kelf->arch) {
-
-	case X86_64:
-		insn_init(&decoded_insn, addr, 1);
-		insn_get_length(&decoded_insn);
-		return decoded_insn.length;
-
-	case PPC64:
-		return 4;
-
-	case S390:
-		switch(insn[0] >> 6) {
-		case 0:
-			return 2;
-		case 1:
-		case 2:
-			return 4;
-		case 3:
-			return 6;
-		}
-
-	default:
-		ERROR("unsupported arch");
-	}
-
-	return 0;
 }
 
 /*
@@ -1477,33 +1443,6 @@ static void kpatch_compare_correlated_elements(struct kpatch_elf *kelf)
 	kpatch_compare_symbols(&kelf->symbols);
 }
 
-static void rela_insn(const struct section *sec, const struct rela *rela,
-		      struct insn *insn)
-{
-	unsigned long insn_addr, start, end, rela_addr;
-
-	start = (unsigned long)sec->data->d_buf;
-	end = start + sec->sh.sh_size;
-
-	if (end <= start)
-		ERROR("bad section size");
-
-	rela_addr = start + rela->offset;
-	for (insn_addr = start; insn_addr < end; insn_addr += insn->length) {
-		insn_init(insn, (void *)insn_addr, 1);
-		insn_get_length(insn);
-		if (!insn->length)
-			ERROR("can't decode instruction in section %s at offset 0x%lx",
-			      sec->name, insn_addr);
-		if (rela_addr >= insn_addr &&
-		    rela_addr < insn_addr + insn->length)
-			return;
-	}
-
-	ERROR("can't find instruction for rela at %s+0x%x",
-	      sec->name, rela->offset);
-}
-
 static bool is_callback_section(struct section *sec) {
 
 	static char *callback_sections[] = {
@@ -1538,13 +1477,12 @@ static void kpatch_replace_sections_syms(struct kpatch_elf *kelf)
 	struct section *relasec;
 	struct rela *rela;
 	struct symbol *sym;
-	unsigned int add_off;
+	long target_off;
 
 	log_debug("\n");
 
 	list_for_each_entry(relasec, &kelf->sections, list) {
-		if (!is_rela_section(relasec) ||
-		    is_debug_section(relasec))
+		if (!is_rela_section(relasec) || is_debug_section(relasec))
 			continue;
 
 		list_for_each_entry(rela, &relasec->relas, list) {
@@ -1573,29 +1511,7 @@ static void kpatch_replace_sections_syms(struct kpatch_elf *kelf)
 				continue;
 			}
 
-			switch(kelf->arch) {
-			case PPC64:
-				add_off = 0;
-				break;
-			case X86_64:
-				if (!is_text_section(relasec->base) ||
-				    rela->type == R_X86_64_64 ||
-				    rela->type == R_X86_64_32S)
-					add_off = 0;
-				else if (rela->type == R_X86_64_PC32 ||
-					 rela->type == R_X86_64_PLT32 ||
-					 rela->type == R_X86_64_NONE) {
-					struct insn insn;
-					rela_insn(relasec->base, rela, &insn);
-					add_off = (unsigned int)((long)insn.next_byte -
-						  (long)relasec->base->data->d_buf -
-						  rela->offset);
-				} else
-					ERROR("unhandled rela type %d", rela->type);
-				break;
-			default:
-				ERROR("unsupported arch");
-			}
+			target_off = rela_target_offset(kelf, relasec, rela);
 
 			/*
 			 * Attempt to replace references to unbundled sections
@@ -1648,8 +1564,7 @@ static void kpatch_replace_sections_syms(struct kpatch_elf *kelf)
 					 *    be the same as &var2.
 					 */
 
-				} else if (rela->addend + add_off < start ||
-					   rela->addend + add_off >= end)
+				} else if (target_off < start || target_off >= end)
 					continue;
 
 				log_debug("%s: replacing %s+%ld reference with %s+%ld\n",

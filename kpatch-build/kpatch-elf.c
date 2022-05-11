@@ -31,6 +31,7 @@
 #include <sys/types.h>
 #include <sys/stat.h>
 
+#include "asm/insn.h"
 #include "kpatch-elf.h"
 
 /*******************
@@ -162,6 +163,103 @@ int offset_of_string(struct list_head *list, char *name)
 	ALLOC_LINK(string, list);
 	string->name = name;
 	return index;
+}
+
+static void rela_insn(const struct section *sec, const struct rela *rela,
+		      struct insn *insn)
+{
+	unsigned long insn_addr, start, end, rela_addr;
+
+	start = (unsigned long)sec->data->d_buf;
+	end = start + sec->sh.sh_size;
+
+	if (end <= start)
+		ERROR("bad section size");
+
+	rela_addr = start + rela->offset;
+	for (insn_addr = start; insn_addr < end; insn_addr += insn->length) {
+		insn_init(insn, (void *)insn_addr, 1);
+		insn_get_length(insn);
+		if (!insn->length)
+			ERROR("can't decode instruction in section %s at offset 0x%lx",
+			      sec->name, insn_addr);
+		if (rela_addr >= insn_addr &&
+		    rela_addr < insn_addr + insn->length)
+			return;
+	}
+
+	ERROR("can't find instruction for rela at %s+0x%x",
+	      sec->name, rela->offset);
+}
+
+/*
+ * Return the addend, adjusted for any PC-relative relocation trickery, to
+ * point to the relevant symbol offset.
+ */
+long rela_target_offset(struct kpatch_elf *kelf, struct section *relasec,
+			struct rela *rela)
+{
+	long add_off;
+	struct section *sec = relasec->base;
+
+	switch(kelf->arch) {
+	case PPC64:
+		add_off = 0;
+		break;
+	case X86_64:
+		if (!is_text_section(sec) ||
+		    rela->type == R_X86_64_64 ||
+		    rela->type == R_X86_64_32S)
+			add_off = 0;
+		else if (rela->type == R_X86_64_PC32 ||
+			 rela->type == R_X86_64_PLT32 ||
+			 rela->type == R_X86_64_NONE) {
+			struct insn insn;
+			rela_insn(sec, rela, &insn);
+			add_off = (long)insn.next_byte -
+				  (long)sec->data->d_buf -
+				  rela->offset;
+		} else
+			ERROR("unhandled rela type %d", rela->type);
+		break;
+	default:
+		ERROR("unsupported arch\n");
+	}
+
+	return rela->addend + add_off;
+}
+
+unsigned int insn_length(struct kpatch_elf *kelf, void *addr)
+{
+	struct insn decoded_insn;
+	char *insn = addr;
+
+	switch(kelf->arch) {
+
+	case X86_64:
+		insn_init(&decoded_insn, addr, 1);
+		insn_get_length(&decoded_insn);
+		return decoded_insn.length;
+
+	case PPC64:
+		return 4;
+
+	case S390:
+		switch(insn[0] >> 6) {
+		case 0:
+			return 2;
+		case 1:
+		case 2:
+			return 4;
+		case 3:
+			return 6;
+		}
+
+	default:
+		ERROR("unsupported arch");
+	}
+
+	return 0;
 }
 
 static void kpatch_create_rela_list(struct kpatch_elf *kelf,

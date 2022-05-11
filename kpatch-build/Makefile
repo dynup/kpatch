@@ -31,8 +31,8 @@ all: $(TARGETS)
 -include $(SOURCES:.c=.d)
 
 create-diff-object: create-diff-object.o kpatch-elf.o lookup.o $(INSN)
-create-klp-module: create-klp-module.o kpatch-elf.o
-create-kpatch-module: create-kpatch-module.o kpatch-elf.o
+create-klp-module: create-klp-module.o kpatch-elf.o $(INSN)
+create-kpatch-module: create-kpatch-module.o kpatch-elf.o $(INSN)
 
 $(PLUGIN): gcc-plugins/ppc64le-plugin.c
 	g++ $(PLUGIN_CFLAGS) $< -o $@
