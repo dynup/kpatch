@@ -305,7 +305,9 @@ static void kpatch_create_rela_list(struct kpatch_elf *kelf,
 			ERROR("could not find rela entry symbol\n");
 		if (rela->sym->sec &&
 		    (rela->sym->sec->sh.sh_flags & SHF_STRINGS)) {
-			rela->string = rela->sym->sec->data->d_buf + rela->addend;
+			rela->string = rela->sym->sec->data->d_buf +
+				       rela->sym->sym.st_value +
+				       rela_target_offset(kelf, relasec, rela);
 			if (!rela->string)
 				ERROR("could not lookup rela string for %s+%ld",
 				      rela->sym->name, rela->addend);
@@ -467,16 +469,6 @@ struct kpatch_elf *kpatch_elf_open(const char *name)
 	/* read and store section, symbol entries from file */
 	kelf->elf = elf;
 	kelf->fd = fd;
-	kpatch_create_section_list(kelf);
-	kpatch_create_symbol_list(kelf);
-
-	/* for each rela section, read and store the rela entries */
-	list_for_each_entry(relasec, &kelf->sections, list) {
-		if (!is_rela_section(relasec))
-			continue;
-		INIT_LIST_HEAD(&relasec->relas);
-		kpatch_create_rela_list(kelf, relasec);
-	}
 
 	if (!gelf_getehdr(kelf->elf, &ehdr))
 		ERROR("gelf_getehdr");
@@ -490,6 +482,18 @@ struct kpatch_elf *kpatch_elf_open(const char *name)
 	default:
 		ERROR("Unsupported target architecture");
 	}
+
+	kpatch_create_section_list(kelf);
+	kpatch_create_symbol_list(kelf);
+
+	/* for each rela section, read and store the rela entries */
+	list_for_each_entry(relasec, &kelf->sections, list) {
+		if (!is_rela_section(relasec))
+			continue;
+		INIT_LIST_HEAD(&relasec->relas);
+		kpatch_create_rela_list(kelf, relasec);
+	}
+
 	return kelf;
 }
 
