@@ -1527,7 +1527,8 @@ static void kpatch_replace_sections_syms(struct kpatch_elf *kelf)
 				start = sym->sym.st_value;
 				end = sym->sym.st_value + sym->sym.st_size;
 
-				if (!is_text_section(sym->sec) &&
+				if (is_text_section(relasec->base) &&
+				    !is_text_section(sym->sec) &&
 				    rela->type == R_X86_64_32S &&
 				    rela->addend == (long)sym->sec->sh.sh_size &&
 				    end == (long)sym->sec->sh.sh_size) {
