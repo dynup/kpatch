@@ -160,9 +160,6 @@ int offset_of_string(struct list_head *list, char *name);
 /*************
  * Functions
  * **********/
-void kpatch_create_rela_list(struct kpatch_elf *kelf, struct section *sec);
-void kpatch_create_section_list(struct kpatch_elf *kelf);
-void kpatch_create_symbol_list(struct kpatch_elf *kelf);
 struct kpatch_elf *kpatch_elf_open(const char *name);
 void kpatch_dump_kelf(struct kpatch_elf *kelf);
 

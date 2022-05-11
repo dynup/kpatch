@@ -164,7 +164,7 @@ int offset_of_string(struct list_head *list, char *name)
 	return index;
 }
 
-void kpatch_create_rela_list(struct kpatch_elf *kelf, struct section *sec)
+static void kpatch_create_rela_list(struct kpatch_elf *kelf, struct section *sec)
 {
 	int index = 0, skip = 0;
 	struct rela *rela;
@@ -223,7 +223,7 @@ void kpatch_create_rela_list(struct kpatch_elf *kelf, struct section *sec)
 	}
 }
 
-void kpatch_create_section_list(struct kpatch_elf *kelf)
+static void kpatch_create_section_list(struct kpatch_elf *kelf)
 {
 	Elf_Scn *scn = NULL;
 	struct section *sec;
@@ -277,7 +277,7 @@ void kpatch_create_section_list(struct kpatch_elf *kelf)
 		ERROR("expected NULL");
 }
 
-void kpatch_create_symbol_list(struct kpatch_elf *kelf)
+static void kpatch_create_symbol_list(struct kpatch_elf *kelf)
 {
 	struct section *symtab;
 	struct symbol *sym;
