@@ -1575,17 +1575,18 @@ static void kpatch_replace_sections_syms(struct kpatch_elf *kelf)
 				add_off = 0;
 				break;
 			case X86_64:
-				if (rela->type == R_X86_64_PC32 ||
-				    rela->type == R_X86_64_PLT32) {
+				if (!is_text_section(relasec->base) ||
+				    rela->type == R_X86_64_64 ||
+				    rela->type == R_X86_64_32S)
+					add_off = 0;
+				else if (rela->type == R_X86_64_PC32 ||
+					 rela->type == R_X86_64_PLT32) {
 					struct insn insn;
 					rela_insn(relasec, rela, &insn);
 					add_off = (unsigned int)((long)insn.next_byte -
 						  (long)relasec->base->data->d_buf -
 						  rela->offset);
-				} else if (rela->type == R_X86_64_64 ||
-					   rela->type == R_X86_64_32S)
-					add_off = 0;
-				else
+				} else
 					continue;
 				break;
 			default:
