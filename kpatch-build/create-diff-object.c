@@ -1477,13 +1477,13 @@ static void kpatch_compare_correlated_elements(struct kpatch_elf *kelf)
 	kpatch_compare_symbols(&kelf->symbols);
 }
 
-static void rela_insn(const struct section *relasec, const struct rela *rela,
+static void rela_insn(const struct section *sec, const struct rela *rela,
 		      struct insn *insn)
 {
 	unsigned long insn_addr, start, end, rela_addr;
 
-	start = (unsigned long)relasec->base->data->d_buf;
-	end = start + relasec->base->sh.sh_size;
+	start = (unsigned long)sec->data->d_buf;
+	end = start + sec->sh.sh_size;
 
 	if (end <= start)
 		ERROR("bad section size");
@@ -1494,7 +1494,7 @@ static void rela_insn(const struct section *relasec, const struct rela *rela,
 		insn_get_length(insn);
 		if (!insn->length)
 			ERROR("can't decode instruction in section %s at offset 0x%lx",
-			      relasec->base->name, insn_addr);
+			      sec->name, insn_addr);
 		if (rela_addr >= insn_addr &&
 		    rela_addr < insn_addr + insn->length)
 			return;
@@ -1583,7 +1583,7 @@ static void kpatch_replace_sections_syms(struct kpatch_elf *kelf)
 					 rela->type == R_X86_64_PLT32 ||
 					 rela->type == R_X86_64_NONE) {
 					struct insn insn;
-					rela_insn(relasec, rela, &insn);
+					rela_insn(relasec->base, rela, &insn);
 					add_off = (unsigned int)((long)insn.next_byte -
 						  (long)relasec->base->data->d_buf -
 						  rela->offset);
