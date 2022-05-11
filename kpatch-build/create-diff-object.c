@@ -1491,6 +1491,17 @@ static void kpatch_replace_sections_syms(struct kpatch_elf *kelf)
 				continue;
 
 			/*
+			 * These sections don't have symbols associated with
+			 * them:
+			 */
+			if (!strcmp(rela->sym->name, ".toc") ||
+			    !strcmp(rela->sym->name, ".fixup") ||
+			    !strcmp(rela->sym->name, ".altinstr_replacement") ||
+			    !strcmp(rela->sym->name, ".altinstr_aux") ||
+			    !strcmp(rela->sym->name, ".text..refcount"))
+				continue;
+
+			/*
 			 * Replace references to bundled sections with their
 			 * symbols.
 			 */
