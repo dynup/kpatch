@@ -1564,6 +1564,12 @@ static void kpatch_replace_sections_syms(struct kpatch_elf *kelf)
 					 *    &(var1+sizeof(var1)) will always
 					 *    be the same as &var2.
 					 */
+				} else if (target_off == start && target_off == end) {
+
+					/*
+					 * Allow replacement for references to
+					 * empty symbols.
+					 */
 
 				} else if (target_off < start || target_off >= end)
 					continue;
