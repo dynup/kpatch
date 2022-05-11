@@ -302,6 +302,12 @@ static bool is_dynamic_debug_symbol(struct symbol *sym)
 	return false;
 }
 
+static bool is_string_literal_section(struct section *sec)
+{
+	return !strncmp(sec->name, ".rodata.", 8) &&
+	       strstr(sec->name, ".str1.");
+}
+
 /*
  * This function detects whether the given symbol is a "special" static local
  * variable (for lack of a better term).
@@ -1478,6 +1484,7 @@ static void kpatch_replace_sections_syms(struct kpatch_elf *kelf)
 	struct rela *rela;
 	struct symbol *sym;
 	long target_off;
+	bool found = false;
 
 	log_debug("\n");
 
@@ -1589,10 +1596,17 @@ static void kpatch_replace_sections_syms(struct kpatch_elf *kelf)
 					  relasec->name,
 					  rela->sym->name, rela->addend,
 					  sym->name, rela->addend - start);
+				found = true;
 
 				rela->sym = sym;
 				rela->addend -= start;
 				break;
+			}
+
+			if (!found && !is_string_literal_section(rela->sym->sec) &&
+			    strncmp(rela->sym->name, ".rodata", 7)) {
+				ERROR("%s+0x%x: can't find replacement symbol for %s+%ld reference",
+				      relasec->base->name, rela->offset, rela->sym->name, rela->addend);
 			}
 		}
 	}
@@ -1709,12 +1723,6 @@ static void kpatch_include_symbol(struct symbol *sym)
 	 */
 	if (sym->sec && (sym->type == STT_SECTION || sym->status != SAME))
 		kpatch_include_section(sym->sec);
-}
-
-static bool is_string_literal_section(struct section *sec)
-{
-	return !strncmp(sec->name, ".rodata.", 8) &&
-	       strstr(sec->name, ".str1.");
 }
 
 static void kpatch_include_standard_elements(struct kpatch_elf *kelf)
