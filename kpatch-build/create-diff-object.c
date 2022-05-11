@@ -1588,7 +1588,7 @@ static void kpatch_replace_sections_syms(struct kpatch_elf *kelf)
 						  (long)relasec->base->data->d_buf -
 						  rela->offset);
 				} else
-					continue;
+					ERROR("unhandled rela type %d", rela->type);
 				break;
 			default:
 				ERROR("unsupported arch");
