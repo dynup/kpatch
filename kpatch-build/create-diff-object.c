@@ -506,7 +506,7 @@ static bool rela_equal(struct rela *rela1, struct rela *rela2)
 	return !kpatch_mangled_strcmp(rela_toc1->sym->name, rela_toc2->sym->name);
 }
 
-static void kpatch_compare_correlated_rela_section(struct section *sec)
+static void kpatch_compare_correlated_rela_section(struct section *relasec)
 {
 	struct rela *rela1, *rela2 = NULL;
 
@@ -514,22 +514,22 @@ static void kpatch_compare_correlated_rela_section(struct section *sec)
 	 * On ppc64le, don't compare the .rela.toc section.  The .toc and
 	 * .rela.toc sections are included as standard elements.
 	 */
-	if (!strcmp(sec->name, ".rela.toc")) {
-		sec->status = SAME;
+	if (!strcmp(relasec->name, ".rela.toc")) {
+		relasec->status = SAME;
 		return;
 	}
 
-	rela2 = list_entry(sec->twin->relas.next, struct rela, list);
-	list_for_each_entry(rela1, &sec->relas, list) {
+	rela2 = list_entry(relasec->twin->relas.next, struct rela, list);
+	list_for_each_entry(rela1, &relasec->relas, list) {
 		if (rela_equal(rela1, rela2)) {
 			rela2 = list_entry(rela2->list.next, struct rela, list);
 			continue;
 		}
-		sec->status = CHANGED;
+		relasec->status = CHANGED;
 		return;
 	}
 
-	sec->status = SAME;
+	relasec->status = SAME;
 }
 
 static void kpatch_compare_correlated_nonrela_section(struct section *sec)
@@ -1138,13 +1138,13 @@ static char *kpatch_section_function_name(struct section *sec)
 	return sec->sym ? sec->sym->name : sec->name;
 }
 
-static struct symbol *kpatch_find_uncorrelated_rela(struct section *rela_sec,
+static struct symbol *kpatch_find_uncorrelated_rela(struct section *relasec,
 						    struct symbol *sym)
 {
 	struct rela *rela, *rela_toc;
 
 	/* find the patched object's corresponding variable */
-	list_for_each_entry(rela, &rela_sec->relas, list) {
+	list_for_each_entry(rela, &relasec->relas, list) {
 		struct symbol *patched_sym;
 
 		rela_toc = toc_rela(rela);
@@ -1198,34 +1198,34 @@ static struct symbol *kpatch_find_static_twin_in_children(struct symbol *parent,
  * in the base object, find a corresponding usage of a similarly named symbol
  * in the patched object.
  */
-static struct symbol *kpatch_find_static_twin(struct section *sec,
+static struct symbol *kpatch_find_static_twin(struct section *relasec,
 					      struct symbol *sym)
 {
 	struct symbol *res;
 
-	if (!sec->twin && sec->base->sym) {
+	if (!relasec->twin && relasec->base->sym) {
 		struct symbol *parent = NULL;
 
 		/*
 		 * The static twin might have been in a .part. symbol in the
 		 * original object that got removed in the patched object.
 		 */
-		parent = kpatch_get_correlated_parent(sec->base->sym);
+		parent = kpatch_get_correlated_parent(relasec->base->sym);
 		if (parent)
-			sec = parent->sec->rela;
+			relasec = parent->sec->rela;
 
 	}
 
-	if (!sec->twin)
+	if (!relasec->twin)
 		return NULL;
 
-	res = kpatch_find_uncorrelated_rela(sec->twin, sym);
+	res = kpatch_find_uncorrelated_rela(relasec->twin, sym);
 	if (res != NULL)
 		return res;
 
 	/* Look if reference might have moved to child functions' sections */
-	if (sec->twin->base->sym)
-		return kpatch_find_static_twin_in_children(sec->twin->base->sym,
+	if (relasec->twin->base->sym)
+		return kpatch_find_static_twin_in_children(relasec->twin->base->sym,
 							   sym);
 
 	return NULL;
@@ -1248,18 +1248,19 @@ static bool kpatch_is_normal_static_local(struct symbol *sym)
 	return true;
 }
 
-static struct rela *kpatch_find_static_twin_ref(struct section *rela_sec, struct symbol *sym)
+static struct rela *kpatch_find_static_twin_ref(struct section *relasec,
+						struct symbol *sym)
 {
 	struct rela *rela;
 
-	list_for_each_entry(rela, &rela_sec->relas, list) {
+	list_for_each_entry(rela, &relasec->relas, list) {
 		if (rela->sym == sym->twin)
 			return rela;
 	}
 
 	/* Reference to static variable might have moved to child function section */
-	if (rela_sec->base->sym) {
-		struct symbol *parent = rela_sec->base->sym;
+	if (relasec->base->sym) {
+		struct symbol *parent = relasec->base->sym;
 		struct symbol *child;
 
 		list_for_each_entry(child, &parent->children, subfunction_node) {
@@ -1305,7 +1306,7 @@ static void kpatch_correlate_static_local_variables(struct kpatch_elf *orig,
 						    struct kpatch_elf *patched)
 {
 	struct symbol *sym, *patched_sym;
-	struct section *sec;
+	struct section *relasec;
 	struct rela *rela;
 	int bundled, patched_bundled;
 
@@ -1338,14 +1339,14 @@ static void kpatch_correlate_static_local_variables(struct kpatch_elf *orig,
 	 * Do the correlations: for each section reference to a static local,
 	 * look for a corresponding reference in the section's twin.
 	 */
-	list_for_each_entry(sec, &orig->sections, list) {
+	list_for_each_entry(relasec, &orig->sections, list) {
 
-		if (!is_rela_section(sec) ||
-		    is_debug_section(sec) ||
-		    !strcmp(sec->name, ".rela.toc"))
+		if (!is_rela_section(relasec) ||
+		    is_debug_section(relasec) ||
+		    !strcmp(relasec->name, ".rela.toc"))
 			continue;
 
-		list_for_each_entry(rela, &sec->relas, list) {
+		list_for_each_entry(rela, &relasec->relas, list) {
 
 			if (!toc_rela(rela))
 				continue; /* skip toc constants */
@@ -1358,7 +1359,7 @@ static void kpatch_correlate_static_local_variables(struct kpatch_elf *orig,
 				continue;
 
 			bundled = sym == sym->sec->sym;
-			if (bundled && sym->sec == sec->base) {
+			if (bundled && sym->sec == relasec->base) {
 				/*
 				 * A rare case where a static local data
 				 * structure references itself.  There's no
@@ -1371,11 +1372,11 @@ static void kpatch_correlate_static_local_variables(struct kpatch_elf *orig,
 				continue;
 			}
 
-			patched_sym = kpatch_find_static_twin(sec, sym);
+			patched_sym = kpatch_find_static_twin(relasec, sym);
 			if (!patched_sym)
 				DIFF_FATAL("reference to static local variable %s in %s was removed",
 					   sym->name,
-					   kpatch_section_function_name(sec));
+					   kpatch_section_function_name(relasec));
 
 			patched_bundled = patched_sym == patched_sym->sec->sym;
 			if (bundled != patched_bundled)
@@ -1401,23 +1402,23 @@ static void kpatch_correlate_static_local_variables(struct kpatch_elf *orig,
 	 *    corresponding reference in the patched object (because a static
 	 *    local can be referenced by more than one section).
 	 */
-	list_for_each_entry(sec, &orig->sections, list) {
+	list_for_each_entry(relasec, &orig->sections, list) {
 
-		if (!is_rela_section(sec) ||
-		    is_debug_section(sec))
+		if (!is_rela_section(relasec) ||
+		    is_debug_section(relasec))
 			continue;
 
-		list_for_each_entry(rela, &sec->relas, list) {
-			struct section *target_sec = sec;
+		list_for_each_entry(rela, &relasec->relas, list) {
+			struct section *target_sec = relasec;
 
 			sym = rela->sym;
 			if (!kpatch_is_normal_static_local(sym))
 				continue;
 
-			if (!sec->twin && sec->base->sym) {
+			if (!relasec->twin && relasec->base->sym) {
 				struct symbol *parent = NULL;
 
-				parent = kpatch_get_correlated_parent(sec->base->sym);
+				parent = kpatch_get_correlated_parent(relasec->base->sym);
 				if (parent)
 					target_sec = parent->sec->rela;
 			}
@@ -1439,13 +1440,13 @@ static void kpatch_correlate_static_local_variables(struct kpatch_elf *orig,
 	 * static locals to see if we need to print any warnings about new
 	 * variables.
 	 */
-	list_for_each_entry(sec, &patched->sections, list) {
+	list_for_each_entry(relasec, &patched->sections, list) {
 
-		if (!is_rela_section(sec) ||
-		    is_debug_section(sec))
+		if (!is_rela_section(relasec) ||
+		    is_debug_section(relasec))
 			continue;
 
-		list_for_each_entry(rela, &sec->relas, list) {
+		list_for_each_entry(rela, &relasec->relas, list) {
 
 			sym = rela->sym;
 			if (!kpatch_is_normal_static_local(sym))
@@ -1456,7 +1457,7 @@ static void kpatch_correlate_static_local_variables(struct kpatch_elf *orig,
 
 			log_normal("WARNING: unable to correlate static local variable %s used by %s, assuming variable is new\n",
 				   sym->name,
-				   kpatch_section_function_name(sec));
+				   kpatch_section_function_name(relasec));
 			return;
 		}
 	}
@@ -1476,13 +1477,13 @@ static void kpatch_compare_correlated_elements(struct kpatch_elf *kelf)
 	kpatch_compare_symbols(&kelf->symbols);
 }
 
-static void rela_insn(const struct section *sec, const struct rela *rela,
+static void rela_insn(const struct section *relasec, const struct rela *rela,
 		      struct insn *insn)
 {
 	unsigned long insn_addr, start, end, rela_addr;
 
-	start = (unsigned long)sec->base->data->d_buf;
-	end = start + sec->base->sh.sh_size;
+	start = (unsigned long)relasec->base->data->d_buf;
+	end = start + relasec->base->sh.sh_size;
 
 	if (end <= start)
 		ERROR("bad section size");
@@ -1493,7 +1494,7 @@ static void rela_insn(const struct section *sec, const struct rela *rela,
 		insn_get_length(insn);
 		if (!insn->length)
 			ERROR("can't decode instruction in section %s at offset 0x%lx",
-			      sec->base->name, insn_addr);
+			      relasec->base->name, insn_addr);
 		if (rela_addr >= insn_addr &&
 		    rela_addr < insn_addr + insn->length)
 			return;
@@ -1531,19 +1532,19 @@ static bool is_callback_section(struct section *sec) {
  */
 static void kpatch_replace_sections_syms(struct kpatch_elf *kelf)
 {
-	struct section *sec;
+	struct section *relasec;
 	struct rela *rela;
 	struct symbol *sym;
 	unsigned int add_off;
 
 	log_debug("\n");
 
-	list_for_each_entry(sec, &kelf->sections, list) {
-		if (!is_rela_section(sec) ||
-		    is_debug_section(sec))
+	list_for_each_entry(relasec, &kelf->sections, list) {
+		if (!is_rela_section(relasec) ||
+		    is_debug_section(relasec))
 			continue;
 
-		list_for_each_entry(rela, &sec->relas, list) {
+		list_for_each_entry(rela, &relasec->relas, list) {
 
 			if (rela->sym->type != STT_SECTION || !rela->sym->sec)
 				continue;
@@ -1577,9 +1578,9 @@ static void kpatch_replace_sections_syms(struct kpatch_elf *kelf)
 				if (rela->type == R_X86_64_PC32 ||
 				    rela->type == R_X86_64_PLT32) {
 					struct insn insn;
-					rela_insn(sec, rela, &insn);
+					rela_insn(relasec, rela, &insn);
 					add_off = (unsigned int)((long)insn.next_byte -
-						  (long)sec->base->data->d_buf -
+						  (long)relasec->base->data->d_buf -
 						  rela->offset);
 				} else if (rela->type == R_X86_64_64 ||
 					   rela->type == R_X86_64_32S)
@@ -1647,7 +1648,7 @@ static void kpatch_replace_sections_syms(struct kpatch_elf *kelf)
 					continue;
 
 				log_debug("%s: replacing %s+%ld reference with %s+%ld\n",
-					  sec->name,
+					  relasec->name,
 					  rela->sym->name, rela->addend,
 					  sym->name, rela->addend - start);
 
@@ -2164,17 +2165,17 @@ static int fixup_barrier_nospec_group_size(struct kpatch_elf *kelf, int offset)
  */
 static int fixup_group_size(struct kpatch_elf *kelf, int offset)
 {
-	struct section *sec;
+	struct section *relasec;
 	struct rela *rela;
 	int found;
 
-	sec = find_section_by_name(&kelf->sections, ".rela__ex_table");
-	if (!sec)
+	relasec = find_section_by_name(&kelf->sections, ".rela__ex_table");
+	if (!relasec)
 		ERROR("missing .rela__ex_table section");
 
 	/* find beginning of this group */
 	found = 0;
-	list_for_each_entry(rela, &sec->relas, list) {
+	list_for_each_entry(rela, &relasec->relas, list) {
 		if (!strcmp(rela->sym->name, ".fixup") &&
 		    rela->addend == offset) {
 				found = 1;
@@ -2187,7 +2188,7 @@ static int fixup_group_size(struct kpatch_elf *kelf, int offset)
 
 	/* find beginning of next group */
 	found = 0;
-	list_for_each_entry_continue(rela, &sec->relas, list) {
+	list_for_each_entry_continue(rela, &relasec->relas, list) {
 		if (!strcmp(rela->sym->name, ".fixup") &&
 		    rela->addend > offset) {
 			found = 1;
@@ -2287,7 +2288,7 @@ static struct special_section special_sections[] = {
 };
 
 static bool should_keep_jump_label(struct lookup_table *lookup,
-				   struct section *sec,
+				   struct section *relasec,
 				   unsigned int group_offset,
 				   unsigned int group_size,
 				   int *jump_labels_found)
@@ -2302,7 +2303,7 @@ static bool should_keep_jump_label(struct lookup_table *lookup,
 	 * struct.  It has three fields: code, target, and key.  Each field has
 	 * a relocation associated with it.
 	 */
-	list_for_each_entry(rela, &sec->relas, list) {
+	list_for_each_entry(rela, &relasec->relas, list) {
 		if (rela->offset >= group_offset &&
 		    rela->offset < group_offset + group_size) {
 			if (i == 0)
@@ -2389,29 +2390,29 @@ static bool should_keep_jump_label(struct lookup_table *lookup,
 }
 
 static bool should_keep_rela_group(struct lookup_table *lookup,
-				   struct section *sec, unsigned int offset,
+				   struct section *relasec, unsigned int offset,
 				   unsigned int size, int *jump_labels_found)
 {
 	struct rela *rela;
 	bool found = false;
 
 	/* check if any relas in the group reference any changed functions */
-	list_for_each_entry(rela, &sec->relas, list) {
+	list_for_each_entry(rela, &relasec->relas, list) {
 		if (rela->offset >= offset &&
 		    rela->offset < offset + size &&
 		    rela->sym->type == STT_FUNC &&
 		    rela->sym->sec->include) {
 			found = true;
 			log_debug("new/changed symbol %s found in special section %s\n",
-				  rela->sym->name, sec->name);
+				  rela->sym->name, relasec->name);
 		}
 	}
 
 	if (!found)
 		return false;
 
-	if (!strcmp(sec->name, ".rela__jump_table"))
-		return should_keep_jump_label(lookup, sec, offset, size,
+	if (!strcmp(relasec->name, ".rela__jump_table"))
+		return should_keep_jump_label(lookup, relasec, offset, size,
 					      jump_labels_found);
 
 	return true;
@@ -2428,13 +2429,13 @@ static void kpatch_update_ex_table_addend(struct kpatch_elf *kelf,
 					  int group_size)
 {
 	struct rela *rela;
-	struct section *sec;
+	struct section *relasec;
 
-	sec = find_section_by_name(&kelf->sections, ".rela__ex_table");
-	if (!sec)
+	relasec = find_section_by_name(&kelf->sections, ".rela__ex_table");
+	if (!relasec)
 		ERROR("missing .rela__ex_table section");
 
-	list_for_each_entry(rela, &sec->relas, list) {
+	list_for_each_entry(rela, &relasec->relas, list) {
 		if (!strcmp(rela->sym->name, ".fixup") &&
 		    rela->addend >= src_offset &&
 		    rela->addend < src_offset + group_size)
@@ -2445,7 +2446,7 @@ static void kpatch_update_ex_table_addend(struct kpatch_elf *kelf,
 static void kpatch_regenerate_special_section(struct kpatch_elf *kelf,
 					      struct lookup_table *lookup,
 					      struct special_section *special,
-					      struct section *sec)
+					      struct section *relasec)
 {
 	struct rela *rela, *safe;
 	char *src, *dest;
@@ -2454,15 +2455,15 @@ static void kpatch_regenerate_special_section(struct kpatch_elf *kelf,
 
 	LIST_HEAD(newrelas);
 
-	src = sec->base->data->d_buf;
+	src = relasec->base->data->d_buf;
 	/* alloc buffer for new base section */
-	dest = malloc(sec->base->sh.sh_size);
+	dest = malloc(relasec->base->sh.sh_size);
 	if (!dest)
 		ERROR("malloc");
 
 	/* Restore the stashed r_addend from kpatch_update_ex_table_addend. */
 	if (!strcmp(special->name, "__ex_table")) {
-		list_for_each_entry(rela, &sec->relas, list) {
+		list_for_each_entry(rela, &relasec->relas, list) {
 			if (!strcmp(rela->sym->name, ".fixup"))
 				rela->addend = rela->rela.r_addend;
 		}
@@ -2470,7 +2471,7 @@ static void kpatch_regenerate_special_section(struct kpatch_elf *kelf,
 
 	src_offset = 0;
 	dest_offset = 0;
-	for ( ; src_offset < sec->base->sh.sh_size; src_offset += group_size) {
+	for ( ; src_offset < relasec->base->sh.sh_size; src_offset += group_size) {
 
 		group_size = special->group_size(kelf, src_offset);
 
@@ -2482,10 +2483,10 @@ static void kpatch_regenerate_special_section(struct kpatch_elf *kelf,
 		 * contains the data but doesn't go past the end of the
 		 * section.
 		 */
-		if (src_offset + group_size > sec->base->sh.sh_size)
-			group_size = (unsigned int)(sec->base->sh.sh_size - src_offset);
+		if (src_offset + group_size > relasec->base->sh.sh_size)
+			group_size = (unsigned int)(relasec->base->sh.sh_size - src_offset);
 
-		if (!should_keep_rela_group(lookup, sec, src_offset, group_size,
+		if (!should_keep_rela_group(lookup, relasec, src_offset, group_size,
 					    &jump_labels_found))
 			continue;
 
@@ -2494,7 +2495,7 @@ static void kpatch_regenerate_special_section(struct kpatch_elf *kelf,
 		 * aren't sorted (e.g. .rela.fixup), so go through the entire
 		 * rela list each time.
 		 */
-		list_for_each_entry_safe(rela, safe, &sec->relas, list) {
+		list_for_each_entry_safe(rela, safe, &relasec->relas, list) {
 			if (rela->offset >= src_offset &&
 			    rela->offset < src_offset + group_size) {
 				/* copy rela entry */
@@ -2525,21 +2526,21 @@ static void kpatch_regenerate_special_section(struct kpatch_elf *kelf,
 
 	if (!dest_offset) {
 		/* no changed or global functions referenced */
-		sec->status = sec->base->status = SAME;
-		sec->include = sec->base->include = 0;
+		relasec->status = relasec->base->status = SAME;
+		relasec->include = relasec->base->include = 0;
 		free(dest);
 		return;
 	}
 
 	/* overwrite with new relas list */
-	list_replace(&newrelas, &sec->relas);
+	list_replace(&newrelas, &relasec->relas);
 
 	/* include both rela and base sections */
-	sec->include = 1;
-	sec->base->include = 1;
+	relasec->include = 1;
+	relasec->base->include = 1;
 	/* include secsym so .kpatch.arch relas can point to section symbols */
-	if (sec->base->secsym)
-		sec->base->secsym->include = 1;
+	if (relasec->base->secsym)
+		relasec->base->secsym->include = 1;
 
 	/*
 	 * Update text section data buf and size.
@@ -2547,8 +2548,8 @@ static void kpatch_regenerate_special_section(struct kpatch_elf *kelf,
 	 * The rela section's data buf and size will be regenerated in
 	 * kpatch_rebuild_rela_section_data().
 	 */
-	sec->base->data->d_buf = dest;
-	sec->base->data->d_size = dest_offset;
+	relasec->base->data->d_buf = dest;
+	relasec->base->data->d_size = dest_offset;
 }
 
 #define ORC_IP_PTR_SIZE 4
@@ -2645,18 +2646,18 @@ next:
 static void kpatch_check_relocations(struct kpatch_elf *kelf)
 {
 	struct rela *rela;
-	struct section *sec;
+	struct section *relasec;
 	Elf_Data *sdata;
 
-	list_for_each_entry(sec, &kelf->sections, list) {
-		if (!is_rela_section(sec))
+	list_for_each_entry(relasec, &kelf->sections, list) {
+		if (!is_rela_section(relasec))
 			continue;
-		list_for_each_entry(rela, &sec->relas, list) {
+		list_for_each_entry(rela, &relasec->relas, list) {
 			if (rela->sym->sec) {
 				sdata = rela->sym->sec->data;
 				if ((long)rela->sym->sym.st_value + rela->addend > (long)sdata->d_size) {
 					ERROR("out-of-range relocation %s+%lx in %s", rela->sym->name,
-							rela->addend, sec->name);
+							rela->addend, relasec->name);
 				}
 			}
 		}
@@ -3076,11 +3077,11 @@ static int function_ptr_rela(const struct rela *rela)
 }
 
 static bool need_dynrela(struct kpatch_elf *kelf, struct lookup_table *table,
-			 struct section *sec, const struct rela *rela)
+			 struct section *relasec, const struct rela *rela)
 {
 	struct lookup_result symbol;
 
-	if (is_debug_section(sec))
+	if (is_debug_section(relasec))
 		return false;
 
 	/*
@@ -3092,7 +3093,7 @@ static bool need_dynrela(struct kpatch_elf *kelf, struct lookup_table *table,
 		return false;
 
 	/* v5.13+ kernels use relative jump labels */
-	if (rela->type == R_PPC64_REL64 && strcmp(sec->name, ".rela__jump_table"))
+	if (rela->type == R_PPC64_REL64 && strcmp(relasec->name, ".rela__jump_table"))
 		return false;
 
 	/*
@@ -3249,7 +3250,7 @@ static void kpatch_create_intermediate_sections(struct kpatch_elf *kelf,
 						char *pmod_name)
 {
 	int nr, index;
-	struct section *sec, *ksym_sec, *krela_sec;
+	struct section *relasec, *ksym_sec, *krela_sec;
 	struct rela *rela, *rela2, *safe;
 	struct symbol *strsym, *ksym_sec_sym;
 	struct kpatch_symbol *ksyms;
@@ -3261,12 +3262,12 @@ static void kpatch_create_intermediate_sections(struct kpatch_elf *kelf,
 
 	/* count rela entries that need to be dynamic */
 	nr = 0;
-	list_for_each_entry(sec, &kelf->sections, list) {
-		if (!is_rela_section(sec))
+	list_for_each_entry(relasec, &kelf->sections, list) {
+		if (!is_rela_section(relasec))
 			continue;
-		if (!strcmp(sec->name, ".rela.kpatch.funcs"))
+		if (!strcmp(relasec->name, ".rela.kpatch.funcs"))
 			continue;
-		list_for_each_entry(rela, &sec->relas, list) {
+		list_for_each_entry(rela, &relasec->relas, list) {
 
 			/* upper bound on number of kpatch relas and symbols */
 			nr++;
@@ -3282,7 +3283,7 @@ static void kpatch_create_intermediate_sections(struct kpatch_elf *kelf,
 			 * internal symbol function pointer check which is done
 			 * via .toc indirection in need_dynrela().
 			 */
-			if (need_dynrela(kelf, table, sec, rela))
+			if (need_dynrela(kelf, table, relasec, rela))
 				toc_rela(rela)->need_dynrela = 1;
 		}
 	}
@@ -3310,12 +3311,12 @@ static void kpatch_create_intermediate_sections(struct kpatch_elf *kelf,
 
 	/* populate sections */
 	index = 0;
-	list_for_each_entry(sec, &kelf->sections, list) {
-		if (!is_rela_section(sec))
+	list_for_each_entry(relasec, &kelf->sections, list) {
+		if (!is_rela_section(relasec))
 			continue;
-		if (!strcmp(sec->name, ".rela.kpatch.funcs") ||
-		    !strcmp(sec->name, ".rela.kpatch.relocations") ||
-		    !strcmp(sec->name, ".rela.kpatch.symbols"))
+		if (!strcmp(relasec->name, ".rela.kpatch.funcs") ||
+		    !strcmp(relasec->name, ".rela.kpatch.relocations") ||
+		    !strcmp(relasec->name, ".rela.kpatch.symbols"))
 			continue;
 
 		special = false;
@@ -3323,11 +3324,11 @@ static void kpatch_create_intermediate_sections(struct kpatch_elf *kelf,
 			if ((s->arch & kelf->arch) == 0)
 				continue;
 
-			if (!strcmp(sec->base->name, s->name))
+			if (!strcmp(relasec->base->name, s->name))
 				special = true;
 		}
 
-		list_for_each_entry_safe(rela, safe, &sec->relas, list) {
+		list_for_each_entry_safe(rela, safe, &relasec->relas, list) {
 			if (!rela->need_dynrela) {
 				rela->sym->strip = SYMBOL_USED;
 				continue;
@@ -3348,7 +3349,7 @@ static void kpatch_create_intermediate_sections(struct kpatch_elf *kelf,
 			 */
 			if (!KLP_ARCH && !vmlinux && special)
 				ERROR("unsupported dynrela reference to symbol '%s' in module-specific special section '%s'",
-				      rela->sym->name, sec->base->name);
+				      rela->sym->name, relasec->base->name);
 
 			if (!lookup_symbol(table, rela->sym, &symbol))
 				ERROR("can't find symbol '%s' in symbol table",
@@ -3394,11 +3395,11 @@ static void kpatch_create_intermediate_sections(struct kpatch_elf *kelf,
 
 			/* add rela to fill in krelas[index].dest field */
 			ALLOC_LINK(rela2, &krela_sec->rela->relas);
-			if (sec->base->secsym)
-				rela2->sym = sec->base->secsym;
+			if (relasec->base->secsym)
+				rela2->sym = relasec->base->secsym;
 			else
 				ERROR("can't create dynrela for section %s (symbol %s): no bundled or section symbol",
-				      sec->name, rela->sym->name);
+				      relasec->name, rela->sym->name);
 
 			rela2->type = absolute_rela_type(kelf);
 			rela2->addend = rela->offset;
@@ -3833,7 +3834,7 @@ int main(int argc, char *argv[])
 	struct arguments arguments;
 	int num_changed, callbacks_exist, new_globals_exist;
 	struct lookup_table *lookup;
-	struct section *sec, *symtab;
+	struct section *relasec, *symtab;
 	char *orig_obj, *patched_obj, *parent_name;
 	char *parent_symtab, *mod_symvers, *patch_name, *output_obj;
 
@@ -3958,12 +3959,12 @@ int main(int argc, char *argv[])
 	if (!symtab)
 		ERROR("missing .symtab section");
 
-	list_for_each_entry(sec, &kelf_out->sections, list) {
-		if (!is_rela_section(sec))
+	list_for_each_entry(relasec, &kelf_out->sections, list) {
+		if (!is_rela_section(relasec))
 			continue;
-		sec->sh.sh_link = symtab->index;
-		sec->sh.sh_info = sec->base->index;
-		kpatch_rebuild_rela_section_data(sec);
+		relasec->sh.sh_link = symtab->index;
+		relasec->sh.sh_info = relasec->base->index;
+		kpatch_rebuild_rela_section_data(relasec);
 	}
 	kpatch_check_relocations(kelf_out);
 

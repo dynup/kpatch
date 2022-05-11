@@ -122,37 +122,37 @@ static struct section *find_or_add_klp_relasec(struct kpatch_elf *kelf,
 					       struct section *base,
 					       char *objname)
 {
-	struct section  *sec;
+	struct section  *relasec;
 	char buf[256];
 
 	/* .klp.rela.objname.secname */
 	snprintf(buf, 256, KLP_RELASEC_PREFIX "%s.%s", objname, base->name);
 
-	list_for_each_entry(sec, &kelf->sections, list) {
-		if (!strcmp(sec->name, buf))
-			return sec;
+	list_for_each_entry(relasec, &kelf->sections, list) {
+		if (!strcmp(relasec->name, buf))
+			return relasec;
 	}
 
-	ALLOC_LINK(sec, &kelf->sections);
-	sec->name = strdup(buf);
-	if (!sec->name)
+	ALLOC_LINK(relasec, &kelf->sections);
+	relasec->name = strdup(buf);
+	if (!relasec->name)
 		ERROR("strdup");
-	sec->base = base;
+	relasec->base = base;
 
-	INIT_LIST_HEAD(&sec->relas);
+	INIT_LIST_HEAD(&relasec->relas);
 
-	sec->data = malloc(sizeof(*sec->data));
-	if (!sec->data)
+	relasec->data = malloc(sizeof(*relasec->data));
+	if (!relasec->data)
 		ERROR("malloc");
-	sec->data->d_type = ELF_T_RELA;
+	relasec->data->d_type = ELF_T_RELA;
 
 	/* sh_info and sh_link are set when rebuilding rela sections */
-	sec->sh.sh_type = SHT_RELA;
-	sec->sh.sh_entsize = sizeof(GElf_Rela);
-	sec->sh.sh_addralign = 8;
-	sec->sh.sh_flags = SHF_RELA_LIVEPATCH | SHF_INFO_LINK | SHF_ALLOC;
+	relasec->sh.sh_type = SHT_RELA;
+	relasec->sh.sh_entsize = sizeof(GElf_Rela);
+	relasec->sh.sh_addralign = 8;
+	relasec->sh.sh_flags = SHF_RELA_LIVEPATCH | SHF_INFO_LINK | SHF_ALLOC;
 
-	return sec;
+	return relasec;
 }
 
 /*
@@ -429,7 +429,7 @@ static struct argp argp = { options, parse_opt, args_doc, 0 };
 int main(int argc, char *argv[])
 {
 	struct kpatch_elf *kelf;
-	struct section *symtab, *sec;
+	struct section *symtab, *relasec;
 	struct section *ksymsec, *krelasec, *strsec;
 	struct arguments arguments;
 	char *strings;
@@ -493,12 +493,12 @@ int main(int argc, char *argv[])
 	if (!symtab)
 		ERROR("missing .symtab section");
 
-	list_for_each_entry(sec, &kelf->sections, list) {
-		if (!is_rela_section(sec))
+	list_for_each_entry(relasec, &kelf->sections, list) {
+		if (!is_rela_section(relasec))
 			continue;
-		sec->sh.sh_link = symtab->index;
-		sec->sh.sh_info = sec->base->index;
-		kpatch_rebuild_rela_section_data(sec);
+		relasec->sh.sh_link = symtab->index;
+		relasec->sh.sh_info = relasec->base->index;
+		kpatch_rebuild_rela_section_data(relasec);
 	}
 
 	kpatch_create_shstrtab(kelf);

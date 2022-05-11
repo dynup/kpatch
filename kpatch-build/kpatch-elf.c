@@ -164,7 +164,8 @@ int offset_of_string(struct list_head *list, char *name)
 	return index;
 }
 
-static void kpatch_create_rela_list(struct kpatch_elf *kelf, struct section *sec)
+static void kpatch_create_rela_list(struct kpatch_elf *kelf,
+				    struct section *relasec)
 {
 	int index = 0, skip = 0;
 	struct rela *rela;
@@ -172,28 +173,28 @@ static void kpatch_create_rela_list(struct kpatch_elf *kelf, struct section *sec
 	unsigned long rela_nr;
 
 	/* find matching base (text/data) section */
-	sec->base = find_section_by_index(&kelf->sections, sec->sh.sh_info);
-	if (!sec->base)
-		ERROR("can't find base section for rela section %s", sec->name);
+	relasec->base = find_section_by_index(&kelf->sections, relasec->sh.sh_info);
+	if (!relasec->base)
+		ERROR("can't find base section for rela section %s", relasec->name);
 
 	/* create reverse link from base section to this rela section */
-	sec->base->rela = sec;
+	relasec->base->rela = relasec;
 
-	rela_nr = sec->sh.sh_size / sec->sh.sh_entsize;
+	rela_nr = relasec->sh.sh_size / relasec->sh.sh_entsize;
 
 	log_debug("\n=== rela list for %s (%ld entries) ===\n",
-		sec->base->name, rela_nr);
+		relasec->base->name, rela_nr);
 
-	if (is_debug_section(sec)) {
+	if (is_debug_section(relasec)) {
 		log_debug("skipping rela listing for .debug_* section\n");
 		skip = 1;
 	}
 
 	/* read and store the rela entries */
 	while (rela_nr--) {
-		ALLOC_LINK(rela, &sec->relas);
+		ALLOC_LINK(rela, &relasec->relas);
 
-		if (!gelf_getrela(sec->data, index, &rela->rela))
+		if (!gelf_getrela(relasec->data, index, &rela->rela))
 			ERROR("gelf_getrela");
 		index++;
 
@@ -346,7 +347,7 @@ struct kpatch_elf *kpatch_elf_open(const char *name)
 	Elf *elf;
 	int fd;
 	struct kpatch_elf *kelf;
-	struct section *sec;
+	struct section *relasec;
 	GElf_Ehdr ehdr;
 
 	fd = open(name, O_RDONLY);
@@ -372,11 +373,11 @@ struct kpatch_elf *kpatch_elf_open(const char *name)
 	kpatch_create_symbol_list(kelf);
 
 	/* for each rela section, read and store the rela entries */
-	list_for_each_entry(sec, &kelf->sections, list) {
-		if (!is_rela_section(sec))
+	list_for_each_entry(relasec, &kelf->sections, list) {
+		if (!is_rela_section(relasec))
 			continue;
-		INIT_LIST_HEAD(&sec->relas);
-		kpatch_create_rela_list(kelf, sec);
+		INIT_LIST_HEAD(&relasec->relas);
+		kpatch_create_rela_list(kelf, relasec);
 	}
 
 	if (!gelf_getehdr(kelf->elf, &ehdr))
