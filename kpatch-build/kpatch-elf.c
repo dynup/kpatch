@@ -53,18 +53,18 @@ char *status_str(enum status status)
 	return NULL;
 }
 
-int is_rela_section(struct section *sec)
+bool is_rela_section(struct section *sec)
 {
 	return (sec->sh.sh_type == SHT_RELA);
 }
 
-int is_text_section(struct section *sec)
+bool is_text_section(struct section *sec)
 {
 	return (sec->sh.sh_type == SHT_PROGBITS &&
 		(sec->sh.sh_flags & SHF_EXECINSTR));
 }
 
-int is_debug_section(struct section *sec)
+bool is_debug_section(struct section *sec)
 {
 	char *name;
 	if (is_rela_section(sec))
@@ -443,22 +443,22 @@ next:
 	}
 }
 
-int is_null_sym(struct symbol *sym)
+bool is_null_sym(struct symbol *sym)
 {
 	return !strlen(sym->name);
 }
 
-int is_file_sym(struct symbol *sym)
+bool is_file_sym(struct symbol *sym)
 {
 	return sym->type == STT_FILE;
 }
 
-int is_local_func_sym(struct symbol *sym)
+bool is_local_func_sym(struct symbol *sym)
 {
 	return sym->bind == STB_LOCAL && sym->type == STT_FUNC;
 }
 
-int is_local_sym(struct symbol *sym)
+bool is_local_sym(struct symbol *sym)
 {
 	return sym->bind == STB_LOCAL;
 }

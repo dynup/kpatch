@@ -129,9 +129,9 @@ struct kpatch_elf {
  * Helper functions
  ******************/
 char *status_str(enum status status);
-int is_rela_section(struct section *sec);
-int is_text_section(struct section *sec);
-int is_debug_section(struct section *sec);
+bool is_rela_section(struct section *sec);
+bool is_text_section(struct section *sec);
+bool is_debug_section(struct section *sec);
 
 struct section *find_section_by_index(struct list_head *list, unsigned int index);
 struct section *find_section_by_name(struct list_head *list, const char *name);
@@ -163,10 +163,10 @@ int offset_of_string(struct list_head *list, char *name);
 struct kpatch_elf *kpatch_elf_open(const char *name);
 void kpatch_dump_kelf(struct kpatch_elf *kelf);
 
-int is_null_sym(struct symbol *sym);
-int is_file_sym(struct symbol *sym);
-int is_local_func_sym(struct symbol *sym);
-int is_local_sym(struct symbol *sym);
+bool is_null_sym(struct symbol *sym);
+bool is_file_sym(struct symbol *sym);
+bool is_local_func_sym(struct symbol *sym);
+bool is_local_sym(struct symbol *sym);
 
 void print_strtab(char *buf, size_t size);
 void kpatch_create_shstrtab(struct kpatch_elf *kelf);

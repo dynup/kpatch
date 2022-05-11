@@ -85,51 +85,51 @@ struct special_section {
  * Functions
  * **********/
 
-static int is_bundleable(struct symbol *sym)
+static bool is_bundleable(struct symbol *sym)
 {
 	if (sym->type == STT_FUNC &&
 	    !strncmp(sym->sec->name, ".text.",6) &&
 	    !strcmp(sym->sec->name + 6, sym->name))
-		return 1;
+		return true;
 
 	if (sym->type == STT_FUNC &&
 	    !strncmp(sym->sec->name, ".text.unlikely.",15) &&
 	    (!strcmp(sym->sec->name + 15, sym->name) ||
 			 (strstr(sym->name, ".cold") &&
 			  !strncmp(sym->sec->name + 15, sym->name, strlen(sym->sec->name) - 15))))
-		return 1;
+		return true;
 
 	if (sym->type == STT_FUNC &&
 	    !strncmp(sym->sec->name, ".text.hot.",10) &&
 	    !strcmp(sym->sec->name + 10, sym->name))
-		return 1;
+		return true;
 
 	if (sym->type == STT_OBJECT &&
 	   !strncmp(sym->sec->name, ".data.",6) &&
 	   !strcmp(sym->sec->name + 6, sym->name))
-		return 1;
+		return true;
 
 	if (sym->type == STT_OBJECT &&
 	    !strncmp(sym->sec->name, ".data.rel.", 10) &&
 	    !strcmp(sym->sec->name + 10, sym->name))
-		return 1;
+		return true;
 
 	if (sym->type == STT_OBJECT &&
 	    !strncmp(sym->sec->name, ".data.rel.ro.", 13) &&
 	    !strcmp(sym->sec->name + 13, sym->name))
-		return 1;
+		return true;
 
 	if (sym->type == STT_OBJECT &&
 	   !strncmp(sym->sec->name, ".rodata.",8) &&
 	   !strcmp(sym->sec->name + 8, sym->name))
-		return 1;
+		return true;
 
 	if (sym->type == STT_OBJECT &&
 	   !strncmp(sym->sec->name, ".bss.",5) &&
 	   !strcmp(sym->sec->name + 5, sym->name))
-		return 1;
+		return true;
 
-	return 0;
+	return false;
 }
 
 /* Symbol st_others value for powerpc */
@@ -874,7 +874,7 @@ static enum subsection kpatch_subsection_type(struct section *sec)
 	return SUBSECTION_NORMAL;
 }
 
-static int kpatch_subsection_changed(struct section *sec1, struct section *sec2)
+static bool kpatch_subsection_changed(struct section *sec1, struct section *sec2)
 {
 	return kpatch_subsection_type(sec1) != kpatch_subsection_type(sec2);
 }
@@ -1825,12 +1825,12 @@ static void kpatch_include_standard_elements(struct kpatch_elf *kelf)
 	list_entry(kelf->symbols.next, struct symbol, list)->include = 1;
 }
 
-static int kpatch_include_callback_elements(struct kpatch_elf *kelf)
+static bool kpatch_include_callback_elements(struct kpatch_elf *kelf)
 {
 	struct section *sec;
 	struct symbol *sym;
 	struct rela *rela;
-	int found = 0;
+	bool found = false;
 
 	/* include load/unload sections */
 	list_for_each_entry(sec, &kelf->sections, list) {
@@ -1838,7 +1838,7 @@ static int kpatch_include_callback_elements(struct kpatch_elf *kelf)
 			continue;
 
 		sec->include = 1;
-		found = 1;
+		found = true;
 		if (is_rela_section(sec)) {
 			/* include callback dependencies */
 			rela = list_entry(sec->relas.next, struct rela, list);
@@ -1942,7 +1942,7 @@ static void kpatch_print_changes(struct kpatch_elf *kelf)
 
 static void kpatch_migrate_symbols(struct list_head *src,
 				   struct list_head *dst,
-				   int (*select)(struct symbol *))
+				   bool (*select)(struct symbol *))
 {
 	struct symbol *sym, *safe;
 
@@ -3057,7 +3057,7 @@ static void kpatch_create_patches_sections(struct kpatch_elf *kelf,
 
 }
 
-static int kpatch_is_core_module_symbol(char *name)
+static bool kpatch_is_core_module_symbol(char *name)
 {
 	return (!strcmp(name, "kpatch_shadow_alloc") ||
 		!strcmp(name, "kpatch_shadow_free") ||
