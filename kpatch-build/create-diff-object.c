@@ -1499,6 +1499,9 @@ static void rela_insn(const struct section *sec, const struct rela *rela,
 		    rela_addr < insn_addr + insn->length)
 			return;
 	}
+
+	ERROR("can't find instruction for rela at %s+0x%x",
+	      sec->name, rela->offset);
 }
 
 static bool is_callback_section(struct section *sec) {
