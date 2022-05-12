@@ -2593,18 +2593,32 @@ static void kpatch_check_relocations(struct kpatch_elf *kelf)
 {
 	struct rela *rela;
 	struct section *relasec;
-	Elf_Data *sdata;
+	long sec_size;
+	long sec_off;
 
 	list_for_each_entry(relasec, &kelf->sections, list) {
 		if (!is_rela_section(relasec))
 			continue;
 		list_for_each_entry(rela, &relasec->relas, list) {
-			if (rela->sym->sec) {
-				sdata = rela->sym->sec->data;
-				if ((long)rela->sym->sym.st_value + rela->addend > (long)sdata->d_size) {
-					ERROR("out-of-range relocation %s+%lx in %s", rela->sym->name,
-							rela->addend, relasec->name);
-				}
+			if (!rela->sym->sec)
+				continue;
+
+			sec_size = rela->sym->sec->data->d_size;
+			sec_off = (long)rela->sym->sym.st_value +
+				  rela_target_offset(kelf, relasec, rela);
+
+			/*
+			 * This check isn't perfect: we still allow relocations
+			 * to the end of a section.  There are real instances
+			 * of that, including ORC entries, LOCKDEP=n
+			 * zero-length '__key' passing, and the loop edge case
+			 * described in kpatch_replace_sections_syms().  For
+			 * now, just allow all such cases.
+			 */
+			if (sec_off < 0 || sec_off > sec_size) {
+				ERROR("%s+0x%x: out-of-range relocation %s+%lx",
+				      relasec->base->name, rela->offset,
+				      rela->sym->name, rela->addend);
 			}
 		}
 	}
