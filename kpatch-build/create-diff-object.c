@@ -3667,7 +3667,7 @@ static void kpatch_build_strings_section_data(struct kpatch_elf *kelf)
 static void kpatch_no_sibling_calls_ppc64le(struct kpatch_elf *kelf)
 {
 	struct symbol *sym;
-	unsigned int insn;
+	unsigned char *insn;
 	unsigned int offset;
 
 	if (kelf->arch != PPC64)
@@ -3679,7 +3679,7 @@ static void kpatch_no_sibling_calls_ppc64le(struct kpatch_elf *kelf)
 
 		for (offset = 0; offset < sym->sec->data->d_size; offset += 4) {
 
-			insn = *(unsigned int *)(sym->sec->data->d_buf + offset);
+			insn = sym->sec->data->d_buf + offset;
 
 			/*
 			 * The instruction 0x48000000 can be assumed to be a
@@ -3694,7 +3694,8 @@ static void kpatch_no_sibling_calls_ppc64le(struct kpatch_elf *kelf)
 			 * there's a REL24 relocation for the address which
 			 * will be written by the linker or the kernel.
 			 */
-			if (insn != 0x48000000)
+			if (insn[3] != 0x48 || insn[2] != 0x00 ||
+			    insn[1] != 0x00 || insn[0] != 0x00)
 				continue;
 
 			/* Make sure it's not a branch-to-self: */
