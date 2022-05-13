@@ -12,6 +12,7 @@ Table of contents
 	- [Debian 8 (Jessie)](#debian-8-jessie)
 	- [Debian 7 (Lenny)](#debian-7-lenny)
 	- [Gentoo](#gentoo)
+	- [OpenEuler](#openeuler)
 - [Build](#build)
 - [Install](#install)
 
@@ -186,6 +187,115 @@ Configure ccache:
 ```bash
 ccache --max-size=5G
 ```
+
+### OpenEuler
+
+*ATTENTION: openEuler maintains its own version of kpatch which work with its
+own kernel. You can check this [link](https://gitee.com/src-openeuler/kpatch)
+to see its documents. This document describes how to run mainline kpatch in openEuler.*
+
+*NOTE: You'll need about 15GB of free disk space for the kpatch-build cache in
+`~/.kpatch` and for ccache.*
+
+Install the dependencies for compiling kpatch and running kpatch-build:
+
+```bash
+source test/integration/lib.sh
+# Will request root privileges
+kpatch_dependencies
+```
+
+Before running kpatch-build, two more things need to be checked:
+-------
+1. Ensure current kernel compiled with *CONFIG_LIVEPATCH_PER_TASK_CONSISTENCY* set
+
+    openEuler has two strategies to apply kernel live patches and it is decided at compile time.
+
+    When CONFIG_LIVEPATCH_STOP_MACHINE_CONSISTENCY set, openEuler uses its own strategy.
+
+    When CONFIG_LIVEPATCH_PER_TASK_CONSISTENCY set, openEuler uses the conventional strategy.
+
+    Only one config option can take effect at the same time.
+    A [chinese blog](https://www.modb.pro/db/232858) written by the openEuler official describes
+    their modifications for kernel livepatch. The main difference is CONFIG_LIVEPATCH_STOP_MACHINE_CONSISTENCY
+    will disable the usage of ftrace handler in livepatch, they believe it will be faster.
+
+    Check whether your current kernel compiled with *CONFIG_LIVEPATCH_PER_TASK_CONSISTENCY*
+    ```bash
+    grep "CONFIG_LIVEPATCH_PER_TASK_CONSISTENCY" /boot/config-$(uname -r)
+    ```
+
+    If you see any output, it means your kernel satisfies, you can go directly to check step 2.
+
+    If not, then you need to recompile your current kernel with CONFIG_LIVEPATCH_PER_TASK_CONSISTENCY set.
+
+    You can reference the following steps to recompile the kernel if needed
+    1. download source code of the current kernel
+        ```bash
+        # set working directories
+        TEMPDIR=~/.tmp
+        mkdir -p $TEMPDIR
+        mkdir -p $TEMPDIR/buildroot
+
+        # download kernel source rpm package
+        yumdownloader --source --destdir "$TEMPDIR" kernel-$(uname -r)
+
+        # obtain source code from package
+        rpm -D "_topdir $TEMPDIR/buildroot" -ivh $TEMPDIR/kernel-*.src.rpm
+        rpmbuild -D "_topdir $TEMPDIR/buildroot" -bp --nodeps --target=$(uname -m) $TEMPDIR/buildroot/SPECS/kernel.spec
+
+        # check source code and copy config file
+        cd $TEMPDIR/buildroot/BUILD/kernel-*/linux-*[sS]ource
+        cp /boot/config-$(uname -r) .config
+        ```
+
+    2. set CONFIG_LIVEPATCH_PER_TASK_CONSISTENCY
+        ```bash
+        make menuconfig
+        ```
+        select order
+
+            -> Processor type and features
+                -> Enable Livepatch
+                    -> Kernel Live Patching
+                        -> live patching method
+
+        choose
+        > based on ftrace
+
+        After this step, you shoud see CONFIG_LIVEPATCH_PER_TASK_CONSISTENCY in .config file
+
+    3. recompile kernel and install it to your running environment.
+
+        Just to remind, after installing the recompiled kernel, the config file should also be updated.
+
+
+2. Ensure */update/source* is in the rpm repo lists
+
+    openEuler releases its source rpm package of the kernel in two places.
+
+    One is /source and it is included in rpm repo lists by default.
+
+    One is /update/source and it may not be included it in some release versions.
+
+    ```bash
+    grep "/update/source" /etc/yum.repos.d/openEuler.repo
+    ```
+
+    If you can't see any output, add it to the end of /etc/yum.repos.d/openEuler.repo
+
+    For example, if you use openEuler 21.09, you will add something like:
+    ```
+    [update-source]
+    name=update-source
+    baseurl=https://repo.openeuler.org/openEuler-21.09/update/source/
+    enabled=1
+    gpgcheck=0
+    ```
+
+    *baseurl* is releated with your release version, be careful please!
+
+    Goto [openEuler repo](https://repo.openeuler.org/), find your own suitable baseurl.
 
 Build
 -----

@@ -116,6 +116,19 @@ kpatch_centos_dependencies()
 	sudo yum remove -y epel-release
 }
 
+kpatch_openEuler_dependencies()
+{
+	local kernel_version
+	local arch
+	kernel_version=$(uname -r)
+	arch=$(uname -m)
+
+	sudo yum install -y make gcc patch bison flex openssl-devel dwarves \
+		rpm-build dnf-plugins-core python3-devel openssl-devel ncurses-devel elfutils-libelf-devel
+	sudo yum install -y "kernel-source-${kernel_version%.*}" \
+		"kernel-debuginfo-${kernel_version%.*}" "kernel-devel-${kernel_version%.*}"
+}
+
 kpatch_dependencies()
 {
 	# shellcheck disable=SC1091
