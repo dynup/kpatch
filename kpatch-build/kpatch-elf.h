@@ -129,9 +129,9 @@ struct kpatch_elf {
  * Helper functions
  ******************/
 char *status_str(enum status status);
-int is_rela_section(struct section *sec);
-int is_text_section(struct section *sec);
-int is_debug_section(struct section *sec);
+bool is_rela_section(struct section *sec);
+bool is_text_section(struct section *sec);
+bool is_debug_section(struct section *sec);
 
 struct section *find_section_by_index(struct list_head *list, unsigned int index);
 struct section *find_section_by_name(struct list_head *list, const char *name);
@@ -152,6 +152,9 @@ struct rela *find_rela_by_offset(struct section *relasec, unsigned int offset);
 
 unsigned int absolute_rela_type(struct kpatch_elf *kelf);
 int offset_of_string(struct list_head *list, char *name);
+long rela_target_offset(struct kpatch_elf *kelf, struct section *relasec,
+			struct rela *rela);
+unsigned int insn_length(struct kpatch_elf *kelf, void *addr);
 
 #ifndef R_PPC64_ENTRY
 #define R_PPC64_ENTRY   118
@@ -160,16 +163,13 @@ int offset_of_string(struct list_head *list, char *name);
 /*************
  * Functions
  * **********/
-void kpatch_create_rela_list(struct kpatch_elf *kelf, struct section *sec);
-void kpatch_create_section_list(struct kpatch_elf *kelf);
-void kpatch_create_symbol_list(struct kpatch_elf *kelf);
 struct kpatch_elf *kpatch_elf_open(const char *name);
 void kpatch_dump_kelf(struct kpatch_elf *kelf);
 
-int is_null_sym(struct symbol *sym);
-int is_file_sym(struct symbol *sym);
-int is_local_func_sym(struct symbol *sym);
-int is_local_sym(struct symbol *sym);
+bool is_null_sym(struct symbol *sym);
+bool is_file_sym(struct symbol *sym);
+bool is_local_func_sym(struct symbol *sym);
+bool is_local_sym(struct symbol *sym);
 
 void print_strtab(char *buf, size_t size);
 void kpatch_create_shstrtab(struct kpatch_elf *kelf);

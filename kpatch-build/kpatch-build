@@ -97,6 +97,18 @@ logger() {
 	fi
 }
 
+trace_on() {
+	if [[ $DEBUG -eq 1 ]] || [[ $DEBUG -ge 3 ]]; then
+		set -o xtrace
+	fi
+}
+
+trace_off() {
+	if [[ $DEBUG -eq 1 ]] || [[ $DEBUG -ge 3 ]]; then
+		set +o xtrace
+	fi
+}
+
 save_env() {
 	export -p | grep -wv -e 'OLDPWD=' -e 'PWD=' > "$ENVFILE"
 }
@@ -619,9 +631,7 @@ if [[ ${#PATCH_LIST[@]} -eq 0 ]]; then
 	exit 1
 fi
 
-if [[ $DEBUG -eq 1 ]] || [[ $DEBUG -ge 3 ]]; then
-	set -o xtrace
-fi
+trace_on
 
 if [[ -n "$SRCRPM" ]]; then
 	if  [[ -n "$ARCHVERSION" ]]; then
@@ -836,9 +846,11 @@ fi
 
 # kernel option checking
 
+trace_off "reading .config"
 # Don't check external file.
 # shellcheck disable=SC1090
 source "$CONFIGFILE"
+trace_on
 
 [[ "$DISTRO" = openEuler ]] && [[ -z "$CONFIG_LIVEPATCH_PER_TASK_CONSISTENCY" ]] && \
 	die "openEuler kernel doesn't have 'CONFIG_LIVEPATCH_PER_TASK_CONSISTENCY' enabled"
@@ -988,26 +1000,28 @@ fi
 grep -q vmlinux "$KERNEL_SRCDIR/Module.symvers" || die "truncated $KERNEL_SRCDIR/Module.symvers file"
 
 if [[ -n "$CONFIG_MODVERSIONS" ]]; then
-    while read -ra sym_line; do
-        if [[ ${#sym_line[@]} -lt 4 ]]; then
-            die "Malformed ${TEMPDIR}/Module.symvers file"
-        fi
+	trace_off "reading Module.symvers"
+	while read -ra sym_line; do
+		if [[ ${#sym_line[@]} -lt 4 ]]; then
+			die "Malformed ${TEMPDIR}/Module.symvers file"
+		fi
 
-        sym=${sym_line[1]}
+		sym=${sym_line[1]}
 
-        read -ra patched_sym_line <<< "$(grep "\s$sym\s" "$BUILDDIR/Module.symvers")"
-        if [[ ${#patched_sym_line[@]} -lt 4 ]]; then
-            die "Malformed symbol entry for ${sym} in ${BUILDDIR}/Module.symvers file"
-        fi
+		read -ra patched_sym_line <<< "$(grep "\s$sym\s" "$BUILDDIR/Module.symvers")"
+		if [[ ${#patched_sym_line[@]} -lt 4 ]]; then
+			die "Malformed symbol entry for ${sym} in ${BUILDDIR}/Module.symvers file"
+		fi
 
-        # Assume that both original and patched symvers have the same format.
-        # In both cases, the symbol should have the same CRC, belong to the same
-        # Module/Namespace and have the same export type.
-        if [[ ${#sym_line[@]} -ne ${#patched_sym_line[@]} || \
-                  "${sym_line[*]}" != "${patched_sym_line[*]}" ]]; then
-            warn "Version disagreement for symbol ${sym}"
-        fi
-    done < "${TEMPDIR}/Module.symvers"
+		# Assume that both original and patched symvers have the same format.
+		# In both cases, the symbol should have the same CRC, belong to the same
+		# Module/Namespace and have the same export type.
+		if [[ ${#sym_line[@]} -ne ${#patched_sym_line[@]} || \
+		     "${sym_line[*]}" != "${patched_sym_line[*]}" ]]; then
+			warn "Version disagreement for symbol ${sym}"
+		fi
+	done < "${TEMPDIR}/Module.symvers"
+	trace_on
 fi
 
 # Read as words, no quotes.

@@ -31,6 +31,7 @@
 #include <sys/types.h>
 #include <sys/stat.h>
 
+#include "asm/insn.h"
 #include "kpatch-elf.h"
 
 /*******************
@@ -53,18 +54,18 @@ char *status_str(enum status status)
 	return NULL;
 }
 
-int is_rela_section(struct section *sec)
+bool is_rela_section(struct section *sec)
 {
 	return (sec->sh.sh_type == SHT_RELA);
 }
 
-int is_text_section(struct section *sec)
+bool is_text_section(struct section *sec)
 {
 	return (sec->sh.sh_type == SHT_PROGBITS &&
 		(sec->sh.sh_flags & SHF_EXECINSTR));
 }
 
-int is_debug_section(struct section *sec)
+bool is_debug_section(struct section *sec)
 {
 	char *name;
 	if (is_rela_section(sec))
@@ -164,7 +165,105 @@ int offset_of_string(struct list_head *list, char *name)
 	return index;
 }
 
-void kpatch_create_rela_list(struct kpatch_elf *kelf, struct section *sec)
+static void rela_insn(const struct section *sec, const struct rela *rela,
+		      struct insn *insn)
+{
+	unsigned long insn_addr, start, end, rela_addr;
+
+	start = (unsigned long)sec->data->d_buf;
+	end = start + sec->sh.sh_size;
+
+	if (end <= start)
+		ERROR("bad section size");
+
+	rela_addr = start + rela->offset;
+	for (insn_addr = start; insn_addr < end; insn_addr += insn->length) {
+		insn_init(insn, (void *)insn_addr, 1);
+		insn_get_length(insn);
+		if (!insn->length)
+			ERROR("can't decode instruction in section %s at offset 0x%lx",
+			      sec->name, insn_addr);
+		if (rela_addr >= insn_addr &&
+		    rela_addr < insn_addr + insn->length)
+			return;
+	}
+
+	ERROR("can't find instruction for rela at %s+0x%x",
+	      sec->name, rela->offset);
+}
+
+/*
+ * Return the addend, adjusted for any PC-relative relocation trickery, to
+ * point to the relevant symbol offset.
+ */
+long rela_target_offset(struct kpatch_elf *kelf, struct section *relasec,
+			struct rela *rela)
+{
+	long add_off;
+	struct section *sec = relasec->base;
+
+	switch(kelf->arch) {
+	case PPC64:
+		add_off = 0;
+		break;
+	case X86_64:
+		if (!is_text_section(sec) ||
+		    rela->type == R_X86_64_64 ||
+		    rela->type == R_X86_64_32S)
+			add_off = 0;
+		else if (rela->type == R_X86_64_PC32 ||
+			 rela->type == R_X86_64_PLT32 ||
+			 rela->type == R_X86_64_NONE) {
+			struct insn insn;
+			rela_insn(sec, rela, &insn);
+			add_off = (long)insn.next_byte -
+				  (long)sec->data->d_buf -
+				  rela->offset;
+		} else
+			ERROR("unhandled rela type %d", rela->type);
+		break;
+	default:
+		ERROR("unsupported arch\n");
+	}
+
+	return rela->addend + add_off;
+}
+
+unsigned int insn_length(struct kpatch_elf *kelf, void *addr)
+{
+	struct insn decoded_insn;
+	char *insn = addr;
+
+	switch(kelf->arch) {
+
+	case X86_64:
+		insn_init(&decoded_insn, addr, 1);
+		insn_get_length(&decoded_insn);
+		return decoded_insn.length;
+
+	case PPC64:
+		return 4;
+
+	case S390:
+		switch(insn[0] >> 6) {
+		case 0:
+			return 2;
+		case 1:
+		case 2:
+			return 4;
+		case 3:
+			return 6;
+		}
+
+	default:
+		ERROR("unsupported arch");
+	}
+
+	return 0;
+}
+
+static void kpatch_create_rela_list(struct kpatch_elf *kelf,
+				    struct section *relasec)
 {
 	int index = 0, skip = 0;
 	struct rela *rela;
@@ -172,28 +271,28 @@ void kpatch_create_rela_list(struct kpatch_elf *kelf, struct section *sec)
 	unsigned long rela_nr;
 
 	/* find matching base (text/data) section */
-	sec->base = find_section_by_index(&kelf->sections, sec->sh.sh_info);
-	if (!sec->base)
-		ERROR("can't find base section for rela section %s", sec->name);
+	relasec->base = find_section_by_index(&kelf->sections, relasec->sh.sh_info);
+	if (!relasec->base)
+		ERROR("can't find base section for rela section %s", relasec->name);
 
 	/* create reverse link from base section to this rela section */
-	sec->base->rela = sec;
+	relasec->base->rela = relasec;
 
-	rela_nr = sec->sh.sh_size / sec->sh.sh_entsize;
+	rela_nr = relasec->sh.sh_size / relasec->sh.sh_entsize;
 
 	log_debug("\n=== rela list for %s (%ld entries) ===\n",
-		sec->base->name, rela_nr);
+		relasec->base->name, rela_nr);
 
-	if (is_debug_section(sec)) {
+	if (is_debug_section(relasec)) {
 		log_debug("skipping rela listing for .debug_* section\n");
 		skip = 1;
 	}
 
 	/* read and store the rela entries */
 	while (rela_nr--) {
-		ALLOC_LINK(rela, &sec->relas);
+		ALLOC_LINK(rela, &relasec->relas);
 
-		if (!gelf_getrela(sec->data, index, &rela->rela))
+		if (!gelf_getrela(relasec->data, index, &rela->rela))
 			ERROR("gelf_getrela");
 		index++;
 
@@ -206,7 +305,9 @@ void kpatch_create_rela_list(struct kpatch_elf *kelf, struct section *sec)
 			ERROR("could not find rela entry symbol\n");
 		if (rela->sym->sec &&
 		    (rela->sym->sec->sh.sh_flags & SHF_STRINGS)) {
-			rela->string = rela->sym->sec->data->d_buf + rela->addend;
+			rela->string = rela->sym->sec->data->d_buf +
+				       rela->sym->sym.st_value +
+				       rela_target_offset(kelf, relasec, rela);
 			if (!rela->string)
 				ERROR("could not lookup rela string for %s+%ld",
 				      rela->sym->name, rela->addend);
@@ -223,7 +324,7 @@ void kpatch_create_rela_list(struct kpatch_elf *kelf, struct section *sec)
 	}
 }
 
-void kpatch_create_section_list(struct kpatch_elf *kelf)
+static void kpatch_create_section_list(struct kpatch_elf *kelf)
 {
 	Elf_Scn *scn = NULL;
 	struct section *sec;
@@ -277,7 +378,7 @@ void kpatch_create_section_list(struct kpatch_elf *kelf)
 		ERROR("expected NULL");
 }
 
-void kpatch_create_symbol_list(struct kpatch_elf *kelf)
+static void kpatch_create_symbol_list(struct kpatch_elf *kelf)
 {
 	struct section *symtab;
 	struct symbol *sym;
@@ -346,7 +447,7 @@ struct kpatch_elf *kpatch_elf_open(const char *name)
 	Elf *elf;
 	int fd;
 	struct kpatch_elf *kelf;
-	struct section *sec;
+	struct section *relasec;
 	GElf_Ehdr ehdr;
 
 	fd = open(name, O_RDONLY);
@@ -368,16 +469,6 @@ struct kpatch_elf *kpatch_elf_open(const char *name)
 	/* read and store section, symbol entries from file */
 	kelf->elf = elf;
 	kelf->fd = fd;
-	kpatch_create_section_list(kelf);
-	kpatch_create_symbol_list(kelf);
-
-	/* for each rela section, read and store the rela entries */
-	list_for_each_entry(sec, &kelf->sections, list) {
-		if (!is_rela_section(sec))
-			continue;
-		INIT_LIST_HEAD(&sec->relas);
-		kpatch_create_rela_list(kelf, sec);
-	}
 
 	if (!gelf_getehdr(kelf->elf, &ehdr))
 		ERROR("gelf_getehdr");
@@ -391,6 +482,18 @@ struct kpatch_elf *kpatch_elf_open(const char *name)
 	default:
 		ERROR("Unsupported target architecture");
 	}
+
+	kpatch_create_section_list(kelf);
+	kpatch_create_symbol_list(kelf);
+
+	/* for each rela section, read and store the rela entries */
+	list_for_each_entry(relasec, &kelf->sections, list) {
+		if (!is_rela_section(relasec))
+			continue;
+		INIT_LIST_HEAD(&relasec->relas);
+		kpatch_create_rela_list(kelf, relasec);
+	}
+
 	return kelf;
 }
 
@@ -442,22 +545,22 @@ next:
 	}
 }
 
-int is_null_sym(struct symbol *sym)
+bool is_null_sym(struct symbol *sym)
 {
 	return !strlen(sym->name);
 }
 
-int is_file_sym(struct symbol *sym)
+bool is_file_sym(struct symbol *sym)
 {
 	return sym->type == STT_FILE;
 }
 
-int is_local_func_sym(struct symbol *sym)
+bool is_local_func_sym(struct symbol *sym)
 {
 	return sym->bind == STB_LOCAL && sym->type == STT_FUNC;
 }
 
-int is_local_sym(struct symbol *sym)
+bool is_local_sym(struct symbol *sym)
 {
 	return sym->bind == STB_LOCAL;
 }
