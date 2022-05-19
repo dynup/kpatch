@@ -378,8 +378,12 @@ disable_patch () {
 
 	local enabled="$SYSFS/$modname/enabled"
 	if ! [[ -e "$enabled" ]]; then
-	    warn "patch module $modname is not loaded"
-	    return 1
+		if [[ -d "/sys/module/$modname" ]] ; then
+			# Module is loaded, but already disabled
+			return 0
+		fi
+		warn "patch module $modname is not loaded"
+		return 1
 	fi
 
 	if [[ "$(cat "$enabled")" -eq 1 ]]; then
