@@ -10,7 +10,7 @@ UNITTEST_DIR = test/unit
 INTEGRATION_DIR = test/integration
 CLEAN_DIRS  += clean-$(UNITTEST_DIR)
 
-.PHONY: all install uninstall clean check unit
+.PHONY: all dependencies install uninstall clean check unit
 .PHONY: $(SUBDIRS) $(BUILD_DIRS) $(INSTALL_DIRS) $(CLEAN_DIRS)
 .PHONY: integration integration-slow integration-quick
 .PHONY: vagrant-integration-slow vagrant-integration-quick vagrant-integration
@@ -20,6 +20,10 @@ CLEAN_DIRS  += clean-$(UNITTEST_DIR)
 all: $(BUILD_DIRS)
 $(BUILD_DIRS):
 	$(MAKE) -C $(@:build-%=%)
+
+dependencies: SHELL:=/bin/bash
+dependencies:
+	source test/integration/lib.sh && kpatch_dependencies
 
 install: $(INSTALL_DIRS)
 $(INSTALL_DIRS):
