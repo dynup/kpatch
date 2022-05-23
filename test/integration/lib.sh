@@ -91,17 +91,24 @@ kpatch_rhel_dependencies()
 			;;
 	esac
 
-	sudo yum install -y "https://dl.fedoraproject.org/pub/epel/epel-release-latest-7.noarch.rpm"
-	sudo yum install -y ccache
-	sudo yum remove -y epel-release
+	# ccache
+	if ! command -v ccache &> /dev/null; then
+		if ! sudo yum install -y ccache; then
+			sudo yum install -y "https://dl.fedoraproject.org/pub/epel/epel-release-latest-${rhel_major}.noarch.rpm" && \
+			sudo yum install -y ccache && \
+			sudo yum remove -y epel-release
+		fi
+	fi
 }
 
 kpatch_centos_dependencies()
 {
 	local kernel_version
 	local arch
+	local rhel_major
 	kernel_version=$(uname -r)
 	arch=$(uname -m)
+	rhel_major=${VERSION_ID%%.*}
 
 	sudo yum install -y gcc gcc-c++ "kernel-devel-${kernel_version%.*}" elfutils elfutils-devel
 	sudo yum install -y yum-utils zlib-devel binutils-devel newt-devel \
@@ -111,9 +118,14 @@ kpatch_centos_dependencies()
 	sudo yum-builddep -y "kernel-${kernel_version%.*}"
 	sudo debuginfo-install -y "kernel-${kernel_version%.*}"
 
-	sudo yum install -y "https://dl.fedoraproject.org/pub/epel/epel-release-latest-7.noarch.rpm"
-	sudo yum install -y ccache
-	sudo yum remove -y epel-release
+	# ccache
+	if ! command -v ccache &> /dev/null; then
+		if ! sudo yum install -y ccache; then
+			sudo yum install -y "https://dl.fedoraproject.org/pub/epel/epel-release-latest-${rhel_major}.noarch.rpm" && \
+			sudo yum install -y ccache && \
+			sudo yum remove -y epel-release
+		fi
+	fi
 }
 
 kpatch_openEuler_dependencies()
