@@ -32,9 +32,8 @@ architecture is supported.
 Install the dependencies for compiling kpatch and running kpatch-build:
 
 ```bash
-source test/integration/lib.sh
 # Will request root privileges
-kpatch_dependencies
+make dependencies
 ```
 
 ### Oracle Linux 7
@@ -78,12 +77,12 @@ ccache --max-size=5G
 Install the dependencies for compiling kpatch and running kpatch-build
 
 ```bash
-source test/integration/lib.sh
 # required on ppc64le
 # e.g., on Ubuntu 18.04 for gcc-7.3
 apt-get install gcc-7-plugin-dev
+
 # Will request root privileges
-kpatch_dependencies
+make dependencies
 ```
 
 ### Debian 9 (Stretch)
@@ -200,9 +199,8 @@ to see its documents. This document describes how to run mainline kpatch in open
 Install the dependencies for compiling kpatch and running kpatch-build:
 
 ```bash
-source test/integration/lib.sh
 # Will request root privileges
-kpatch_dependencies
+make dependencies
 ```
 
 Before running kpatch-build, two more things need to be checked:

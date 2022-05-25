@@ -7,23 +7,6 @@ kpatch_set_ccache_max_size()
 	ccache --max-size="${ccache_max_size}"
 }
 
-kpatch_fedora_dependencies()
-{
-	local kernel_version
-	kernel_version=$(uname -r)
-
-	sudo dnf install -y gcc "kernel-devel-${kernel_version%.*}" elfutils elfutils-devel
-	sudo dnf install -y pesign yum-utils openssl wget numactl-devel
-	sudo dnf builddep -y "kernel-${kernel_version%.*}"
-	sudo dnf debuginfo-install -y "kernel-${kernel_version%.*}"
-
-	sudo dnf install -y ccache
-
-	if [[ "$(uname -m)" == "ppc64le" ]]; then
-		sudo yum install -y gcc-plugin-devel
-	fi
-}
-
 kpatch_ubuntu_dependencies()
 {
 	sudo sed -i 's/# deb-src/deb-src/' /etc/apt/sources.list
@@ -58,62 +41,52 @@ kpatch_rhel_dependencies()
 	local kernel_version
 	local arch
 	local rhel_major
-	local py_version
+	local yum_utils_version
 	kernel_version=$(uname -r)
 	arch=$(uname -m)
 	rhel_major=${VERSION_ID%%.*}
 
-	if [ "${rhel_major}" -ge 8 ]; then
-		py_version="3"
-	else
-		py_version="2"
-	fi
-
-	sudo yum install -y git gcc gcc-c++ "kernel-devel-${kernel_version%.*}" elfutils elfutils-devel
-	sudo yum install -y yum-utils zlib-devel binutils-devel newt-devel \
-		python${py_version}-devel perl-ExtUtils-Embed audit-libs-devel numactl-devel \
-		pciutils-devel bison ncurses-devel rpm-build java-devel
-	sudo yum-builddep -y "kernel-${kernel_version%.*}"
+	# kpatch-build dependencies
+	sudo yum install -y \
+		elfutils \
+		elfutils-devel \
+		gcc \
+		gcc-c++ \
+		git \
+		"kernel-devel-${kernel_version%.*}" \
+		rpm-build \
+		wget \
+		yum-utils
 	sudo debuginfo-install -y "kernel-${kernel_version%.*}"
+	[[ "$arch" == "ppc64le" ]] && sudo yum install -y gcc-plugin-devel
 
-	case "${arch}" in
-		"x86_64")
-			sudo yum install -y pesign
-			;;
-		"ppc64le")
-			sudo yum install -y gcc-plugin-devel
-			if [ "${rhel_major}" -ge 8 ]; then
-				# yum-builddep doesn't provide everything we need :(
-				sudo yum install -y flex openssl-devel
-			fi
-			;;
-		*)
-			;;
-	esac
+	# kernel dependencies
+	yum_utils_version=$(rpm -q --queryformat="%{version}" yum-utils)
+	if [[ "${yum_utils_version}" = "$(echo -e "${yum_utils_version}\\n4.0.12" | sort -rV | head -n1)" ]]; then
+		sudo yum-builddep -y --skip-unavailable "kernel-${kernel_version%.*}"
+	else
+		sudo yum-builddep -y "kernel-${kernel_version%.*}"
+	fi
+	[[ "$arch" == "x86_64" ]] && sudo yum install -y pesign
 
-	sudo yum install -y "https://dl.fedoraproject.org/pub/epel/epel-release-latest-7.noarch.rpm"
-	sudo yum install -y ccache
-	sudo yum remove -y epel-release
+	# ccache
+	if ! command -v ccache &> /dev/null; then
+		if ! sudo yum install -y ccache; then
+			sudo yum install -y "https://dl.fedoraproject.org/pub/epel/epel-release-latest-${rhel_major}.noarch.rpm" && \
+			sudo yum install -y ccache && \
+			sudo yum remove -y epel-release
+		fi
+	fi
 }
 
 kpatch_centos_dependencies()
 {
-	local kernel_version
-	local arch
-	kernel_version=$(uname -r)
-	arch=$(uname -m)
+	kpatch_rhel_dependencies
+}
 
-	sudo yum install -y gcc gcc-c++ "kernel-devel-${kernel_version%.*}" elfutils elfutils-devel
-	sudo yum install -y yum-utils zlib-devel binutils-devel newt-devel \
-		python-devel perl-ExtUtils-Embed audit-libs-devel numactl-devel \
-		pciutils-devel bison ncurses-devel rpm-build java-devel pesign
-	sudo yum-config-manager --enable debug
-	sudo yum-builddep -y "kernel-${kernel_version%.*}"
-	sudo debuginfo-install -y "kernel-${kernel_version%.*}"
-
-	sudo yum install -y "https://dl.fedoraproject.org/pub/epel/epel-release-latest-7.noarch.rpm"
-	sudo yum install -y ccache
-	sudo yum remove -y epel-release
+kpatch_fedora_dependencies()
+{
+	kpatch_rhel_dependencies
 }
 
 kpatch_openEuler_dependencies()
