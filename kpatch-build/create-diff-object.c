@@ -3355,12 +3355,23 @@ static void kpatch_create_intermediate_sections(struct kpatch_elf *kelf,
 
 			/* add rela to fill in krelas[index].dest field */
 			ALLOC_LINK(rela2, &krela_sec->rela->relas);
-			if (relasec->base->secsym)
-				rela2->sym = relasec->base->secsym;
-			else
-				ERROR("can't create dynrela for section %s (symbol %s): no bundled or section symbol",
-				      relasec->name, rela->sym->name);
+			if (!relasec->base->secsym) {
+				struct symbol *sym;
 
+				/*
+				 * Newer toolchains are stingy with their
+				 * section symbols, create one if it doesn't
+				 * exist already.
+				 */
+				ALLOC_LINK(sym, &kelf->symbols);
+				sym->sec = relasec->base;
+				sym->sym.st_info = GELF_ST_INFO(STB_LOCAL, STT_SECTION);
+				sym->type = STT_SECTION;
+				sym->bind = STB_LOCAL;
+				sym->name = relasec->base->name;
+				relasec->base->secsym = sym;
+			}
+			rela2->sym = relasec->base->secsym;
 			rela2->type = absolute_rela_type(kelf);
 			rela2->addend = rela->offset;
 			rela2->offset = (unsigned int)(index * sizeof(*krelas) + \
