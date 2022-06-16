@@ -35,7 +35,7 @@ diff -Nupr src.orig/fs/nfsd/export.c src/fs/nfsd/export.c
 +	alternative("ud2", "call single_task_running", X86_FEATURE_ALWAYS);
 +	alternative("call single_task_running", "ud2", X86_FEATURE_IA64);
 +
-+	__flush_tlb_local();   /* paravirt call */
++	slow_down_io();   /* paravirt call */
 +#endif
 +
 +	pr_debug("kpatch: pr_debug() test\n");
