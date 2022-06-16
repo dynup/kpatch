@@ -3817,7 +3817,8 @@ int main(int argc, char *argv[])
 	if (arguments.klp_arch)
 		KLP_ARCH = true;
 
-	elf_version(EV_CURRENT);
+	if (elf_version(EV_CURRENT) == EV_NONE)
+		ERROR("ELF library initialisation failed \n");
 
 	orig_obj      = arguments.args[0];
 	patched_obj   = arguments.args[1];
