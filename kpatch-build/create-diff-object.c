@@ -80,52 +80,66 @@ struct special_section {
 	int (*group_size)(struct kpatch_elf *kelf, int offset);
 };
 
+static char *strarrcmp(char *name, char **prefix)
+{
+	size_t len;
+
+	if (name == NULL)
+		return NULL;
+
+	while (*prefix != NULL) {
+		len = strlen(*prefix);
+		if (!strncmp(name, *prefix, len))
+			return name + len;
+		prefix ++;
+	}
+	return NULL;
+}
+
 /*************
  * Functions
  * **********/
-
 static bool is_bundleable(struct symbol *sym)
 {
+	char *name = NULL;
+	char *func_prefix[] = {
+		".text.",
+		".text.unlikely.",
+		".text.hot.",
+		NULL,
+	};
+
+	char *obj_prefix[] = {
+		".data.",
+		".data.rel.",
+		".data.rel.ro.",
+		".rodata.",
+		".bss.",
+		NULL,
+	};
+
+	if (sym->type == STT_FUNC)
+		name = strarrcmp(sym->sec->name, func_prefix);
+	else if (sym->type==STT_OBJECT)
+		name = strarrcmp(sym->sec->name, obj_prefix);
+
+	/* No valid symbol type or prefix found */
+	if (name == NULL)
+		return false;
+
+	/* section name = prefix + symbol name */
+	if (!strcmp(name, sym->name))
+		return true;
+
+	/*
+	 * Handle cold functions:
+	 * symbol name = name + ".coldxxx"
+	 * section name = prefix + name
+	 */
 	if (sym->type == STT_FUNC &&
-	    !strncmp(sym->sec->name, ".text.",6) &&
-	    !strcmp(sym->sec->name + 6, sym->name))
-		return true;
-
-	if (sym->type == STT_FUNC &&
-	    !strncmp(sym->sec->name, ".text.unlikely.",15) &&
-	    (!strcmp(sym->sec->name + 15, sym->name) ||
-			 (strstr(sym->name, ".cold") &&
-			  !strncmp(sym->sec->name + 15, sym->name, strlen(sym->sec->name) - 15))))
-		return true;
-
-	if (sym->type == STT_FUNC &&
-	    !strncmp(sym->sec->name, ".text.hot.",10) &&
-	    !strcmp(sym->sec->name + 10, sym->name))
-		return true;
-
-	if (sym->type == STT_OBJECT &&
-	   !strncmp(sym->sec->name, ".data.",6) &&
-	   !strcmp(sym->sec->name + 6, sym->name))
-		return true;
-
-	if (sym->type == STT_OBJECT &&
-	    !strncmp(sym->sec->name, ".data.rel.", 10) &&
-	    !strcmp(sym->sec->name + 10, sym->name))
-		return true;
-
-	if (sym->type == STT_OBJECT &&
-	    !strncmp(sym->sec->name, ".data.rel.ro.", 13) &&
-	    !strcmp(sym->sec->name + 13, sym->name))
-		return true;
-
-	if (sym->type == STT_OBJECT &&
-	   !strncmp(sym->sec->name, ".rodata.",8) &&
-	   !strcmp(sym->sec->name + 8, sym->name))
-		return true;
-
-	if (sym->type == STT_OBJECT &&
-	   !strncmp(sym->sec->name, ".bss.",5) &&
-	   !strcmp(sym->sec->name + 5, sym->name))
+		!strncmp(sym->sec->name, ".text.unlikely.", 15) &&
+		strstr(sym->name, ".cold") &&
+		!strncmp(sym->sec->name + 15, sym->name, strlen(sym->sec->name) - 15))
 		return true;
 
 	return false;
