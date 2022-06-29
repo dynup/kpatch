@@ -140,6 +140,8 @@ unsigned int absolute_rela_type(struct kpatch_elf *kelf)
 		return R_PPC64_ADDR64;
 	case X86_64:
 		return R_X86_64_64;
+	case S390:
+		return R_390_64;
 	default:
 		ERROR("unsupported arch");
 	}
@@ -220,6 +222,23 @@ long rela_target_offset(struct kpatch_elf *kelf, struct section *relasec,
 				  (long)sec->data->d_buf -
 				  rela->offset;
 		} else
+			ERROR("unhandled rela type %d", rela->type);
+		break;
+	case S390:
+		/*
+		 * For branch and relative load instructions,
+		 * add_off is -2.
+		 */
+		if (rela->type == R_390_GOTENT ||
+			rela->type == R_390_PLT32DBL ||
+			rela->type == R_390_PC32DBL)
+			add_off = -2;
+		else if (rela->type == R_390_32 ||
+			rela->type == R_390_64 ||
+			rela->type == R_390_PC32 ||
+			rela->type == R_390_PC64)
+			add_off = 0;
+		else
 			ERROR("unhandled rela type %d", rela->type);
 		break;
 	default:
@@ -478,6 +497,9 @@ struct kpatch_elf *kpatch_elf_open(const char *name)
 		break;
 	case EM_X86_64:
 		kelf->arch = X86_64;
+		break;
+	case EM_S390:
+		kelf->arch = S390;
 		break;
 	default:
 		ERROR("Unsupported target architecture");
