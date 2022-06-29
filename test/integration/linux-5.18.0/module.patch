@@ -14,8 +14,8 @@ This tests several things related to the patching of modules:
 Signed-off-by: Josh Poimboeuf <jpoimboe@redhat.com>
 
 diff -Nupr src.orig/fs/nfsd/export.c src/fs/nfsd/export.c
---- src.orig/fs/nfsd/export.c	2022-04-29 15:52:13.385335713 -0400
-+++ src/fs/nfsd/export.c	2022-04-29 15:53:02.037508852 -0400
+--- src.orig/fs/nfsd/export.c	2022-06-15 10:04:10.582915958 -0400
++++ src/fs/nfsd/export.c	2022-06-15 10:04:48.309096555 -0400
 @@ -1294,6 +1294,10 @@ static void exp_flags(struct seq_file *m
  	}
  }
@@ -65,8 +65,8 @@ diff -Nupr src.orig/fs/nfsd/export.c src/fs/nfsd/export.c
  	}
  
 diff -Nupr src.orig/net/netlink/af_netlink.c src/net/netlink/af_netlink.c
---- src.orig/net/netlink/af_netlink.c	2022-04-29 15:52:13.657336681 -0400
-+++ src/net/netlink/af_netlink.c	2022-04-29 15:53:02.038508855 -0400
+--- src.orig/net/netlink/af_netlink.c	2022-06-15 10:04:11.011918011 -0400
++++ src/net/netlink/af_netlink.c	2022-06-15 10:04:48.312096569 -0400
 @@ -2908,4 +2908,9 @@ panic:
  	panic("netlink_init: Cannot allocate nl_table\n");
  }
