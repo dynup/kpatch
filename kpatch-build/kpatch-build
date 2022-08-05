@@ -1100,6 +1100,7 @@ for i in $FILES; do
 			SYMVERS_FILE="$BUILDDIR/Module.symvers"
 		elif [[ "$(basename "$KOBJFILE")" = "$(basename "$OOT_MODULE")" ]]; then
 			KOBJFILE_NAME="$(basename --suffix=.ko "$OOT_MODULE")"
+			KOBJFILE_NAME="${KOBJFILE_NAME//-/_}"
 			KOBJFILE_PATH="$OOT_MODULE"
 			SYMTAB="${TEMPDIR}/module/${KOBJFILE_NAME}.symtab"
 			SYMVERS_FILE="$TEMPDIR/Module.symvers"
