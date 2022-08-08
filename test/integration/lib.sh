@@ -41,10 +41,18 @@ kpatch_rhel_dependencies()
 	local kernel_version
 	local arch
 	local rhel_major
+	local kernel
 	local yum_utils_version
 	kernel_version=$(uname -r)
 	arch=$(uname -m)
 	rhel_major=${VERSION_ID%%.*}
+
+	# RHEL -debug kernels end in ".$(arch)+debug"
+	if uname -r | grep -q "\.$(arch)+debug$"; then
+		kernel="kernel-debug"
+	else
+		kernel="kernel"
+	fi
 
 	# kpatch-build dependencies
 	sudo yum install -y \
@@ -53,19 +61,19 @@ kpatch_rhel_dependencies()
 		gcc \
 		gcc-c++ \
 		git \
-		"kernel-devel-${kernel_version%.*}" \
+		"${kernel}-devel-${kernel_version%.*}" \
 		rpm-build \
 		wget \
 		yum-utils
-	sudo debuginfo-install -y "kernel-${kernel_version%.*}"
+	sudo debuginfo-install -y "${kernel}-${kernel_version%.*}"
 	[[ "$arch" == "ppc64le" ]] && sudo yum install -y gcc-plugin-devel
 
 	# kernel dependencies
 	yum_utils_version=$(rpm -q --queryformat="%{version}" yum-utils)
 	if [[ "${yum_utils_version}" = "$(echo -e "${yum_utils_version}\\n4.0.12" | sort -rV | head -n1)" ]]; then
-		sudo yum-builddep -y --skip-unavailable "kernel-${kernel_version%.*}"
+		sudo yum-builddep -y --skip-unavailable "${kernel}-${kernel_version%.*}"
 	else
-		sudo yum-builddep -y "kernel-${kernel_version%.*}"
+		sudo yum-builddep -y "${kernel}-${kernel_version%.*}"
 	fi
 	[[ "$arch" == "x86_64" ]] && sudo yum install -y pesign
 
