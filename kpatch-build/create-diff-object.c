@@ -1673,7 +1673,8 @@ static void kpatch_verify_patchability(struct kpatch_elf *kelf)
 		 */
 		if (sec->include && sec->status != NEW &&
 		    (!strncmp(sec->name, ".data", 5) || !strncmp(sec->name, ".bss", 4)) &&
-		    (strcmp(sec->name, ".data.unlikely") && strcmp(sec->name, ".data.once"))) {
+		    (strcmp(sec->name, ".data.unlikely") && strcmp(sec->name, ".data.once") &&
+		     strncmp(sec->name, ".data..LASAN", 12))) {
 			log_normal("data section %s selected for inclusion\n",
 				   sec->name);
 			errs++;
@@ -1769,6 +1770,7 @@ static void kpatch_include_standard_elements(struct kpatch_elf *kelf)
 		    !strcmp(sec->name, ".symtab") ||
 		    !strcmp(sec->name, ".toc") ||
 		    !strcmp(sec->name, ".rodata") ||
+		    !strncmp(sec->name, ".data..LASAN", 12) ||
 		    is_string_literal_section(sec)) {
 			kpatch_include_section(sec);
 		}
