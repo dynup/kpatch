@@ -57,6 +57,7 @@ declare -a PATCH_LIST
 APPLIED_PATCHES=0
 OOT_MODULE=
 KLP_REPLACE=1
+RHEL_DEBUG_CONFIG=0
 
 GCC="${CROSS_COMPILE:-}gcc"
 CLANG="${CROSS_COMPILE:-}clang"
@@ -535,12 +536,13 @@ usage() {
 	echo "		                        specify current version of module" >&2
 	echo "		--oot-module-src        Specify out-of-tree module source directory" >&2
 	echo "		-R, --non-replace       Disable replace patch (replace is on by default)" >&2
+	echo "		--rhel-debug-config     Use RHEL debug kernel config from srpm" >&2
 	echo "		--skip-cleanup          Skip post-build cleanup" >&2
 	echo "		--skip-compiler-check   Skip compiler version matching check" >&2
 	echo "		                        (not recommended)" >&2
 }
 
-options="$(getopt -o ha:r:s:c:v:j:t:n:o:dR -l "help,archversion:,sourcerpm:,sourcedir:,config:,vmlinux:,jobs:,target:,name:,output:,oot-module:,oot-module-src:,debug,skip-gcc-check,skip-compiler-check,skip-cleanup,non-replace" -- "$@")" || die "getopt failed"
+options="$(getopt -o ha:r:s:c:v:j:t:n:o:dR -l "help,archversion:,sourcerpm:,sourcedir:,config:,vmlinux:,jobs:,target:,name:,output:,oot-module:,oot-module-src:,debug,skip-gcc-check,skip-compiler-check,skip-cleanup,non-replace,rhel-debug-config" -- "$@")" || die "getopt failed"
 
 eval set -- "$options"
 
@@ -568,6 +570,10 @@ while [[ $# -gt 0 ]]; do
 		[[ ! -f "$2" ]] && die "config file '$2' not found"
 		CONFIGFILE="$(readlink -f "$2")"
 		shift
+		;;
+	--rhel-debug-config)
+		RHEL_DEBUG_CONFIG=1
+		echo "Building for RHEL srpm kernel-debug variant"
 		;;
 	-v|--vmlinux)
 		[[ ! -f "$2" ]] && die "vmlinux file '$2' not found"
@@ -648,6 +654,15 @@ if [[ -n "$SRCRPM" ]]; then
 	ARCHVERSION="${rpmname%.src.rpm}.$(uname -m)"
 	ARCHVERSION="${ARCHVERSION#kernel-}"
 	ARCHVERSION="${ARCHVERSION#alt-}"
+
+	if [[ "$RHEL_DEBUG_CONFIG" -eq 1 ]]; then
+		ARCHVERSION+="+debug"
+	fi
+else
+	if [[ "$RHEL_DEBUG_CONFIG" -eq 1 ]]; then
+		warn "--rhel-debug-config requires --sourcerpm"
+		exit 1
+	fi
 fi
 
 if [[ -n "$OOT_MODULE" ]] &&  [[ -z "$OOT_MODULE_SRCDIR" ]]; then
@@ -797,7 +812,10 @@ else
 		if [[ "$DISTRO" = openEuler ]]; then
 			[[ -z "$CONFIGFILE" ]] && CONFIGFILE="/boot/config-${ARCHVERSION}"
 		else
-			[[ -z "$CONFIGFILE" ]] && CONFIGFILE="$KERNEL_SRCDIR/configs/kernel$ALT-$KVER-$ARCH.config"
+			# RHEL specifies debug kernel variant at end of
+			# ARCHVERSION, i.e. 5.14.0-70.13.1.el9_0.x86_64+debug
+			VARIANT=$(echo "${ARCHVERSION##*.}" | tr '+' '-')
+			[[ -z "$CONFIGFILE" ]] && CONFIGFILE="$KERNEL_SRCDIR/configs/kernel$ALT-$KVER-$VARIANT.config"
 		fi
 
 		(cd "$KERNEL_SRCDIR" && make mrproper 2>&1 | logger) || die
