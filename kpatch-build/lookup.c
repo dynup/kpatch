@@ -31,7 +31,7 @@
 #include <stdlib.h>
 #include <stdio.h>
 #include <string.h>
-#include <error.h>
+#include <err.h>
 #include <gelf.h>
 #include <unistd.h>
 #include <libgen.h>
