@@ -479,6 +479,12 @@ find_parent_obj() {
 
 find_kobj() {
 	arg="$1"
+
+	if [[ -n $OOT_MODULE ]]; then
+		KOBJFILE="$OOT_MODULE"
+		return
+	fi
+
 	KOBJFILE="$arg"
 	DEEP_FIND=0
 	ERROR_IF_DIFF=
@@ -1093,17 +1099,17 @@ for i in $FILES; do
 	find_kobj "$i"
 	cd "$TEMPDIR" || die
 	if [[ -e "orig/$i" ]]; then
-		if [[ "$(basename "$KOBJFILE")" = vmlinux ]]; then
-			KOBJFILE_NAME=vmlinux
-			KOBJFILE_PATH="$VMLINUX"
-			SYMTAB="${TEMPDIR}/${KOBJFILE_NAME}.symtab"
-			SYMVERS_FILE="$BUILDDIR/Module.symvers"
-		elif [[ "$(basename "$KOBJFILE")" = "$(basename "$OOT_MODULE")" ]]; then
+		if [[ -n $OOT_MODULE ]]; then
 			KOBJFILE_NAME="$(basename --suffix=.ko "$OOT_MODULE")"
 			KOBJFILE_NAME="${KOBJFILE_NAME//-/_}"
 			KOBJFILE_PATH="$OOT_MODULE"
 			SYMTAB="${TEMPDIR}/module/${KOBJFILE_NAME}.symtab"
 			SYMVERS_FILE="$TEMPDIR/Module.symvers"
+		elif [[ "$(basename "$KOBJFILE")" = vmlinux ]]; then
+			KOBJFILE_NAME=vmlinux
+			KOBJFILE_PATH="$VMLINUX"
+			SYMTAB="${TEMPDIR}/${KOBJFILE_NAME}.symtab"
+			SYMVERS_FILE="$BUILDDIR/Module.symvers"
 		else
 			KOBJFILE_NAME=$(basename "${KOBJFILE%.ko}")
 			KOBJFILE_NAME="${KOBJFILE_NAME//-/_}"
