@@ -434,82 +434,215 @@ find_special_section_data() {
 	return
 }
 
-filter_parent_obj()
-{
-  local dir="${1}"
-  local file="${2}"
+# path of file, relative to dir
+# adapted from https://stackoverflow.com/a/24848739
+relpath() {
+	local file="$1"
+	local dir="$2"
 
-  grep -v "\.mod\.cmd$" | grep -Fv "${dir}/.${file}.cmd"
+	local filedir
+	local common
+	local result
+
+	filedir="$(dirname "$(readlink -f "$file")")"
+	common="$(readlink -f "$dir")"
+
+	if [[ "$filedir" = "$common" ]]; then
+		basename "$file"
+		return
+	fi
+
+	while [[ "${filedir#$common/}" = "$filedir" ]]; do
+		common="$(dirname "$common")"
+		result="../$result"
+	done
+
+	result="${result}${filedir#$common/}"
+	echo "${result}/$(basename "$file")"
+}
+
+cmd_file_to_o_file() {
+	local parent="$1"
+
+	# convert cmd file name to corresponding .o
+	parent_dir="$(dirname "$parent")"
+	parent_dir="${parent_dir#./}"
+	parent="$(basename "$parent")"
+	parent="${parent#.}"
+	parent="${parent%.cmd}"
+	parent="$parent_dir/$parent"
+
+	[[ -f $parent ]] || die "can't find $parent associated with $1"
+
+	echo "$parent"
+}
+
+get_parent_from_parents() {
+	local parents=("$@")
+
+	[[ ${#parents[@]} -eq 0 ]] && PARENT="" && return
+	[[ ${#parents[@]} -eq 1 ]] && PARENT="${parents[0]}" && return
+
+	# multiple parents:
+	local parent
+	local mod_name="${parents[0]%.*}"
+	local mod_file
+	for parent in "${parents[@]}"; do
+		# for modules, there can be multiple matches.  Some
+		# combination of foo.o, foo.mod, and foo.ko, depending
+		# on kernel version and whether the module is single or
+		# multi-object.  Make sure a .mod and/or .ko exists, and no
+		# more than one .mod/.ko exists.
+
+		[[ $parent = *.o ]] && continue
+
+		if [[ ${parent%.*} != "$mod_name" ]]; then
+			mod_file=""
+			break
+		fi
+
+		if [[ $parent = *.mod || $parent = *.ko ]]; then
+			mod_file=$parent
+			continue
+		fi
+
+		mod_file=""
+		break
+	done
+
+	if [[ -n $mod_file ]]; then
+		PARENT="$mod_file"
+		return
+	fi
+
+	ERROR_IF_DIFF="multiple parent matches for $file: ${parents[*]}"
+	PARENT="${parents[0]}"
+}
+
+__find_parent_obj_in_dir() {
+	local file="$1"
+	local dir="$2"
+
+	declare -a parents
+
+	while IFS='' read -r parent; do
+		parent="$(cmd_file_to_o_file "$parent")"
+		[[ $parent -ef $file ]] && continue
+		parents+=("$parent")
+	done < <(grep -El "[ 	]${file/./\\.}([ 	\)]|$)" "$dir"/.*.cmd)
+
+	get_parent_from_parents "${parents[@]}"
+}
+
+find_parent_obj_in_dir() {
+	local file="$1"
+	local dir="$2"
+
+	# make sure the dir has .cmd files
+	if ! compgen -G "$dir"/.*.cmd > /dev/null; then
+		PARENT=""
+		return
+	fi
+
+	# 5.19+: ../acp/acp_hw.o
+	__find_parent_obj_in_dir "$(relpath "$file" "$dir")" "$dir"
+	[[ -n $PARENT ]] && return
+
+	# pre-5.19 (and 5.19+ single-object modules):
+	if [[ $file == $dir* ]]; then
+		# arch/x86/kernel/smp.o
+		__find_parent_obj_in_dir "$file" "$dir"
+	else
+		# drivers/gpu/drm/amd/amdgpu/../acp/acp_hw.o
+		__find_parent_obj_in_dir "$dir"/"$(relpath "$file" "$dir")" "$dir"
+	fi
 }
 
 find_parent_obj() {
-	dir="$(dirname "$1")"
-	absdir="$(readlink -f "$dir")"
-	pwddir="$(readlink -f .)"
-	pdir="${absdir#$pwddir/}"
-	file="$(basename "$1")"
-	grepname="${1%.o}"
-	grepname="$grepname\\.o"
-	if [[ "$DEEP_FIND" -eq 1 ]]; then
-		num=0
-		if [[ -n "$last_deep_find" ]]; then
-			parent="$(grep -lw "$grepname" "$last_deep_find"/.*.cmd | filter_parent_obj "${pdir}" "${file}" | head -n1)"
-			num="$(grep -lw "$grepname" "$last_deep_find"/.*.cmd | filter_parent_obj "${pdir}" "${file}" | wc -l)"
-		fi
-		if [[ "$num" -eq 0 ]]; then
-			parent="$(find . -name ".*.cmd" -print0 | xargs -0 grep -lw "$grepname" | filter_parent_obj "${pdir}" "${file}" | cut -c3- | head -n1)"
-			num="$(find . -name ".*.cmd" -print0 | xargs -0 grep -lw "$grepname" | filter_parent_obj "${pdir}" "${file}" | wc -l)"
-			[[ "$num" -eq 1 ]] && last_deep_find="$(dirname "$parent")"
-		fi
-	else
-		parent="$(grep -lw "$grepname" "$dir"/.*.cmd | filter_parent_obj "${dir}" "${file}" | head -n1)"
-		num="$(grep -lw "$grepname" "$dir"/.*.cmd | filter_parent_obj "${dir}" "${file}" | wc -l)"
+	local file="$1"
+
+	# common case: look in same directory
+	find_parent_obj_in_dir "$file" "$(dirname "$file")"
+	[[ -n $PARENT ]] && return
+
+	# if we previously had a successful deep find, try that dir first
+	if [[ -n "$LAST_DEEP_FIND_DIR" ]]; then
+		find_parent_obj_in_dir "$file" "$LAST_DEEP_FIND_DIR"
+		[[ -n "$PARENT" ]] && return
 	fi
 
-	[[ "$num" -eq 0 ]] && PARENT="" && return
-	[[ "$num" -gt 1 ]] && ERROR_IF_DIFF="two parent matches for $1"
+	# prevent known deep finds
+	if [[ $file = drivers/gpu/drm/amd/* ]]; then
+		find_parent_obj_in_dir "$file" "drivers/gpu/drm/amd/amdgpu"
+		[[ -n "$PARENT" ]] && return
+	fi
+	if [[ $file = virt/kvm/* ]]; then
+		find_parent_obj_in_dir "$file" "arch/x86/kvm"
+		[[ -n "$PARENT" ]] && return
+	fi
+	if [[ $file = drivers/oprofile/* ]]; then
+		find_parent_obj_in_dir "$file" "arch/x86/oprofile"
+		[[ -n "$PARENT" ]] && return
+	fi
 
-	dir="$(dirname "$parent")"
-	PARENT="$(basename "$parent")"
-	PARENT="${PARENT#.}"
-	PARENT="${PARENT%.cmd}"
-	[[ $dir != "." ]] && PARENT="$dir/$PARENT"
-	[[ ! -e "$PARENT" ]] && die "ERROR: can't find parent $PARENT for $1"
+	# check higher-level dirs
+	local dir
+	dir="$(dirname "$file")"
+	while [[ ! $dir -ef . ]]; do
+		dir="$(dirname "$dir")"
+		find_parent_obj_in_dir "$file" "$dir"
+		[[ -n $PARENT ]] && return
+	done
+
+	# slow path: search the entire tree ("deep find")
+	echo 'doing "deep find" for parent object'
+	declare -a parents
+	while IFS= read -r -d '' dir; do
+		find_parent_obj_in_dir "$file" "$dir"
+		if [[ -n $PARENT ]]; then
+			parents+=("$PARENT")
+			LAST_DEEP_FIND_DIR="$dir"
+		fi
+	done < <(find . -type d -print0)
+
+	get_parent_from_parents "${parents[@]}"
 }
 
+# find vmlinux or .ko associated with a .o file
 find_kobj() {
-	arg="$1"
+	local file="$1"
 
 	if [[ -n $OOT_MODULE ]]; then
 		KOBJFILE="$OOT_MODULE"
 		return
 	fi
 
-	KOBJFILE="$arg"
-	DEEP_FIND=0
+	KOBJFILE="$file"
 	ERROR_IF_DIFF=
 	while true; do
+		case "$KOBJFILE" in
+			*.mod)
+				KOBJFILE=${PARENT/.mod/.ko}
+				[[ -e $KOBJFILE ]] || die "can't find .ko for $PARENT"
+				return
+				;;
+			*.ko)
+				return
+				;;
+			*/built-in.o|\
+			*/built-in.a|\
+			arch/x86/kernel/ebda.o|\
+			arch/x86/kernel/head*.o|\
+			arch/x86/kernel/platform-quirks.o|\
+			arch/x86/lib/lib.a|\
+			lib/lib.a)
+				KOBJFILE=vmlinux
+				return
+				;;
+		esac
+
 		find_parent_obj "$KOBJFILE"
-		[[ -n "$PARENT" ]] && DEEP_FIND=0
-		if [[ -z "$PARENT" ]]; then
-			[[ "$KOBJFILE" = *.ko ]] && return
-			case "$KOBJFILE" in
-				*/built-in.o|\
-				*/built-in.a|\
-				arch/x86/lib/lib.a|\
-				arch/x86/kernel/head*.o|\
-				arch/x86/kernel/ebda.o|\
-				arch/x86/kernel/platform-quirks.o|\
-				lib/lib.a)
-					KOBJFILE=vmlinux
-					return
-			esac
-			if [[ "$DEEP_FIND" -eq 0 ]]; then
-				DEEP_FIND=1
-				continue;
-			fi
-			die "invalid ancestor $KOBJFILE for $arg"
-		fi
+		[[ -z "$PARENT" ]] && die "invalid ancestor $KOBJFILE for $file"
 		KOBJFILE="$PARENT"
 	done
 }
