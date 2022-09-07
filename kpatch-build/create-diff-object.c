@@ -1766,6 +1766,9 @@ static void kpatch_replace_sections_syms(struct kpatch_elf *kelf)
 					 */
 				} else if (target_off == start && target_off == end) {
 
+					if(kpatch_is_mapping_symbol(kelf, sym))
+						continue;
+
 					/*
 					 * Allow replacement for references to
 					 * empty symbols.
