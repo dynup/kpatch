@@ -294,6 +294,23 @@ built separately.
 `kpatch-build --oot-module-src ~/test/ --target default --oot-module /lib/modules/$(uname -r)/extra/test.ko test.patch`
 
 
+**Q. What is needed to support a new architecture?**
+
+Porting an architecture can be done in three phases:
+
+1. In the kernel, add `CONFIG_HAVE_LIVEPATCH` support. For some arches
+this might be as simple as enabling `CONFIG_DYNAMIC_FTRACE_WITH REGS`.
+With this support you can do basic live patches like those in
+samples/livepatch. Livepatch functionality is limited and extra care
+must be taken to avoid certain pitfalls.
+2. Add kpatch-build (create-diff-object) support. This makes it easier
+to build patches, and avoids some of the pitfalls.  For example,
+https://github.com/dynup/kpatch/pull/1203 added s390x support.
+3. Add `CONFIG_HAVE_RELIABLE_STACKTRACE` and (if needed) objtool
+support in the kernel. This avoids more pitfalls and enables full
+livepatch functionality.
+
+
 Get involved
 ------------
 
