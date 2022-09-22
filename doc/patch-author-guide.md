@@ -85,7 +85,7 @@ For example, consider this
 [patch](http://git.kernel.org/cgit/linux/kernel/git/torvalds/linux.git/commit/?id=54a20552e1eae07aa240fa370a0293e006b5faed).
 which has the following hunk:
 
-```
+```diff
 @@ -3270,6 +3277,7 @@ static int (*const svm_exit_handlers[])(struct vcpu_svm *svm) = {
  	[SVM_EXIT_EXCP_BASE + PF_VECTOR]	= pf_interception,
  	[SVM_EXIT_EXCP_BASE + NM_VECTOR]	= nm_interception,
@@ -103,7 +103,7 @@ AC_VECTOR]`.  That change is incompatible with kpatch.
 Looking at the source file, we can see that this function pointer is only
 accessed by a single function, `handle_exit()`:
 
-```
+```c
         if (exit_code >= ARRAY_SIZE(svm_exit_handlers)
             || !svm_exit_handlers[exit_code]) {
                 WARN_ONCE(1, "svm: unexpected exit reason 0x%x\n", exit_code);
@@ -117,7 +117,7 @@ accessed by a single function, `handle_exit()`:
 So an easy solution here is to just change the code to manually check for the
 new case before looking in the data structure:
 
-```
+```diff
 @@ -3580,6 +3580,9 @@ static int handle_exit(struct kvm_vcpu *vcpu)
                 return 1;
         }
@@ -149,7 +149,7 @@ but to do so through kpatch-build, `kpatch-macros.h` defines the following:
 
 A pre-patch callback routine has the following signature:
 
-```
+```c
 static int callback(patch_object *obj) { }
 KPATCH_PRE_PATCH_CALLBACK(callback);
 ```
@@ -161,7 +161,7 @@ section below.
 Post-patch, pre-unpatch, and post-unpatch callback routines all share the
 following signature:
 
-```
+```c
 static void callback(patch_object *obj) { }
 KPATCH_POST_PATCH_CALLBACK(callback);            /* or */
 KPATCH_PRE_UNPATCH_CALLBACK(callback);           /* or */
@@ -201,7 +201,7 @@ Example: a kpatch fix for CVE-2016-5389 could utilize the
 `KPATCH_PRE_PATCH_CALLBACK` and `KPATCH_POST_UNPATCH_CALLBACK` macros to modify
 variable `sysctl_tcp_challenge_ack_limit` in-place:
 
-```
+```diff
 +#include "kpatch-macros.h"
 +
 +static bool kpatch_write = false;
@@ -250,7 +250,7 @@ provide unique ID enumerations per kpatch as needed.
 `klp_shadow_alloc()` returns a pointer to the shadow variable, so we can
 dereference and make assignments as usual.  In this patch chunk, the shadow
 `newpid` is allocated then assigned to a rolling `ctr` counter value:
-```
+```patch
 diff --git a/kernel/fork.c b/kernel/fork.c
 index 9bff3b28c357..18374fd35bd9 100644
 --- a/kernel/fork.c
@@ -285,7 +285,7 @@ modifies `task_context_switch_counts()` to fetch the shadow variable
 associated with the current `struct task_struct *p` object and a
 `KPATCH_SHADOW_NEWPID ID`.  As in the previous patch chunk, the shadow
 variable pointer may be accessed as an ordinary pointer type:
-```
+```patch
 diff --git a/fs/proc/array.c b/fs/proc/array.c
 index 39684c79e8e2..fe0259d057a3 100644
 --- a/fs/proc/array.c
@@ -315,7 +315,7 @@ index 39684c79e8e2..fe0259d057a3 100644
 A shadow variable is freed by calling `klp_shadow_free()` and providing
 the object / enum ID combination.  Once freed, the shadow variable is no
 longer safe to access:
-```
+```patch
 diff --git a/kernel/exit.c b/kernel/exit.c
 index 148a7842928d..44b6fe61e912 100644
 --- a/kernel/exit.c
@@ -369,7 +369,7 @@ also required to allocate/free a shadow variable with enum ID
 `KPATCH_SHADOW_REQS_ACTIVE_V2` whenever a new `struct kioctx` is
 created/released. No values are ever assigned to the shadow variable.)
 
-```
+```patch
 diff --git a/fs/aio.c b/fs/aio.c
 index ebd06fd0de89..6a33b73c9107 100644
 --- a/fs/aio.c
@@ -387,7 +387,7 @@ index ebd06fd0de89..6a33b73c9107 100644
 
 Shadow variable existence can be verified before applying the *new* data
 semantic of the associated object:
-```
+```diff
 @@ -678,6 +681,8 @@ void aio_complete(struct kiocb *iocb, long res, long res2)
  put_rq:
         /* everything turned out well, dispose of the aiocb. */
@@ -401,7 +401,7 @@ semantic of the associated object:
 
 Likewise, shadow variable non-existence can be tested to continue applying the
 *old* data semantic:
-```
+```diff
 @@ -310,7 +312,8 @@ static void free_ioctx(struct kioctx *ctx)
  
                 avail = (head <= ctx->tail ? ctx->tail : ctx->nr_events) - head;
@@ -430,7 +430,7 @@ critical sections throughout `net/mac80211/sta_info.c`.
 When allocating a new `struct sta_info`, allocate a corresponding shadow
 variable large enough to hold a `spinlock_t` instance, then initialize the
 spinlock:
-```
+```patch
 diff --git a/net/mac80211/sta_info.c b/net/mac80211/sta_info.c
 index decd30c1e290..758533dda4d8 100644
 --- a/net/mac80211/sta_info.c
@@ -468,7 +468,7 @@ index decd30c1e290..758533dda4d8 100644
 Patched code can reference the shadow variable associated with a given `struct
 sta_info` to determine and apply the correct locking semantic for that
 instance:
-```
+```patch
 diff --git a/net/mac80211/tx.c b/net/mac80211/tx.c
 index 97a02d3f7d87..0edb0ed8dc60 100644
 --- a/net/mac80211/tx.c
@@ -599,7 +599,7 @@ redirect existing functions, so "removed" functions will continue to exist in
 kernel address space as effectively dead code.
 
 That means this patch (source code removal of `cmdline_proc_show`):
-```
+```patch
 diff -Nupr src.orig/fs/proc/cmdline.c src/fs/proc/cmdline.c
 --- src.orig/fs/proc/cmdline.c	2016-11-30 19:39:49.317737234 +0000
 +++ src/fs/proc/cmdline.c	2016-11-30 19:39:52.696737234 +0000
@@ -628,7 +628,7 @@ diff -Nupr src.orig/fs/proc/cmdline.c src/fs/proc/cmdline.c
 ```
 will generate an equivalent kpatch module to this patch (dead
 `cmdline_proc_show` left in source):
-```
+```patch
 diff -Nupr src.orig/fs/proc/cmdline.c src/fs/proc/cmdline.c
 --- src.orig/fs/proc/cmdline.c	2016-11-30 19:39:49.317737234 +0000
 +++ src/fs/proc/cmdline.c	2016-11-30 19:39:52.696737234 +0000
@@ -680,7 +680,7 @@ logic which doesn't store the static variable in the `.data..read_mostly`
 section.
 
 For example, a `pr_warn_once()` can be replaced with:
-```
+```c
 	static bool print_once;
 	...
 	if (!print_once) {
@@ -695,7 +695,7 @@ inline implies notrace
 The linux kernel defines its own version of "inline" in
 include/linux/compiler_types.h which includes "notrace" as well:
 
-```
+```c
 #if !defined(CONFIG_OPTIMIZE_INLINING)
 #define inline inline __attribute__((__always_inline__)) __gnu_inline \
         __inline_maybe_unused notrace
@@ -710,7 +710,7 @@ to kpatch-build errors like the following:
 
 1. `__tcp_mtu_to_mss()` is marked as inline:
 
-```
+```c
 net/ipv4/tcp_output.c:
 
 /* Calculate MSS not accounting any TCP options.  */
@@ -722,7 +722,7 @@ static inline int __tcp_mtu_to_mss(struct sock *sk, int pmtu)
    function-section.  Then kpatch-build notices that it doesn't have an
    fentry/mcount call:
 
-```
+```console
 % kpatch-build ...
 
 tcp_output.o: function __tcp_mtu_to_mss has no fentry/mcount call, unable to patch
@@ -730,7 +730,7 @@ tcp_output.o: function __tcp_mtu_to_mss has no fentry/mcount call, unable to pat
 
 3. a peek at the generated code:
 
-```
+```c
 Disassembly of section .text.__tcp_mtu_to_mss:
 
 0000000000000000 <__tcp_mtu_to_mss>:
@@ -764,7 +764,7 @@ compiled default.
 The current workaround is to remove the jump label by explictly checking
 the static key:
 
-```
+```c
 DEFINE_STATIC_KEY_TRUE(true_key);
 DEFINE_STATIC_KEY_FALSE(false_key);
 
