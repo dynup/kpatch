@@ -974,7 +974,7 @@ static void kpatch_correlate_section(struct section *sec_orig,
 		__kpatch_correlate_section(sec_orig->base, sec_patched->base);
 		sec_orig = sec_orig->base;
 		sec_patched = sec_patched->base;
-	} else if (sec_orig->rela) {
+	} else if (sec_orig->rela && sec_patched->rela) {
 		__kpatch_correlate_section(sec_orig->rela, sec_patched->rela);
 	}
 
