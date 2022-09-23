@@ -28,7 +28,7 @@ SYMVERS_FILE = $(if $(wildcard $(TNAME).$(EXT_SYMVERS)),$(TNAME).$(EXT_SYMVERS),
 
 define check_stripped =
 	$(if $(shell readelf --debug-dump $(1)),
-		$(error $(1) is not properly stripped, use 'strip --strip-debug --keep-file-symbols $(1)' to fix this),
+		$(error $(1) is not properly stripped, use 'strip --strip-debug --keep-file-symbols --remove-section=.eh_frame $(1)' to fix this),
 	)
 endef
 
