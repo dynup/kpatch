@@ -579,7 +579,9 @@ static void kpatch_compare_correlated_section(struct section *sec)
 	}
 
 	if (sec1->sh.sh_size != sec2->sh.sh_size ||
-	    sec1->data->d_size != sec2->data->d_size) {
+	    sec1->data->d_size != sec2->data->d_size ||
+		(sec1->rela && !sec2->rela) ||
+		(sec2->rela && !sec1->rela)) {
 		sec->status = CHANGED;
 		goto out;
 	}
