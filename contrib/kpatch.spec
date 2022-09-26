@@ -6,7 +6,7 @@
 
 Name: kpatch
 Summary: Dynamic kernel patching
-Version: 0.9.6
+Version: 0.9.7
 License: GPLv2
 Group: System Environment/Kernel
 URL: http://github.com/dynup/kpatch
@@ -104,6 +104,21 @@ rm -rf %{buildroot}
 %{_mandir}/man1/kpatch-build.1*
 
 %changelog
+* Wed Sep 14 Yannick Cote <ycote@redhat.com> - 0.9.7
+* S390x kpatch support
+* Add support for openEuler + documentation (kpatch-build)
+* Use err.h instead of error.h for musl support (kpatch-build)
+* Add support for .return_sites section (kpatch-build x86)
+* Create missing section symbol (kpatch-build)
+* Fix symtab parsing lookup (kpatch-build)
+* Many fixes and improvements in create-diff-object (kpatch-build)
+* Unload already disabled modules (kpatch util)
+* Add integration tests for: rhel-{8.6,9.0},5.18.0 (test)
+* Add tests for patching a syscall (test)
+* Combine and improve Fedora, CentOS with RHEL kpatch-build dependencies (test)
+* Major revamp of README.md and documentation
+* Add syscall patching macros (kmod)
+
 * Tue Apr 12 Joe Lawrence <joe.lawrence@redhat.com> - 0.9.6
 * Allow OOT modules to be built with non-distro kernels
 * Add cross-arch unit testing support

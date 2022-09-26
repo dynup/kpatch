@@ -25,7 +25,7 @@
 
 INSTALLDIR=/var/lib/kpatch
 SCRIPTDIR="$(readlink -f "$(dirname "$(type -p "$0")")")"
-VERSION="0.9.6"
+VERSION="0.9.7"
 POST_ENABLE_WAIT=15	# seconds
 POST_SIGNAL_WAIT=60	# seconds
 MODULE_REF_WAIT=15	# seconds
