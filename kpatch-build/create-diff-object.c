@@ -2717,7 +2717,8 @@ static void kpatch_mark_ignored_sections(struct kpatch_elf *kelf)
 	/* Ignore any discarded sections */
 	list_for_each_entry(sec, &kelf->sections, list) {
 		if (!strncmp(sec->name, ".discard", 8) ||
-		    !strncmp(sec->name, ".rela.discard", 13))
+		    !strncmp(sec->name, ".rela.discard", 13) ||
+		    !strncmp(sec->name, ".llvm_addrsig", 13))
 			sec->ignore = 1;
 	}
 
