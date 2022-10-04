@@ -607,7 +607,7 @@ void kpatch_create_shstrtab(struct kpatch_elf *kelf)
 
 	shstrtab = find_section_by_name(&kelf->sections, ".shstrtab");
 	if (!shstrtab)
-		ERROR("find_section_by_name");
+		return;
 
 	/* determine size of string table */
 	size = 1; /* for initial NULL terminator */
@@ -648,7 +648,7 @@ void kpatch_create_shstrtab(struct kpatch_elf *kelf)
 
 void kpatch_create_strtab(struct kpatch_elf *kelf)
 {
-	struct section *strtab;
+	struct section *strtab, *shstrtab;
 	struct symbol *sym;
 	size_t size = 0, offset = 0, len;
 	char *buf;
@@ -657,11 +657,22 @@ void kpatch_create_strtab(struct kpatch_elf *kelf)
 	if (!strtab)
 		ERROR("find_section_by_name");
 
+	shstrtab = find_section_by_name(&kelf->sections, ".shstrtab");
+
 	/* determine size of string table */
 	list_for_each_entry(sym, &kelf->symbols, list) {
 		if (sym->type == STT_SECTION)
 			continue;
 		size += strlen(sym->name) + 1; /* include NULL terminator */
+	}
+
+	/* and when covering for missing .shstrtab ... */
+	if (!shstrtab) {
+		/* factor out into common (sh)strtab feeder */
+		struct section *sec;
+
+		list_for_each_entry(sec, &kelf->sections, list)
+			size += strlen(sec->name) + 1; /* include NULL terminator */
 	}
 
 	/* allocate data buffer */
@@ -682,8 +693,20 @@ void kpatch_create_strtab(struct kpatch_elf *kelf)
 		offset += len;
 	}
 
+	if (!shstrtab) {
+		struct section *sec;
+
+		/* populate string table and link with section header */
+		list_for_each_entry(sec, &kelf->sections, list) {
+			len = strlen(sec->name) + 1;
+			sec->sh.sh_name = (unsigned int)offset;
+			memcpy(buf + offset, sec->name, len);
+			offset += len;
+		}
+	}
+
 	if (offset != size)
-		ERROR("shstrtab size mismatch");
+		ERROR("strtab size mismatch");
 
 	strtab->data->d_buf = buf;
 	strtab->data->d_size = size;
@@ -928,7 +951,9 @@ void kpatch_write_output_elf(struct kpatch_elf *kelf, Elf *elf, char *outfile,
 
 	shstrtab = find_section_by_name(&kelf->sections, ".shstrtab");
 	if (!shstrtab)
-		ERROR("missing .shstrtab section");
+		shstrtab = find_section_by_name(&kelf->sections, ".strtab");
+	if (!shstrtab)
+		ERROR("missing .shstrtab, .strtab sections");
 
 	ehout.e_shstrndx = (unsigned short)shstrtab->index;
 
