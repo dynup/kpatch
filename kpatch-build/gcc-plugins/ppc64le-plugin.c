@@ -1,5 +1,5 @@
-#include "gcc-common.h"
 #include <error.h>
+#include "gcc-common.h"
 
 #define PLUGIN_NAME "ppc64le-plugin"
 
