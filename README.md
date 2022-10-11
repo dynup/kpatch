@@ -40,7 +40,7 @@ Supported Architectures
 
 - [x] x86-64
 - [x] ppc64le
-- [x] arm64
+- [x] arm64 [upstream prerequisites](doc/arm64-upstream-prerequisites.md)
 - [x] s390 [upstream prerequisites](doc/s390-upstream-prerequisites.md)
 
 Installation
