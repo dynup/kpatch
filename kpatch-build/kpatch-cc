@@ -31,22 +31,22 @@ if [[ "$TOOLCHAINCMD" =~ ^(.*-)?gcc$ || "$TOOLCHAINCMD" =~ ^(.*-)?clang$ ]] ; th
 				vmlinux.o|\
 				.tmp_kallsyms1.o|\
 				.tmp_kallsyms2.o|\
-				init/version.o|\
-				arch/x86/boot/version.o|\
-				arch/x86/boot/compressed/eboot.o|\
-				arch/x86/boot/header.o|\
-				arch/x86/boot/compressed/efi_stub_64.o|\
-				arch/x86/boot/compressed/piggy.o|\
-				kernel/system_certificates.o|\
-				arch/x86/vdso/*|\
+				arch/x86/boot/*|\
 				arch/x86/entry/vdso/*|\
-				drivers/firmware/efi/libstub/*|\
+				arch/x86/purgatory/*|\
+				arch/x86/realmode/*|\
+				arch/x86/tools/*|\
+				arch/x86/vdso/*|\
 				arch/powerpc/kernel/prom_init.o|\
 				arch/powerpc/kernel/vdso64/*|\
 				arch/s390/boot/*|\
 				arch/s390/purgatory/*|\
 				arch/s390/kernel/vdso64/*|\
+				drivers/firmware/efi/libstub/*|\
+				init/version.o|\
+				kernel/system_certificates.o|\
 				lib/*|\
+				tools/*|\
 				.*.o|\
 				*/.lib_exports.o)
 					break
