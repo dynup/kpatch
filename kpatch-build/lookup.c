@@ -91,11 +91,13 @@ static bool maybe_discarded_sym(const char *name)
 }
 
 static bool locals_match(struct lookup_table *table, int idx,
-			struct symbol *file_sym, struct list_head *sym_list)
+			 struct symbol *file_sym, struct list_head *sym_list,
+			 int match_pct)
 {
 	struct symbol *sym;
 	struct object_symbol *table_sym;
 	int i, found;
+	int match_cnt = 0, mismatch_cnt = 0;
 
 	i = idx + 1;
 	for_each_obj_symbol_continue(i, table_sym, table) {
@@ -121,9 +123,17 @@ static bool locals_match(struct lookup_table *table, int idx,
 			}
 		}
 
-		if (!found)
-			return false;
+		if (found)
+			match_cnt++;
+		else
+			mismatch_cnt++;
 	}
+
+	if (match_cnt * 100 < (match_cnt + mismatch_cnt) * match_pct)
+		return false;
+
+	match_cnt = 0;
+	mismatch_cnt = 0;
 
 	sym = file_sym;
 	list_for_each_entry_continue(sym, sym_list, list) {
@@ -157,11 +167,13 @@ static bool locals_match(struct lookup_table *table, int idx,
 			}
 		}
 
-		if (!found)
-			return false;
+		if (found)
+			match_cnt++;
+		else
+			mismatch_cnt++;
 	}
 
-	return true;
+	return match_cnt * 100 >= (match_cnt + mismatch_cnt) * match_pct;
 }
 
 static void find_local_syms(struct lookup_table *table, struct symbol *file_sym,
@@ -176,7 +188,7 @@ static void find_local_syms(struct lookup_table *table, struct symbol *file_sym,
 			continue;
 		if (strcmp(file_sym->name, sym->name))
 			continue;
-		if (!locals_match(table, i, file_sym, sym_list))
+		if (!locals_match(table, i, file_sym, sym_list, 90 /* match_pct */))
 			continue;
 		if (lookup_table_file_sym)
 			ERROR("found duplicate matches for %s local symbols in %s symbol table",
