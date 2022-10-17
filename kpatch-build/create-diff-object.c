@@ -455,6 +455,14 @@ static bool rela_equal(struct rela *rela1, struct rela *rela2)
 		return true;
 
 	/*
+	 * __llvm_prf_cnts is used by clang PGO to store counters. Ignore
+	 * these to void unnecessary "changed function".
+	 */
+	if (!strcmp(rela1->sym->name, "__llvm_prf_cnts") &&
+	    !strcmp(rela2->sym->name, "__llvm_prf_cnts"))
+		return true;
+
+	/*
 	 * With -mcmodel=large on ppc64le, GCC might generate entries in the .toc
 	 * section for relocation symbol references.   The .toc offsets may change
 	 * between the original and patched .o, so comparing ".toc + offset" isn't
