@@ -806,7 +806,7 @@ if [[ -n "$USERSRCDIR" ]]; then
 	[[ ! -e "$VMLINUX" ]] && die "can't find vmlinux"
 
 	# Extract the target kernel version from vmlinux in this case.
-	VMLINUX_VER="$(strings "$VMLINUX" | grep -m 1 -e "^Linux version" | awk '{ print($3); }')"
+	VMLINUX_VER="$(strings "$VMLINUX" | grep -m1 -o -e 'Linux version \S*' | awk '{print $3}')"
 	if [[ -n "$ARCHVERSION" ]]; then
 		if [[ -n "$VMLINUX_VER" ]] && [[ "$ARCHVERSION" != "$VMLINUX_VER" ]]; then
 			die "Kernel version mismatch: $ARCHVERSION was specified but vmlinux was built for $VMLINUX_VER"
