@@ -1,0 +1,85 @@
+From 08078d00ab1749a6f84148a00d8d26572af4ec97 Mon Sep 17 00:00:00 2001
+Message-Id: <08078d00ab1749a6f84148a00d8d26572af4ec97.1586900628.git.jpoimboe@redhat.com>
+From: Josh Poimboeuf <jpoimboe@redhat.com>
+Date: Tue, 14 Apr 2020 15:17:51 -0500
+Subject: [PATCH] kpatch module integration test
+
+This tests several things related to the patching of modules:
+
+- 'kpatch_string' tests the referencing of a symbol which is outside the
+  .o, but inside the patch module.
+
+- alternatives patching (.altinstructions)
+
+- paravirt patching (.parainstructions)
+
+- jump labels (5.8+ kernels only) -- including dynamic printk
+
+Signed-off-by: Josh Poimboeuf <jpoimboe@redhat.com>
+---
+ fs/nfsd/export.c         | 30 ++++++++++++++++++++++++++++++
+ net/netlink/af_netlink.c |  5 +++++
+ 2 files changed, 35 insertions(+)
+
+diff -Nupr src.orig/fs/nfsd/export.c src/fs/nfsd/export.c
+--- src.orig/fs/nfsd/export.c	2022-10-24 15:41:08.846760255 -0400
++++ src/fs/nfsd/export.c	2022-10-24 15:41:52.672070238 -0400
+@@ -1228,15 +1228,45 @@ static void exp_flags(struct seq_file *m
+ 	}
+ }
+ 
++#include <linux/version.h>
++extern char *kpatch_string(void);
++
+ static int e_show(struct seq_file *m, void *p)
+ {
+ 	struct cache_head *cp = p;
+ 	struct svc_export *exp = container_of(cp, struct svc_export, h);
+ 	struct cache_detail *cd = m->private;
++#ifdef CONFIG_X86_64
++	unsigned long long sched_clock;
++
++	alternative("ud2", "call yield", X86_FEATURE_ALWAYS);
++	alternative("call yield", "ud2", X86_FEATURE_IA64);
++
++	sched_clock = paravirt_sched_clock();
++	if (!jiffies)
++		printk("kpatch: sched_clock: %llu\n", sched_clock);
++#endif
++
++	pr_debug("kpatch: pr_debug() test\n");
++
++#if LINUX_VERSION_CODE >= KERNEL_VERSION(5, 8, 0)
++{
++	static DEFINE_STATIC_KEY_TRUE(kpatch_key);
++
++	if (static_branch_unlikely(&mcsafe_key))
++		printk("kpatch: mcsafe_key\n");
++
++	BUG_ON(!static_branch_likely(&kpatch_key));
++	static_branch_disable(&kpatch_key);
++	BUG_ON(static_branch_likely(&kpatch_key));
++	static_branch_enable(&kpatch_key);
++}
++#endif
+ 
+ 	if (p == SEQ_START_TOKEN) {
+ 		seq_puts(m, "# Version 1.1\n");
+ 		seq_puts(m, "# Path Client(Flags) # IPs\n");
++		seq_puts(m, kpatch_string());
+ 		return 0;
+ 	}
+ 
+diff -Nupr src.orig/net/netlink/af_netlink.c src/net/netlink/af_netlink.c
+--- src.orig/net/netlink/af_netlink.c	2022-10-24 15:41:09.080756571 -0400
++++ src/net/netlink/af_netlink.c	2022-10-24 15:41:52.672070238 -0400
+@@ -2887,4 +2887,9 @@ panic:
+ 	panic("netlink_init: Cannot allocate nl_table\n");
+ }
+ 
++char *kpatch_string(void)
++{
++	return "# kpatch\n";
++}
++
+ core_initcall(netlink_proto_init);
