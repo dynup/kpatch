@@ -56,7 +56,7 @@ DEBUG_KCFLAGS=""
 declare -a PATCH_LIST
 APPLIED_PATCHES=0
 OOT_MODULE=
-KLP_REPLACE=1
+KLP_REPLACE=0
 
 GCC="${CROSS_COMPILE:-}gcc"
 CLANG="${CROSS_COMPILE:-}clang"
@@ -673,13 +673,13 @@ usage() {
 	echo "		--oot-module            Enable patching out-of-tree module," >&2
 	echo "		                        specify current version of module" >&2
 	echo "		--oot-module-src        Specify out-of-tree module source directory" >&2
-	echo "		-R, --non-replace       Disable replace patch (replace is on by default)" >&2
+	echo "		-R, --replace           Enable replace patch (replace is off by default)" >&2
 	echo "		--skip-cleanup          Skip post-build cleanup" >&2
 	echo "		--skip-compiler-check   Skip compiler version matching check" >&2
 	echo "		                        (not recommended)" >&2
 }
 
-options="$(getopt -o ha:r:s:c:v:j:t:n:o:dR -l "help,archversion:,sourcerpm:,sourcedir:,config:,vmlinux:,jobs:,target:,name:,output:,oot-module:,oot-module-src:,debug,skip-gcc-check,skip-compiler-check,skip-cleanup,non-replace" -- "$@")" || die "getopt failed"
+options="$(getopt -o ha:r:s:c:v:j:t:n:o:dR -l "help,archversion:,sourcerpm:,sourcedir:,config:,vmlinux:,jobs:,target:,name:,output:,oot-module:,oot-module-src:,debug,skip-gcc-check,skip-compiler-check,skip-cleanup,replace" -- "$@")" || die "getopt failed"
 
 eval set -- "$options"
 
@@ -747,8 +747,8 @@ while [[ $# -gt 0 ]]; do
 		OOT_MODULE_SRCDIR="$(readlink -f "$2")"
 		shift
 		;;
-	-R|--non-replace)
-		KLP_REPLACE=0
+	-R|--replace)
+		KLP_REPLACE=1
 		;;
 	--skip-cleanup)
 		echo "Skipping cleanup"
