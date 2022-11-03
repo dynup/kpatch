@@ -946,6 +946,7 @@ void kpatch_write_output_elf(struct kpatch_elf *kelf, Elf *elf, char *outfile,
 	memset(&ehout, 0, sizeof(ehout));
 	ehout.e_ident[EI_DATA] = eh.e_ident[EI_DATA];
 	ehout.e_machine = eh.e_machine;
+	ehout.e_flags = eh.e_flags;
 	ehout.e_type = eh.e_type;
 	ehout.e_version = EV_CURRENT;
 
