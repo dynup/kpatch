@@ -1,0 +1,22 @@
+diff -Nupr src.orig/kernel/fork.c src/kernel/fork.c
+--- src.orig/kernel/fork.c	2022-10-24 15:23:43.026194628 -0400
++++ src/kernel/fork.c	2022-10-24 15:24:03.603873575 -0400
+@@ -1676,10 +1676,18 @@ static void posix_cpu_timers_init_group(
+ 	posix_cputimers_group_init(pct, cpu_limit);
+ }
+ 
++void kpatch_foo(void)
++{
++	if (!jiffies)
++		printk("kpatch copy signal\n");
++}
++
+ static int copy_signal(unsigned long clone_flags, struct task_struct *tsk)
+ {
+ 	struct signal_struct *sig;
+ 
++	kpatch_foo();
++
+ 	if (clone_flags & CLONE_THREAD)
+ 		return 0;
+ 
