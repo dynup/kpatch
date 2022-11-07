@@ -2705,8 +2705,9 @@ static void kpatch_include_debug_sections(struct kpatch_elf *kelf)
 		if (!is_rela_section(sec) || !is_debug_section(sec))
 			continue;
 		list_for_each_entry_safe(rela, saferela, &sec->relas, list)
-			if (!rela->sym->sec->include)
+			if (!rela->sym->include || !rela->sym->sec->include) {
 				list_del(&rela->list);
+			}
 	}
 }
 
