@@ -1,0 +1,29 @@
+From 64aff1ab8f9a9f5df06c998be73d4981b77e480d Mon Sep 17 00:00:00 2001
+From: Joe Lawrence <joe.lawrence@redhat.com>
+Date: Mon, 7 Nov 2022 08:21:58 -0500
+Subject: [PATCH] kpatch: modify /proc/version output
+Content-type: text/plain
+
+This is a simple kpatch example that modifies version_proc_show() so
+that the output of /proc/version will be prefixed by "kpatch ".
+
+Signed-off-by: Joe Lawrence <joe.lawrence@redhat.com>
+---
+ fs/proc/version.c | 1 +
+ 1 file changed, 1 insertion(+)
+
+diff --git a/fs/proc/version.c b/fs/proc/version.c
+index 02e3c3cd4a9a..957faeea8f5c 100644
+--- a/fs/proc/version.c
++++ b/fs/proc/version.c
+@@ -9,6 +9,7 @@
+ 
+ static int version_proc_show(struct seq_file *m, void *v)
+ {
++	seq_printf(m, "kpatch ");
+ 	seq_printf(m, linux_proc_banner,
+ 		utsname()->sysname,
+ 		utsname()->release,
+-- 
+2.26.3
+
