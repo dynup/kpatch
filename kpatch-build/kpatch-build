@@ -271,9 +271,14 @@ find_core_symvers() {
 }
 
 gcc_version_from_file() {
-	"$READELF" -p .comment "$1" | grep -m 1 -o 'GCC:.*'
+	"$READELF" -p .comment "$1" | grep -m 1 -o 'GCC:.*'| awk '{$1=$2=""; print $0}'|awk '{gsub(/^\s+|\s+$/, "");print}'
 }
 
+gcc_version_from_config() {
+    if [[ -n "$CONFIGFILE" ]]; then
+        cat "$CONFIGFILE" | grep -w "Compiler: gcc" | awk '{$1=$2=$3=$4=""; print $0}' | awk '{gsub(/^\s+|\s+$/, "");print}'
+    fi
+}
 gcc_version_check() {
 	local target="$1"
 	local c="$TEMPDIR/test.c" o="$TEMPDIR/test.o"
@@ -284,7 +289,11 @@ gcc_version_check() {
 	echo 'void main(void) {}' > "$c"
 	out="$("$GCC" -c -pg -ffunction-sections -o "$o" "$c" 2>&1)"
 	gccver="$(gcc_version_from_file "$o")"
+    if [[ -f "$target" ]]; then
 	kgccver="$(gcc_version_from_file "$target")"
+    else
+        kgccver="$(gcc_version_from_config)"
+    fi
 
 	if [[ -n "$out" ]]; then
 		warn "gcc >= 4.8 required for -pg -ffunction-settings"
@@ -803,8 +812,6 @@ if [[ -n "$USERSRCDIR" ]]; then
 	KERNEL_SRCDIR="$USERSRCDIR"
 
 	[[ -z "$VMLINUX" ]] && VMLINUX="$KERNEL_SRCDIR"/vmlinux
-	[[ ! -e "$VMLINUX" ]] && die "can't find vmlinux"
-
 	# Extract the target kernel version from vmlinux in this case.
 	VMLINUX_VER="$(strings "$VMLINUX" | grep -m 1 -e "^Linux version" | awk '{ print($3); }')"
 	if [[ -n "$ARCHVERSION" ]]; then
@@ -812,7 +819,7 @@ if [[ -n "$USERSRCDIR" ]]; then
 			die "Kernel version mismatch: $ARCHVERSION was specified but vmlinux was built for $VMLINUX_VER"
 		fi
 	else
-		if [[ -z "$VMLINUX_VER" ]]; then
+		if [[ -z "$VMLINUX_VER" ]] && [[ -f "$VMLINUX" ]]; then
 			die "Unable to determine the kernel version from vmlinux"
 		fi
 		ARCHVERSION="$VMLINUX_VER"
@@ -1090,8 +1097,6 @@ fi
 export KCFLAGS="-I$DATADIR/patch -ffunction-sections -fdata-sections \
 		$ARCH_KCFLAGS $DEBUG_KCFLAGS"
 
-echo "Reading special section data"
-find_special_section_data
 
 if [[ $DEBUG -ge 4 ]]; then
 	export KPATCH_GCC_DEBUG=1
@@ -1122,6 +1127,9 @@ fi
 # $TARGETS used as list, no quotes.
 # shellcheck disable=SC2086
 make "${MAKEVARS[@]}" "-j$CPUS" $TARGETS 2>&1 | logger || die
+
+echo "Reading special section data"
+find_special_section_data
 
 # Save original module symvers
 cp -f "$BUILDDIR/Module.symvers" "$TEMPDIR/Module.symvers" || die
