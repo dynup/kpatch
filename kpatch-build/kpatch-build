@@ -271,14 +271,29 @@ find_core_symvers() {
 }
 
 gcc_version_from_file() {
-	"$READELF" -p .comment "$1" | grep -m 1 -o 'GCC:.*'| awk '{$1=$2=""; print $0}'|awk '{gsub(/^\s+|\s+$/, "");print}'
+	"$READELF" -p .comment "$1" | grep -m 1 -o 'GCC:.*'| cut -d ' ' -f 3-
 }
 
 gcc_version_from_config() {
-    if [[ -n "$CONFIGFILE" ]]; then
-        cat "$CONFIGFILE" | grep -w "Compiler: gcc" | awk '{$1=$2=$3=$4=""; print $0}' | awk '{gsub(/^\s+|\s+$/, "");print}'
+    local gccver
+    if [[ -f "$CONFIGFILE" ]]; then
+	    # Compiler: gcc (GCC) 8.5.0 20210514 (Red Hat 8.5.0-4)
+	    gccver="$(sed -n '/Compiler:/p' "$CONFIGFILE" | cut -d ' ' -f 5-)"
+	    if [[ -z "$gccver" ]];then
+		    #CONFIG_CC_VERSION_TEXT="gcc (GCC) 6.5.1 20190307 (Red Hat 6.5.1-1 2.17)"
+		    gccver="$(sed -n '/CONFIG_CC_VERSION_TEXT/p' "$CONFIGFILE" | cut -d ' ' -f 3-)"
+		    gccver=${gccver%\"*}
+	    fi
+    fi
+    echo "$gccver"
+}
+
+kernel_version_from_config() {
+    if [[ -f "$CONFIGFILE" ]]; then
+       sed -n '/Kernel Configuration/p' "$CONFIGFILE" | cut -d ' ' -f 3
     fi
 }
+
 gcc_version_check() {
 	local target="$1"
 	local c="$TEMPDIR/test.c" o="$TEMPDIR/test.o"
@@ -813,7 +828,9 @@ if [[ -n "$USERSRCDIR" ]]; then
 
 	[[ -z "$VMLINUX" ]] && VMLINUX="$KERNEL_SRCDIR"/vmlinux
 	# Extract the target kernel version from vmlinux in this case.
-	VMLINUX_VER="$(strings "$VMLINUX" | grep -m 1 -e "^Linux version" | awk '{ print($3); }')"
+	if [[ -f "$VMLINUX" ]]; then
+		VMLINUX_VER="$(strings "$VMLINUX" | grep -m 1 -e "^Linux version" | awk '{ print($3); }')"
+	fi
 	if [[ -n "$ARCHVERSION" ]]; then
 		if [[ -n "$VMLINUX_VER" ]] && [[ "$ARCHVERSION" != "$VMLINUX_VER" ]]; then
 			die "Kernel version mismatch: $ARCHVERSION was specified but vmlinux was built for $VMLINUX_VER"
@@ -823,6 +840,9 @@ if [[ -n "$USERSRCDIR" ]]; then
 			die "Unable to determine the kernel version from vmlinux"
 		fi
 		ARCHVERSION="$VMLINUX_VER"
+        if [[ -z "$ARCHVERSION" ]] && [[ -f "$CONFIGFILE" ]]; then
+            ARCHVERSION="$(kernel_version_from_config)"
+        fi
 	fi
 fi
 
