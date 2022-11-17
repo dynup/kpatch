@@ -1544,6 +1544,10 @@ static void kpatch_replace_sections_syms(struct kpatch_elf *kelf)
 
 			target_off = rela_target_offset(kelf, relasec, rela);
 
+			if (target_off >= (long)rela->sym->sec->sh.sh_size)
+				continue;
+
+			found = false;
 			/*
 			 * Attempt to replace references to unbundled sections
 			 * with their symbols.
