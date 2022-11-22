@@ -71,7 +71,7 @@ enum loglevel loglevel = NORMAL;
 
 bool KLP_ARCH;
 
-int jump_label_errors;
+int jump_label_errors, static_call_errors;
 
 /*******************
  * Data structures
@@ -2321,6 +2321,68 @@ static bool jump_table_group_filter(struct lookup_table *lookup,
 	return true;
 }
 
+static bool static_call_sites_group_filter(struct lookup_table *lookup,
+					   struct section *relasec,
+					   unsigned int group_offset,
+					   unsigned int group_size)
+{
+	struct rela *code = NULL, *key = NULL, *rela;
+	bool tracepoint = false;
+	struct lookup_result symbol;
+	int i = 0;
+
+	/*
+	 * Here we hard-code knowledge about the contents of the jump_entry
+	 * struct.  It has three fields: code, target, and key.  Each field has
+	 * a relocation associated with it.
+	 */
+	list_for_each_entry(rela, &relasec->relas, list) {
+		if (rela->offset >= group_offset &&
+		    rela->offset < group_offset + group_size) {
+			if (i == 0)
+				code = rela;
+			else if (i == 1)
+				key = rela;
+			i++;
+		}
+	}
+
+	if (i != 2 || !key || !code)
+		ERROR("BUG: .static_call_sites has an unexpected format");
+
+	if (!strncmp(key->sym->name, "__SCK__tp_func_", 15))
+		tracepoint = true;
+
+	/*
+	 * Static calls are only supported in the case where the corresponding
+	 * static call key lives in vmlinux (see explanation in
+	 * jump_table_group_filter).
+	 */
+
+	if (lookup_symbol(lookup, key->sym, &symbol) &&
+	    strcmp(symbol.objname, "vmlinux")) {
+
+		/* The key lives in a module -- not supported */
+
+		/* Inert tracepoints are harmless */
+		if (tracepoint)
+			return false;
+
+		/*
+		 * This will be upgraded to an error after all static call
+		 * errors have been reported.
+		 */
+		log_normal("Found a static call at %s()+0x%lx, using key %s, which is defined in a module.  Use KPATCH_STATIC_CALL() instead.\n",
+			   code->sym->name, code->addend, key->sym->name);
+		static_call_errors++;
+		return false;
+	}
+
+	/* The key lives in vmlinux or the patch module itself */
+	return true;
+}
+
+
 static struct special_section special_sections[] = {
 	{
 		.name		= "__bug_table",
@@ -2367,6 +2429,7 @@ static struct special_section special_sections[] = {
 		.name		= ".static_call_sites",
 		.arch		= X86_64,
 		.group_size	= static_call_sites_group_size,
+		.group_filter	= static_call_sites_group_filter,
 	},
 	{
 		.name		= ".retpoline_sites",
@@ -2563,6 +2626,10 @@ static void kpatch_regenerate_special_section(struct kpatch_elf *kelf,
 	if (jump_label_errors)
 		ERROR("Found %d unsupported jump label(s) in the patched code. Use static_key_enabled() instead.",
 		      jump_label_errors);
+
+	if (static_call_errors)
+		ERROR("Found %d unsupported static call(s) in the patched code. Use KPATCH_STATIC_CALL() instead.",
+		      static_call_errors);
 
 	if (!dest_offset) {
 		/* no changed or global functions referenced */
