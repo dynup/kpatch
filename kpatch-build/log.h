@@ -9,7 +9,7 @@ extern enum loglevel loglevel;
 extern char *childobj;
 
 #define ERROR(format, ...) \
-	err(EXIT_STATUS_ERROR, "ERROR: %s: %s: %d: " format, childobj, __FUNCTION__, __LINE__, ##__VA_ARGS__)
+	errx(EXIT_STATUS_ERROR, "ERROR: %s: %s: %d: " format, childobj, __FUNCTION__, __LINE__, ##__VA_ARGS__)
 
 #define log_debug(format, ...) log(DEBUG, format, ##__VA_ARGS__)
 #define log_normal(format, ...) log(NORMAL, "%s: " format, childobj, ##__VA_ARGS__)

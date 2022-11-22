@@ -56,7 +56,7 @@
 #define DIFF_FATAL(format, ...) \
 ({ \
 	fprintf(stderr, "ERROR: %s: " format "\n", childobj, ##__VA_ARGS__); \
-	err(EXIT_STATUS_DIFF_FATAL, "unreconcilable difference"); \
+	errx(EXIT_STATUS_DIFF_FATAL, "unreconcilable difference"); \
 })
 
 char *childobj;
