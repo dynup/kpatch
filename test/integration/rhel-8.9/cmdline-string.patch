@@ -1,0 +1,13 @@
+diff -Nupr src.orig/fs/proc/cmdline.c src/fs/proc/cmdline.c
+--- src.orig/fs/proc/cmdline.c	2023-04-24 15:18:02.062521125 -0400
++++ src/fs/proc/cmdline.c	2023-04-24 15:18:13.371561909 -0400
+@@ -6,8 +6,7 @@
+ 
+ static int cmdline_proc_show(struct seq_file *m, void *v)
+ {
+-	seq_puts(m, saved_command_line);
+-	seq_putc(m, '\n');
++	seq_printf(m, "%s kpatch=1\n", saved_command_line);
+ 	return 0;
+ }
+ 
