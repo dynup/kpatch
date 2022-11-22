@@ -397,6 +397,35 @@ static bool has_digit_tail(char *tail)
 }
 
 /*
+ * Hack for __UNIQUE_ID().  The following should match:
+ *
+ *   __UNIQUE_ID_ddebug1131.186
+ *   __UNIQUE_ID_ddebug1132.187
+ */
+static int __kpatch_unique_id_strcmp(char *s1, char *s2)
+{
+	/* match '__UNIQUE_ID_ddebug' */
+	while (*s1 == *s2) {
+		if (!*s1)
+			return 0;
+		s1++;
+		s2++;
+	}
+
+	/* skip digits before '.' or EOL */
+	while (isdigit(*s1))
+		s1++;
+	while (isdigit(*s2))
+		s2++;
+
+	if ((!*s1 || has_digit_tail(s1)) &&
+	    (!*s2 || has_digit_tail(s2)))
+		return 0;
+
+	return 1;
+}
+
+/*
  * This is like strcmp, but for gcc-mangled symbols.  It skips the comparison
  * of any substring which consists of '.' followed by any number of digits.
  */
@@ -408,6 +437,9 @@ static int kpatch_mangled_strcmp(char *s1, char *s2)
 	 */
 	if (strstr(s1, ".str1."))
 		return strcmp(s1, s2);
+
+	if (!strncmp(s1, "__UNIQUE_ID_", 12))
+		return __kpatch_unique_id_strcmp(s1, s2);
 
 	while (*s1 == *s2) {
 		if (!*s1)
