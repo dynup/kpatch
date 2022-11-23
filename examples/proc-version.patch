@@ -1,29 +1,35 @@
-From 64aff1ab8f9a9f5df06c998be73d4981b77e480d Mon Sep 17 00:00:00 2001
+From 1ca265b42c864ba3be998ab01be9815e90105ef5 Mon Sep 17 00:00:00 2001
 From: Joe Lawrence <joe.lawrence@redhat.com>
-Date: Mon, 7 Nov 2022 08:21:58 -0500
+Date: Wed, 23 Nov 2022 15:22:20 -0500
 Subject: [PATCH] kpatch: modify /proc/version output
 Content-type: text/plain
 
-This is a simple kpatch example that modifies version_proc_show() so
-that the output of /proc/version will be prefixed by "kpatch ".
+This is a simple kpatch example that modifies version_proc_show() to
+replace the compilation info (person, host, compiler) with "(kpatched)".
+For example:
+
+  $ cat /proc/version
+  Linux version 6.1.0-rc5+ (kpatched) #1 SMP PREEMPT_DYNAMIC Mon Nov 21 11:28:34 EST 2022
+                            ^^^^^^^^
 
 Signed-off-by: Joe Lawrence <joe.lawrence@redhat.com>
 ---
- fs/proc/version.c | 1 +
- 1 file changed, 1 insertion(+)
+ fs/proc/version.c | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
 
 diff --git a/fs/proc/version.c b/fs/proc/version.c
-index 02e3c3cd4a9a..957faeea8f5c 100644
+index 02e3c3cd4a9a..a61a79c7b59b 100644
 --- a/fs/proc/version.c
 +++ b/fs/proc/version.c
-@@ -9,6 +9,7 @@
+@@ -9,7 +9,7 @@
  
  static int version_proc_show(struct seq_file *m, void *v)
  {
-+	seq_printf(m, "kpatch ");
- 	seq_printf(m, linux_proc_banner,
+-	seq_printf(m, linux_proc_banner,
++	seq_printf(m, "%s version %s (kpatched) %s\n",
  		utsname()->sysname,
  		utsname()->release,
+ 		utsname()->version);
 -- 
 2.26.3
 
