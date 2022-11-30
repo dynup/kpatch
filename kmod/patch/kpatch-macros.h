@@ -141,4 +141,15 @@ struct kpatch_post_unpatch_callback {
 		printk(_fmt, ## __VA_ARGS__); \
 })
 
+/*
+ * KPATCH_STATIC_CALL macro
+ *
+ * Replace usages of static_call() with this macro, when create-diff-object
+ * recommends it due to the original static call key living in a module.
+ *
+ * This converts the static call to a regular indirect call.
+ */
+#define KPATCH_STATIC_CALL(name) \
+	((typeof(STATIC_CALL_TRAMP(name))*)(STATIC_CALL_KEY(name).func))
+
 #endif /* __KPATCH_MACROS_H_ */

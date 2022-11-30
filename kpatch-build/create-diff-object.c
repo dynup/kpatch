@@ -56,7 +56,7 @@
 #define DIFF_FATAL(format, ...) \
 ({ \
 	fprintf(stderr, "ERROR: %s: " format "\n", childobj, ##__VA_ARGS__); \
-	err(EXIT_STATUS_DIFF_FATAL, "unreconcilable difference"); \
+	errx(EXIT_STATUS_DIFF_FATAL, "unreconcilable difference"); \
 })
 
 char *childobj;
@@ -71,6 +71,8 @@ enum loglevel loglevel = NORMAL;
 
 bool KLP_ARCH;
 
+int jump_label_errors, static_call_errors;
+
 /*******************
  * Data structures
  * ****************/
@@ -78,6 +80,9 @@ struct special_section {
 	char *name;
 	enum architecture arch;
 	int (*group_size)(struct kpatch_elf *kelf, int offset);
+	bool (*group_filter)(struct lookup_table *lookup,
+			     struct section *relasec, unsigned int offset,
+			     unsigned int size);
 };
 
 /*************
@@ -2215,120 +2220,10 @@ static int fixup_group_size(struct kpatch_elf *kelf, int offset)
 	return (int)(rela->addend - offset);
 }
 
-static struct special_section special_sections[] = {
-	{
-		.name		= "__bug_table",
-		.arch		= X86_64 | PPC64 | S390,
-		.group_size	= bug_table_group_size,
-	},
-	{
-		.name		= ".fixup",
-		.arch		= X86_64 | PPC64 | S390,
-		.group_size	= fixup_group_size,
-	},
-	{
-		.name		= "__ex_table", /* must come after .fixup */
-		.arch		= X86_64 | PPC64 | S390,
-		.group_size	= ex_table_group_size,
-	},
-	{
-		.name		= "__jump_table",
-		.arch		= X86_64 | PPC64 | S390,
-		.group_size	= jump_table_group_size,
-	},
-	{
-		.name		= ".printk_index",
-		.arch		= X86_64 | PPC64 | S390,
-		.group_size	= printk_index_group_size,
-	},
-	{
-		.name		= ".smp_locks",
-		.arch		= X86_64,
-		.group_size	= smp_locks_group_size,
-	},
-	{
-		.name		= ".parainstructions",
-		.arch		= X86_64,
-		.group_size	= parainstructions_group_size,
-	},
-	{
-		.name		= ".altinstructions",
-		.arch		= X86_64 | S390,
-		.group_size	= altinstructions_group_size,
-	},
-	{
-		.name		= ".static_call_sites",
-		.arch		= X86_64,
-		.group_size	= static_call_sites_group_size,
-	},
-	{
-		.name		= ".retpoline_sites",
-		.arch		= X86_64,
-		.group_size	= retpoline_sites_group_size,
-	},
-	{
-		.name		= ".return_sites",
-		.arch		= X86_64,
-		.group_size	= return_sites_group_size,
-	},
-	{
-		.name		= "__ftr_fixup",
-		.arch		= PPC64,
-		.group_size	= fixup_entry_group_size,
-	},
-	{
-		.name		= "__mmu_ftr_fixup",
-		.arch		= PPC64,
-		.group_size	= fixup_entry_group_size,
-	},
-	{
-		.name		= "__fw_ftr_fixup",
-		.arch		= PPC64,
-		.group_size	= fixup_entry_group_size,
-	},
-	{
-		.name		= "__lwsync_fixup",
-		.arch		= PPC64,
-		.group_size	= fixup_lwsync_group_size,
-	},
-	{
-		.name		= "__barrier_nospec_fixup",
-		.arch		= PPC64,
-		.group_size	= fixup_barrier_nospec_group_size,
-	},
-	{
-		.name = ".s390_return_mem",
-		.arch = S390,
-		.group_size = s390_expolines_group_size,
-	},
-	{
-		.name = ".s390_return_reg",
-		.arch = S390,
-		.group_size = s390_expolines_group_size,
-	},
-	{
-		.name = ".s390_indirect_call",
-		.arch = S390,
-		.group_size = s390_expolines_group_size,
-	},
-	{
-		.name = ".s390_indirect_branches",
-		.arch = S390,
-		.group_size = s390_expolines_group_size,
-	},
-	{
-		.name = ".s390_indirect_jump",
-		.arch = S390,
-		.group_size = s390_expolines_group_size,
-	},
-	{},
-};
-
-static bool should_keep_jump_label(struct lookup_table *lookup,
-				   struct section *relasec,
-				   unsigned int group_offset,
-				   unsigned int group_size,
-				   int *jump_labels_found)
+static bool jump_table_group_filter(struct lookup_table *lookup,
+				    struct section *relasec,
+				    unsigned int group_offset,
+				    unsigned int group_size)
 {
 	struct rela *code = NULL, *key = NULL, *rela;
 	bool tracepoint = false, dynamic_debug = false;
@@ -2378,7 +2273,7 @@ static bool should_keep_jump_label(struct lookup_table *lookup,
 		 */
 		log_normal("Found a jump label at %s()+0x%lx, using key %s.  Jump labels aren't supported with this kernel.  Use static_key_enabled() instead.\n",
 			   code->sym->name, code->addend, key->sym->name);
-		(*jump_labels_found)++;
+		jump_label_errors++;
 		return false;
 	}
 
@@ -2403,12 +2298,12 @@ static bool should_keep_jump_label(struct lookup_table *lookup,
 			return false;
 
 		/*
-		 * This will be upgraded to an error after all jump labels have
-		 * been reported.
+		 * This will be upgraded to an error after all jump label
+		 * errors have been reported.
 		 */
 		log_normal("Found a jump label at %s()+0x%lx, using key %s, which is defined in a module.  Use static_key_enabled() instead.\n",
 			   code->sym->name, code->addend, key->sym->name);
-		(*jump_labels_found)++;
+		jump_label_errors++;
 		return false;
 	}
 
@@ -2426,9 +2321,182 @@ static bool should_keep_jump_label(struct lookup_table *lookup,
 	return true;
 }
 
+static bool static_call_sites_group_filter(struct lookup_table *lookup,
+					   struct section *relasec,
+					   unsigned int group_offset,
+					   unsigned int group_size)
+{
+	struct rela *code = NULL, *key = NULL, *rela;
+	bool tracepoint = false;
+	struct lookup_result symbol;
+	int i = 0;
+
+	/*
+	 * Here we hard-code knowledge about the contents of the jump_entry
+	 * struct.  It has three fields: code, target, and key.  Each field has
+	 * a relocation associated with it.
+	 */
+	list_for_each_entry(rela, &relasec->relas, list) {
+		if (rela->offset >= group_offset &&
+		    rela->offset < group_offset + group_size) {
+			if (i == 0)
+				code = rela;
+			else if (i == 1)
+				key = rela;
+			i++;
+		}
+	}
+
+	if (i != 2 || !key || !code)
+		ERROR("BUG: .static_call_sites has an unexpected format");
+
+	if (!strncmp(key->sym->name, "__SCK__tp_func_", 15))
+		tracepoint = true;
+
+	/*
+	 * Static calls are only supported in the case where the corresponding
+	 * static call key lives in vmlinux (see explanation in
+	 * jump_table_group_filter).
+	 */
+
+	if (lookup_symbol(lookup, key->sym, &symbol) &&
+	    strcmp(symbol.objname, "vmlinux")) {
+
+		/* The key lives in a module -- not supported */
+
+		/* Inert tracepoints are harmless */
+		if (tracepoint)
+			return false;
+
+		/*
+		 * This will be upgraded to an error after all static call
+		 * errors have been reported.
+		 */
+		log_normal("Found a static call at %s()+0x%lx, using key %s, which is defined in a module.  Use KPATCH_STATIC_CALL() instead.\n",
+			   code->sym->name, code->addend, key->sym->name);
+		static_call_errors++;
+		return false;
+	}
+
+	/* The key lives in vmlinux or the patch module itself */
+	return true;
+}
+
+
+static struct special_section special_sections[] = {
+	{
+		.name		= "__bug_table",
+		.arch		= X86_64 | PPC64 | S390,
+		.group_size	= bug_table_group_size,
+	},
+	{
+		.name		= ".fixup",
+		.arch		= X86_64 | PPC64 | S390,
+		.group_size	= fixup_group_size,
+	},
+	{
+		.name		= "__ex_table", /* must come after .fixup */
+		.arch		= X86_64 | PPC64 | S390,
+		.group_size	= ex_table_group_size,
+	},
+	{
+		.name		= "__jump_table",
+		.arch		= X86_64 | PPC64 | S390,
+		.group_size	= jump_table_group_size,
+		.group_filter	= jump_table_group_filter,
+	},
+	{
+		.name		= ".printk_index",
+		.arch		= X86_64 | PPC64 | S390,
+		.group_size	= printk_index_group_size,
+	},
+	{
+		.name		= ".smp_locks",
+		.arch		= X86_64,
+		.group_size	= smp_locks_group_size,
+	},
+	{
+		.name		= ".parainstructions",
+		.arch		= X86_64,
+		.group_size	= parainstructions_group_size,
+	},
+	{
+		.name		= ".altinstructions",
+		.arch		= X86_64 | S390,
+		.group_size	= altinstructions_group_size,
+	},
+	{
+		.name		= ".static_call_sites",
+		.arch		= X86_64,
+		.group_size	= static_call_sites_group_size,
+		.group_filter	= static_call_sites_group_filter,
+	},
+	{
+		.name		= ".retpoline_sites",
+		.arch		= X86_64,
+		.group_size	= retpoline_sites_group_size,
+	},
+	{
+		.name		= ".return_sites",
+		.arch		= X86_64,
+		.group_size	= return_sites_group_size,
+	},
+	{
+		.name		= "__ftr_fixup",
+		.arch		= PPC64,
+		.group_size	= fixup_entry_group_size,
+	},
+	{
+		.name		= "__mmu_ftr_fixup",
+		.arch		= PPC64,
+		.group_size	= fixup_entry_group_size,
+	},
+	{
+		.name		= "__fw_ftr_fixup",
+		.arch		= PPC64,
+		.group_size	= fixup_entry_group_size,
+	},
+	{
+		.name		= "__lwsync_fixup",
+		.arch		= PPC64,
+		.group_size	= fixup_lwsync_group_size,
+	},
+	{
+		.name		= "__barrier_nospec_fixup",
+		.arch		= PPC64,
+		.group_size	= fixup_barrier_nospec_group_size,
+	},
+	{
+		.name		= ".s390_return_mem",
+		.arch		= S390,
+		.group_size	= s390_expolines_group_size,
+	},
+	{
+		.name		= ".s390_return_reg",
+		.arch		= S390,
+		.group_size	= s390_expolines_group_size,
+	},
+	{
+		.name		= ".s390_indirect_call",
+		.arch		= S390,
+		.group_size	= s390_expolines_group_size,
+	},
+	{
+		.name		= ".s390_indirect_branches",
+		.arch		= S390,
+		.group_size	= s390_expolines_group_size,
+	},
+	{
+		.name		= ".s390_indirect_jump",
+		.arch		= S390,
+		.group_size	= s390_expolines_group_size,
+	},
+	{},
+};
+
 static bool should_keep_rela_group(struct lookup_table *lookup,
 				   struct section *relasec, unsigned int offset,
-				   unsigned int size, int *jump_labels_found)
+				   unsigned int size)
 {
 	struct rela *rela;
 	bool found = false;
@@ -2447,10 +2515,6 @@ static bool should_keep_rela_group(struct lookup_table *lookup,
 
 	if (!found)
 		return false;
-
-	if (!strcmp(relasec->name, ".rela__jump_table"))
-		return should_keep_jump_label(lookup, relasec, offset, size,
-					      jump_labels_found);
 
 	return true;
 }
@@ -2488,7 +2552,6 @@ static void kpatch_regenerate_special_section(struct kpatch_elf *kelf,
 	struct rela *rela, *safe;
 	char *src, *dest;
 	unsigned int group_size, src_offset, dest_offset;
-	int jump_labels_found = 0;
 
 	LIST_HEAD(newrelas);
 
@@ -2523,8 +2586,11 @@ static void kpatch_regenerate_special_section(struct kpatch_elf *kelf,
 		if (src_offset + group_size > relasec->base->sh.sh_size)
 			group_size = (unsigned int)(relasec->base->sh.sh_size - src_offset);
 
-		if (!should_keep_rela_group(lookup, relasec, src_offset, group_size,
-					    &jump_labels_found))
+		if (!should_keep_rela_group(lookup, relasec, src_offset, group_size))
+			continue;
+
+		if (special->group_filter &&
+		    !special->group_filter(lookup, relasec, src_offset, group_size))
 			continue;
 
 		/*
@@ -2557,9 +2623,13 @@ static void kpatch_regenerate_special_section(struct kpatch_elf *kelf,
 		dest_offset += group_size;
 	}
 
-	if (jump_labels_found)
-		ERROR("Found %d jump label(s) in the patched code. Jump labels aren't currently supported. Use static_key_enabled() instead.",
-		      jump_labels_found);
+	if (jump_label_errors)
+		ERROR("Found %d unsupported jump label(s) in the patched code. Use static_key_enabled() instead.",
+		      jump_label_errors);
+
+	if (static_call_errors)
+		ERROR("Found %d unsupported static call(s) in the patched code. Use KPATCH_STATIC_CALL() instead.",
+		      static_call_errors);
 
 	if (!dest_offset) {
 		/* no changed or global functions referenced */
