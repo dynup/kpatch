@@ -1759,14 +1759,14 @@ static void kpatch_include_symbol(struct symbol *sym)
 	/*
 	 * The symbol gets included even if its section isn't needed, as it
 	 * might be needed: either permanently for a rela, or temporarily for
-	 * the later creation of a dynrela.
+	 * the later creation of a klp relocation.
 	 */
 	sym->include = 1;
 
 	/*
 	 * For a function/object symbol, if it has a section, we only need to
 	 * include the section if it has changed.  Otherwise the symbol will be
-	 * used by relas/dynrelas to link to the real symbol externally.
+	 * used by relas/klp_relocs to link to the real symbol externally.
 	 *
 	 * For section symbols, we always include the section because
 	 * references to them can't otherwise be resolved externally.
@@ -1800,8 +1800,8 @@ static void kpatch_include_standard_elements(struct kpatch_elf *kelf)
 		 *
 		 * Note that if any of these sections have rela sections, they
 		 * will also be included in their entirety.  That may result in
-		 * some extra (unused) dynrelas getting created, which should
-		 * be harmless.
+		 * some extra (unused) klp relocations getting created, which
+		 * should be harmless.
 		 */
 		if (!strcmp(sec->name, ".shstrtab") ||
 		    !strcmp(sec->name, ".strtab") ||
@@ -2284,8 +2284,8 @@ static bool jump_table_group_filter(struct lookup_table *lookup,
 	 * (in the klp module load) as normal relas, before jump label init.
 	 * On the other hand, jump labels based on static keys which are
 	 * defined in modules aren't supported, because late module patching
-	 * can result in the klp relas getting applied *after* the klp module's
-	 * jump label init.
+	 * can result in the klp relocations getting applied *after* the klp
+	 * module's jump label init.
 	 */
 
 	if (lookup_symbol(lookup, key->sym, &symbol) &&
@@ -3204,8 +3204,8 @@ static int function_ptr_rela(const struct rela *rela)
 		rela->type == R_PPC64_TOC16_LO_DS));
 }
 
-static bool need_dynrela(struct kpatch_elf *kelf, struct lookup_table *table,
-			 struct section *relasec, const struct rela *rela)
+static bool need_klp_reloc(struct kpatch_elf *kelf, struct lookup_table *table,
+			   struct section *relasec, const struct rela *rela)
 {
 	struct lookup_result symbol;
 
@@ -3214,7 +3214,7 @@ static bool need_dynrela(struct kpatch_elf *kelf, struct lookup_table *table,
 
 	/*
 	 * These references are treated specially by the module loader and
-	 * should never be converted to dynrelas.
+	 * should never be converted to klp relocations.
 	 */
 	if (rela->type == R_PPC64_REL16_HA || rela->type == R_PPC64_REL16_LO ||
 	    rela->type == R_PPC64_ENTRY)
@@ -3259,16 +3259,16 @@ static bool need_dynrela(struct kpatch_elf *kelf, struct lookup_table *table,
 
 	if (rela->sym->sec) {
 		/*
-		 * Internal symbols usually don't need dynrelas, because they
-		 * live in the patch module and can be relocated normally.
+		 * Internal symbols usually don't need klp relocations, because
+		 * they live in the patch module and can be relocated normally.
 		 *
 		 * There's one exception: function pointers.
 		 *
 		 * If the rela references a function pointer, we convert it to
-		 * a dynrela, so that the function pointer will refer to the
-		 * original function rather than the patched function.  This
-		 * can prevent crashes in cases where the function pointer is
-		 * called asynchronously after the patch module has been
+		 * a klp relocation, so that the function pointer will refer to
+		 * the original function rather than the patched function.
+		 * This can prevent crashes in cases where the function pointer
+		 * is called asynchronously after the patch module has been
 		 * unloaded.
 		 */
 		if (!function_ptr_rela(rela))
@@ -3279,13 +3279,13 @@ static bool need_dynrela(struct kpatch_elf *kelf, struct lookup_table *table,
 		 * special case.  They are not supposed to be visible outside
 		 * of the function that defines them.  Their names may differ
 		 * in the original and the patched kernels which makes it
-		 * difficult to use dynrelas.  Fortunately, nested functions
-		 * are rare and are unlikely to be used as asynchronous
-		 * callbacks, so the patched code can refer to them directly.
-		 * It seems, one can only distinguish such functions by their
-		 * names containing a dot.  Other kinds of functions with such
-		 * names (e.g. optimized copies of functions) are unlikely to
-		 * be used as callbacks.
+		 * difficult to use klp relocations.  Fortunately, nested
+		 * functions are rare and are unlikely to be used as
+		 * asynchronous callbacks, so the patched code can refer to
+		 * them directly.  It seems, one can only distinguish such
+		 * functions by their names containing a dot.  Other kinds of
+		 * functions with such names (e.g. optimized copies of
+		 * functions) are unlikely to be used as callbacks.
 		 *
 		 * Function pointers to *new* functions don't have this issue,
 		 * just use a normal rela for them.
@@ -3309,8 +3309,9 @@ static bool need_dynrela(struct kpatch_elf *kelf, struct lookup_table *table,
 			      rela->sym->name);
 
 		/*
-		 * The symbol is (formerly) local.  Use a dynrela to access the
-		 * original version of the symbol in the patched object.
+		 * The symbol is (formerly) local.  Use a klp relocation to
+		 * access the original version of the symbol in the patched
+		 * object.
 		 */
 		return true;
 	}
@@ -3322,9 +3323,9 @@ static bool need_dynrela(struct kpatch_elf *kelf, struct lookup_table *table,
 			 * On powerpc, the symbol is global and exported, but
 			 * it was also in the changed object file.  In this
 			 * case the rela refers to the 'localentry' point, so a
-			 * normal rela wouldn't work.  Force a dynrela so it
-			 * can be handled correctly by the livepatch relocation
-			 * code.
+			 * normal rela wouldn't work.  Force a klp relocation
+			 * so it can be handled correctly by the livepatch
+			 * relocation code.
 			 */
 			return true;
 		}
@@ -3340,8 +3341,9 @@ static bool need_dynrela(struct kpatch_elf *kelf, struct lookup_table *table,
 		/*
 		 * The symbol is exported by the to-be-patched module, or by
 		 * another module which the patched module depends on.  Use a
-		 * dynrela because of late module loading: the patch module may
-		 * be loaded before the to-be-patched (or other) module.
+		 * klp relocation because of late module loading: the patch
+		 * module may be loaded before the to-be-patched (or other)
+		 * module.
 		 */
 		return true;
 	}
@@ -3349,8 +3351,8 @@ static bool need_dynrela(struct kpatch_elf *kelf, struct lookup_table *table,
 	if (symbol.global) {
 		/*
 		 * The symbol is global in the to-be-patched object, but not
-		 * exported.  Use a dynrela to work around the fact that it's
-		 * an unexported sybmbol.
+		 * exported.  Use a klp relocation to work around the fact that
+		 * it's an unexported sybmbol.
 		 */
 		return true;
 	}
@@ -3366,9 +3368,8 @@ static bool need_dynrela(struct kpatch_elf *kelf, struct lookup_table *table,
 /*
  * kpatch_create_intermediate_sections()
  *
- * The primary purpose of this function is to convert some relas (also known as
- * relocations) to dynrelas (also known as dynamic relocations or livepatch
- * relocations or klp relas).
+ * The primary purpose of this function is to convert some relocations to klp
+ * relocations.
  *
  * If the patched code refers to a symbol, for example, if it calls a function
  * or stores a pointer to a function somewhere or accesses some global data,
@@ -3377,7 +3378,7 @@ static bool need_dynrela(struct kpatch_elf *kelf, struct lookup_table *table,
  *
  * If the symbol lives outside the patch module, and if it's not exported by
  * vmlinux (e.g., with EXPORT_SYMBOL) then the rela needs to be converted to a
- * dynrela so the livepatch code can resolve it at runtime.
+ * klp relocation so the livepatch code can resolve it at runtime.
  */
 static void kpatch_create_intermediate_sections(struct kpatch_elf *kelf,
 						struct lookup_table *table,
@@ -3408,18 +3409,18 @@ static void kpatch_create_intermediate_sections(struct kpatch_elf *kelf,
 			nr++;
 
 			/*
-			 * We set 'need_dynrela' here in the first pass because
-			 * the .toc section's 'need_dynrela' values are
-			 * dependent on all the other sections.  Otherwise, if
-			 * we did this analysis in the second pass, we'd have
-			 * to convert .toc dynrelas at the very end.
+			 * We set 'need_klp_reloc' here in the first pass
+			 * because the .toc section's 'need_klp_reloc' values
+			 * are dependent on all the other sections.  Otherwise,
+			 * if we did this analysis in the second pass, we'd
+			 * have to convert .toc klp relocations at the very end.
 			 *
 			 * Specifically, this is needed for the powerpc
 			 * internal symbol function pointer check which is done
-			 * via .toc indirection in need_dynrela().
+			 * via .toc indirection in need_klp_reloc().
 			 */
-			if (need_dynrela(kelf, table, relasec, rela))
-				toc_rela(rela)->need_dynrela = 1;
+			if (need_klp_reloc(kelf, table, relasec, rela))
+				toc_rela(rela)->need_klp_reloc = true;
 		}
 	}
 
@@ -3464,7 +3465,7 @@ static void kpatch_create_intermediate_sections(struct kpatch_elf *kelf,
 		}
 
 		list_for_each_entry_safe(rela, safe, &relasec->relas, list) {
-			if (!rela->need_dynrela) {
+			if (!rela->need_klp_reloc) {
 				rela->sym->strip = SYMBOL_USED;
 				continue;
 			}
@@ -3483,7 +3484,7 @@ static void kpatch_create_intermediate_sections(struct kpatch_elf *kelf,
 			 * runs due to late module patching.
 			 */
 			if (!KLP_ARCH && !vmlinux && special)
-				ERROR("unsupported dynrela reference to symbol '%s' in module-specific special section '%s'",
+				ERROR("unsupported klp relocation reference to symbol '%s' in module-specific special section '%s'",
 				      rela->sym->name, relasec->base->name);
 
 			if (!lookup_symbol(table, rela->sym, &symbol))
@@ -3764,7 +3765,7 @@ static void kpatch_create_mcount_sections(struct kpatch_elf *kelf)
 /*
  * This function strips out symbols that were referenced by changed rela
  * sections, but the rela entries that referenced them were converted to
- * dynrelas and are no longer needed.
+ * klp relocations and are no longer needed.
  */
 static void kpatch_strip_unneeded_syms(struct kpatch_elf *kelf,
 				       struct lookup_table *table)
@@ -4090,7 +4091,7 @@ int main(int argc, char *argv[])
 
 	kpatch_no_sibling_calls_ppc64le(kelf_out);
 
-	/* create strings, patches, and dynrelas sections */
+	/* create strings, patches, and klp relocation sections */
 	kpatch_create_strings_elements(kelf_out);
 	kpatch_create_patches_sections(kelf_out, lookup, parent_name);
 	kpatch_create_intermediate_sections(kelf_out, lookup, parent_name, patch_name);
