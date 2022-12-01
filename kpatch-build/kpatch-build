@@ -452,12 +452,12 @@ relpath() {
 		return
 	fi
 
-	while [[ "${filedir#$common/}" = "$filedir" ]]; do
+	while [[ "${filedir#"$common"/}" = "$filedir" ]]; do
 		common="$(dirname "$common")"
 		result="../$result"
 	done
 
-	result="${result}${filedir#$common/}"
+	result="${result}${filedir#"$common"/}"
 	echo "${result}/$(basename "$file")"
 }
 
