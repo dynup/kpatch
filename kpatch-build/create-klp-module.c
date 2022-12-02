@@ -113,9 +113,9 @@ static struct symbol *find_or_add_ksym_to_symbols(struct kpatch_elf *kelf,
 }
 
 /*
- * Create a klp rela section given the base section and objname
+ * Create a .klp.rela section given the base section and objname
  *
- * If a klp rela section matching the base section and objname
+ * If a .klp.rela section matching the base section and objname
  * already exists, return it.
  */
 static struct section *find_or_add_klp_relasec(struct kpatch_elf *kelf,
@@ -163,8 +163,8 @@ static struct section *find_or_add_klp_relasec(struct kpatch_elf *kelf,
  *   1) Allocate a symbol for the corresponding .kpatch.symbols entry if
  *      it doesn't already exist (find_or_add_ksym_to_symbols())
  *      This is the symbol that the relocation points to (rela->sym)
- *   2) Allocate a rela, and add it to the corresponding .klp.rela. section. If
- *      the matching .klp.rela. section (given the base section and objname)
+ *   2) Allocate a rela, and add it to the corresponding .klp.rela section. If
+ *      the matching .klp.rela section (given the base section and objname)
  *      doesn't exist yet, create it (find_or_add_klp_relasec())
  */
 static void create_klp_relasecs_and_syms(struct kpatch_elf *kelf, struct section *krelasec,
@@ -212,12 +212,12 @@ static void create_klp_relasecs_and_syms(struct kpatch_elf *kelf, struct section
 		if (!sym)
 			ERROR("error finding or adding ksym to symtab");
 
-		/* Create (or find) the .klp.rela. section for the dest sec and object */
+		/* Create (or find) the .klp.rela section for the dest sec and object */
 		klp_relasec = find_or_add_klp_relasec(kelf, dest->sec, objname);
 		if (!klp_relasec)
-			ERROR("error finding or adding klp relasec");
+			ERROR("error finding or adding .klp.rela section");
 
-		/* Add the klp rela to the .klp.rela. section */
+		/* Add the klp relocation to the .klp.rela section */
 		ALLOC_LINK(rela, &klp_relasec->relas);
 		rela->offset = (unsigned int)(dest->sym.st_value + dest_off);
 		rela->type = krelas[index].type;
@@ -471,7 +471,7 @@ int main(int argc, char *argv[])
 		ERROR("number of krelas and ksyms do not match");
 
 	/*
-	 * Create klp rela sections and klp symbols from
+	 * Create .klp.rela sections and klp symbols from
 	 * .kpatch.{relocations,symbols} sections
 	 */
 	create_klp_relasecs_and_syms(kelf, krelasec, ksymsec, strings);
@@ -488,7 +488,7 @@ int main(int argc, char *argv[])
 	remove_intermediate_sections(kelf);
 	kpatch_reindex_elements(kelf);
 
-	/* Rebuild rela sections, new klp rela sections will be rebuilt too. */
+	/* Rebuild rela sections, new .klp.rela sections will be rebuilt too. */
 	symtab = find_section_by_name(&kelf->sections, ".symtab");
 	if (!symtab)
 		ERROR("missing .symtab section");

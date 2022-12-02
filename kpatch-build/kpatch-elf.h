@@ -101,7 +101,7 @@ struct rela {
 	unsigned int offset;
 	long addend;
 	char *string;
-	bool need_dynrela;
+	bool need_klp_reloc;
 };
 
 struct string {

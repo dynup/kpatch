@@ -24,7 +24,7 @@ Table of contents
 - [Code removal](#code-removal)
 - [Once macros](#once-macros)
 - [inline implies notrace](#inline-implies-notrace)
-- [Jump labels](#jump-labels)
+- [Jump labels and static calls](#jump-labels-and-static-calls)
 - [Sibling calls](#sibling-calls)
 - [Exported symbol versioning](#exported-symbol-versioning)
 - [System calls](#system-calls)
@@ -747,41 +747,81 @@ changes to all of `__tcp_mtu_to_mss()` callers (ie, it was inlined as
 requested).  In this case, a simple workaround is to specify
 `__tcp_mtu_to_mss()` as `__always_inline` to force the compiler to do so.
 
-Jump labels
------------
+Jump labels and static calls
+----------------------------
 
-When modifying a function that contains a jump label, kpatch-build may
-return an error like: `ERROR: oom_kill.o: kpatch_regenerate_special_section: 2109: Found a jump label at out_of_memory()+0x10a, using key cpusets_enabled_key.  Jump labels aren't currently supported.  Use static_key_enabled() instead.`
+### Late module patching vs special section relocations
 
-This is due to a limitation in the kernel to process static key
-livepatch relocations (resolved by late-module patching).  Older
-versions of kpatch-build may have reported successfully building
-kpatch module, but issue
-[#931](https://github.com/dynup/kpatch/issues/931) revealed potentially
-dangerous behavior if the static key value had been modified from its
-compiled default.
+Jump labels and static calls can be problematic due to "late module patching",
+which is a feature (design flaw?) in upstream livepatch.  When a livepatch
+module patches another module, unfortunately the livepatch module doesn't have
+an official module dependency on the patched module.  That means the patched
+module doesn't even have to be loaded when the livepatch module gets loaded.
+In that case the patched module gets patched on demand whenever it might get
+loaded in the future.  It also gets unpatched on demand whenever it gets
+unloaded.
 
-The current workaround is to remove the jump label by explictly checking
-the static key:
+Loading (and patching) the module at some point after loading the livepatch
+module is called "late module patching".  In order to support this
+(mis?)feature, all relocations in the livepatch module which reference module
+symbols must be converted to "klp relocations", which get resolved at patching
+time.
 
-```c
-DEFINE_STATIC_KEY_TRUE(true_key);
-DEFINE_STATIC_KEY_FALSE(false_key);
+In all modules (livepatch and otherwise), jump labels and static calls rely on
+special sections which trigger jump-label/static-call code patching when a
+module gets loaded.  But unfortunately those special sections have relocations
+which need to get resolved, so there's an ordering issue.
 
-/* unsupported */
-if (static_key_true(&true_key))
-if (static_key_false(&false_key))
-if (static_branch_likely(&key))
+When a (livepatch) module gets loaded, first its relocations are resolved, then
+its special section handling (and code patching) is done.  The problem is, for
+klp relocations, if they reference another module's symbols, and that module
+isn't loaded, they're not yet defined.  So if a `.static_call_sites` entry
+tries to reference its corresponding `struct static_call_key`, but that key
+lives in another module which is not yet loaded, the key reference won't be
+resolved, and so `mod->static_call_sites` will be corrupted when
+`static_call_module_notify()` runs when the livepatch module first loads.
 
-/* supported */
-if (static_key_enabled(&true_key))
-if (static_key_enabled(&false_key))
-if (likely(static_key_enabled(&key)))
+### Jump labels
+
+With pre-5.8 kernels, kpatch-build will error out if it encounters any jump
+labels:
+```
+oom_kill.o: Found a jump label at out_of_memory()+0x10a, using key cpusets_enabled_key.  Jump labels aren't supported with this kernel.  Use static_key_enabled() instead.
 ```
 
-Note that with Linux 5.8+, jump labels in patched functions are now supported
-when the static key was originally defined in the kernel proper (vmlinux).  The
-above error will not be seen unless the static key lives in a module.
+With Linux 5.8+, klp relocation handling is integrated with the module relocation
+code, so jump labels in patched functions are supported when the static key was
+originally defined in the kernel proper (vmlinux).
+
+However, if the static key lives in a module, jump labels are _not_ supported
+in patched code, due to the ordering issue described above.  If the jump label
+is a tracepoint, kpatch-build will silently remove the tracepoint.  Otherwise,
+there will be an error:
+```
+vmx.o: Found a jump label at vmx_hardware_enable.cold()+0x23, using key enable_evmcs, which is defined in a module.  Use static_key_enabled() instead.
+```
+
+When you get one of the above errors, the fix is to remove the jump label usage
+in the patched function, replacing it with a regular C conditional.
+
+This can be done by replacing any usages of `static_branch_likely()`,
+`static_branch_unlikely()`, `static_key_true()`, and `static_key_false()` with
+`static_key_enabled()` in the patch file.
+
+### Static calls
+
+Similarly, static calls are not supported when the corresponding static call
+key was originally defined in a module.  If such a static call is part of a
+tracepoint, kpatch-build will silently remove it.  Otherwise, there will be an
+error:
+```
+cpuid.o: Found a static call at kvm_set_cpuid.cold()+0x32c, using key __SCK__kvm_x86_vcpu_after_set_cpuid, which is defined in a module.  Use KPATCH_STATIC_CALL() instead.
+```
+
+To fix this error, simply replace such static calls with regular indirect
+branches (or retpolines, if applicable) by adding `#include "kpatch-macros.h"`
+to the patch source and replacing usages of `static_call()` with
+`KPATCH_STATIC_CALL()`.
 
 Sibling calls
 -------------
