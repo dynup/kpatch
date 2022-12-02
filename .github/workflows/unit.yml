@@ -11,7 +11,7 @@ jobs:
     env:
       CFLAGS: ${{ matrix.cflags }}
     steps:
-    - uses: actions/checkout@v2
+    - uses: actions/checkout@v3
     - name: dependencies
       run: sudo apt-get install -y libelf-dev linux-headers-$(uname -r) shellcheck elfutils
     - name: make
