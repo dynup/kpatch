@@ -354,6 +354,28 @@ static bool is_string_literal_section(struct section *sec)
 	return !strncmp(sec->name, ".rodata.", 8) && strstr(sec->name, ".str");
 }
 
+/* gcc's ".data.unlikely" or clang's ".(data|bss).module_name.unlikely" */
+static bool is_data_unlikely_section(const char *name)
+{
+	size_t len = strlen(name);
+
+	return (len >= 5 + 8 &&
+		((!strncmp(name, ".data.", 6) ||
+		 !strncmp(name, ".bss.", 5)) &&
+		strstr(name + len - 9, ".unlikely")));
+}
+
+/* either ".data.once" or clang's ".(data|bss).module_name.once" */
+static bool is_data_once_section(const char *name)
+{
+	size_t len = strlen(name);
+
+	return (len >= 5 + 4 &&
+		(!strncmp(name, ".data.", 6) ||
+		 !strncmp(name, ".bss.", 5)) &&
+		strstr(name + len - 5, ".once"));
+}
+
 /*
  * This function detects whether the given symbol is a "special" static local
  * variable (for lack of a better term).
@@ -395,7 +417,7 @@ static bool is_special_static(struct symbol *sym)
 	if (sym->type != STT_OBJECT || sym->bind != STB_LOCAL)
 		return false;
 
-	if  (!strcmp(sym->sec->name, ".data.once"))
+	if (is_data_once_section(sym->sec->name))
 		return true;
 
 	for (var_name = var_names; *var_name; var_name++) {
@@ -1200,9 +1222,11 @@ static void kpatch_correlate_symbols(struct kpatch_elf *kelf_orig,
 			 * The .LCx symbols point to string literals in
 			 * '.rodata.<func>.str1.*' sections.  They get included
 			 * in kpatch_include_standard_elements().
+			 * Clang creates similar .Ltmp%d symbols in .rodata.str
 			 */
 			if (sym_orig->type == STT_NOTYPE &&
-			    !strncmp(sym_orig->name, ".LC", 3))
+			    !(strncmp(sym_orig->name, ".LC", 3) &&
+			      strncmp(sym_orig->name, ".Ltmp", 5)))
 				continue;
 
 			if (kpatch_is_mapping_symbol(kelf_orig, sym_orig))
@@ -1847,8 +1871,10 @@ static void kpatch_verify_patchability(struct kpatch_elf *kelf)
 		 * (.data.unlikely and .data.once is ok b/c it only has __warned vars)
 		 */
 		if (sec->include && sec->status != NEW &&
-		    (!strncmp(sec->name, ".data", 5) || !strncmp(sec->name, ".bss", 4)) &&
-		    (strcmp(sec->name, ".data.unlikely") && strcmp(sec->name, ".data.once"))) {
+		    (!strncmp(sec->name, ".data", 5) ||
+		     !strncmp(sec->name, ".bss", 4)) &&
+		     !is_data_once_section(sec->name) &&
+		     !is_data_unlikely_section(sec->name)) {
 			log_normal("data section %s selected for inclusion\n",
 				   sec->name);
 			errs++;
