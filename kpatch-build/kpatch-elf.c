@@ -108,15 +108,27 @@ struct section *find_section_by_index(struct list_head *list, unsigned int index
 	return NULL;
 }
 
-struct section *find_section_by_name(struct list_head *list, const char *name)
+struct section *find_nth_section_by_name( struct list_head *list, int nth, const char *name)
 {
 	struct section *sec;
 
-	list_for_each_entry(sec, list, list)
-		if (!strcmp(sec->name, name))
-			return sec;
+	if (!list || !list->next || !name)
+		return NULL;
+
+	list_for_each_entry(sec, list, list) {
+		if (strcmp(sec->name, name))
+			continue;
+		if (--nth >= 0)
+			continue;
+		return sec;
+	}
 
 	return NULL;
+}
+
+struct section *find_section_by_name(struct list_head *list, const char *name)
+{
+	return find_nth_section_by_name(list, 0, name);
 }
 
 struct symbol *find_symbol_by_index(struct list_head *list, size_t index)
@@ -1007,11 +1019,17 @@ void kpatch_reindex_elements(struct kpatch_elf *kelf)
 	index = 0;
 	list_for_each_entry(sym, &kelf->symbols, list) {
 		sym->index = index++;
-		if (sym->sec)
+		if (sym->sec) {
 			sym->sym.st_shndx = (unsigned short)sym->sec->index;
-		else if (sym->sym.st_shndx != SHN_ABS &&
-			 sym->sym.st_shndx != SHN_LIVEPATCH)
+			if (sym->sec->pfe) {
+				sym->sec->pfe->sh.sh_link = sym->sec->index;
+				if (sym->sec->pfe->rela)
+					sym->sec->pfe->rela->sh.sh_info = sym->sec->index;
+			}
+		} else if (sym->sym.st_shndx != SHN_ABS &&
+			 sym->sym.st_shndx != SHN_LIVEPATCH) {
 			sym->sym.st_shndx = SHN_UNDEF;
+		}
 	}
 }
 
