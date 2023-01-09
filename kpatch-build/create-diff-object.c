@@ -3695,6 +3695,11 @@ static void kpatch_create_callbacks_objname_rela(struct kpatch_elf *kelf, char *
 	}
 }
 
+/*
+ * Allocate the mcount/patchable_function_entry sections which must be done
+ * before the patched object is torn down so that the section flags can be
+ * copied.
+ */
 static void kpatch_alloc_mcount_sections(struct kpatch_elf *kelf, struct kpatch_elf *kelfout)
 {
 	int nr;
@@ -3707,10 +3712,36 @@ static void kpatch_alloc_mcount_sections(struct kpatch_elf *kelf, struct kpatch_
 			nr++;
 
 	/* create text/rela section pair */
-	create_section_pair(kelfout, "__mcount_loc", sizeof(void *), nr);
+	switch(kelf->arch) {
+	case AARCH64: {
+		struct section *sec, *tmp;
+
+		sec = create_section_pair(kelfout, "__patchable_function_entries", sizeof(void *), nr);
+
+		/*
+		 * Depending on the compiler the __patchable_function_entries section
+		 * can be ordered or not, copy this flag to the section we created to
+		 * avoid:
+		 * ld: __patchable_function_entries has both ordered [...] and unordered [...] sections
+		 */
+		tmp = find_section_by_name(&kelf->sections, "__patchable_function_entries");
+		sec->sh.sh_flags |= (tmp->sh.sh_flags & SHF_LINK_ORDER);
+		sec->sh.sh_link = 1;
+		break;
+	}
+	case PPC64:
+	case X86_64:
+	case S390:
+		create_section_pair(kelfout, "__mcount_loc", sizeof(void *), nr);
+		break;
+	default:
+		ERROR("unsupported arch\n");
+	}
 }
 
 /*
+ * Populate the mcount sections allocated by kpatch_alloc_mcount_sections()
+ * previously.
  * This function basically reimplements the functionality of the Linux
  * recordmcount script, so that patched functions can be recognized by ftrace.
  *
@@ -3726,8 +3757,18 @@ static void kpatch_populate_mcount_sections(struct kpatch_elf *kelf)
 	void **funcs;
 	unsigned long insn_offset = 0;
 
-
-	sec = find_section_by_name(&kelf->sections, "__mcount_loc");
+	switch(kelf->arch) {
+	case AARCH64:
+		sec = find_section_by_name(&kelf->sections, "__patchable_function_entries");
+		break;
+	case PPC64:
+	case X86_64:
+	case S390:
+		sec = find_section_by_name(&kelf->sections, "__mcount_loc");
+		break;
+	default:
+		ERROR("unsupported arch\n");
+	}
 	relasec = sec->rela;
 	nr = (int) (sec->data->d_size / sizeof(void *));
 
@@ -3744,6 +3785,34 @@ static void kpatch_populate_mcount_sections(struct kpatch_elf *kelf)
 		}
 
 		switch(kelf->arch) {
+		case AARCH64: {
+			unsigned char *insn;
+			int i;
+
+			insn = sym->sec->data->d_buf;
+			insn_offset = 0;
+
+			/*
+			 * If BTI (Branch Target Identification) is enabled then there
+			 * might be an additional 'BTI C' instruction before the two
+			 * patchable function entry 'NOP's.
+			 * i.e. 0xd503245f (little endian)
+			 */
+			if (insn[0] == 0x5f) {
+				if (insn[1] != 0x24 || insn[2] != 0x03 || insn[3] != 0xd5)
+					ERROR("%s: unexpected instruction in patch section of function\n", sym->name);
+				insn_offset += 4;
+				insn += 4;
+			}
+			for (i = 0; i < 8; i += 4) {
+				/* We expect a NOP i.e. 0xd503201f (little endian) */
+				if (insn[i] != 0x1f || insn[i + 1] != 0x20 ||
+				    insn[i + 2] != 0x03 || insn [i + 3] != 0xd5)
+					ERROR("%s: unexpected instruction in patch section of function\n", sym->name);
+			}
+
+			break;
+		}
 		case PPC64: {
 			bool found = false;
 
