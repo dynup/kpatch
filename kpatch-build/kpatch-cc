@@ -44,6 +44,7 @@ if [[ "$TOOLCHAINCMD" =~ ^(.*-)?gcc$ || "$TOOLCHAINCMD" =~ ^(.*-)?clang$ ]] ; th
 				arch/s390/kernel/vdso64/*|\
 				drivers/firmware/efi/libstub/*|\
 				init/version.o|\
+				init/version-timestamp.o|\
 				kernel/system_certificates.o|\
 				lib/*|\
 				tools/*|\
