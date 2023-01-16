@@ -2124,6 +2124,11 @@ static int static_call_sites_group_size(struct kpatch_elf *kelf, int offset)
 	return size;
 }
 
+static int call_sites_group_size(struct kpatch_elf *kelf, int offset)
+{
+	return 4;
+}
+
 static int retpoline_sites_group_size(struct kpatch_elf *kelf, int offset)
 {
 	return 4;
@@ -2430,6 +2435,11 @@ static struct special_section special_sections[] = {
 		.arch		= X86_64,
 		.group_size	= static_call_sites_group_size,
 		.group_filter	= static_call_sites_group_filter,
+	},
+	{
+		.name		= ".call_sites",
+		.arch		= X86_64,
+		.group_size	= call_sites_group_size,
 	},
 	{
 		.name		= ".retpoline_sites",
