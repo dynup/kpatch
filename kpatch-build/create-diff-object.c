@@ -236,14 +236,21 @@ static struct rela *toc_rela(const struct rela *rela)
 static void kpatch_bundle_symbols(struct kpatch_elf *kelf)
 {
 	struct symbol *sym;
+	unsigned int expected_offset;
 
 	list_for_each_entry(sym, &kelf->symbols, list) {
 		if (is_bundleable(sym)) {
-			if (sym->sym.st_value != 0 &&
-			    !is_gcc6_localentry_bundled_sym(kelf, sym)) {
-				ERROR("symbol %s at offset %lu within section %s, expected 0",
+			if (sym->pfx)
+				expected_offset = 16;
+			else if (is_gcc6_localentry_bundled_sym(kelf, sym))
+				expected_offset = 8;
+			else
+				expected_offset = 0;
+
+			if (sym->sym.st_value != expected_offset) {
+				ERROR("symbol %s at offset %lu within section %s, expected %u",
 				      sym->name, sym->sym.st_value,
-				      sym->sec->name);
+				      sym->sec->name, expected_offset);
 			}
 
 			sym->sec->sym = sym;
@@ -1913,6 +1920,8 @@ static int kpatch_include_changed_functions(struct kpatch_elf *kelf)
 		    sym->type == STT_FUNC) {
 			changed_nr++;
 			kpatch_include_symbol(sym);
+			if (sym->pfx)
+				kpatch_include_symbol(sym->pfx);
 		}
 
 		if (sym->type == STT_FILE)
@@ -1927,7 +1936,8 @@ static void kpatch_print_changes(struct kpatch_elf *kelf)
 	struct symbol *sym;
 
 	list_for_each_entry(sym, &kelf->symbols, list) {
-		if (!sym->include || !sym->sec || sym->type != STT_FUNC || sym->parent)
+		if (!sym->include || !sym->sec || sym->type != STT_FUNC ||
+		    sym->parent || sym->is_pfx)
 			continue;
 		if (sym->status == NEW)
 			log_normal("new function: %s\n", sym->name);
@@ -3922,7 +3932,8 @@ static void kpatch_find_func_profiling_calls(struct kpatch_elf *kelf)
 	struct rela *rela;
 	unsigned char *insn;
 	list_for_each_entry(sym, &kelf->symbols, list) {
-		if (sym->type != STT_FUNC || !sym->sec || !sym->sec->rela)
+		if (sym->type != STT_FUNC || sym->is_pfx ||
+		    !sym->sec || !sym->sec->rela)
 			continue;
 
 		switch(kelf->arch) {

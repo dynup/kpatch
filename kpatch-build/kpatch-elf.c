@@ -397,6 +397,97 @@ static void kpatch_create_section_list(struct kpatch_elf *kelf)
 		ERROR("expected NULL");
 }
 
+/*
+ * Some x86 kernels have NOP function padding [1] for which objtool [2]
+ * adds ELF function symbols with prefix "__pfx_" to indicate the start
+ * of a function, inclusive of NOP-padding.  Find the prefix symbols and
+ * link them to their corresponding function symbols at an expected
+ * offset.
+ *
+ * A few examples:
+ *
+ *    Value          Size Type    Bind   Vis      Ndx Name
+ * (fork.o, simple case)
+ * 0000000000000000     0 SECTION LOCAL  DEFAULT   31 .text.get_task_mm
+ * 0000000000000000    16 FUNC    GLOBAL DEFAULT   31 __pfx_get_task_mm
+ * 0000000000000010    91 FUNC    GLOBAL DEFAULT   31 get_task_mm
+ *
+ * (fork.o, multiple function aliases)
+ * 0000000000000000     0 SECTION LOCAL  DEFAULT  190 .text.__do_sys_fork
+ * 0000000000000000    16 FUNC    GLOBAL DEFAULT  190 __pfx___x64_sys_fork
+ * 0000000000000010    49 FUNC    LOCAL  DEFAULT  190 __do_sys_fork
+ * 0000000000000010    49 FUNC    GLOBAL DEFAULT  190 __ia32_sys_fork
+ * 0000000000000010    49 FUNC    GLOBAL DEFAULT  190 __x64_sys_fork
+ *
+ * (fork.o multiple functions in one section)
+ * 0000000000000000     0 SECTION LOCAL  DEFAULT   59 .init.text
+ * 0000000000000000    16 FUNC    LOCAL  DEFAULT   59 __pfx_coredump_filter_setup
+ * 0000000000000010    40 FUNC    LOCAL  DEFAULT   59 coredump_filter_setup
+ * 0000000000000038    16 FUNC    WEAK   DEFAULT   59 __pfx_arch_task_cache_init
+ * 0000000000000048    10 FUNC    WEAK   DEFAULT   59 arch_task_cache_init
+ * 0000000000000052    16 FUNC    GLOBAL DEFAULT   59 __pfx_fork_init
+ * 0000000000000062   357 FUNC    GLOBAL DEFAULT   59 fork_init
+ * 00000000000001c7    16 FUNC    GLOBAL DEFAULT   59 __pfx_fork_idle
+ * 00000000000001d7   214 FUNC    GLOBAL DEFAULT   59 fork_idle
+ * 00000000000002ad    16 FUNC    GLOBAL DEFAULT   59 __pfx_mm_cache_init
+ * 00000000000002bd    72 FUNC    GLOBAL DEFAULT   59 mm_cache_init
+ * 0000000000000305    16 FUNC    GLOBAL DEFAULT   59 __pfx_proc_caches_init
+ * 0000000000000315   192 FUNC    GLOBAL DEFAULT   59 proc_caches_init
+ *
+ * (fork.o, function without nop padding / __pfx_ symbol)
+ * 0000000000000000     0 SECTION LOCAL  DEFAULT   99 .text.unlikely.__mmdrop
+ * 0000000000000000    48 FUNC    LOCAL  DEFAULT   99 __mmdrop.cold
+ *
+ * (kpatch-build generated tmp.ko, multple functions in one section, no __pfx_ symbols)
+ * 0000000000000000     0 SECTION LOCAL  DEFAULT   10 .text.unlikely.callback_info.isra.0
+ * 0000000000000010    65 FUNC    LOCAL  DEFAULT   10 callback_info.isra.0
+ * 0000000000000061    54 FUNC    LOCAL  DEFAULT   10 callback_info.isra.0
+ * 00000000000000a7    54 FUNC    LOCAL  DEFAULT   10 callback_info.isra.0
+ *
+ * CONFIG_CFI_CLANG uses something very similar, except the symbol is created
+ * by the compiler and its prefix is "__cfi_".
+ *
+ * [1] bea75b33895f ("x86/Kconfig: Introduce function padding")
+ * [2] 9f2899fe36a6 ("objtool: Add option to generate prefix symbols")
+ */
+static void kpatch_link_prefixed_functions(struct kpatch_elf *kelf)
+{
+	struct symbol *func, *pfx;
+	bool found;
+
+	if (kelf->arch != X86_64)
+		return;
+
+	list_for_each_entry(pfx, &kelf->symbols, list) {
+		if (!pfx->name || pfx->type != STT_FUNC)
+			continue;
+
+		if (strncmp(pfx->name, "__pfx_", 6) &&
+		    strncmp(pfx->name, "__cfi_", 6))
+			continue;
+
+		found = false;
+
+		list_for_each_entry(func, &kelf->symbols, list) {
+			if (func->type == STT_FUNC && func->sec == pfx->sec &&
+			    func->sym.st_value == pfx->sym.st_value + 16) {
+
+				/*
+				 * If a func has aliases, it's possible for
+				 * multiple functions to have the same 'pfx'.
+				 */
+
+				pfx->is_pfx = true;
+				func->pfx = pfx;
+				found = true;
+			}
+		}
+
+		if (!found)
+			ERROR("missing func for %s", pfx->name);
+	}
+}
+
 static void kpatch_create_symbol_list(struct kpatch_elf *kelf)
 {
 	struct section *symtab;
@@ -459,6 +550,7 @@ static void kpatch_create_symbol_list(struct kpatch_elf *kelf)
 		log_debug("\n");
 	}
 
+	kpatch_link_prefixed_functions(kelf);
 }
 
 struct kpatch_elf *kpatch_elf_open(const char *name)
