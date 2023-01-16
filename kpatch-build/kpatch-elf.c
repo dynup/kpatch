@@ -948,6 +948,7 @@ void kpatch_write_output_elf(struct kpatch_elf *kelf, Elf *elf, char *outfile,
 	ehout.e_machine = eh.e_machine;
 	ehout.e_type = eh.e_type;
 	ehout.e_version = EV_CURRENT;
+	ehout.e_flags = eh.e_flags;
 
 	shstrtab = find_section_by_name(&kelf->sections, ".shstrtab");
 	if (!shstrtab)
