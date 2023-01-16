@@ -38,7 +38,7 @@
 
 #ifdef CONFIG_X86_64
 
-/* x86/include/asm/syscall_wrapper.h versions */
+/* arch/x86/include/asm/syscall_wrapper.h versions */
 
 # if LINUX_VERSION_CODE >= KERNEL_VERSION(5, 7, 0)
 
@@ -81,7 +81,7 @@
 
 #elif defined(CONFIG_S390)
 
-/* s390/include/asm/syscall_wrapper.h versions */
+/* arch/s390/include/asm/syscall_wrapper.h versions */
 
 #define __KPATCH_S390_SYS_STUBx(x, name, ...)					\
 	long __s390_sys##name(struct pt_regs *regs);				\
@@ -113,6 +113,33 @@
 	}										\
 	__diag_pop();									\
 	static inline long __kpatch_do_sys##name(__MAP(x,__SC_DECL,__VA_ARGS__))
+
+#elif defined(CONFIG_PPC64)
+
+/* arch/powerpc/include/asm/syscall_wrapper.h versions */
+
+# if LINUX_VERSION_CODE >= KERNEL_VERSION(6, 1, 0)
+
+#  define __KPATCH_SYSCALL_DEFINEx(x, name, ...)			\
+	long sys##name(const struct pt_regs *regs);			\
+	ALLOW_ERROR_INJECTION(sys##name, ERRNO);			\
+	static long __se_sys##name(__MAP(x,__SC_LONG,__VA_ARGS__));		\
+	static inline long __kpatch_do_sys##name(__MAP(x,__SC_DECL,__VA_ARGS__));\
+	__attribute__((optimize("-fno-optimize-sibling-calls")))		\
+	long sys##name(const struct pt_regs *regs)			\
+	{									\
+		return __se_sys##name(SC_POWERPC_REGS_TO_ARGS(x,__VA_ARGS__));	\
+	}									\
+	static long __se_sys##name(__MAP(x,__SC_LONG,__VA_ARGS__))		\
+	{									\
+		long ret = __kpatch_do_sys##name(__MAP(x,__SC_CAST,__VA_ARGS__));\
+		__MAP(x,__SC_TEST,__VA_ARGS__);					\
+		__PROTECT(x, ret,__MAP(x,__SC_ARGS,__VA_ARGS__));		\
+		return ret;							\
+	}									\
+	static inline long __kpatch_do_sys##name(__MAP(x,__SC_DECL,__VA_ARGS__))
+
+# endif /* LINUX_VERSION_CODE */
 
 #endif /* CONFIG_X86_64 */
 
