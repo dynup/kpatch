@@ -1,4 +1,4 @@
 [submodule "test/unit/objs"]
 	path = test/unit/objs
-	url = https://github.com/joe-lawrence/kpatch-unit-test-objs.git
-	branch = initial-aarch64
+	url = https://github.com/swine/kpatch-unit-test-objs.git
+	branch = remotes/github-swine/arm64
