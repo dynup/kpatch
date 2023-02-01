@@ -752,6 +752,12 @@ static bool insn_is_load_immediate(struct kpatch_elf *kelf, void *addr)
 
 		break;
 
+	case AARCH64:
+		/* Verify mov w2 <line number> */
+		if ((insn[0] & 0b11111) == 0x2 && insn[3] == 0x52)
+			return true;
+		break;
+
 	default:
 		ERROR("unsupported arch");
 	}
@@ -785,13 +791,14 @@ static bool insn_is_load_immediate(struct kpatch_elf *kelf, void *addr)
  *  51b:   e8 00 00 00 00          callq  520 <do_select+0x520>
  *                         51c: R_X86_64_PC32      ___might_sleep-0x4
  */
-static bool _kpatch_line_macro_change_only(struct kpatch_elf *kelf,
+static bool kpatch_line_macro_change_only(struct kpatch_elf *kelf,
 					  struct section *sec)
 {
 	unsigned long offset, insn1_len, insn2_len;
 	void *data1, *data2, *insn1, *insn2;
 	struct rela *r, *rela;
 	bool found, found_any = false;
+	bool warn_printk_only = (kelf->arch == AARCH64);
 
 	if (sec->status != CHANGED ||
 	    is_rela_section(sec) ||
@@ -855,8 +862,15 @@ static bool _kpatch_line_macro_change_only(struct kpatch_elf *kelf,
 			    !strncmp(rela->sym->name, "__func__.", 9))
 				continue;
 
+			if (!strcmp(rela->sym->name, "__warn_printk")) {
+				found = true;
+				break;
+			}
+
+			if (warn_printk_only)
+				return false;
+
 			if (!strncmp(rela->sym->name, "warn_slowpath_", 14) ||
-			    !strcmp(rela->sym->name, "__warn_printk") ||
 			    !strcmp(rela->sym->name, "__might_sleep") ||
 			    !strcmp(rela->sym->name, "___might_sleep") ||
 			    !strcmp(rela->sym->name, "__might_fault") ||
@@ -882,84 +896,6 @@ static bool _kpatch_line_macro_change_only(struct kpatch_elf *kelf,
 		      sec->name);
 
 	return true;
-}
-
-static bool _kpatch_line_macro_change_only_aarch64(struct kpatch_elf *kelf,
-						  struct section *sec)
-{
-	unsigned char *start1, *start2;
-	unsigned long size, offset, insn_len;
-	struct rela *rela;
-	int lineonly = 0, found;
-
-	insn_len = insn_length(kelf, NULL);
-
-	if (sec->status != CHANGED ||
-	    is_rela_section(sec) ||
-	    !is_text_section(sec) ||
-	    sec->sh.sh_size != sec->twin->sh.sh_size ||
-	    !sec->rela ||
-	    sec->rela->status != SAME)
-		return false;
-
-	start1 = sec->twin->data->d_buf;
-	start2 = sec->data->d_buf;
-	size = sec->sh.sh_size;
-	for (offset = 0; offset < size; offset += insn_len) {
-		if (!memcmp(start1 + offset, start2 + offset, insn_len))
-			continue;
-
-		/* Verify mov w2 <line number> */
-		if (((start1[offset] & 0b11111) != 0x2) || (start1[offset+3] != 0x52) ||
-		    ((start1[offset] & 0b11111) != 0x2) || (start2[offset+3] != 0x52))
-			return false;
-
-		/*
-		 * Verify zero or more string relas followed by a
-		 * warn_slowpath_* or another similar rela.
-		 */
-		found = 0;
-		list_for_each_entry(rela, &sec->rela->relas, list) {
-			if (rela->offset < offset + insn_len)
-				continue;
-			if (rela->string)
-				continue;
-			if (!strncmp(rela->sym->name, "__warned.", 9) ||
-			    !strncmp(rela->sym->name, "__already_done.", 15))
-				continue;
-			if (!strcmp(rela->sym->name, "__warn_printk")) {
-				found = 1;
-				break;
-			}
-			return false;
-		}
-		if (!found)
-			return false;
-
-		lineonly = 1;
-	}
-
-	if (!lineonly)
-		ERROR("no instruction changes detected for changed section %s",
-		      sec->name);
-
-	return true;
-}
-
-static bool kpatch_line_macro_change_only(struct kpatch_elf *kelf,
-					  struct section *sec)
-{
-	switch(kelf->arch) {
-	case AARCH64:
-		return _kpatch_line_macro_change_only_aarch64(kelf, sec);
-	case PPC64:
-	case S390:
-	case X86_64:
-		return _kpatch_line_macro_change_only(kelf, sec);
-	default:
-		ERROR("unsupported arch");
-	}
-	return false;
 }
 
 /*
