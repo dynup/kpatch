@@ -173,11 +173,11 @@ cleanup() {
 	# restore original vmlinux if it was overwritten by sourcedir build
 	[[ -e "$TEMPDIR/vmlinux" ]] && mv -f "$TEMPDIR/vmlinux" "$KERNEL_SRCDIR/"
 
-	# restore original link-vmlinux.sh if we updated it for the build
+	# restore any files that were modified for the build
 	[[ -e "$TEMPDIR/link-vmlinux.sh" ]] && mv -f "$TEMPDIR/link-vmlinux.sh" "$KERNEL_SRCDIR/scripts"
-
-	# restore original Makefile.modfinal if we updated it for the build
 	[[ -e "$TEMPDIR/Makefile.modfinal" ]] && mv -f "$TEMPDIR/Makefile.modfinal" "$KERNEL_SRCDIR/scripts"
+	[[ -e "$TEMPDIR/Makefile.build" ]] && mv -f "$TEMPDIR/Makefile.build" "$KERNEL_SRCDIR/scripts"
+	[[ -e "$TEMPDIR/Makefile" ]] && mv -f "$TEMPDIR/Makefile" "$KERNEL_SRCDIR"
 
 	[[ "$DEBUG" -eq 0 ]] && rm -rf "$TEMPDIR"
 	rm -rf "$RPMTOPDIR"
@@ -1054,6 +1054,23 @@ if [[ -n "$CONFIG_DEBUG_INFO_BTF" ]]; then
 	fi
 fi
 
+if [[ -n "$CONFIG_LTO_CLANG" ]]; then
+	[[ -n "$CONFIG_LTO_CLANG_THIN" ]] || die "Non-thin LTO is not supported. Please enable CONFIG_LTO_CLANG_THIN"
+
+	# This is a heuristic: use -x to check vmlinux vs. vmlinux.o
+	[[ -x "$VMLINUX" ]] && die "For kernel with CONFIG_LTO_CLANG, please supply vmlinux.o instead of vmlinux via -v|--vmlinux option."
+
+	# update Makefile so that ld.lld generate vmlinux.o.thinlto.o* files for vmlinux.o
+	cp -f "$KERNEL_SRCDIR/Makefile" "$TEMPDIR/Makefile" || die
+	sed -i "s/--thinlto-cache-dir=\$(extmod_prefix).thinlto-cache/--lto-obj-path=vmlinux.o.thinlto.o/g" "$KERNEL_SRCDIR"/Makefile
+
+	# update scripts/Makefile.build so that ld.lld generate XX.o.thinlto.o* files for modules
+	cp -f "$KERNEL_SRCDIR/scripts/Makefile.build" "$TEMPDIR/Makefile.build" || die
+	sed -i "s/\$(ld_flags)/\$(ld_flags) --lto-obj-path=\$@.thinlto.o/g" "$KERNEL_SRCDIR"/scripts/Makefile.build
+
+	export KPATCH_CC_LTO=1
+fi
+
 if [[ -n "$CONFIG_CC_IS_CLANG" ]]; then
 	echo "WARNING: Clang support is experimental"
 fi
@@ -1179,9 +1196,14 @@ if [[ -n "$CONFIG_MODVERSIONS" ]]; then
 	trace_on
 fi
 
+if [[ -n "$CONFIG_LTO_CLANG" ]]; then
+	DIFF_OBJS="$TEMPDIR/thinlto_objs"
+else
+	DIFF_OBJS="$TEMPDIR/changed_objs"
+fi
 # Read as words, no quotes.
 # shellcheck disable=SC2013
-for i in $(cat "$TEMPDIR/changed_objs")
+for i in $(cat "$DIFF_OBJS")
 do
 	mkdir -p "$TEMPDIR/patched/$(dirname "$i")" || die
 	cp -f "$BUILDDIR/$i" "$TEMPDIR/patched/$i" || die
@@ -1210,7 +1232,8 @@ if [[ -z "$MODNAME" ]] ; then
 
 	MODNAME="$(module_name_string "$MODNAME")"
 fi
-FILES="$(cat "$TEMPDIR/changed_objs")"
+FILES="$(cat "$DIFF_OBJS")"
+
 cd "$TEMPDIR" || die
 mkdir output
 declare -a objnames
@@ -1234,7 +1257,11 @@ for i in $FILES; do
 
 	mkdir -p "output/$(dirname "$i")"
 	cd "$BUILDDIR" || die
-	find_kobj "$i"
+	if [[ -n "$CONFIG_LTO_CLANG" ]] ; then
+		KOBJFILE=${i/.o.thinlto.o*/}
+	else
+		find_kobj "$i"
+	fi
 	cd "$TEMPDIR" || die
 	if [[ -e "orig/$i" ]]; then
 		if [[ -n $OOT_MODULE ]]; then
@@ -1251,14 +1278,28 @@ for i in $FILES; do
 		else
 			KOBJFILE_NAME=$(basename "${KOBJFILE%.ko}")
 			KOBJFILE_NAME="${KOBJFILE_NAME//-/_}"
-			KOBJFILE_PATH="${TEMPDIR}/module/$KOBJFILE"
+			if [[ -n "$CONFIG_LTO_CLANG" ]] ; then
+				KOBJFILE_PATH="${TEMPDIR}/module/$KOBJFILE.ko"
+			else
+				KOBJFILE_PATH="${TEMPDIR}/module/$KOBJFILE"
+			fi
 			SYMTAB="${KOBJFILE_PATH}.symtab"
 			SYMVERS_FILE="$BUILDDIR/Module.symvers"
 		fi
 
-		"$READELF" -s --wide "$KOBJFILE_PATH" > "$SYMTAB"
+		# With CONFIG_LTO_CLANG, multiple .thinlto files share a
+		# symtab file. Only generate the symtab file once.
+		[[ -e "$SYMTAB" ]] || "$READELF" --symbols --wide "$KOBJFILE_PATH" > "$SYMTAB"
 		if [[ "$ARCH" = "ppc64le" ]]; then
 			sed -ri 's/\s+\[<localentry>: 8\]//' "$SYMTAB"
+		fi
+
+		if [[ -n "$CONFIG_LTO_CLANG" ]] ; then
+			# skip .thinlto file that didn't change at all
+			diff "orig/$i" "patched/$i" 2> /dev/null && continue
+			# skip .thinlto file without any functions
+			num_func=$("$READELF" --symbols "orig/$i" | grep -c FUNC)
+			[[ $num_func -eq 0 ]] && continue
 		fi
 
 		# create-diff-object orig.o patched.o parent-name parent-symtab
@@ -1313,7 +1354,7 @@ fi
 cd "$TEMPDIR/output" || die
 # $KPATCH_LDFLAGS and result of find used as list, no quotes.
 # shellcheck disable=SC2086,SC2046
-"$LD" -r $KPATCH_LDFLAGS -o ../patch/tmp_output.o $(find . -name "*.o") 2>&1 | logger || die
+"$LD" -r $KPATCH_LDFLAGS -o ../patch/tmp_output.o $(find . -name "*.o*") 2>&1 | logger || die
 
 if [[ "$USE_KLP" -eq 1 ]]; then
 	cp -f "$TEMPDIR"/patch/tmp_output.o "$TEMPDIR"/patch/output.o || die
