@@ -2835,6 +2835,12 @@ static void kpatch_mark_ignored_sections(struct kpatch_elf *kelf)
 		    !strncmp(sec->name, ".llvm_addrsig", 13) ||
 		    !strncmp(sec->name, ".llvm.", 6))
 			sec->ignore = 1;
+
+		if (kelf->arch == X86_64) {
+			if (!strcmp(sec->name, ".rela__patchable_function_entries") ||
+			    !strcmp(sec->name, "__patchable_function_entries"))
+				sec->ignore = 1;
+		}
 	}
 
 	sec = find_section_by_name(&kelf->sections, ".kpatch.ignore.sections");
