@@ -1118,6 +1118,11 @@ else
 	MAKEVARS+=("LD=${KPATCH_CC_PREFIX}${LD}")
 fi
 
+# It is common for the user to enable all LLVM utilities with LLVM=1.
+# Detech such case with CONFIG_AS_IS_LLVM flag.
+if [[ -n "$CONFIG_AS_IS_LLVM" ]]; then
+	MAKEVARS+=("LLVM=1")
+fi
 
 # $TARGETS used as list, no quotes.
 # shellcheck disable=SC2086
