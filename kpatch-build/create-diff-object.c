@@ -430,6 +430,23 @@ static int __kpatch_unique_id_strcmp(char *s1, char *s2)
 	return 1;
 }
 
+static int __kpatch_skip_digits_strcmp(char *s1, char *s2)
+{
+	while (*s1 == *s2) {
+		if (!*s1)
+			return 0;
+		s1++;
+		s2++;
+
+		while (isdigit(*s1))
+			s1++;
+		while (isdigit(*s2))
+			s2++;
+	}
+
+	return 1;
+}
+
 /*
  * This is like strcmp, but for gcc-mangled symbols.  It skips the comparison
  * of any substring which consists of '.' followed by any number of digits.
@@ -445,6 +462,19 @@ static int kpatch_mangled_strcmp(char *s1, char *s2)
 
 	if (!strncmp(s1, "__UNIQUE_ID_", 12))
 		return __kpatch_unique_id_strcmp(s1, s2);
+
+	/*
+	 * Hack for __initcall_stub() with CONFIG_LTO_CLANG.
+	 * The following should match:
+	 *
+	 *   __initstub__kmod_syscall__728_5326_bpf_syscall_sysctl_init7
+	 *   __initstub__kmod_syscall__728_5324_bpf_syscall_sysctl_init7
+	 *
+	 * Please refer to __initcall_stub() in include/linux/init.h for
+	 * more details.
+	 */
+	if (!strncmp(s1, "__initstub__kmod_syscall__", 26))
+		return __kpatch_skip_digits_strcmp(s1, s2);
 
 	while (*s1 == *s2) {
 		if (!*s1)
