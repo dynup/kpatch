@@ -3860,6 +3860,7 @@ static void kpatch_no_sibling_calls_ppc64le(struct kpatch_elf *kelf)
 	struct symbol *sym;
 	unsigned char *insn;
 	unsigned int offset;
+	int sibling_call_errors = 0;
 
 	if (kelf->arch != PPC64)
 		return;
@@ -3893,10 +3894,15 @@ static void kpatch_no_sibling_calls_ppc64le(struct kpatch_elf *kelf)
 			if (!find_rela_by_offset(sym->sec->rela, offset))
 				continue;
 
-			ERROR("Found an unsupported sibling call at %s()+0x%lx.  Add __attribute__((optimize(\"-fno-optimize-sibling-calls\"))) to %s() definition.",
+			log_normal("Found an unsupported sibling call at %s()+0x%lx.  Add __attribute__((optimize(\"-fno-optimize-sibling-calls\"))) to %s() definition.\n",
 			      sym->name, sym->sym.st_value + offset, sym->name);
+			sibling_call_errors++;
 		}
 	}
+
+	if (sibling_call_errors)
+		ERROR("Found %d unsupported sibling call(s) in the patched code.",
+		      sibling_call_errors);
 }
 
 /* Check which functions have fentry/mcount calls; save this info for later use. */
