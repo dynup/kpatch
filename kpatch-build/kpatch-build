@@ -1117,7 +1117,8 @@ if [[ -n "$CONFIG_LD_IS_LLD" ]]; then
 else
 	MAKEVARS+=("LD=${KPATCH_CC_PREFIX}${LD}")
 fi
-
+#Force the kpatch module version to be consistent with ${ARCHVERSION}
+MAKEVARS+=("KERNELRELEASE=${ARCHVERSION}")
 
 # $TARGETS used as list, no quotes.
 # shellcheck disable=SC2086
