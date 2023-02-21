@@ -84,7 +84,8 @@ static bool maybe_discarded_sym(const char *name)
 	    !strncmp(name, "__func_stack_frame_non_standard_", 32) ||
 	    strstr(name, "__addressable_") ||
 	    strstr(name, "__UNIQUE_ID_") ||
-	    !strncmp(name, ".L.str", 6))
+	    !strncmp(name, ".L.str", 6) ||
+	    is_ubsan_sec(name))
 		return true;
 
 	return false;
