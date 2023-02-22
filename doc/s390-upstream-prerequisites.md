@@ -16,6 +16,7 @@
 - eed38cd2f46f s390/nospec: generate single register thunks if possible
 - 2268169c14e5 s390: remove unused expoline to BC instructions
 - f0003a9e4c18 s390/entry: remove unused expoline thunk
+- ded466e18066 s390/unwind: fix fgraph return address recovery
 
 **v5.16:**
 - torvalds/linux@f6ac18f sched: Improve try_invoke_on_locked_down_task()
