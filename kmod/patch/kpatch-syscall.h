@@ -82,6 +82,39 @@
 #elif defined(CONFIG_S390)
 
 /* arch/s390/include/asm/syscall_wrapper.h versions */
+# if LINUX_VERSION_CODE >= KERNEL_VERSION(6, 3, 0)
+
+#define __KPATCH_S390_SYS_STUBx(x, name, ...)                                          \
+	long __s390_sys##name(struct pt_regs *regs);                            \
+	ALLOW_ERROR_INJECTION(__s390_sys##name, ERRNO);                         \
+	static inline long ___se_sys##name(__MAP(x, __SC_LONG, __VA_ARGS__));   \
+	long __s390_sys##name(struct pt_regs *regs)                             \
+	{                                                                       \
+		return ___se_sys##name(SC_S390_REGS_TO_ARGS(x, __VA_ARGS__));   \
+	}                                                                       \
+	static inline long ___se_sys##name(__MAP(x, __SC_LONG, __VA_ARGS__))    \
+	{                                                                       \
+		__MAP(x, __SC_TEST, __VA_ARGS__);                               \
+		return __kpatch_do_sys##name(__MAP(x, __SC_COMPAT_CAST, __VA_ARGS__)); \
+	}
+
+#define __KPATCH_SYSCALL_DEFINEx(x, name, ...)					\
+       long __s390x_sys##name(struct pt_regs *regs);                           \
+       ALLOW_ERROR_INJECTION(__s390x_sys##name, ERRNO);                        \
+       static inline long __se_sys##name(__MAP(x, __SC_LONG, __VA_ARGS__));    \
+       static inline long __kpatch_do_sys##name(__MAP(x, __SC_DECL, __VA_ARGS__));    \
+       __KPATCH_S390_SYS_STUBx(x, name, __VA_ARGS__);                                 \
+       long __s390x_sys##name(struct pt_regs *regs)                            \
+       {                                                                       \
+               return __se_sys##name(SC_S390_REGS_TO_ARGS(x, __VA_ARGS__));    \
+       }                                                                       \
+       static inline long __se_sys##name(__MAP(x, __SC_LONG, __VA_ARGS__))     \
+       {                                                                       \
+               __MAP(x, __SC_TEST, __VA_ARGS__);                               \
+               return __kpatch_do_sys##name(__MAP(x, __SC_CAST, __VA_ARGS__));        \
+       }                                                                       \
+       static inline long __kpatch_do_sys##name(__MAP(x, __SC_DECL, __VA_ARGS__))
+# else
 
 #define __KPATCH_S390_SYS_STUBx(x, name, ...)					\
 	long __s390_sys##name(struct pt_regs *regs);				\
@@ -113,6 +146,8 @@
 	}										\
 	__diag_pop();									\
 	static inline long __kpatch_do_sys##name(__MAP(x,__SC_DECL,__VA_ARGS__))
+
+#endif /* LINUX_VERSION_CODE */
 
 #elif defined(CONFIG_PPC64)
 
