@@ -6,7 +6,7 @@
 
 Name: kpatch
 Summary: Dynamic kernel patching
-Version: 0.9.7
+Version: 0.9.8
 License: GPLv2
 Group: System Environment/Kernel
 URL: http://github.com/dynup/kpatch
@@ -104,6 +104,14 @@ rm -rf %{buildroot}
 %{_mandir}/man1/kpatch-build.1*
 
 %changelog
+* Wed Mar 8 2023 Joe Lawrence <joe.lawrence@redhat.com> - 0.9.8
+* Clang fix ups from Pete Swain
+* Support for gcc-12
+* Support for Linux 5.19
+* Added RHEL-8.7 and 9.1 integration tests
+* Fixed __UNIQUE_ID() variable correlation
+* Improved handling of unsupported static calls
+
 * Wed Sep 14 Yannick Cote <ycote@redhat.com> - 0.9.7
 * S390x kpatch support
 * Add support for openEuler + documentation (kpatch-build)
