@@ -587,6 +587,18 @@ bool is_local_sym(struct symbol *sym)
 	return sym->bind == STB_LOCAL;
 }
 
+bool is_ubsan_sec(const char *name) {
+	if (!strncmp(name, ".data.rel.local..Lubsan_data", 28) ||
+		!strncmp(name, ".data..Lubsan_type", 18) ||
+		!strncmp(name, ".Lubsan_data", 12) ||
+		!strncmp(name, ".data..Lubsan_data", 18) ||
+		!strncmp(name, ".rela.data..Lubsan_data", 23) ||
+		!strncmp(name, ".rela.data.rel.local..Lubsan_data", 33))
+		return true;
+	else
+		return false;
+}
+
 void print_strtab(char *buf, size_t size)
 {
 	size_t i;

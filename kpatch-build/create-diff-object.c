@@ -1036,6 +1036,9 @@ static void kpatch_correlate_sections(struct list_head *seclist_orig,
 			    sec_patched->twin)
 				continue;
 
+			if (is_ubsan_sec(sec_orig->name))
+				continue;
+
 			if (is_special_static(is_rela_section(sec_orig) ?
 					      sec_orig->base->secsym :
 					      sec_orig->secsym))
@@ -1070,6 +1073,9 @@ static void kpatch_correlate_symbols(struct list_head *symlist_orig,
 		list_for_each_entry(sym_patched, symlist_patched, list) {
 			if (kpatch_mangled_strcmp(sym_orig->name, sym_patched->name) ||
 			    sym_orig->type != sym_patched->type || sym_patched->twin)
+				continue;
+
+			if (is_ubsan_sec(sym_orig->name))
 				continue;
 
 			if (is_special_static(sym_orig))
@@ -1545,6 +1551,13 @@ static void kpatch_replace_sections_syms(struct kpatch_elf *kelf)
 		list_for_each_entry(rela, &relasec->relas, list) {
 
 			if (rela->sym->type != STT_SECTION || !rela->sym->sec)
+				continue;
+
+			/*
+			 * UBSAN data will be taken wholesale, no need to
+			 * replace section symbols.
+			 */
+			if (is_ubsan_sec(rela->sym->name))
 				continue;
 
 			/*
