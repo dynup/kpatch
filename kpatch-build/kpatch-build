@@ -166,18 +166,13 @@ remove_patches() {
 }
 
 cleanup() {
-	rm -f "$BUILDDIR/.scmversion"
-
 	remove_patches
 
-	# restore original vmlinux if it was overwritten by sourcedir build
+	# restore any files that were modified for the build
 	[[ -e "$TEMPDIR/vmlinux" ]] && mv -f "$TEMPDIR/vmlinux" "$KERNEL_SRCDIR/"
-
-	# restore original link-vmlinux.sh if we updated it for the build
 	[[ -e "$TEMPDIR/link-vmlinux.sh" ]] && mv -f "$TEMPDIR/link-vmlinux.sh" "$KERNEL_SRCDIR/scripts"
-
-	# restore original Makefile.modfinal if we updated it for the build
 	[[ -e "$TEMPDIR/Makefile.modfinal" ]] && mv -f "$TEMPDIR/Makefile.modfinal" "$KERNEL_SRCDIR/scripts"
+	[[ -e "$TEMPDIR/setlocalversion" ]] && mv -f "$TEMPDIR/setlocalversion" "$KERNEL_SRCDIR/scripts"
 
 	[[ "$DEBUG" -eq 0 ]] && rm -rf "$TEMPDIR"
 	rm -rf "$RPMTOPDIR"
@@ -989,6 +984,25 @@ if [[ -z "$OOT_MODULE" && ! "$CONFIGFILE" -ef "$KERNEL_SRCDIR"/.config ]] ; then
 	cp -f "$CONFIGFILE" "$KERNEL_SRCDIR/.config" || die
 fi
 
+# When the kernel source is in a git repo, applying the patch (plus the
+# Makefile sed hacks we do) can cause it to be built with "+" or "dirty"
+# appended to the kernel version string (VERMAGIC_STRING), even if the original
+# kernel was not dirty.  That can complicate both the build (create-diff-object
+# false positive changes) and the patch module link (module version mismatch
+# load failures).
+#
+# Prevent that by replacing the original setlocalversion with a friendlier one
+# which just echo's the original version.  This should be done before any
+# changes to the source.
+if [[ -n "$USERSRCDIR" && -e "$KERNEL_SRCDIR/.git" ]]; then
+	cd "$KERNEL_SRCDIR" || die
+	cp -f scripts/setlocalversion "$TEMPDIR" || die
+	LOCALVERSION="$(make kernelversion)"
+	LOCALVERSION="$(KERNELVERSION="$LOCALVERSION" ./scripts/setlocalversion)"
+	[[ -n "$LOCALVERSION" ]] || die "setlocalversion failed"
+	echo "echo $LOCALVERSION" > scripts/setlocalversion
+fi
+
 # kernel option checking
 
 trace_off "reading .config"
@@ -1099,7 +1113,6 @@ fi
 save_env
 
 echo "Building original source"
-[[ -n "$OOT_MODULE" ]] || ./scripts/setlocalversion --save-scmversion || die
 unset KPATCH_GCC_TEMPDIR
 
 KPATCH_CC_PREFIX="$TOOLSDIR/kpatch-cc "
