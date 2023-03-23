@@ -13,38 +13,43 @@ This tests several things related to the patching of modules:
 
 Signed-off-by: Josh Poimboeuf <jpoimboe@redhat.com>
 
-diff -Nupr src.orig/fs/nfsd/export.c src/fs/nfsd/export.c
---- src.orig/fs/nfsd/export.c	2023-01-12 11:20:07.174710504 -0500
-+++ src/fs/nfsd/export.c	2023-01-12 11:20:46.075941153 -0500
-@@ -1294,6 +1294,10 @@ static void exp_flags(struct seq_file *m
- 	}
+diff --git a/fs/xfs/xfs_stats.c b/fs/xfs/xfs_stats.c
+index 90a77cd3ebad..f65df90ae8e1 100644
+--- a/fs/xfs/xfs_stats.c
++++ b/fs/xfs/xfs_stats.c
+@@ -16,6 +16,8 @@ static int counter_val(struct xfsstats __percpu *stats, int idx)
+ 	return val;
  }
  
-+#include <linux/version.h>
 +extern char *kpatch_string(void);
 +
-+__attribute__((optimize("-fno-optimize-sibling-calls")))
- static int e_show(struct seq_file *m, void *p)
+ int xfs_stats_format(struct xfsstats __percpu *stats, char *buf)
  {
- 	struct cache_head *cp = p;
-@@ -1301,12 +1305,36 @@ static int e_show(struct seq_file *m, vo
- 	struct cache_detail *cd = m->private;
- 	bool export_stats = is_export_stats_file(m);
+ 	int		i, j;
+@@ -85,6 +87,34 @@ int xfs_stats_format(struct xfsstats __percpu *stats, char *buf)
+ 		0);
+ #endif
  
-+#ifdef CONFIG_X86_64
-+	alternative("ud2", "call single_task_running", X86_FEATURE_ALWAYS);
-+	alternative("call single_task_running", "ud2", X86_FEATURE_IA64);
++	/* Reference a symbol outside the .o yet inside the patch module: */
++	len += scnprintf(buf + len, PATH_MAX-len, "%s\n", kpatch_string());
 +
++#ifdef CONFIG_X86_64
++	/* Test alternatives patching: */
++	alternative("ud2", "nop", X86_FEATURE_ALWAYS);
++	alternative("nop", "ud2", X86_FEATURE_IA64);
++
++	/* Test paravirt patching: */
 +	slow_down_io();   /* paravirt call */
 +#endif
 +
++	/* Test pr_debug: */
 +	pr_debug("kpatch: pr_debug() test\n");
 +
-+#if LINUX_VERSION_CODE >= KERNEL_VERSION(5, 8, 0)
 +{
++	/* Test static branches: */
 +	static DEFINE_STATIC_KEY_TRUE(kpatch_key);
 +
-+	if (static_branch_unlikely(&memcg_kmem_enabled_key))
++       if (static_branch_unlikely(&memcg_kmem_enabled_key))
 +		printk("kpatch: memcg_kmem_enabled_key\n");
 +
 +	BUG_ON(!static_branch_likely(&kpatch_key));
@@ -52,28 +57,21 @@ diff -Nupr src.orig/fs/nfsd/export.c src/fs/nfsd/export.c
 +	BUG_ON(static_branch_likely(&kpatch_key));
 +	static_branch_enable(&kpatch_key);
 +}
-+#endif
 +
- 	if (p == SEQ_START_TOKEN) {
- 		seq_puts(m, "# Version 1.1\n");
- 		if (export_stats)
- 			seq_puts(m, "# Path Client Start-time\n#\tStats\n");
- 		else
- 			seq_puts(m, "# Path Client(Flags) # IPs\n");
-+		seq_puts(m, kpatch_string());
- 		return 0;
- 	}
+ 	return len;
+ }
  
-diff -Nupr src.orig/net/netlink/af_netlink.c src/net/netlink/af_netlink.c
---- src.orig/net/netlink/af_netlink.c	2023-01-12 11:20:07.603713047 -0500
-+++ src/net/netlink/af_netlink.c	2023-01-12 11:20:46.076941159 -0500
-@@ -2970,4 +2970,9 @@ panic:
+diff --git a/net/netlink/af_netlink.c b/net/netlink/af_netlink.c
+index c64277659753..05b753c2ec84 100644
+--- a/net/netlink/af_netlink.c
++++ b/net/netlink/af_netlink.c
+@@ -2980,4 +2980,9 @@ static int __init netlink_proto_init(void)
  	panic("netlink_init: Cannot allocate nl_table\n");
  }
  
 +char *kpatch_string(void)
 +{
-+	return "# kpatch\n";
++	return "kpatch";
 +}
 +
  core_initcall(netlink_proto_init);

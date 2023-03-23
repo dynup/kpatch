@@ -2,12 +2,8 @@
 
 set -o errexit
 
-sudo modprobe nfsd
+sudo modprobe xfs
 sleep 5
-grep -q kpatch /proc/fs/nfs/exports
-
-# TODO: This will trigger a printk on newer kernels which have the .klp.arch
-# removal.  Don't actually do the grep until running on a newer kernel.
-echo "file fs/nfsd/export.c +p" > /sys/kernel/debug/dynamic_debug/control
-cat /proc/fs/nfs/exports > /dev/null
-# dmesg | grep -q "kpatch: pr_debug"
+echo "file fs/xfs/xfs_stats.c +p" > /sys/kernel/debug/dynamic_debug/control
+grep -q kpatch /sys/fs/xfs/stats/stats
+dmesg | grep -q "kpatch: pr_debug"
