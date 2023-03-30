@@ -355,7 +355,6 @@ load_module () {
 			i=$((i+1))
 			if [[ $i -eq $MAX_LOAD_ATTEMPTS ]]; then
 				die "failed to load module $module"
-				break
 			else
 				warn "retrying..."
 				sleep $RETRY_INTERVAL
