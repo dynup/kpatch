@@ -236,14 +236,21 @@ static struct rela *toc_rela(const struct rela *rela)
 static void kpatch_bundle_symbols(struct kpatch_elf *kelf)
 {
 	struct symbol *sym;
+	unsigned int expected_offset;
 
 	list_for_each_entry(sym, &kelf->symbols, list) {
 		if (is_bundleable(sym)) {
-			if (sym->sym.st_value != 0 &&
-			    !is_gcc6_localentry_bundled_sym(kelf, sym)) {
-				ERROR("symbol %s at offset %lu within section %s, expected 0",
+			if (sym->pfx)
+				expected_offset = 16;
+			else if (is_gcc6_localentry_bundled_sym(kelf, sym))
+				expected_offset = 8;
+			else
+				expected_offset = 0;
+
+			if (sym->sym.st_value != expected_offset) {
+				ERROR("symbol %s at offset %lu within section %s, expected %u",
 				      sym->name, sym->sym.st_value,
-				      sym->sec->name);
+				      sym->sec->name, expected_offset);
 			}
 
 			sym->sec->sym = sym;
@@ -1926,6 +1933,8 @@ static int kpatch_include_changed_functions(struct kpatch_elf *kelf)
 		    sym->type == STT_FUNC) {
 			changed_nr++;
 			kpatch_include_symbol(sym);
+			if (sym->pfx)
+				kpatch_include_symbol(sym->pfx);
 		}
 
 		if (sym->type == STT_FILE)
@@ -1940,7 +1949,8 @@ static void kpatch_print_changes(struct kpatch_elf *kelf)
 	struct symbol *sym;
 
 	list_for_each_entry(sym, &kelf->symbols, list) {
-		if (!sym->include || !sym->sec || sym->type != STT_FUNC || sym->parent)
+		if (!sym->include || !sym->sec || sym->type != STT_FUNC ||
+		    sym->parent || sym->is_pfx)
 			continue;
 		if (sym->status == NEW)
 			log_normal("new function: %s\n", sym->name);
@@ -2135,6 +2145,11 @@ static int static_call_sites_group_size(struct kpatch_elf *kelf, int offset)
 	}
 
 	return size;
+}
+
+static int call_sites_group_size(struct kpatch_elf *kelf, int offset)
+{
+	return 4;
 }
 
 static int retpoline_sites_group_size(struct kpatch_elf *kelf, int offset)
@@ -2443,6 +2458,11 @@ static struct special_section special_sections[] = {
 		.arch		= X86_64,
 		.group_size	= static_call_sites_group_size,
 		.group_filter	= static_call_sites_group_filter,
+	},
+	{
+		.name		= ".call_sites",
+		.arch		= X86_64,
+		.group_size	= call_sites_group_size,
 	},
 	{
 		.name		= ".retpoline_sites",
@@ -2838,6 +2858,12 @@ static void kpatch_mark_ignored_sections(struct kpatch_elf *kelf)
 		    !strncmp(sec->name, ".llvm_addrsig", 13) ||
 		    !strncmp(sec->name, ".llvm.", 6))
 			sec->ignore = 1;
+
+		if (kelf->arch == X86_64) {
+			if (!strcmp(sec->name, ".rela__patchable_function_entries") ||
+			    !strcmp(sec->name, "__patchable_function_entries"))
+				sec->ignore = 1;
+		}
 	}
 
 	sec = find_section_by_name(&kelf->sections, ".kpatch.ignore.sections");
@@ -3925,7 +3951,8 @@ static void kpatch_find_func_profiling_calls(struct kpatch_elf *kelf)
 	struct rela *rela;
 	unsigned char *insn;
 	list_for_each_entry(sym, &kelf->symbols, list) {
-		if (sym->type != STT_FUNC || !sym->sec || !sym->sec->rela)
+		if (sym->type != STT_FUNC || sym->is_pfx ||
+		    !sym->sec || !sym->sec->rela)
 			continue;
 
 		switch(kelf->arch) {

@@ -77,6 +77,7 @@ struct symbol {
 	struct list_head list;
 	struct symbol *twin;
 	struct symbol *parent;
+	struct symbol *pfx;
 	struct list_head children;
 	struct list_head subfunction_node;
 	struct section *sec;
@@ -91,6 +92,7 @@ struct symbol {
 		enum symbol_strip strip; /* used in the output elf */
 	};
 	int has_func_profiling;
+	bool is_pfx;
 };
 
 struct rela {
