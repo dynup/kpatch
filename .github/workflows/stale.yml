@@ -1,0 +1,27 @@
+name: close inactive issues
+on:
+  schedule:
+    - cron: "0 10 * * *"
+
+jobs:
+  close-issues:
+    runs-on: ubuntu-latest
+    permissions:
+      issues: write
+      pull-requests: write
+    steps:
+      - uses: actions/stale@v5
+        with:
+          days-before-issue-stale: 30
+          days-before-issue-close: 7
+          stale-issue-label: "stale"
+          stale-issue-message: "This issue has been open for 30 days with no activity and no assignee.  It will be closed in 7 days unless a comment is added."
+          close-issue-message: "This issue was closed because it was inactive for 7 days after being marked stale."
+          days-before-pr-stale: 60
+          days-before-pr-close: 7
+          stale-pr-label: "stale"
+          stale-pr-message: "This PR has been open for 60 days with no activity and no assignee.  It will be closed in 7 days unless a comment is added."
+          close-pr-message: "This PR was closed because it was inactive for 7 days after being marked stale."
+          exempt-all-assignees: true
+          ascending: true
+          repo-token: ${{ secrets.GITHUB_TOKEN }}
