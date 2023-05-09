@@ -203,7 +203,7 @@ Install the dependencies for compiling kpatch and running kpatch-build:
 make dependencies
 ```
 
-Before running kpatch-build, two more things need to be checked:
+#### Before running kpatch-build, two more things need to be checked:
 -------
 1. Ensure current kernel compiled with *CONFIG_LIVEPATCH_PER_TASK_CONSISTENCY* set
 
