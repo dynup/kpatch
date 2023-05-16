@@ -1,0 +1,11 @@
+diff -Nupr src.orig/net/core/dev.c src/net/core/dev.c
+--- src.orig/net/core/dev.c	2023-04-24 14:22:43.578960434 -0400
++++ src/net/core/dev.c	2023-04-24 14:23:01.282021571 -0400
+@@ -5440,6 +5440,7 @@ skip_classify:
+ 		case RX_HANDLER_PASS:
+ 			break;
+ 		default:
++			printk("BUG!\n");
+ 			BUG();
+ 		}
+ 	}
