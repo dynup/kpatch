@@ -1,0 +1,22 @@
+diff -Nupr src.orig/net/ipv6/netfilter.c src/net/ipv6/netfilter.c
+--- src.orig/net/ipv6/netfilter.c	2023-04-24 14:12:18.012987240 -0400
++++ src/net/ipv6/netfilter.c	2023-04-24 14:12:31.238972810 -0400
+@@ -96,6 +96,8 @@ static int nf_ip6_reroute(struct sk_buff
+ 	return 0;
+ }
+ 
++#include "kpatch-macros.h"
++
+ int __nf_ip6_route(struct net *net, struct dst_entry **dst,
+ 		   struct flowi *fl, bool strict)
+ {
+@@ -109,6 +111,9 @@ int __nf_ip6_route(struct net *net, stru
+ 	struct dst_entry *result;
+ 	int err;
+ 
++	if (!jiffies)
++		printk("kpatch nf_ip6_route foo\n");
++
+ 	result = ip6_route_output(net, sk, &fl->u.ip6);
+ 	err = result->error;
+ 	if (err)
