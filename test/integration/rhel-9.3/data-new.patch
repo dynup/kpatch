@@ -1,0 +1,20 @@
+diff -Nupr src.orig/fs/proc/meminfo.c src/fs/proc/meminfo.c
+--- src.orig/fs/proc/meminfo.c	2023-05-17 13:18:35.265720606 -0400
++++ src/fs/proc/meminfo.c	2023-05-17 13:18:36.087719488 -0400
+@@ -29,6 +29,8 @@ static void show_val_kb(struct seq_file
+ 	seq_write(m, " kB\n", 4);
+ }
+ 
++static int foo = 5;
++
+ static int meminfo_proc_show(struct seq_file *m, void *v)
+ {
+ 	struct sysinfo i;
+@@ -154,6 +156,7 @@ static int meminfo_proc_show(struct seq_
+ 	show_val_kb(m, "CmaFree:        ",
+ 		    global_zone_page_state(NR_FREE_CMA_PAGES));
+ #endif
++	seq_printf(m, "kpatch:         %d\n", foo);
+ 
+ 	hugetlb_report_meminfo(m);
+ 
