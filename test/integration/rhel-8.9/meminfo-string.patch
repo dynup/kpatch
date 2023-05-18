@@ -1,6 +1,6 @@
 diff -Nupr src.orig/fs/proc/meminfo.c src/fs/proc/meminfo.c
---- src.orig/fs/proc/meminfo.c	2023-04-24 15:18:02.062521125 -0400
-+++ src/fs/proc/meminfo.c	2023-04-24 15:19:02.986740842 -0400
+--- src.orig/fs/proc/meminfo.c	2023-05-18 13:26:13.304170797 -0400
++++ src/fs/proc/meminfo.c	2023-05-18 13:27:16.879095885 -0400
 @@ -124,7 +124,7 @@ static int meminfo_proc_show(struct seq_
  	seq_printf(m, "VmallocTotal:   %8lu kB\n",
  		   (unsigned long)VMALLOC_TOTAL >> 10);

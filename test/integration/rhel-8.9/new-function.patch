@@ -1,6 +1,6 @@
 diff -Nupr src.orig/drivers/tty/n_tty.c src/drivers/tty/n_tty.c
---- src.orig/drivers/tty/n_tty.c	2023-04-24 15:18:01.924520627 -0400
-+++ src/drivers/tty/n_tty.c	2023-04-24 15:19:10.931769495 -0400
+--- src.orig/drivers/tty/n_tty.c	2023-05-18 13:26:13.216170901 -0400
++++ src/drivers/tty/n_tty.c	2023-05-18 13:27:21.591090332 -0400
 @@ -2298,7 +2298,7 @@ static ssize_t n_tty_read(struct tty_str
   *		  lock themselves)
   */
