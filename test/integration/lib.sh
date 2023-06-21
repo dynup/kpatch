@@ -102,6 +102,24 @@ kpatch_openEuler_dependencies()
 		"kernel-debuginfo-${kernel_version%.*}" "kernel-devel-${kernel_version%.*}"
 }
 
+kpatch_photon_dependencies()
+{
+	local flavor
+	flavor=$(uname -r | cut -d "-" -f 3)
+	if [[ $(uname -r | cut -d "-" -f 2) == "rt" ]]; then
+		flavor="rt"
+	fi
+
+	tdnf install -y kmod bash rpm-build coreutils util-linux sed findutils \
+		 elfutils-devel systemd-rpm-macros build-essential wget
+
+	if [[ -z "$flavor" ]]; then
+		tdnf install -y linux-debuginfo
+	else
+		tdnf install -y linux-$flavor-debuginfo
+	fi
+}
+
 kpatch_dependencies()
 {
 	# shellcheck disable=SC1091
