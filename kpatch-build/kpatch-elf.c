@@ -399,7 +399,7 @@ static void kpatch_create_section_list(struct kpatch_elf *kelf)
 
 /*
  * Some x86 kernels have NOP function padding [1] for which objtool [2]
- * adds ELF function symbols with prefix "__pfx_" to indicate the start
+ * may add ELF function symbols with prefix "__pfx_" to indicate the start
  * of a function, inclusive of NOP-padding.  Find the prefix symbols and
  * link them to their corresponding function symbols at an expected
  * offset.
@@ -438,7 +438,7 @@ static void kpatch_create_section_list(struct kpatch_elf *kelf)
  * 0000000000000000     0 SECTION LOCAL  DEFAULT   99 .text.unlikely.__mmdrop
  * 0000000000000000    48 FUNC    LOCAL  DEFAULT   99 __mmdrop.cold
  *
- * (kpatch-build generated tmp.ko, multple functions in one section, no __pfx_ symbols)
+ * (kpatch-build generated tmp.ko, multiple functions in one section, no __pfx_ symbols)
  * 0000000000000000     0 SECTION LOCAL  DEFAULT   10 .text.unlikely.callback_info.isra.0
  * 0000000000000010    65 FUNC    LOCAL  DEFAULT   10 callback_info.isra.0
  * 0000000000000061    54 FUNC    LOCAL  DEFAULT   10 callback_info.isra.0

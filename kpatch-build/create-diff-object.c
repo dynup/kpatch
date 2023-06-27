@@ -229,6 +229,54 @@ static struct rela *toc_rela(const struct rela *rela)
 }
 
 /*
+ * Some x86 kernels have NOP function padding, see upstream commit
+ * bea75b33895f ("x86/Kconfig: Introduce function padding").
+ * Check for any amount of NOPs between the beginning of a function's
+ * section and its offset value within that section.
+ */
+static bool insn_is_nop_pad(struct kpatch_elf *kelf, void *addr, void *end,
+			    unsigned long *insn_len)
+{
+	unsigned char *insn = addr;
+
+	switch(kelf->arch) {
+
+	case X86_64:
+		if (insn[0] == 0x90) {
+			*insn_len = 1;
+			return true;
+		}
+		break;
+
+	case PPC64:
+	case S390:
+		/* kernel feature not present on these arches  */
+		return false;
+
+	default:
+		ERROR("unsupported arch");
+	}
+
+	return false;
+}
+
+bool is_function_nop_padded(struct kpatch_elf *kelf, struct symbol *sym)
+{
+	unsigned long offset, insn_len;
+	void *end = sym->sec->data->d_buf + sym->sym.st_value;
+
+	if (sym->type != STT_FUNC)
+		return false;
+
+	for (offset = 0; offset < sym->sym.st_value; offset += insn_len) {
+		if (!insn_is_nop_pad(kelf, sym->sec->data->d_buf + offset, end, &insn_len))
+			return false;
+	}
+
+	return true;
+}
+
+/*
  * When compiling with -ffunction-sections and -fdata-sections, almost every
  * symbol gets its own dedicated section.  We call such symbols "bundled"
  * symbols.  They're indicated by "sym->sec->sym == sym".
@@ -236,7 +284,7 @@ static struct rela *toc_rela(const struct rela *rela)
 static void kpatch_bundle_symbols(struct kpatch_elf *kelf)
 {
 	struct symbol *sym;
-	unsigned int expected_offset;
+	Elf64_Addr expected_offset;
 
 	list_for_each_entry(sym, &kelf->symbols, list) {
 		if (is_bundleable(sym)) {
@@ -244,11 +292,13 @@ static void kpatch_bundle_symbols(struct kpatch_elf *kelf)
 				expected_offset = 16;
 			else if (is_gcc6_localentry_bundled_sym(kelf, sym))
 				expected_offset = 8;
+			else if (is_function_nop_padded(kelf, sym))
+				expected_offset = sym->sym.st_value;
 			else
 				expected_offset = 0;
 
 			if (sym->sym.st_value != expected_offset) {
-				ERROR("symbol %s at offset %lu within section %s, expected %u",
+				ERROR("symbol %s at offset %lu within section %s, expected %lu",
 				      sym->name, sym->sym.st_value,
 				      sym->sec->name, expected_offset);
 			}
