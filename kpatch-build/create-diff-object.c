@@ -1578,6 +1578,10 @@ static void kpatch_replace_sections_syms(struct kpatch_elf *kelf)
 			    !strcmp(rela->sym->name, ".text..refcount"))
 				continue;
 
+			/* Skip powerpc cpu feature fixup relocations */
+			if (!strncmp(rela->sym->name, "__ftr_alt_", 10))
+				continue;
+
 			/*
 			 * Replace references to bundled sections with their
 			 * symbols.
