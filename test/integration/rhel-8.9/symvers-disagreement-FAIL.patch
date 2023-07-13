@@ -1,6 +1,6 @@
 diff -Nupr src.orig/drivers/base/core.c src/drivers/base/core.c
---- src.orig/drivers/base/core.c	2023-05-18 13:26:12.556171679 -0400
-+++ src/drivers/base/core.c	2023-05-18 13:27:34.750074826 -0400
+--- src.orig/drivers/base/core.c	2023-07-13 16:51:26.069090978 -0400
++++ src/drivers/base/core.c	2023-07-13 16:52:29.005967192 -0400
 @@ -34,6 +34,8 @@
  #include "physical_location.h"
  #include "power/power.h"
@@ -11,9 +11,9 @@ diff -Nupr src.orig/drivers/base/core.c src/drivers/base/core.c
  #ifdef CONFIG_SYSFS_DEPRECATED_V2
  long sysfs_deprecated = 1;
 diff -Nupr src.orig/drivers/usb/core/usb.c src/drivers/usb/core/usb.c
---- src.orig/drivers/usb/core/usb.c	2023-05-18 13:26:13.223170893 -0400
-+++ src/drivers/usb/core/usb.c	2023-05-18 13:27:34.751074825 -0400
-@@ -739,6 +739,8 @@ EXPORT_SYMBOL_GPL(usb_alloc_dev);
+--- src.orig/drivers/usb/core/usb.c	2023-07-13 16:51:26.833089475 -0400
++++ src/drivers/usb/core/usb.c	2023-07-13 16:52:29.006967190 -0400
+@@ -693,6 +693,8 @@ EXPORT_SYMBOL_GPL(usb_alloc_dev);
   */
  struct usb_device *usb_get_dev(struct usb_device *dev)
  {

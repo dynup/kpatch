@@ -1,6 +1,6 @@
 diff -Nupr src.orig/fs/proc/meminfo.c src/fs/proc/meminfo.c
---- src.orig/fs/proc/meminfo.c	2023-05-18 13:26:13.304170797 -0400
-+++ src/fs/proc/meminfo.c	2023-05-18 13:27:11.926101721 -0400
+--- src.orig/fs/proc/meminfo.c	2023-07-13 16:51:26.925089294 -0400
++++ src/fs/proc/meminfo.c	2023-07-13 16:52:06.403011648 -0400
 @@ -41,6 +41,7 @@ static int meminfo_proc_show(struct seq_
  	unsigned long sreclaimable, sunreclaim;
  	int lru;

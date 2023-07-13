@@ -1,6 +1,6 @@
 diff -Nupr src.orig/kernel/time/timekeeping.c src/kernel/time/timekeeping.c
---- src.orig/kernel/time/timekeeping.c	2023-05-18 13:26:13.459170615 -0400
-+++ src/kernel/time/timekeeping.c	2023-05-18 13:26:42.511136382 -0400
+--- src.orig/kernel/time/timekeeping.c	2023-07-13 16:51:27.123088905 -0400
++++ src/kernel/time/timekeeping.c	2023-07-13 16:51:44.126055463 -0400
 @@ -1231,6 +1231,9 @@ void do_gettimeofday(struct timeval *tv)
  {
  	struct timespec64 now;

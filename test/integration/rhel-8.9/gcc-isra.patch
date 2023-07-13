@@ -1,6 +1,6 @@
 diff -Nupr src.orig/fs/proc/proc_sysctl.c src/fs/proc/proc_sysctl.c
---- src.orig/fs/proc/proc_sysctl.c	2023-05-18 13:26:13.304170797 -0400
-+++ src/fs/proc/proc_sysctl.c	2023-05-18 13:26:48.145129743 -0400
+--- src.orig/fs/proc/proc_sysctl.c	2023-07-13 16:51:26.926089292 -0400
++++ src/fs/proc/proc_sysctl.c	2023-07-13 16:51:46.329051130 -0400
 @@ -53,6 +53,7 @@ void proc_sys_poll_notify(struct ctl_tab
  	if (!poll)
  		return;

@@ -1,6 +1,6 @@
 diff -Nupr src.orig/fs/proc/cmdline.c src/fs/proc/cmdline.c
---- src.orig/fs/proc/cmdline.c	2023-05-18 13:26:13.304170797 -0400
-+++ src/fs/proc/cmdline.c	2023-05-18 13:26:20.040162860 -0400
+--- src.orig/fs/proc/cmdline.c	2023-07-13 16:51:26.925089294 -0400
++++ src/fs/proc/cmdline.c	2023-07-13 16:51:34.883073642 -0400
 @@ -6,8 +6,7 @@
  
  static int cmdline_proc_show(struct seq_file *m, void *v)
