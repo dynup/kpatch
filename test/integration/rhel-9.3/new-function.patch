@@ -1,6 +1,6 @@
 diff -Nupr src.orig/drivers/tty/n_tty.c src/drivers/tty/n_tty.c
---- src.orig/drivers/tty/n_tty.c	2023-05-17 13:18:35.175720729 -0400
-+++ src/drivers/tty/n_tty.c	2023-05-17 13:18:58.489688981 -0400
+--- src.orig/drivers/tty/n_tty.c	2023-07-14 10:41:06.178435397 -0400
++++ src/drivers/tty/n_tty.c	2023-07-14 10:41:23.942400459 -0400
 @@ -2253,7 +2253,7 @@ more_to_be_read:
   *		  lock themselves)
   */

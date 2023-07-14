@@ -1,6 +1,6 @@
 diff -Nupr src.orig/fs/proc/cmdline.c src/fs/proc/cmdline.c
---- src.orig/fs/proc/cmdline.c	2023-05-17 13:18:35.264720608 -0400
-+++ src/fs/proc/cmdline.c	2023-05-17 13:19:03.054682765 -0400
+--- src.orig/fs/proc/cmdline.c	2023-07-14 10:41:06.283435190 -0400
++++ src/fs/proc/cmdline.c	2023-07-14 10:41:26.683395067 -0400
 @@ -17,3 +17,10 @@ static int __init proc_cmdline_init(void
  	return 0;
  }
@@ -13,8 +13,8 @@ diff -Nupr src.orig/fs/proc/cmdline.c src/fs/proc/cmdline.c
 +		printk("hello there!\n");
 +}
 diff -Nupr src.orig/fs/proc/meminfo.c src/fs/proc/meminfo.c
---- src.orig/fs/proc/meminfo.c	2023-05-17 13:18:35.265720606 -0400
-+++ src/fs/proc/meminfo.c	2023-05-17 13:19:03.055682764 -0400
+--- src.orig/fs/proc/meminfo.c	2023-07-14 10:41:06.284435188 -0400
++++ src/fs/proc/meminfo.c	2023-07-14 10:41:26.683395067 -0400
 @@ -19,6 +19,8 @@
  #include <asm/page.h>
  #include "internal.h"
