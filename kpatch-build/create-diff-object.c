@@ -1575,7 +1575,8 @@ static void kpatch_replace_sections_syms(struct kpatch_elf *kelf)
 			    !strcmp(rela->sym->name, ".fixup") ||
 			    !strcmp(rela->sym->name, ".altinstr_replacement") ||
 			    !strcmp(rela->sym->name, ".altinstr_aux") ||
-			    !strcmp(rela->sym->name, ".text..refcount"))
+			    !strcmp(rela->sym->name, ".text..refcount") ||
+			    !strncmp(rela->sym->name, "__ftr_alt_", 10))
 				continue;
 
 			/*
