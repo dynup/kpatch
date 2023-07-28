@@ -3695,6 +3695,21 @@ static void kpatch_create_callbacks_objname_rela(struct kpatch_elf *kelf, char *
 	}
 }
 
+static void kpatch_alloc_mcount_sections(struct kpatch_elf *kelf, struct kpatch_elf *kelfout)
+{
+	int nr;
+	struct symbol *sym;
+
+	nr = 0;
+	list_for_each_entry(sym, &kelfout->symbols, list)
+		if (sym->type == STT_FUNC && sym->status != SAME &&
+		    sym->has_func_profiling)
+			nr++;
+
+	/* create text/rela section pair */
+	create_section_pair(kelfout, "__mcount_loc", sizeof(void *), nr);
+}
+
 /*
  * This function basically reimplements the functionality of the Linux
  * recordmcount script, so that patched functions can be recognized by ftrace.
@@ -3702,7 +3717,7 @@ static void kpatch_create_callbacks_objname_rela(struct kpatch_elf *kelf, char *
  * TODO: Eventually we can modify recordmount so that it recognizes our bundled
  * sections as valid and does this work for us.
  */
-static void kpatch_create_mcount_sections(struct kpatch_elf *kelf)
+static void kpatch_populate_mcount_sections(struct kpatch_elf *kelf)
 {
 	int nr, index;
 	struct section *sec, *relasec;
@@ -3711,15 +3726,10 @@ static void kpatch_create_mcount_sections(struct kpatch_elf *kelf)
 	void **funcs;
 	unsigned long insn_offset = 0;
 
-	nr = 0;
-	list_for_each_entry(sym, &kelf->symbols, list)
-		if (sym->type == STT_FUNC && sym->status != SAME &&
-		    sym->has_func_profiling)
-			nr++;
 
-	/* create text/rela section pair */
-	sec = create_section_pair(kelf, "__mcount_loc", sizeof(void*), nr);
+	sec = find_section_by_name(&kelf->sections, "__mcount_loc");
 	relasec = sec->rela;
+	nr = (int) (sec->data->d_size / sizeof(void *));
 
 	/* populate sections */
 	index = 0;
@@ -4165,6 +4175,9 @@ int main(int argc, char *argv[])
 	/* this is destructive to kelf_patched */
 	kpatch_migrate_included_elements(kelf_patched, &kelf_out);
 
+	/* this must be done before kelf_patched is torn down */
+	kpatch_alloc_mcount_sections(kelf_patched, kelf_out);
+
 	/*
 	 * Teardown kelf_patched since we shouldn't access sections or symbols
 	 * through it anymore.  Don't free however, since our section and symbol
@@ -4183,7 +4196,7 @@ int main(int argc, char *argv[])
 	kpatch_create_callbacks_objname_rela(kelf_out, parent_name);
 	kpatch_build_strings_section_data(kelf_out);
 
-	kpatch_create_mcount_sections(kelf_out);
+	kpatch_populate_mcount_sections(kelf_out);
 
 	/*
 	 *  At this point, the set of output sections and symbols is
