@@ -70,7 +70,6 @@ enum subsection {
 enum loglevel loglevel = NORMAL;
 
 bool KLP_ARCH;
-bool multi_pfe;
 
 int jump_label_errors, static_call_errors;
 
@@ -3773,112 +3772,66 @@ static void kpatch_create_callbacks_objname_rela(struct kpatch_elf *kelf, char *
 	}
 }
 
-/*
- * Allocate the mcount/patchable_function_entry sections which must be done
- * before the patched object is torn down so that the section flags can be
- * copied.
- */
-static void kpatch_alloc_mcount_sections(struct kpatch_elf *kelf, struct kpatch_elf *kelfout)
+static void kpatch_set_pfe_link(struct kpatch_elf *kelf)
 {
-	int nr;
-	struct symbol *sym;
-	int text_idx = 0;
+	struct section* sec;
+	struct rela *rela;
 
-	nr = 0;
-	list_for_each_entry(sym, &kelfout->symbols, list) {
-		if (sym->type == STT_FUNC && sym->status != SAME &&
-		    sym->has_func_profiling) {
-			text_idx = sym->sec->index;
-			nr++;
-		}
-	}
-
-	/* create text/rela section pair */
-	switch(kelf->arch) {
-	case AARCH64: {
-		struct section *sec;
-		int entries = multi_pfe ? 1 : nr;
-		int copies = multi_pfe ? nr : 1;
-		int flags = 0, rflags = 0;
-
-		/*
-		 * Depending on the compiler the __patchable_function_entries section
-		 * can be ordered or not, copy this flag to the section we created to
-		 * avoid:
-		 * ld: __patchable_function_entries has both ordered [...] and unordered [...] sections
-		 */
-		sec = find_section_by_name(&kelf->sections, "__patchable_function_entries");
-		if (sec) {
-			flags = (sec->sh.sh_flags & (SHF_LINK_ORDER|SHF_WRITE));
-			if (sec->rela)
-				rflags = (sec->rela->sh.sh_flags & (SHF_LINK_ORDER|SHF_WRITE));
+	list_for_each_entry(sec, &kelf->sections, list) {
+		if (strcmp(sec->name, "__patchable_function_entries")) {
+			continue;
 		}
 
-		for (nr = 0; nr < copies; nr++) {
-			sec = create_section_pair(kelfout,
-						  "__patchable_function_entries",
-						  sizeof(void *), entries);
-
-			sec->sh.sh_flags |= flags;
-			if (sec->rela)
-				sec->rela->sh.sh_flags |= rflags;
-			if (multi_pfe)
-				sec->sh.sh_link = 0;
-			else
-				sec->sh.sh_link = text_idx;
+		if (!sec->rela) {
+			continue;
 		}
-		break;
-	}
-	case PPC64:
-	case X86_64:
-	case S390:
-		create_section_pair(kelfout, "__mcount_loc", sizeof(void *), nr);
-		break;
-	default:
-		ERROR("unsupported arch\n");
+		list_for_each_entry(rela, &sec->rela->relas, list) {
+			rela->sym->sec->pfe = sec;
+		}
 	}
 }
 
 /*
- * Populate the mcount sections allocated by kpatch_alloc_mcount_sections()
- * previously.
  * This function basically reimplements the functionality of the Linux
  * recordmcount script, so that patched functions can be recognized by ftrace.
  *
  * TODO: Eventually we can modify recordmount so that it recognizes our bundled
  * sections as valid and does this work for us.
  */
-static void kpatch_populate_mcount_sections(struct kpatch_elf *kelf)
+static void kpatch_create_mcount_sections(struct kpatch_elf *kelf)
 {
 	int nr, index;
-	struct section *sec, *relasec;
+	struct section *relasec;
 	struct symbol *sym;
 	struct rela *rela, *mcount_rela;
 	void **funcs;
+	bool pfe_per_function = false;
 
-	switch(kelf->arch) {
+	nr = 0;
+	list_for_each_entry(sym, &kelf->symbols, list)
+		if (sym->type == STT_FUNC && sym->status != SAME &&
+			sym->has_func_profiling)
+			nr++;
+
+	switch (kelf->arch) {
 	case AARCH64:
-		if (multi_pfe)
-			sec = NULL;
-		else
-			sec = find_section_by_name(&kelf->sections,
-						   "__patchable_function_entries");
+		/* For aarch64, we will create separate __patchable_function_entries sections for each symbols. */
+		pfe_per_function = true;
+		relasec = NULL;
 		break;
 	case PPC64:
 	case X86_64:
 	case S390:
-		sec = find_section_by_name(&kelf->sections, "__mcount_loc");
+	{
+		struct section *sec;
+
+		/* create text/rela section pair */
+		sec = create_section_pair(kelf, "__mcount_loc", sizeof(void*), nr);
+		relasec = sec->rela;
 		break;
+	}
 	default:
 		ERROR("unsupported arch\n");
-	}
-
-	if (multi_pfe) {
-		relasec = NULL;
-		nr = 0;
-	} else {
-		relasec = sec->rela;
-		nr = (int) (sec->data->d_size / sizeof(void *));
 	}
 
 	/* populate sections */
@@ -3897,6 +3850,7 @@ static void kpatch_populate_mcount_sections(struct kpatch_elf *kelf)
 
 		switch(kelf->arch) {
 		case AARCH64: {
+			struct section *sec;
 			unsigned char *insn;
 			int i;
 
@@ -3921,6 +3875,14 @@ static void kpatch_populate_mcount_sections(struct kpatch_elf *kelf)
 					ERROR("%s: unexpected instruction in patch section of function\n", sym->name);
 			}
 
+			/* Allocate __patchable_function_entries for symbol */
+			sec = create_section_pair(kelf, "__patchable_function_entries", sizeof(void *), 1);
+			sec->sh.sh_flags |= SHF_WRITE | SHF_LINK_ORDER;
+			/* We will reset this sh_link in the reindex function. */
+			sec->sh.sh_link = 0;
+
+			relasec = sec->rela;
+			sym->sec->pfe = sec;
 			break;
 		}
 		case PPC64: {
@@ -3991,18 +3953,6 @@ static void kpatch_populate_mcount_sections(struct kpatch_elf *kelf)
 			ERROR("unsupported arch");
 		}
 
-		if (multi_pfe) {
-			sec = find_nth_section_by_name(&kelf->sections, nr, "__patchable_function_entries");
-			if (!sec)
-				ERROR("cannot retrieve pre-allocated __pfe #%d\n", nr);
-
-			relasec = sec->rela;
-			sym->sec->pfe = sec;
-			sec->sh.sh_link = sec->index;
-
-			nr++;
-		}
-
 		/*
 		 * 'rela' points to the mcount/fentry call.
 		 *
@@ -4013,9 +3963,8 @@ static void kpatch_populate_mcount_sections(struct kpatch_elf *kelf)
 		mcount_rela->type = absolute_rela_type(kelf);
 		mcount_rela->addend = insn_offset - sym->sym.st_value;
 
-		if (multi_pfe) {
+		if (pfe_per_function) {
 			mcount_rela->offset = 0;
-			sec = NULL;
 		} else {
 			mcount_rela->offset = (unsigned int) (index * sizeof(*funcs));
 		}
@@ -4185,19 +4134,21 @@ static void kpatch_find_func_profiling_calls(struct kpatch_elf *kelf)
 		switch(kelf->arch) {
 		case AARCH64: {
 			struct section *sec;
-
 			list_for_each_entry(sec, &kelf->sections, list) {
-				if (strcmp(sec->name, "__patchable_function_entries"))
+				if (strcmp(sec->name, "__patchable_function_entries")) {
 					continue;
-				if (multi_pfe && sym->sec->pfe != sec)
+				}
+				if (sym->sec->pfe != sec) {
 					continue;
-				if (!sec->rela)
+				}
+				if (!sec->rela) {
 					continue;
+				}
 
 				list_for_each_entry(rela, &sec->rela->relas, list) {
 					if (rela->sym->sec && sym->sec == rela->sym->sec) {
 						sym->has_func_profiling = 1;
-							goto next_symbol;
+						goto next_symbol;
 						}
 				}
 			}
@@ -4287,12 +4238,6 @@ static error_t parse_opt (int key, char *arg, struct argp_state *state)
 	return 0;
 }
 
-static bool has_multi_pfe(struct kpatch_elf *kelf)
-{
-	return !!find_nth_section_by_name(&kelf->sections, 1,
-			"__patchable_function_entries");
-}
-
 static struct argp argp = { options, parse_opt, args_doc, NULL };
 
 int main(int argc, char *argv[])
@@ -4326,7 +4271,10 @@ int main(int argc, char *argv[])
 
 	kelf_orig = kpatch_elf_open(orig_obj);
 	kelf_patched = kpatch_elf_open(patched_obj);
-	multi_pfe = has_multi_pfe(kelf_orig) || has_multi_pfe(kelf_patched);
+
+	kpatch_set_pfe_link(kelf_orig);
+	kpatch_set_pfe_link(kelf_patched);
+
 	kpatch_find_func_profiling_calls(kelf_orig);
 	kpatch_find_func_profiling_calls(kelf_patched);
 
@@ -4388,9 +4336,6 @@ int main(int argc, char *argv[])
 	/* this is destructive to kelf_patched */
 	kpatch_migrate_included_elements(kelf_patched, &kelf_out);
 
-	/* this must be done before kelf_patched is torn down */
-	kpatch_alloc_mcount_sections(kelf_patched, kelf_out);
-
 	/*
 	 * Teardown kelf_patched since we shouldn't access sections or symbols
 	 * through it anymore.  Don't free however, since our section and symbol
@@ -4409,7 +4354,7 @@ int main(int argc, char *argv[])
 	kpatch_create_callbacks_objname_rela(kelf_out, parent_name);
 	kpatch_build_strings_section_data(kelf_out);
 
-	kpatch_populate_mcount_sections(kelf_out);
+	kpatch_create_mcount_sections(kelf_out);
 
 	/*
 	 *  At this point, the set of output sections and symbols is

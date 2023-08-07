@@ -685,6 +685,7 @@ void kpatch_dump_kelf(struct kpatch_elf *kelf)
 			if (sec->rela)
 				printf(", rela-> %s", sec->rela->name);
 		}
+		printf(", pfe-> [%d]", (sec->pfe) == NULL ? -1 : (int)sec->pfe->index);
 next:
 		printf("\n");
 	}
@@ -694,8 +695,10 @@ next:
 		printf("sym %02d, type %d, bind %d, ndx %02d, name %s (%s)",
 			sym->index, sym->type, sym->bind, sym->sym.st_shndx,
 			sym->name, status_str(sym->status));
-		if (sym->sec && (sym->type == STT_FUNC || sym->type == STT_OBJECT))
+		if (sym->sec && (sym->type == STT_FUNC || sym->type == STT_OBJECT)) {
 			printf(" -> %s", sym->sec->name);
+			printf(", profiling: %d", sym->has_func_profiling);
+		}
 		printf("\n");
 	}
 }
@@ -964,6 +967,7 @@ struct section *create_section_pair(struct kpatch_elf *kelf, char *name,
 	relasec->sh.sh_type = SHT_RELA;
 	relasec->sh.sh_entsize = sizeof(GElf_Rela);
 	relasec->sh.sh_addralign = 8;
+	relasec->sh.sh_flags = SHF_INFO_LINK;
 
 	/* set text rela section pointer */
 	sec->rela = relasec;
