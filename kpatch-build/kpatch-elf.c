@@ -235,13 +235,12 @@ static void rela_insn(const struct section *sec, const struct rela *rela,
 long rela_target_offset(struct kpatch_elf *kelf, struct section *relasec,
 			struct rela *rela)
 {
-	long add_off;
+	long add_off = 0;
 	struct section *sec = relasec->base;
 
 	switch(kelf->arch) {
 	case AARCH64:
 	case PPC64:
-		add_off = 0;
 		break;
 	case X86_64:
 		if (!is_text_section(sec) ||
