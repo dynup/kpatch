@@ -17,7 +17,7 @@
  * 02110-1301, USA.
  */
 
-#if IS_ENABLED(CONFIG_LIVEPATCH)
+#if IS_ENABLED(CONFIG_LIVEPATCH) && (USE_KLP == 1)
 #include "livepatch-patch-hook.c"
 #else
 #include "kpatch-patch-hook.c"

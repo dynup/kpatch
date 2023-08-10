@@ -57,6 +57,7 @@ declare -a PATCH_LIST
 APPLIED_PATCHES=0
 OOT_MODULE=
 KLP_REPLACE=1
+KPATCH_MODULE_ENABLE=0
 
 GCC="${CROSS_COMPILE:-}gcc"
 CLANG="${CROSS_COMPILE:-}clang"
@@ -672,9 +673,10 @@ usage() {
 	echo "		--skip-cleanup          Skip post-build cleanup" >&2
 	echo "		--skip-compiler-check   Skip compiler version matching check" >&2
 	echo "		                        (not recommended)" >&2
+	echo "		--use-kpatch-module		Use kpatch core module for hotfix apply" >&2
 }
 
-options="$(getopt -o ha:r:s:c:v:j:t:n:o:dR -l "help,archversion:,sourcerpm:,sourcedir:,config:,vmlinux:,jobs:,target:,name:,output:,oot-module:,oot-module-src:,debug,skip-gcc-check,skip-compiler-check,skip-cleanup,non-replace" -- "$@")" || die "getopt failed"
+options="$(getopt -o ha:r:s:c:v:j:t:n:o:dR -l "help,archversion:,sourcerpm:,sourcedir:,config:,vmlinux:,jobs:,target:,name:,output:,oot-module:,oot-module-src:,debug,skip-gcc-check,skip-compiler-check,skip-cleanup,non-replace,use-kpatch-module" -- "$@")" || die "getopt failed"
 
 eval set -- "$options"
 
@@ -748,6 +750,10 @@ while [[ $# -gt 0 ]]; do
 	--skip-cleanup)
 		echo "Skipping cleanup"
 		SKIPCLEANUP=1
+		;;
+	--use-kpatch-module)
+		echo "Enable kpatch module"
+		KPATCH_MODULE_ENABLE=1
 		;;
 	--skip-gcc-check)
 		echo "DEPRECATED: --skip-gcc-check is deprecated, use --skip-compiler-check instead"
@@ -1095,7 +1101,8 @@ KPATCH_LDFLAGS=""
 USE_KLP=0
 USE_KLP_ARCH=0
 
-if [[ -n "$CONFIG_LIVEPATCH" ]] && (kernel_is_rhel || kernel_version_gte 4.9.0); then
+# support kpatch module when user want kpatch module in greater version of kernel
+if [[ $KPATCH_MODULE_ENABLE -eq 0 ]] && [[ -n "$CONFIG_LIVEPATCH" ]] && (kernel_is_rhel || kernel_version_gte 4.9.0); then
 
 	USE_KLP=1
 
@@ -1421,6 +1428,12 @@ KBUILD_EXTRA_SYMBOLS="$KBUILD_EXTRA_SYMBOLS" \
 KPATCH_LDFLAGS="$KPATCH_LDFLAGS" \
 CROSS_COMPILE="$CROSS_COMPILE"
 save_env
+
+if [[ $USE_KLP -eq 1 ]]; then
+	export CFLAGS_MODULE=$CFLAGS_MODULE" -DUSE_KLP=1"
+else
+	export CFLAGS_MODULE=$CFLAGS_MODULE" -DUSE_KLP=0"
+fi
 
 make "${MAKEVARS[@]}" 2>&1 | logger || die
 
