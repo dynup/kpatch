@@ -21,6 +21,10 @@ GCC_PLUGINS_DIR := $(shell $(CROSS_COMPILE)gcc -print-file-name=plugin)
 PLUGIN_CFLAGS := $(filter-out -Wconversion, $(CFLAGS))
 PLUGIN_CFLAGS += -shared -I$(GCC_PLUGINS_DIR)/include \
 		   -Igcc-plugins -fPIC -fno-rtti -O2 -Wall
+else ifeq ($(ARCH),loongarch64)
+SOURCES += insn/insn.c insn/inat.c
+INSN     = insn/insn.o insn/inat.o
+insn/%.o: CFLAGS := $(filter-out -Wconversion, $(CFLAGS))
 endif
 ifeq ($(filter $(ARCH),s390x x86_64 ppc64le),)
 $(error Unsupported architecture ${ARCH}, check https://github.com/dynup/kpatch/#supported-architectures)
