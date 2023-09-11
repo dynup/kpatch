@@ -119,7 +119,7 @@ verify_patch_files() {
 	local ret=0
 
 	for patch in "${PATCH_LIST[@]}"; do
-		for path in $(lsdiff "$patch" 2>/dev/null); do
+		for path in $(lsdiff --strip=1 "$patch" 2>/dev/null); do
 
 			dir=$(dirname "$path")
 			ext="${path##*.}"
