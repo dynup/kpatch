@@ -165,6 +165,25 @@ static bool locals_match(struct lookup_table *table, int idx,
 	return true;
 }
 
+static bool file_has_locals(struct symbol *file_sym, struct list_head *sym_list)
+{
+	struct symbol *sym = file_sym;
+
+	list_for_each_entry_continue(sym, sym_list, list) {
+		if (sym->type == STT_FILE)
+			break;
+		if (sym->type != STB_LOCAL)
+			continue;
+		if (maybe_discarded_sym(sym->name))
+			continue;
+
+		if (sym->type == STT_FUNC || sym->type == STT_OBJECT)
+			return true;
+	}
+
+	return false;
+}
+
 static void find_local_syms(struct lookup_table *table, struct symbol *file_sym,
 		struct list_head *sym_list)
 {
@@ -184,6 +203,14 @@ static void find_local_syms(struct lookup_table *table, struct symbol *file_sym,
 			      file_sym->name, table->objname);
 
 		lookup_table_file_sym = sym;
+
+		if (!file_has_locals(file_sym, sym_list)) {
+			/*
+			 * If the file doesn't have local symbols, any empty
+			 * match will do.  Skip the duplicate check.
+			 */
+			break;
+		}
 	}
 
 	if (!lookup_table_file_sym)

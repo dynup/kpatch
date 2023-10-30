@@ -119,7 +119,7 @@ verify_patch_files() {
 	local ret=0
 
 	for patch in "${PATCH_LIST[@]}"; do
-		for path in $(lsdiff "$patch" 2>/dev/null); do
+		for path in $(lsdiff --strip=1 "$patch" 2>/dev/null); do
 
 			dir=$(dirname "$path")
 			ext="${path##*.}"
@@ -831,15 +831,6 @@ fi
 
 [[ "$SKIPCLEANUP" -eq 0 ]] && trap cleanup EXIT INT TERM HUP
 
-KVER="${ARCHVERSION%%-*}"
-if [[ "$ARCHVERSION" =~ - ]]; then
-	KREL="${ARCHVERSION##*-}"
-	KREL="${KREL%.*}"
-fi
-[[ "$ARCHVERSION" =~ .el7a. ]] && ALT="-alt"
-
-[[ -z "$TARGETS" ]] && TARGETS="vmlinux modules"
-
 # Don't check external file.
 # shellcheck disable=SC1090
 if [[ -z "$USERSRCDIR" ]] && [[ -f "$RELEASE_FILE" ]]; then
@@ -847,7 +838,37 @@ if [[ -z "$USERSRCDIR" ]] && [[ -f "$RELEASE_FILE" ]]; then
 	DISTRO="$ID"
 fi
 
-if [[ "$DISTRO" = fedora ]] || [[ "$DISTRO" = rhel ]] || [[ "$DISTRO" = ol ]] || [[ "$DISTRO" = centos ]] || [[ "$DISTRO" = openEuler ]]; then
+KVER="${ARCHVERSION%%-*}"
+if [[ "$ARCHVERSION" =~ - ]]; then
+	# handle flavor extension on Photon ex) -rt, -esx
+	if [[ "$DISTRO" = photon ]]; then
+		KREL="${ARCHVERSION#*-}"
+
+		# strip rt patchset version if present
+		# remove trailing -flavor and starting -rt### patchset
+		KREL="${KREL%-*}"
+		KREL="${KREL#*-}"
+
+		PH_TAG="${ARCHVERSION##*.}"
+		PH_FLAVOR="${PH_TAG##*-}"
+		PH_TAG="${PH_TAG%%-*}"
+
+		# if no flavor, these will be the same
+		[[ "$PH_FLAVOR" = "$PH_TAG" ]] && PH_FLAVOR=""
+	else
+		KREL="${ARCHVERSION##*-}"
+	fi
+	KREL="${KREL%.*}"
+fi
+
+[[ "$ARCHVERSION" =~ .el7a. ]] && ALT="-alt"
+
+[[ -z "$TARGETS" ]] && TARGETS="vmlinux modules"
+
+if [[ "$DISTRO" = fedora ]] || [[ "$DISTRO" = rhel ]] || [[ "$DISTRO" = ol ]] ||
+   [[ "$DISTRO" = centos ]] || [[ "$DISTRO" = openEuler ]] ||
+   [[ "$DISTRO" = photon ]]; then
+
 	[[ -z "$VMLINUX" ]] && VMLINUX="/usr/lib/debug/lib/modules/$ARCHVERSION/vmlinux"
 	[[ -e "$VMLINUX" ]] || die "kernel-debuginfo-$ARCHVERSION not installed"
 
@@ -885,13 +906,14 @@ elif [[ -e "$KERNEL_SRCDIR"/.config ]] && [[ -e "$VERSIONFILE" ]] && [[ "$(cat "
 	echo "Using cache at $KERNEL_SRCDIR"
 
 else
-	if [[ "$DISTRO" = fedora ]] || [[ "$DISTRO" = rhel ]] || [[ "$DISTRO" = ol ]] || [[ "$DISTRO" = centos ]] || [[ "$DISTRO" = openEuler ]]; then
+	if [[ "$DISTRO" = fedora ]] || [[ "$DISTRO" = rhel ]] || [[ "$DISTRO" = ol ]] || [[ "$DISTRO" = centos ]] || [[ "$DISTRO" = openEuler ]] || [[ "$DISTRO" = photon ]]; then
 
 		[[ "$DISTRO" = fedora ]] && echo "Fedora distribution detected"
 		[[ "$DISTRO" = rhel ]] && echo "RHEL distribution detected"
 		[[ "$DISTRO" = ol ]] && echo "Oracle Linux distribution detected"
 		[[ "$DISTRO" = centos ]] && echo "CentOS distribution detected"
 		[[ "$DISTRO" = openEuler ]] && echo "OpenEuler distribution detected"
+		[[ "$DISTRO" = photon ]] && echo "Photon OS distribution detected"
 
 		clean_cache
 
@@ -899,30 +921,71 @@ else
 		if [[ -z "$SRCRPM" ]]; then
 			if [[ "$DISTRO" = fedora ]]; then
 				wget -P "$TEMPDIR" "http://kojipkgs.fedoraproject.org/packages/kernel/$KVER/$KREL/src/kernel-$KVER-$KREL.src.rpm" 2>&1 | logger || die
+			elif [[ "$DISTRO" = photon ]]; then
+				if [[ -n "$PH_FLAVOR" ]]; then
+					SRC_RPM_NAME="linux-$PH_FLAVOR-$KVER-$KREL.$PH_TAG.src.rpm"
+				else
+					SRC_RPM_NAME="linux-${ARCHVERSION}.src.rpm"
+				fi
+
+				PHOTON_VERSION="${PH_TAG//[^0-9]/}".0
+				wget -P "$TEMPDIR" "https://packages.vmware.com/photon/$PHOTON_VERSION/photon_srpms_${PHOTON_VERSION}_${ARCH}/$SRC_RPM_NAME" 2>&1 | logger || die
+				SRCRPM="$TEMPDIR/$SRC_RPM_NAME"
 			else
 				command -v yumdownloader &>/dev/null || die "yumdownloader (yum-utils or dnf-utils) not installed"
 				yumdownloader --source --destdir "$TEMPDIR" "kernel$ALT-$KVER-$KREL" 2>&1 | logger || die
 			fi
-			SRCRPM="$TEMPDIR/kernel$ALT-$KVER-$KREL.src.rpm"
+
+			if [ -z "$SRCRPM" ]; then
+				SRCRPM="$TEMPDIR/kernel$ALT-$KVER-$KREL.src.rpm"
+			fi
+
 		fi
 
 		echo "Unpacking kernel source"
 
+		if [[ "$DISTRO" = photon ]]; then
+			[[ -n "$PH_FLAVOR" ]] && SPECNAME="linux-$PH_FLAVOR.spec" || SPECNAME="linux.spec"
+		else
+			SPECNAME="kernel$ALT.spec"
+		fi
+
 		rpm -D "_topdir $RPMTOPDIR" -ivh "$SRCRPM" 2>&1 | logger || die
-		rpmbuild -D "_topdir $RPMTOPDIR" -bp --nodeps "--target=$(uname -m)" "$RPMTOPDIR"/SPECS/kernel$ALT.spec 2>&1 | logger ||
-			die "rpmbuild -bp failed.  you may need to run 'yum-builddep kernel' first."
+
+		# Define dist tag to handle rpmbuild of the linux src rpm in Photon
+		if [[ "$DISTRO" = photon ]] && [ "$(rpm -E %dist)" = "%dist" ]; then
+			sed -i "1s/^/%define dist .$PH_TAG/" "$RPMTOPDIR"/SPECS/"$SPECNAME"
+		fi
+
+		rpmbuild -D "_topdir $RPMTOPDIR" -bp --nodeps "--target=$(uname -m)" "$RPMTOPDIR"/SPECS/"$SPECNAME" 2>&1 | logger || die "rpmbuild -bp failed.  you may need to run 'yum-builddep kernel' first."
 
 		if [[ "$DISTRO" = openEuler ]]; then
 			# openEuler has two directories with the same content after 'rpm -D'
 			# openEuler 21.09 has linux-* and linux-*-source while openEuler 20.03 has linux-* and linux-*-Source
 			mv "$RPMTOPDIR"/BUILD/kernel-*/linux-*[sS]ource "$KERNEL_SRCDIR" 2>&1 | logger || die
+		elif [[ "$DISTRO" = photon ]]; then
+			# Photon has some files that are copied over during the build section of the spec file (instead of prep)
+			# These change occasionally, so check they exist before copying
+			ls "$RPMTOPDIR"/BUILD/fips*canister* &> /dev/null && ( cp -rT "$RPMTOPDIR"/BUILD/fips*canister* "$RPMTOPDIR"/BUILD/linux-"$KVER"/crypto | logger || die )
+			[[ -f "$RPMTOPDIR"/SOURCES/fips_canister-kallsyms ]] && ( cp "$RPMTOPDIR"/SOURCES/fips_canister-kallsyms rpmbuild/BUILD/linux-"$KVER"/crypto | logger || die )
+
+			if [[ -z "$CONFIGFILE" ]]; then
+				# Photon has multiple config files per src rpm sometimes, and naming is not consistent.
+				# So do our best to find the right one by parsing the spec file
+				SRC_CFG=$(rpmspec -P -D "_topdir $RPMTOPDIR" "$RPMTOPDIR"/SPECS/"$SPECNAME" | awk '/^cp .*\/SOURCES\/config.* \.config$/{print $2}')
+				[[ -z "$SRC_CFG" ]] && die "Failed to locate kernel config file"
+				SRC_CFG="${SRC_CFG##*/}"
+				cp "$RPMTOPDIR"/SOURCES/"$SRC_CFG" "$RPMTOPDIR"/BUILD/linux-"$KVER" | logger || die
+			fi
+			mv "$RPMTOPDIR"/BUILD/linux-"$KVER" "$KERNEL_SRCDIR" 2>&1 | logger || die
 		else
 			mv "$RPMTOPDIR"/BUILD/kernel-*/linux-* "$KERNEL_SRCDIR" 2>&1 | logger || die
 		fi
+
 		rm -rf "$RPMTOPDIR"
 		rm -rf "$KERNEL_SRCDIR/.git"
 
-		if [[ "$ARCHVERSION" == *-* ]]; then
+		if [[ "$ARCHVERSION" == *-* ]] && [[ ! "$DISTRO" = photon ]]; then
 			sed -i "s/^EXTRAVERSION.*/EXTRAVERSION = -${ARCHVERSION##*-}/" "$KERNEL_SRCDIR/Makefile" || die
 		fi
 
@@ -930,6 +993,16 @@ else
 
 		if [[ "$DISTRO" = openEuler ]]; then
 			[[ -z "$CONFIGFILE" ]] && CONFIGFILE="/boot/config-${ARCHVERSION}"
+		elif [[ "$DISTRO" = photon ]]; then
+			[[ -z "$CONFIGFILE" ]] && CONFIGFILE="$KERNEL_SRCDIR/$SRC_CFG"
+
+			# modify config file here to get the right vermagic, as Photon does not always listen to localversion file
+			if [[ -z "$PH_FLAVOR" ]]; then
+				sed -i s/^CONFIG_LOCALVERSION=\".*\"/CONFIG_LOCALVERSION=\"-"$KREL"."$PH_TAG"\"/g "$CONFIGFILE" || die
+			else
+				sed -i s/^CONFIG_LOCALVERSION=\".*\"/CONFIG_LOCALVERSION=\"-"$KREL"."$PH_TAG"-"$PH_FLAVOR"\"/g "$CONFIGFILE" || die
+			fi
+
 		else
 			[[ -z "$CONFIGFILE" ]] && CONFIGFILE="$KERNEL_SRCDIR/configs/kernel$ALT-$KVER-$ARCH.config"
 		fi
@@ -972,7 +1045,6 @@ else
 		# upstream SUBLEVEL; they are always at SUBLEVEL 0
 		sed -i "s/^SUBLEVEL.*/${sublevel}/" "$KERNEL_SRCDIR/Makefile" || die
 		echo "$ARCHVERSION" > "$VERSIONFILE" || die
-
 	else
 		die "Unsupported distribution"
 	fi

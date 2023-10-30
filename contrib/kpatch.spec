@@ -6,7 +6,7 @@
 
 Name: kpatch
 Summary: Dynamic kernel patching
-Version: 0.9.8
+Version: 0.9.9
 License: GPLv2
 Group: System Environment/Kernel
 URL: http://github.com/dynup/kpatch
@@ -104,6 +104,13 @@ rm -rf %{buildroot}
 %{_mandir}/man1/kpatch-build.1*
 
 %changelog
+* Thu Jul 27 2023 Joe Lawrence <joe.lawrence@redhat.com> - 0.9.9
+- Support for gcc-13
+- Support for Linux 6.2
+- Support for UBSAN kernels
+- Fix handling of PowerPC cpu features
+- Added RHEL-8.8 and 9.2 integration tests
+
 * Wed Mar 8 2023 Joe Lawrence <joe.lawrence@redhat.com> - 0.9.8
 * Clang fix ups from Pete Swain
 * Support for gcc-12
