@@ -3805,7 +3805,7 @@ static void kpatch_create_mcount_sections(struct kpatch_elf *kelf)
 	struct symbol *sym;
 	struct rela *rela, *mcount_rela;
 	void **funcs;
-	bool pfe_per_function;
+	bool pfe_per_function = false;
 
 	nr = 0;
 	list_for_each_entry(sym, &kelf->symbols, list)
