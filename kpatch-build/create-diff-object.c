@@ -3970,7 +3970,8 @@ static void kpatch_find_func_profiling_calls(struct kpatch_elf *kelf)
 						list);
 			if ((rela->type != R_X86_64_NONE &&
 			     rela->type != R_X86_64_PC32 &&
-			     rela->type != R_X86_64_PLT32) ||
+			     rela->type != R_X86_64_PLT32 &&
+				 rela->type != R_X86_64_GOTPCREL) ||
 			    strcmp(rela->sym->name, "__fentry__"))
 				continue;
 
