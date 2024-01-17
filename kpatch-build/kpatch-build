@@ -71,6 +71,7 @@ declare -rA SUPPORTED_DEB_DISTROS=(
 	["ubuntu"]="Ubuntu OS")
 
 declare -rA SUPPORTED_RPM_DISTROS=(
+	["anolis"]="Anolis OS"
 	["centos"]="CentOS"
 	["fedora"]="Fedora"
 	["openEuler"]="OpenEuler"
