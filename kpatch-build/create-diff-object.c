@@ -228,6 +228,28 @@ static struct rela *toc_rela(const struct rela *rela)
 				   (unsigned int)rela->addend);
 }
 
+static unsigned int function_padding_size(struct kpatch_elf *kelf, struct symbol *sym)
+{
+	unsigned int size = 0;
+
+	switch (kelf->arch) {
+	case X86_64:
+	{
+		unsigned char *insn = sym->sec->data->d_buf;
+		unsigned int i;
+
+		for (i = 0; i < sym->sym.st_value && *insn == 0x90; i++, insn++)
+			size++;
+
+		break;
+	}
+	default:
+		break;
+	}
+
+	return size;
+}
+
 /*
  * When compiling with -ffunction-sections and -fdata-sections, almost every
  * symbol gets its own dedicated section.  We call such symbols "bundled"
@@ -244,6 +266,8 @@ static void kpatch_bundle_symbols(struct kpatch_elf *kelf)
 				expected_offset = 16;
 			else if (is_gcc6_localentry_bundled_sym(kelf, sym))
 				expected_offset = 8;
+			else if (sym->type == STT_FUNC)
+				expected_offset = function_padding_size(kelf, sym);
 			else
 				expected_offset = 0;
 
