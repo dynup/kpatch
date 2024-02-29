@@ -15,14 +15,24 @@
  * being a 'kpatch' prefix added to the __do_sys##name() function name.  This
  * causes kpatch-build to treat it as a new function (due to
  * its new name), and its caller __se_sys##name() function is inlined by its own
- * caller __x64_sys##name() function, which has an fentry hook.
-
+ * caller __x64_sys##name() function, which has an fentry hook.  Since the
+ * kpatch versions do not provide SYSCALL_METADATA, specifically entries in the
+ * __syscalls_metadata and _ftrace_events sections, provide dummy values in
+ * these sections and instruct kpatch-build to ignore changes to them.
+ *
  * To patch a syscall, just replace the use of the SYSCALL_DEFINE1 (or similar)
  * macro with the "KPATCH_" prefixed version.
  */
 
-#define KPATCH_IGNORE_SYSCALL_SECTIONS					\
+#define KPATCH_SYSCALL_METADATA(sname)					\
+	static struct syscall_metadata __used				\
+	  __section("__syscalls_metadata")			 	\
+	  *__p_syscall_meta_##sname = NULL;				\
 	KPATCH_IGNORE_SECTION("__syscalls_metadata");			\
+									\
+	static struct trace_event_call __used				\
+	  __section("_ftrace_events")					\
+	  *__event_enter_##sname = NULL;				\
 	KPATCH_IGNORE_SECTION("_ftrace_events")
 
 #define KPATCH_SYSCALL_DEFINE1(name, ...) KPATCH_SYSCALL_DEFINEx(1, _##name, __VA_ARGS__)
@@ -33,7 +43,7 @@
 #define KPATCH_SYSCALL_DEFINE6(name, ...) KPATCH_SYSCALL_DEFINEx(6, _##name, __VA_ARGS__)
 
 #define KPATCH_SYSCALL_DEFINEx(x, sname, ...)				\
-	KPATCH_IGNORE_SYSCALL_SECTIONS;					\
+	KPATCH_SYSCALL_METADATA(sname);					\
 	__KPATCH_SYSCALL_DEFINEx(x, sname, __VA_ARGS__)
 
 #ifdef CONFIG_X86_64
