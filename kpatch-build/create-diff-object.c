@@ -228,6 +228,37 @@ static struct rela *toc_rela(const struct rela *rela)
 				   (unsigned int)rela->addend);
 }
 
+static bool padding_is_all_nops(enum architecture arch, struct symbol *sym,
+	unsigned int expected_offset)
+{
+	unsigned char *padding = NULL;
+	unsigned long len = sym->sym.st_value;
+	unsigned int i;
+	unsigned char nops_insn;
+
+	if (expected_offset != 0 || !sym->sec)
+		return false;
+
+	switch (arch) {
+	case X86_64:
+		nops_insn = (unsigned char)0x90;
+		break;
+	default:
+		return false;
+	}
+
+	padding = sym->sec->data->d_buf;
+	for (i = 0; i < len; i ++) {
+		/*
+		 * For other architecture, len of nops may not be one char.
+		 * In that case, we can compare two arrays.
+		 */
+		if (padding[i] != nops_insn)
+			return false;
+	}
+	return true;
+}
+
 /*
  * When compiling with -ffunction-sections and -fdata-sections, almost every
  * symbol gets its own dedicated section.  We call such symbols "bundled"
@@ -247,7 +278,8 @@ static void kpatch_bundle_symbols(struct kpatch_elf *kelf)
 			else
 				expected_offset = 0;
 
-			if (sym->sym.st_value != expected_offset) {
+			if (sym->sym.st_value != expected_offset &&
+				!padding_is_all_nops(kelf->arch, sym, expected_offset)) {
 				ERROR("symbol %s at offset %lu within section %s, expected %u",
 				      sym->name, sym->sym.st_value,
 				      sym->sec->name, expected_offset);
