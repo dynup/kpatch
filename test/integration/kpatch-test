@@ -299,12 +299,13 @@ run_combined_test() {
 
 # save existing dmesg so we can detect new content
 save_dmesg() {
-	SAVED_DMESG="$(dmesg | tail -n1)"
+	SAVED_DMESG="kpatch-test timestamp: $(date --rfc-3339=ns)"
+	echo "$SAVED_DMESG" > /dev/kmsg
 }
 
 # new dmesg entries since our saved entry
 new_dmesg() {
-	if ! dmesg | awk -v last="$SAVED_DMESG" 'p; $0 == last{p=1} END {exit !p}'; then
+	if ! dmesg --notime | awk -v last="$SAVED_DMESG" 'p; $0 == last{p=1} END {exit !p}'; then
 		error "dmesg overflow, try increasing kernel log buffer size"
 	fi
 }
