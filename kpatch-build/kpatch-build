@@ -71,6 +71,7 @@ declare -rA SUPPORTED_DEB_DISTROS=(
 	["ubuntu"]="Ubuntu OS")
 
 declare -rA SUPPORTED_RPM_DISTROS=(
+	["opencloudos"]="OpenCloudOS"
 	["anolis"]="Anolis OS"
 	["centos"]="CentOS"
 	["fedora"]="Fedora"
@@ -994,6 +995,8 @@ else
 			# openEuler has two directories with the same content after 'rpm -D'
 			# openEuler 21.09 has linux-* and linux-*-source while openEuler 20.03 has linux-* and linux-*-Source
 			mv "$RPMTOPDIR"/BUILD/kernel-*/linux-*[sS]ource "$KERNEL_SRCDIR" 2>&1 | logger || die
+		elif [[ "$DISTRO" = opencloudos ]]; then
+			mv "$RPMTOPDIR"/BUILD/kernel-*/kernel-* "$KERNEL_SRCDIR" 2>&1 | logger || die
 		elif [[ "$DISTRO" = photon ]]; then
 			# Photon has some files that are copied over during the build section of the spec file (instead of prep)
 			# These change occasionally, so check they exist before copying
@@ -1022,7 +1025,7 @@ else
 
 		echo "$ARCHVERSION" > "$VERSIONFILE" || die
 
-		if [[ "$DISTRO" = openEuler ]]; then
+		if [[ "$DISTRO" = openEuler ]] || [[ "$DISTRO" = opencloudos ]]; then
 			[[ -z "$CONFIGFILE" ]] && CONFIGFILE="/boot/config-${ARCHVERSION}"
 		elif [[ "$DISTRO" = photon ]]; then
 			[[ -z "$CONFIGFILE" ]] && CONFIGFILE="$KERNEL_SRCDIR/$SRC_CFG"

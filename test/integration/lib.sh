@@ -120,6 +120,19 @@ kpatch_photon_dependencies()
 	fi
 }
 
+kpatch_opencloudos_dependencies()
+{
+	local kernel_version
+	local arch
+	kernel_version=$(uname -r)
+	arch=$(uname -m)
+	sudo yum install -y make gcc patch bison flex openssl-devel dwarves dnf-utils \
+		rpm-build dnf-plugins-core python3-devel openssl-devel ncurses-devel elfutils-libelf-devel
+	sudo yum install -y "kernel-debuginfo-${kernel_version%.*}"\
+		"kernel-devel-${kernel_version%.*}"
+	sudo yum-builddep -y "kernel-${kernel_version}*"
+}
+
 kpatch_anolis_dependencies()
 {
 	local kernel_version
