@@ -1,0 +1,24 @@
+diff -Nupr src.orig/drivers/base/core.c src/drivers/base/core.c
+--- src.orig/drivers/base/core.c	2024-04-18 14:12:02.743376691 -0400
++++ src/drivers/base/core.c	2024-04-18 14:13:01.732248486 -0400
+@@ -34,6 +34,8 @@
+ #include "physical_location.h"
+ #include "power/power.h"
+ 
++#include <linux/blktrace_api.h>
++
+ #ifdef CONFIG_SYSFS_DEPRECATED
+ #ifdef CONFIG_SYSFS_DEPRECATED_V2
+ long sysfs_deprecated = 1;
+diff -Nupr src.orig/drivers/usb/core/usb.c src/drivers/usb/core/usb.c
+--- src.orig/drivers/usb/core/usb.c	2024-04-18 14:12:03.383375300 -0400
++++ src/drivers/usb/core/usb.c	2024-04-18 14:13:01.733248484 -0400
+@@ -769,6 +769,8 @@ EXPORT_SYMBOL_GPL(usb_alloc_dev);
+  */
+ struct usb_device *usb_get_dev(struct usb_device *dev)
+ {
++	barrier();
++
+ 	if (dev)
+ 		get_device(&dev->dev);
+ 	return dev;
