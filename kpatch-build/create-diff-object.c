@@ -180,6 +180,8 @@ static bool is_gcc6_localentry_bundled_sym(struct kpatch_elf *kelf,
 		return false;
 	case S390:
 		return false;
+	case LOONGARCH64:
+		return false;
 	default:
 		ERROR("unsupported arch");
 	}
@@ -699,7 +701,8 @@ static bool insn_is_load_immediate(struct kpatch_elf *kelf, void *addr)
 			return true;
 
 		break;
-
+	case LOONGARCH64:
+		break;
 	default:
 		ERROR("unsupported arch");
 	}
@@ -2415,7 +2418,7 @@ static bool static_call_sites_group_filter(struct lookup_table *lookup,
 static struct special_section special_sections[] = {
 	{
 		.name		= "__bug_table",
-		.arch		= X86_64 | PPC64 | S390,
+		.arch		= X86_64 | PPC64 | S390 | LOONGARCH64,
 		.group_size	= bug_table_group_size,
 	},
 	{
@@ -2425,12 +2428,12 @@ static struct special_section special_sections[] = {
 	},
 	{
 		.name		= "__ex_table", /* must come after .fixup */
-		.arch		= X86_64 | PPC64 | S390,
+		.arch		= X86_64 | PPC64 | S390 | LOONGARCH64,
 		.group_size	= ex_table_group_size,
 	},
 	{
 		.name		= "__jump_table",
-		.arch		= X86_64 | PPC64 | S390,
+		.arch		= X86_64 | PPC64 | S390 | LOONGARCH64,
 		.group_size	= jump_table_group_size,
 		.group_filter	= jump_table_group_filter,
 	},
@@ -2451,7 +2454,7 @@ static struct special_section special_sections[] = {
 	},
 	{
 		.name		= ".altinstructions",
-		.arch		= X86_64 | S390,
+		.arch		= X86_64 | S390 | LOONGARCH64,
 		.group_size	= altinstructions_group_size,
 	},
 	{
@@ -3715,7 +3718,8 @@ static void kpatch_create_mcount_sections(struct kpatch_elf *kelf)
 		}
 
 		switch(kelf->arch) {
-		case PPC64: {
+		case PPC64: 
+		case LOONGARCH64:{
 			bool found = false;
 
 			list_for_each_entry(rela, &sym->sec->rela->relas, list)
@@ -3958,6 +3962,7 @@ static void kpatch_find_func_profiling_calls(struct kpatch_elf *kelf)
 
 		switch(kelf->arch) {
 		case PPC64:
+		case LOONGARCH64:
 			list_for_each_entry(rela, &sym->sec->rela->relas, list) {
 				if (!strcmp(rela->sym->name, "_mcount")) {
 					sym->has_func_profiling = 1;
