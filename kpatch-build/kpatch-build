@@ -186,6 +186,7 @@ cleanup() {
 
 	# restore any files that were modified for the build
 	[[ -e "$TEMPDIR/vmlinux" ]] && mv -f "$TEMPDIR/vmlinux" "$KERNEL_SRCDIR/"
+	[[ -e "$TEMPDIR/Makefile" ]] && mv -f "$TEMPDIR/Makefile" "$KERNEL_SRCDIR/"
 	[[ -e "$TEMPDIR/link-vmlinux.sh" ]] && mv -f "$TEMPDIR/link-vmlinux.sh" "$KERNEL_SRCDIR/scripts"
 	[[ -e "$TEMPDIR/Makefile.modfinal" ]] && mv -f "$TEMPDIR/Makefile.modfinal" "$KERNEL_SRCDIR/scripts"
 	[[ -e "$TEMPDIR/setlocalversion" ]] && mv -f "$TEMPDIR/setlocalversion" "$KERNEL_SRCDIR/scripts"
@@ -1172,6 +1173,14 @@ if [[ -n "$CONFIG_DEBUG_INFO_BTF" ]]; then
 		cp -f "$KERNEL_SRCDIR/scripts/Makefile.modfinal" "$TEMPDIR/Makefile.modfinal" || die
 		sed -i 's/CONFIG_DEBUG_INFO_BTF_MODULES/DISABLED_FOR_KPATCH_BUILD/g' "$KERNEL_SRCDIR"/scripts/Makefile.modfinal || die
 	fi
+fi
+
+# CONFIG_LD_ORPHAN_WARN_LEVEL="error" will fail kernel builds with
+# --ffunction-sections with lots of "ld: error: unplaced orphan section"
+# errors.  Temporarily demote to "warn"ings in the kernel Makefile.
+if [[ "$CONFIG_LD_ORPHAN_WARN_LEVEL" == "error" ]]; then
+	cp -f "$KERNEL_SRCDIR/Makefile" "$TEMPDIR/Makefile" || die
+	sed -i 's/--orphan-handling=[$](CONFIG_LD_ORPHAN_WARN_LEVEL)/--orphan-handling="warn"/g' "$KERNEL_SRCDIR/Makefile" || die
 fi
 
 if [[ -n "$CONFIG_CC_IS_CLANG" ]]; then
