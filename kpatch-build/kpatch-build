@@ -181,14 +181,37 @@ remove_patches() {
 	[[ -d "$BUILDDIR/.git" ]] && (cd "$BUILDDIR" && git update-index -q --refresh)
 }
 
+# List of kernel tree files that kpatch-build backed up to
+# $KERNEL_BACKUPDIR before modification
+declare -a BACKUP_KERNEL_FILES
+KERNEL_BACKUPDIR="$TEMPDIR/kernel-backup"
+
+# Save a kernel file (i.e. "scripts/Makefile.modfinal")
+backup_kernel_file() {
+	local kernel_path="$1"
+
+	if [[ ! -e "$KERNEL_SRCDIR/$kernel_path" ]]; then
+		die "Kernel path not found: $KERNEL_SRCDIR/$kernel_path"
+	fi
+
+	mkdir --parents "$KERNEL_BACKUPDIR/$(dirname "$kernel_path")" || die
+	cp --force "$KERNEL_SRCDIR/$kernel_path" "$KERNEL_BACKUPDIR/$kernel_path" || die
+
+	BACKUP_KERNEL_FILES+=("$kernel_path")
+}
+
+# Restore all kernel files backed up by backup_kernel_file()
+restore_kernel_files() {
+	for kernel_path in "${BACKUP_KERNEL_FILES[@]}"; do
+		if ! mv --force "$KERNEL_BACKUPDIR/$kernel_path" "$KERNEL_SRCDIR/$kernel_path"; then
+			warn "Couldn't restore kernel path: $kernel_path"
+		fi
+	done
+}
+
 cleanup() {
 	remove_patches
-
-	# restore any files that were modified for the build
-	[[ -e "$TEMPDIR/vmlinux" ]] && mv -f "$TEMPDIR/vmlinux" "$KERNEL_SRCDIR/"
-	[[ -e "$TEMPDIR/link-vmlinux.sh" ]] && mv -f "$TEMPDIR/link-vmlinux.sh" "$KERNEL_SRCDIR/scripts"
-	[[ -e "$TEMPDIR/Makefile.modfinal" ]] && mv -f "$TEMPDIR/Makefile.modfinal" "$KERNEL_SRCDIR/scripts"
-	[[ -e "$TEMPDIR/setlocalversion" ]] && mv -f "$TEMPDIR/setlocalversion" "$KERNEL_SRCDIR/scripts"
+	restore_kernel_files
 
 	[[ "$DEBUG" -eq 0 ]] && rm -rf "$TEMPDIR"
 	rm -rf "$RPMTOPDIR"
@@ -932,7 +955,7 @@ if [[ -n "$USERSRCDIR" ]]; then
 
 	# save original vmlinux before it gets overwritten by sourcedir build
 	if [[ "$VMLINUX" -ef "$KERNEL_SRCDIR"/vmlinux ]]; then
-		cp -f "$VMLINUX" "$TEMPDIR/vmlinux" || die
+		backup_kernel_file "vmlinux"
 		VMLINUX="$TEMPDIR/vmlinux"
 	fi
 elif [[ -n "$OOT_MODULE" ]]; then
@@ -1102,7 +1125,7 @@ fi
 # changes to the source.
 if [[ -n "$USERSRCDIR" && -e "$KERNEL_SRCDIR/.git" ]]; then
 	cd "$KERNEL_SRCDIR" || die
-	cp -f scripts/setlocalversion "$TEMPDIR" || die
+	backup_kernel_file "scripts/setlocalversion"
 	LOCALVERSION="$(make kernelversion)"
 	LOCALVERSION="$(KERNELVERSION="$LOCALVERSION" ./scripts/setlocalversion)"
 	[[ -n "$LOCALVERSION" ]] || die "setlocalversion failed"
@@ -1165,13 +1188,21 @@ fi
 # link-vmlinux.sh and Makefile.modfinal since kpatch doesn't care about
 # that anyway.
 if [[ -n "$CONFIG_DEBUG_INFO_BTF" ]]; then
-	cp -f "$KERNEL_SRCDIR/scripts/link-vmlinux.sh" "$TEMPDIR/link-vmlinux.sh" || die
+	backup_kernel_file "scripts/link-vmlinux.sh"
 	sed -i 's/CONFIG_DEBUG_INFO_BTF/DISABLED_FOR_KPATCH_BUILD/g' "$KERNEL_SRCDIR"/scripts/link-vmlinux.sh || die
 
 	if [[ -e "$KERNEL_SRCDIR/scripts/Makefile.modfinal" ]]; then
-		cp -f "$KERNEL_SRCDIR/scripts/Makefile.modfinal" "$TEMPDIR/Makefile.modfinal" || die
+		backup_kernel_file "scripts/Makefile.modfinal"
 		sed -i 's/CONFIG_DEBUG_INFO_BTF_MODULES/DISABLED_FOR_KPATCH_BUILD/g' "$KERNEL_SRCDIR"/scripts/Makefile.modfinal || die
 	fi
+fi
+
+# CONFIG_LD_ORPHAN_WARN_LEVEL="error" will fail kernel builds with
+# --ffunction-sections with lots of "ld: error: unplaced orphan section"
+# errors.  Temporarily demote to "warn"ings in the kernel Makefile.
+if [[ "$CONFIG_LD_ORPHAN_WARN_LEVEL" == "error" ]]; then
+	backup_kernel_file "Makefile"
+	sed -i 's/--orphan-handling=[$](CONFIG_LD_ORPHAN_WARN_LEVEL)/--orphan-handling="warn"/g' "$KERNEL_SRCDIR/Makefile" || die
 fi
 
 if [[ -n "$CONFIG_CC_IS_CLANG" ]]; then
