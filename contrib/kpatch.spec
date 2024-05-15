@@ -112,41 +112,41 @@ rm -rf %{buildroot}
 - Added RHEL-8.8 and 9.2 integration tests
 
 * Wed Mar 8 2023 Joe Lawrence <joe.lawrence@redhat.com> - 0.9.8
-* Clang fix ups from Pete Swain
-* Support for gcc-12
-* Support for Linux 5.19
-* Added RHEL-8.7 and 9.1 integration tests
-* Fixed __UNIQUE_ID() variable correlation
-* Improved handling of unsupported static calls
+- Clang fix ups from Pete Swain
+- Support for gcc-12
+- Support for Linux 5.19
+- Added RHEL-8.7 and 9.1 integration tests
+- Fixed __UNIQUE_ID() variable correlation
+- Improved handling of unsupported static calls
 
-* Wed Sep 14 Yannick Cote <ycote@redhat.com> - 0.9.7
-* S390x kpatch support
-* Add support for openEuler + documentation (kpatch-build)
-* Use err.h instead of error.h for musl support (kpatch-build)
-* Add support for .return_sites section (kpatch-build x86)
-* Create missing section symbol (kpatch-build)
-* Fix symtab parsing lookup (kpatch-build)
-* Many fixes and improvements in create-diff-object (kpatch-build)
-* Unload already disabled modules (kpatch util)
-* Add integration tests for: rhel-{8.6,9.0},5.18.0 (test)
-* Add tests for patching a syscall (test)
-* Combine and improve Fedora, CentOS with RHEL kpatch-build dependencies (test)
-* Major revamp of README.md and documentation
-* Add syscall patching macros (kmod)
+* Wed Sep 14 2022 Yannick Cote <ycote@redhat.com> - 0.9.7
+- S390x kpatch support
+- Add support for openEuler + documentation (kpatch-build)
+- Use err.h instead of error.h for musl support (kpatch-build)
+- Add support for .return_sites section (kpatch-build x86)
+- Create missing section symbol (kpatch-build)
+- Fix symtab parsing lookup (kpatch-build)
+- Many fixes and improvements in create-diff-object (kpatch-build)
+- Unload already disabled modules (kpatch util)
+- Add integration tests for: rhel-{8.6,9.0},5.18.0 (test)
+- Add tests for patching a syscall (test)
+- Combine and improve Fedora, CentOS with RHEL kpatch-build dependencies (test)
+- Major revamp of README.md and documentation
+- Add syscall patching macros (kmod)
 
-* Tue Apr 12 Joe Lawrence <joe.lawrence@redhat.com> - 0.9.6
-* Allow OOT modules to be built with non-distro kernels
-* Add cross-arch unit testing support
-* Support ELF extended symbol section indexes
-* Allow setting kernel version if --sourcedir and --vmlinux are used
-* Cleanup and enhance __LINE__ macro detection for all arches
-* Fix segfault on .LCx string literal symbols
-* Include __dyndbg section when referenced by jump table
-* Honor user provided KBUILD_EXTRA_SYMBOLS
-* Support .retpoline_sites section
-* Add native compiler selection via CROSS_COMPILE
+* Tue Apr 12 2022 Joe Lawrence <joe.lawrence@redhat.com> - 0.9.6
+- Allow OOT modules to be built with non-distro kernels
+- Add cross-arch unit testing support
+- Support ELF extended symbol section indexes
+- Allow setting kernel version if --sourcedir and --vmlinux are used
+- Cleanup and enhance __LINE__ macro detection for all arches
+- Fix segfault on .LCx string literal symbols
+- Include __dyndbg section when referenced by jump table
+- Honor user provided KBUILD_EXTRA_SYMBOLS
+- Support .retpoline_sites section
+- Add native compiler selection via CROSS_COMPILE
 
-* Wed Oct 13 Artem Savkov <asavkov@redhat.com> - 0.9.5
+* Wed Oct 13 2021 Artem Savkov <asavkov@redhat.com> - 0.9.5
 - openEuler support
 - kpatch-build: Do not check KLP_REPLACE for kpatch.ko-based patches
 - create-diff-object: fix use after free in kpatch-check-relocations()
@@ -155,7 +155,7 @@ rm -rf %{buildroot}
 - kmod/patch: clean only rebuildable objs
 - kpatch-build: save environment varibles to file
 
-* Wed Aug 25 Yannick Cote <ycote@redhat.com> - 0.9.4
+* Wed Aug 25 2021 Yannick Cote <ycote@redhat.com> - 0.9.4
 - Support for multiple source files
 - Makefile tweaks for handling non-replace kpatch building
 - Support CONFIG_PRINTK_INDEX
@@ -168,7 +168,7 @@ rm -rf %{buildroot}
 - kpatch: Sync signal subcmd usage output with manpage
 - fixes for the out-of-range relocation check
 
-* Tue Apr 20 Yannick Cote <ycote@redhat.com> - 0.9.3
+* Tue Apr 20 2021 Yannick Cote <ycote@redhat.com> - 0.9.3
 - Initial support for clang compiler
 - Add support for rhel-8.4
 - rhel-8.4: workaround pahole and extended ELF sections
@@ -269,7 +269,7 @@ rm -rf %{buildroot}
 - Increase the transition timeout, helpful for large CPU count systems
 - Miscellaneous unit testing, ppc64, etc. fixes
 
-* Mon Apr 22 2018 Josh Poimboeuf <jpoimboe@redhat.com> - 0.6.0
+* Sun Apr 22 2018 Josh Poimboeuf <jpoimboe@redhat.com> - 0.6.0
 - Support and converted to livepatch-style hooks.
 - Lots of misc bugfixes and cleanups
 - Manpage, README.md fixups
@@ -294,7 +294,7 @@ rm -rf %{buildroot}
 - KASLR support.
 - Many other bug fixes and improvements.
 
-* Thu Oct 11 2016 Jessica Yu - 0.3.4
+* Tue Oct 11 2016 Jessica Yu - 0.3.4
 - bump version to 0.3.4
 
 * Fri Aug 19 2016 Josh Poimboeuf <jpoimboe@redhat.com> - 0.3.3
