@@ -275,6 +275,11 @@ support_klp_replace()
 	fi
 }
 
+check_paravirt_patch_site()
+{
+    ! kernel_version_gte 6.8.0
+}
+
 find_dirs() {
 	if [[ -e "$SCRIPTDIR/create-diff-object" ]]; then
 		# git repo
@@ -465,7 +470,9 @@ find_special_section_data() {
 	[[ ${check[i]} && -z "$PRINTK_INDEX_STRUCT_SIZE" ]] && die "can't find special struct pi_entry size"
 	[[ ${check[j]} && -z "$JUMP_STRUCT_SIZE" ]] && die "can't find special struct jump_entry size"
 	[[ ${check[o]} && -z "$ORC_STRUCT_SIZE" ]] && die "can't find special struct orc_entry size"
-	[[ ${check[p]} && -z "$PARA_STRUCT_SIZE" ]] && die "can't find special struct paravirt_patch_site size"
+	if check_paravirt_patch_site; then
+		[[ ${check[p]} && -z "$PARA_STRUCT_SIZE" ]] && die "can't find special struct paravirt_patch_site size"
+	fi
 	[[ ${check[s]} && -z "$STATIC_CALL_STRUCT_SIZE" ]] && die "can't find special struct static_call_site size"
 
 	save_env
