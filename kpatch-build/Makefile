@@ -22,7 +22,7 @@ PLUGIN_CFLAGS := $(filter-out -Wconversion, $(CFLAGS))
 PLUGIN_CFLAGS += -shared -I$(GCC_PLUGINS_DIR)/include \
 		   -Igcc-plugins -fPIC -fno-rtti -O2 -Wall
 endif
-ifeq ($(filter $(ARCH),s390x x86_64 ppc64le),)
+ifeq ($(filter $(ARCH),aarch64 s390x x86_64 ppc64le),)
 $(error Unsupported architecture ${ARCH}, check https://github.com/dynup/kpatch/#supported-architectures)
 endif
 

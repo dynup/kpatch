@@ -381,6 +381,9 @@ find_special_section_data() {
 
 	# Arch-specific features
 	case "$ARCH" in
+		"aarch64")
+			check[a]=true					# alt_instr
+			;;
 		"x86_64")
 			check[a]=true					# alt_instr
 			kernel_version_gte 5.10.0 && check[s]=true	# static_call_site
