@@ -38,6 +38,26 @@
  * Helper functions
  ******************/
 
+static enum architecture current_arch;
+
+enum architecture def_arch(void)
+{
+	return current_arch;
+}
+
+bool is_arch(enum architecture arch)
+{
+	return current_arch == arch;
+}
+
+void set_arch(enum architecture arch)
+{
+	if (!arch || (current_arch && arch != current_arch))
+		ERROR("inconsistent ELF arch: setting %d but already %d",
+		      arch, current_arch);
+	current_arch = arch;
+}
+
 char *status_str(enum status status)
 {
 	switch(status) {
@@ -594,8 +614,10 @@ struct kpatch_elf *kpatch_elf_open(const char *name)
 		kelf->arch = S390;
 		break;
 	default:
-		ERROR("Unsupported target architecture");
+		ERROR("Unsupported target architecture: e_machine %x",
+		      ehdr.e_machine);
 	}
+	set_arch(kelf->arch);
 
 	kpatch_create_section_list(kelf);
 	kpatch_create_symbol_list(kelf);
