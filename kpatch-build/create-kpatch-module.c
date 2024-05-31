@@ -58,6 +58,9 @@ static void create_dynamic_rela_sections(struct kpatch_elf *kelf, struct section
 	dynsec = create_section_pair(kelf, ".kpatch.dynrelas", sizeof(*dynrelas), nr);
 	dynrelas = dynsec->data->d_buf;
 
+	if (kelf->arch != X86_64)
+		return;
+
 	for (index = 0; index < nr; index++) {
 		offset = index * (unsigned int)sizeof(*krelas);
 

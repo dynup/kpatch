@@ -157,6 +157,9 @@ int offset_of_string(struct list_head *list, char *name);
 long rela_target_offset(struct kpatch_elf *kelf, struct section *relasec,
 			struct rela *rela);
 unsigned int insn_length(struct kpatch_elf *kelf, void *addr);
+enum architecture def_arch(void);
+void set_arch(enum architecture);
+bool is_arch(enum architecture);
 
 #ifndef R_PPC64_ENTRY
 #define R_PPC64_ENTRY   118
