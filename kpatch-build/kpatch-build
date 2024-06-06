@@ -78,8 +78,8 @@ declare -rA SUPPORTED_RPM_DISTROS=(
 	["openEuler"]="OpenEuler"
 	["ol"]="Oracle"
 	["photon"]="Photon OS"
-	["rhel"]="RHEL")
-
+	["rhel"]="RHEL"
+	["amzn"]="Amazon Linux")
 
 warn() {
 	echo "ERROR: $1" >&2
