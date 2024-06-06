@@ -142,6 +142,8 @@ unsigned int absolute_rela_type(struct kpatch_elf *kelf)
 		return R_X86_64_64;
 	case S390:
 		return R_390_64;
+	case LOONGARCH64:
+                return R_LARCH_64;
 	default:
 		ERROR("unsupported arch");
 	}
