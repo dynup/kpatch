@@ -38,6 +38,26 @@
  * Helper functions
  ******************/
 
+static enum architecture current_arch;
+
+enum architecture def_arch(void)
+{
+	return current_arch;
+}
+
+bool is_arch(enum architecture arch)
+{
+	return current_arch == arch;
+}
+
+void set_arch(enum architecture arch)
+{
+	if (!arch || (current_arch && arch != current_arch))
+		ERROR("inconsistent ELF arch: setting %d but already %d",
+		      arch, current_arch);
+	current_arch = arch;
+}
+
 char *status_str(enum status status)
 {
 	switch(status) {
@@ -88,15 +108,27 @@ struct section *find_section_by_index(struct list_head *list, unsigned int index
 	return NULL;
 }
 
-struct section *find_section_by_name(struct list_head *list, const char *name)
+struct section *find_nth_section_by_name( struct list_head *list, int nth, const char *name)
 {
 	struct section *sec;
 
-	list_for_each_entry(sec, list, list)
-		if (!strcmp(sec->name, name))
-			return sec;
+	if (!list || !list->next || !name)
+		return NULL;
+
+	list_for_each_entry(sec, list, list) {
+		if (strcmp(sec->name, name))
+			continue;
+		if (--nth >= 0)
+			continue;
+		return sec;
+	}
 
 	return NULL;
+}
+
+struct section *find_section_by_name(struct list_head *list, const char *name)
+{
+	return find_nth_section_by_name(list, 0, name);
 }
 
 struct symbol *find_symbol_by_index(struct list_head *list, size_t index)
@@ -136,6 +168,8 @@ struct rela *find_rela_by_offset(struct section *relasec, unsigned int offset)
 unsigned int absolute_rela_type(struct kpatch_elf *kelf)
 {
 	switch(kelf->arch) {
+	case AARCH64:
+		return R_AARCH64_ABS64;
 	case PPC64:
 		return R_PPC64_ADDR64;
 	case X86_64:
@@ -201,12 +235,12 @@ static void rela_insn(const struct section *sec, const struct rela *rela,
 long rela_target_offset(struct kpatch_elf *kelf, struct section *relasec,
 			struct rela *rela)
 {
-	long add_off;
+	long add_off = 0;
 	struct section *sec = relasec->base;
 
 	switch(kelf->arch) {
+	case AARCH64:
 	case PPC64:
-		add_off = 0;
 		break;
 	case X86_64:
 		if (!is_text_section(sec) ||
@@ -254,6 +288,8 @@ unsigned int insn_length(struct kpatch_elf *kelf, void *addr)
 	char *insn = addr;
 
 	switch(kelf->arch) {
+	case AARCH64:
+		return 4;
 
 	case X86_64:
 		insn_init(&decoded_insn, addr, 1);
@@ -584,6 +620,9 @@ struct kpatch_elf *kpatch_elf_open(const char *name)
 	if (!gelf_getehdr(kelf->elf, &ehdr))
 		ERROR("gelf_getehdr");
 	switch (ehdr.e_machine) {
+	case EM_AARCH64:
+		kelf->arch = AARCH64;
+		break;
 	case EM_PPC64:
 		kelf->arch = PPC64;
 		break;
@@ -594,8 +633,10 @@ struct kpatch_elf *kpatch_elf_open(const char *name)
 		kelf->arch = S390;
 		break;
 	default:
-		ERROR("Unsupported target architecture");
+		ERROR("Unsupported target architecture: e_machine %x",
+		      ehdr.e_machine);
 	}
+	set_arch(kelf->arch);
 
 	kpatch_create_section_list(kelf);
 	kpatch_create_symbol_list(kelf);
@@ -644,6 +685,7 @@ void kpatch_dump_kelf(struct kpatch_elf *kelf)
 			if (sec->rela)
 				printf(", rela-> %s", sec->rela->name);
 		}
+		printf(", pfe-> [%d]", (sec->pfe) == NULL ? -1 : (int)sec->pfe->index);
 next:
 		printf("\n");
 	}
@@ -653,8 +695,10 @@ next:
 		printf("sym %02d, type %d, bind %d, ndx %02d, name %s (%s)",
 			sym->index, sym->type, sym->bind, sym->sym.st_shndx,
 			sym->name, status_str(sym->status));
-		if (sym->sec && (sym->type == STT_FUNC || sym->type == STT_OBJECT))
+		if (sym->sec && (sym->type == STT_FUNC || sym->type == STT_OBJECT)) {
 			printf(" -> %s", sym->sec->name);
+			printf(", profiling: %d", sym->has_func_profiling);
+		}
 		printf("\n");
 	}
 }
@@ -923,6 +967,7 @@ struct section *create_section_pair(struct kpatch_elf *kelf, char *name,
 	relasec->sh.sh_type = SHT_RELA;
 	relasec->sh.sh_entsize = sizeof(GElf_Rela);
 	relasec->sh.sh_addralign = 8;
+	relasec->sh.sh_flags = SHF_INFO_LINK;
 
 	/* set text rela section pointer */
 	sec->rela = relasec;
@@ -977,11 +1022,17 @@ void kpatch_reindex_elements(struct kpatch_elf *kelf)
 	index = 0;
 	list_for_each_entry(sym, &kelf->symbols, list) {
 		sym->index = index++;
-		if (sym->sec)
+		if (sym->sec) {
 			sym->sym.st_shndx = (unsigned short)sym->sec->index;
-		else if (sym->sym.st_shndx != SHN_ABS &&
-			 sym->sym.st_shndx != SHN_LIVEPATCH)
+			if (sym->sec->pfe) {
+				sym->sec->pfe->sh.sh_link = sym->sec->index;
+				if (sym->sec->pfe->rela)
+					sym->sec->pfe->rela->sh.sh_info = sym->sec->index;
+			}
+		} else if (sym->sym.st_shndx != SHN_ABS &&
+			 sym->sym.st_shndx != SHN_LIVEPATCH) {
 			sym->sym.st_shndx = SHN_UNDEF;
+		}
 	}
 }
 
