@@ -956,7 +956,7 @@ if [[ -n "$USERSRCDIR" ]]; then
 	# save original vmlinux before it gets overwritten by sourcedir build
 	if [[ "$VMLINUX" -ef "$KERNEL_SRCDIR"/vmlinux ]]; then
 		backup_kernel_file "vmlinux"
-		VMLINUX="$TEMPDIR/vmlinux"
+		VMLINUX="$KERNEL_BACKUPDIR/vmlinux"
 	fi
 elif [[ -n "$OOT_MODULE" ]]; then
 	if [[ -z "${CONFIGFILE}" ]]; then
