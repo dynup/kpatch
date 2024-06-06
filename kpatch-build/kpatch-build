@@ -689,11 +689,11 @@ module_name_string() {
 }
 
 is_supported_deb_distro(){
-	[[ -n "${SUPPORTED_DEB_DISTROS[$1]:-}" ]]
+	[[ -n "$1" ]] && [[ -n "${SUPPORTED_DEB_DISTROS[$1]:-}" ]]
 }
 
 is_supported_rpm_distro(){
-	[[ -n "${SUPPORTED_RPM_DISTROS[$1]:-}" ]]
+	[[ -n "$1" ]] && [[ -n "${SUPPORTED_RPM_DISTROS[$1]:-}" ]]
 }
 
 print_supported_distro(){
