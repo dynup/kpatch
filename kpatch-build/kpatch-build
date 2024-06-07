@@ -1132,7 +1132,7 @@ if [[ -n "$USERSRCDIR" && -e "$KERNEL_SRCDIR/.git" ]]; then
 	cd "$KERNEL_SRCDIR" || die
 	if ! ./scripts/setlocalversion --save-scmversion &>/dev/null; then
 		backup_kernel_file "scripts/setlocalversion"
-		LOCALVERSION="$(make kernelversion)"
+		LOCALVERSION="$(make --no-print-directory kernelversion)"
 		LOCALVERSION="$(KERNELVERSION="$LOCALVERSION" ./scripts/setlocalversion)"
 		[[ -n "$LOCALVERSION" ]] || die "setlocalversion failed"
 		echo "echo $LOCALVERSION" > scripts/setlocalversion
