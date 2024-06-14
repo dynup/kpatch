@@ -1424,7 +1424,7 @@ for i in $FILES; do
 
 		# create-diff-object orig.o patched.o parent-name parent-symtab
 		#		     Module.symvers patch-mod-name output.o
-		"$TOOLSDIR"/create-diff-object $CDO_FLAGS "orig/$i" "patched/$i" "$KOBJFILE_NAME" \
+		"$TOOLSDIR"/create-diff-object "${CDO_FLAGS[@]}" "orig/$i" "patched/$i" "$KOBJFILE_NAME" \
 			"$SYMTAB" "$SYMVERS_FILE" "${MODNAME//-/_}" \
 			"output/$i" 2>&1 | logger 1
 		check_pipe_status create-diff-object
@@ -1494,7 +1494,7 @@ cd "$TEMPDIR/patch" || die
 
 # We no longer need kpatch-cc
 for ((idx=0; idx<${#MAKEVARS[@]}; idx++)); do
-    MAKEVARS[$idx]=${MAKEVARS[$idx]/${KPATCH_CC_PREFIX}/}
+    MAKEVARS[idx]=${MAKEVARS[idx]/${KPATCH_CC_PREFIX}/}
 done
 
 export KPATCH_BUILD="$KERNEL_SRCDIR" KPATCH_NAME="$MODNAME" \
@@ -1510,7 +1510,7 @@ if [[ "$USE_KLP" -eq 1 ]]; then
 		extra_flags="--no-klp-arch-sections"
 	fi
 	cp -f "$TEMPDIR/patch/$MODNAME.ko" "$TEMPDIR/patch/tmp.ko" || die
-	"$TOOLSDIR"/create-klp-module $extra_flags "$TEMPDIR/patch/tmp.ko" "$TEMPDIR/patch/$MODNAME.ko" 2>&1 | logger 1
+	"$TOOLSDIR"/create-klp-module "${extra_flags[@]}" "$TEMPDIR/patch/tmp.ko" "$TEMPDIR/patch/$MODNAME.ko" 2>&1 | logger 1
 	check_pipe_status create-klp-module
 	[[ "$rc" -ne 0 ]] && die "create-klp-module: exited with return code: $rc"
 fi

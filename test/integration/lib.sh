@@ -116,7 +116,7 @@ kpatch_photon_dependencies()
 	if [[ -z "$flavor" ]]; then
 		tdnf install -y linux-debuginfo
 	else
-		tdnf install -y linux-$flavor-debuginfo
+		tdnf install -y "linux-$flavor-debuginfo"
 	fi
 }
 
