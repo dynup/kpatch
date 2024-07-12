@@ -237,6 +237,7 @@ static void kpatch_bundle_symbols(struct kpatch_elf *kelf)
 {
 	struct symbol *sym;
 	unsigned int expected_offset;
+	unsigned int directcall_offset = 16;
 
 	list_for_each_entry(sym, &kelf->symbols, list) {
 		if (is_bundleable(sym)) {
@@ -247,7 +248,8 @@ static void kpatch_bundle_symbols(struct kpatch_elf *kelf)
 			else
 				expected_offset = 0;
 
-			if (sym->sym.st_value != expected_offset) {
+			if (sym->sym.st_value != expected_offset &&
+				!(getenv("CONFIG_DYNAMIC_FTRACE_WITH_DIRECT_CALLS") && sym->sym.st_value == directcall_offset)) {
 				ERROR("symbol %s at offset %lu within section %s, expected %u",
 				      sym->name, sym->sym.st_value,
 				      sym->sec->name, expected_offset);
