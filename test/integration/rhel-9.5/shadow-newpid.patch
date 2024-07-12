@@ -1,6 +1,6 @@
 diff -Nupr src.orig/fs/proc/array.c src/fs/proc/array.c
---- src.orig/fs/proc/array.c	2024-05-16 10:26:19.687215651 -0400
-+++ src/fs/proc/array.c	2024-05-16 10:26:37.491226842 -0400
+--- src.orig/fs/proc/array.c	2024-07-12 13:29:00.219637700 -0400
++++ src/fs/proc/array.c	2024-07-12 13:29:18.105645633 -0400
 @@ -403,12 +403,19 @@ static inline void task_seccomp(struct s
  	seq_putc(m, '\n');
  }
@@ -22,8 +22,8 @@ diff -Nupr src.orig/fs/proc/array.c src/fs/proc/array.c
  
  static void task_cpus_allowed(struct seq_file *m, struct task_struct *task)
 diff -Nupr src.orig/kernel/exit.c src/kernel/exit.c
---- src.orig/kernel/exit.c	2024-05-16 10:26:19.925215801 -0400
-+++ src/kernel/exit.c	2024-05-16 10:26:37.491226842 -0400
+--- src.orig/kernel/exit.c	2024-07-12 13:29:00.448637802 -0400
++++ src/kernel/exit.c	2024-07-12 13:29:18.106645634 -0400
 @@ -765,6 +765,7 @@ static void check_stack_usage(void)
  static inline void check_stack_usage(void) {}
  #endif
@@ -42,8 +42,8 @@ diff -Nupr src.orig/kernel/exit.c src/kernel/exit.c
  	 * Flush inherited counters to the parent - before the parent
  	 * gets woken up by child-exit notifications.
 diff -Nupr src.orig/kernel/fork.c src/kernel/fork.c
---- src.orig/kernel/fork.c	2024-05-16 10:26:19.925215801 -0400
-+++ src/kernel/fork.c	2024-05-16 10:26:37.492226843 -0400
+--- src.orig/kernel/fork.c	2024-07-12 13:29:00.448637802 -0400
++++ src/kernel/fork.c	2024-07-12 13:29:18.106645634 -0400
 @@ -2714,6 +2714,7 @@ struct task_struct *create_io_thread(int
   *
   * args->exit_signal is expected to be checked for sanity by the caller.
