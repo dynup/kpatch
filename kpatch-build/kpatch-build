@@ -1237,6 +1237,7 @@ fi
 
 if [[ "$ARCH" = "s390x" ]]; then
 	ARCH_KCFLAGS="-mno-pic-data-is-text-relative -fno-section-anchors"
+	! kernel_version_gte 6.10.0 && ARCH_KCFLAGS+=" -fPIE"
 fi
 
 export KCFLAGS="-I$DATADIR/patch -ffunction-sections -fdata-sections \
