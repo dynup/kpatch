@@ -1,0 +1,11 @@
+diff -Nupr src.orig/fs/readdir.c src/fs/readdir.c
+--- src.orig/fs/readdir.c	2024-04-18 14:12:03.462375128 -0400
++++ src/fs/readdir.c	2024-04-18 14:12:17.665344260 -0400
+@@ -189,6 +189,7 @@ static int filldir(struct dir_context *c
+ 			goto efault;
+ 	}
+ 	dirent = buf->current_dir;
++	asm("nop");
+ 	if (__put_user(d_ino, &dirent->d_ino))
+ 		goto efault;
+ 	if (__put_user(reclen, &dirent->d_reclen))

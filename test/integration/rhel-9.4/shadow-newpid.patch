@@ -1,0 +1,75 @@
+diff -Nupr src.orig/fs/proc/array.c src/fs/proc/array.c
+--- src.orig/fs/proc/array.c	2024-04-18 11:19:38.153638377 -0400
++++ src/fs/proc/array.c	2024-04-18 11:19:58.692590862 -0400
+@@ -403,12 +403,19 @@ static inline void task_seccomp(struct s
+ 	seq_putc(m, '\n');
+ }
+ 
++#include <linux/livepatch.h>
+ static inline void task_context_switch_counts(struct seq_file *m,
+ 						struct task_struct *p)
+ {
++	int *newpid;
++
+ 	seq_put_decimal_ull(m, "voluntary_ctxt_switches:\t", p->nvcsw);
+ 	seq_put_decimal_ull(m, "\nnonvoluntary_ctxt_switches:\t", p->nivcsw);
+ 	seq_putc(m, '\n');
++
++	newpid = klp_shadow_get(p, 0);
++	if (newpid)
++		seq_printf(m, "newpid:\t%d\n", *newpid);
+ }
+ 
+ static void task_cpus_allowed(struct seq_file *m, struct task_struct *task)
+diff -Nupr src.orig/kernel/exit.c src/kernel/exit.c
+--- src.orig/kernel/exit.c	2024-04-18 11:19:38.381637849 -0400
++++ src/kernel/exit.c	2024-04-18 11:19:58.692590862 -0400
+@@ -734,6 +734,7 @@ static void check_stack_usage(void)
+ static inline void check_stack_usage(void) {}
+ #endif
+ 
++#include <linux/livepatch.h>
+ void __noreturn do_exit(long code)
+ {
+ 	struct task_struct *tsk = current;
+@@ -797,6 +798,8 @@ void __noreturn do_exit(long code)
+ 	exit_task_work(tsk);
+ 	exit_thread(tsk);
+ 
++	klp_shadow_free(tsk, 0, NULL);
++
+ 	/*
+ 	 * Flush inherited counters to the parent - before the parent
+ 	 * gets woken up by child-exit notifications.
+diff -Nupr src.orig/kernel/fork.c src/kernel/fork.c
+--- src.orig/kernel/fork.c	2024-04-18 11:19:38.381637849 -0400
++++ src/kernel/fork.c	2024-04-18 11:19:58.693590860 -0400
+@@ -2639,6 +2639,7 @@ struct task_struct *create_io_thread(int
+  *
+  * args->exit_signal is expected to be checked for sanity by the caller.
+  */
++#include <linux/livepatch.h>
+ pid_t kernel_clone(struct kernel_clone_args *args)
+ {
+ 	u64 clone_flags = args->flags;
+@@ -2647,6 +2648,8 @@ pid_t kernel_clone(struct kernel_clone_a
+ 	struct task_struct *p;
+ 	int trace = 0;
+ 	pid_t nr;
++	int *newpid;
++	static int ctr = 0;
+ 
+ 	/*
+ 	 * For legacy clone() calls, CLONE_PIDFD uses the parent_tid argument
+@@ -2686,6 +2689,11 @@ pid_t kernel_clone(struct kernel_clone_a
+ 	if (IS_ERR(p))
+ 		return PTR_ERR(p);
+ 
++	newpid = klp_shadow_get_or_alloc(p, 0, sizeof(*newpid), GFP_KERNEL,
++					 NULL, NULL);
++	if (newpid)
++		*newpid = ctr++;
++
+ 	/*
+ 	 * Do this prior waking up the new thread - the thread pointer
+ 	 * might get invalid after that point, if the thread exits quickly.
