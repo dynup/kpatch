@@ -808,6 +808,33 @@ This can be done by replacing any usages of `static_branch_likely()`,
 `static_branch_unlikely()`, `static_key_true()`, and `static_key_false()` with
 `static_key_enabled()` in the patch file.
 
+There is an example  of using `static_key_enabled()` to replace the static key in the patch file:
+This is an static key used in the patch file:
+```
+static inline bool memcg_kmem_enabled(void)
+{
+    return static_branch_unlikely(&memcg_kmem_enabled_key);
+}
+``` 
+    
+We can use `static_key_enabled()` to rewrite the macros `static_branch_likely` as follows:
+```
+#define static_branch_unlikely(x) unlikely(static_key_enabled(&(x)->key))
+```
+
+Changing the definition in header file may cause too much changes in the functions invoked this macros eventhough we have no changes in them.
+So, it is not a good choice to rewrite the original definition because it may cause longer builds, more create-diff-object work, potential KABI recalculation, etc. 
+To face this situation, we can define a new function for our patch function to fix static_key.
+```
+static inline bool memcg_kmem_enabled_new(void)
+{
+	return static_key_enabled(&memcg_kmem_enabled_key);
+}
+```
+The patch function invoke `memcg_kmem_enabled_new` can avoid changes to other extraneous functions.
+
+
+
 ### Static calls
 
 Similarly, static calls are not supported when the corresponding static call
