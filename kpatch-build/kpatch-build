@@ -1186,6 +1186,8 @@ else
 	KBUILD_EXTRA_SYMBOLS="$SYMVERSFILE"
 fi
 
+grep -q "CONFIG_DYNAMIC_FTRACE_WITH_DIRECT_CALLS=y"    "$CONFIGFILE" && export CONFIG_DYNAMIC_FTRACE_WITH_DIRECT_CALLS=1
+
 # unsupported kernel option checking
 [[ -n "$CONFIG_DEBUG_INFO_SPLIT" ]] && die "kernel option 'CONFIG_DEBUG_INFO_SPLIT' not supported"
 [[ -n "$CONFIG_GCC_PLUGIN_LATENT_ENTROPY" ]] && die "kernel option 'CONFIG_GCC_PLUGIN_LATENT_ENTROPY' not supported"
