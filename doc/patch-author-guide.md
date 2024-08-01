@@ -197,7 +197,7 @@ module-notifier will execute callbacks when the module is loaded into
 the `MODULE_STATE_COMING` state.  The pre and post-patch callbacks are
 called before any module_init code.
 
-Example: a kpatch fix for CVE-2016-5389 could utilize the
+Example: a kpatch fix for CVE-2016-5696 could utilize the
 `KPATCH_PRE_PATCH_CALLBACK` and `KPATCH_POST_UNPATCH_CALLBACK` macros to modify
 variable `sysctl_tcp_challenge_ack_limit` in-place:
 
