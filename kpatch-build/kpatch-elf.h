@@ -115,6 +115,7 @@ enum architecture {
 	PPC64  = 0x1 << 0,
 	X86_64 = 0x1 << 1,
 	S390   = 0x1 << 2,
+	LOONGARCH64 = 0x1 << 3,
 };
 
 struct kpatch_elf {

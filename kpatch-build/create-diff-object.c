@@ -180,6 +180,8 @@ static bool is_gcc6_localentry_bundled_sym(struct kpatch_elf *kelf,
 		return false;
 	case S390:
 		return false;
+	case LOONGARCH64:
+		return false;
 	default:
 		ERROR("unsupported arch");
 	}
@@ -686,6 +688,11 @@ static bool insn_is_load_immediate(struct kpatch_elf *kelf, void *addr)
 		/* arg3: li r5, imm */
 		if (insn[3] == 0x38 && insn[2] == 0xa0)
 			return true;
+
+		break;
+
+	case LOONGARCH64:
+		/* to be done */
 
 		break;
 
@@ -2415,22 +2422,22 @@ static bool static_call_sites_group_filter(struct lookup_table *lookup,
 static struct special_section special_sections[] = {
 	{
 		.name		= "__bug_table",
-		.arch		= X86_64 | PPC64 | S390,
+		.arch		= X86_64 | PPC64 | S390 | LOONGARCH64,
 		.group_size	= bug_table_group_size,
 	},
 	{
 		.name		= ".fixup",
-		.arch		= X86_64 | PPC64 | S390,
+		.arch		= X86_64 | PPC64 | S390 | LOONGARCH64,
 		.group_size	= fixup_group_size,
 	},
 	{
 		.name		= "__ex_table", /* must come after .fixup */
-		.arch		= X86_64 | PPC64 | S390,
+		.arch		= X86_64 | PPC64 | S390 | LOONGARCH64,
 		.group_size	= ex_table_group_size,
 	},
 	{
 		.name		= "__jump_table",
-		.arch		= X86_64 | PPC64 | S390,
+		.arch		= X86_64 | PPC64 | S390 | LOONGARCH64,
 		.group_size	= jump_table_group_size,
 		.group_filter	= jump_table_group_filter,
 	},
@@ -2451,7 +2458,7 @@ static struct special_section special_sections[] = {
 	},
 	{
 		.name		= ".altinstructions",
-		.arch		= X86_64 | S390,
+		.arch		= X86_64 | S390 | LOONGARCH64,
 		.group_size	= altinstructions_group_size,
 	},
 	{
