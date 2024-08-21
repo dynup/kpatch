@@ -1236,7 +1236,10 @@ verify_patch_files
 apply_patches
 remove_patches
 
+# cp preserves mode and the files might have been read-only. This would
+# interfere with cleanup later, so ensure the $TEMPDIR is read/write.
 cp -LR "$DATADIR/patch" "$TEMPDIR" || die
+chmod -R u+rw "$TEMPDIR" || die
 
 if [[ "$ARCH" = "ppc64le" ]]; then
 	ARCH_KCFLAGS="-mcmodel=large -fplugin=$PLUGINDIR/ppc64le-plugin.so"
