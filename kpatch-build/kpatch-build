@@ -1190,6 +1190,7 @@ fi
 [[ -n "$CONFIG_DEBUG_INFO_SPLIT" ]] && die "kernel option 'CONFIG_DEBUG_INFO_SPLIT' not supported"
 [[ -n "$CONFIG_GCC_PLUGIN_LATENT_ENTROPY" ]] && die "kernel option 'CONFIG_GCC_PLUGIN_LATENT_ENTROPY' not supported"
 [[ -n "$CONFIG_GCC_PLUGIN_RANDSTRUCT" ]] && die "kernel option 'CONFIG_GCC_PLUGIN_RANDSTRUCT' not supported"
+[[ -n "$CONFIG_X86_KERNEL_IBT" ]] && die "kernel option 'CONFIG_X86_KERNEL_IBT' not supported"
 
 # CONFIG_DEBUG_INFO_BTF invokes pahole, for which some versions don't
 # support extended ELF sections.  Disable the BTF typeinfo generation in
