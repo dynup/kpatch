@@ -314,12 +314,9 @@ livepatch functionality.
 Get involved
 ------------
 
-If you have questions or feedback, join the #kpatch IRC channel on
-[Libera](https://libera.chat) and say hi.
-
 Contributions are very welcome.  Feel free to open issues or PRs on github.
 For big PRs, it's a good idea to discuss them first in github
-issues/discussions or on IRC before you write a lot of code.
+issues/discussions before you write a lot of code.
 
 
 License
