@@ -1,3 +1,4 @@
 [submodule "test/unit/objs"]
 	path = test/unit/objs
-	url = https://github.com/dynup/kpatch-unit-test-objs.git
+	url = https://github.com/swine/kpatch-unit-test-objs.git
+	branch = remotes/github-swine/arm64
