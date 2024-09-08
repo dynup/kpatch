@@ -3706,7 +3706,10 @@ static void kpatch_create_mcount_sections(struct kpatch_elf *kelf)
 			nr++;
 
 	/* create text/rela section pair */
-	sec = create_section_pair(kelf, "__mcount_loc", sizeof(void*), nr);
+	if (kelf->arch == LOONGARCH64)
+		sec = create_section_pair(kelf, "__patchable_function_entries", sizeof(void *), nr);
+	else
+		sec = create_section_pair(kelf, "__mcount_loc", sizeof(void *), nr);
 	relasec = sec->rela;
 
 	/* populate sections */
@@ -3784,6 +3787,20 @@ static void kpatch_create_mcount_sections(struct kpatch_elf *kelf)
 		}
 		case S390: {
 			insn_offset = sym->sym.st_value;
+			break;
+		}
+		case LOONGARCH64: {
+#define LOONGARCH_NOP 0x03400000
+			bool found = false;
+			unsigned int *insn = sym->sec->data->d_buf + sym->sym.st_value;
+
+			if (*insn == LOONGARCH_NOP && *(insn + 1) == LOONGARCH_NOP)
+				found = true;
+
+			if (!found)
+				ERROR("%s: unexpected instruction at the start of the function", sym->name);
+
+			insn_offset = 0;
 			break;
 		}
 		default:
@@ -3990,6 +4007,22 @@ static void kpatch_find_func_profiling_calls(struct kpatch_elf *kelf)
 				insn[2] == 0x00 && insn[3] == 0x00 &&
 				insn[4] == 0x00 && insn[5] == 0x00)
 				sym->has_func_profiling = 1;
+			break;
+		case LOONGARCH64:
+			struct section *sec;
+
+			sec = find_section_by_name(&kelf->sections,
+					"__patchable_function_entries");
+			if (sec) {
+				list_for_each_entry(rela, &sec->rela->relas, list) {
+					if (rela->sym->sec == sym->sec &&
+					   (rela->sym->sym.st_value +
+					   rela->addend) == sym->sym.st_value) {
+						sym->has_func_profiling = 1;
+						break;
+					}
+				}
+			}
 			break;
 		default:
 			ERROR("unsupported arch");
