@@ -245,29 +245,31 @@ signal_stalled_processes() {
 
 wait_for_patch_transition() {
 	local module="$1"
-	local i
+	local i=0
 
 	in_transition "$module" || return 0
 
 	echo "waiting (up to $POST_ENABLE_WAIT seconds) for patch transition to complete..."
-	for (( i=0; i<POST_ENABLE_WAIT; i++ )); do
+	start_time=$SECONDS
+	while [ $i -lt $POST_ENABLE_WAIT ]; do
 		if ! in_transition "$module" ; then
 			echo "transition complete ($i seconds)"
 			return 0
 		fi
-		sleep 1s
+		i=$(( SECONDS - start_time ))
 	done
 
 	echo "patch transition has stalled!"
 	signal_stalled_processes
 
 	echo "waiting (up to $POST_SIGNAL_WAIT seconds) for patch transition to complete..."
-	for (( i=0; i<POST_SIGNAL_WAIT; i++ )); do
+	start_time=$SECONDS
+	while [ $i -lt $POST_SIGNAL_WAIT ]; do
 		if ! in_transition "$module" ; then
 			echo "transition complete ($i seconds)"
 			return 0
 		fi
-		sleep 1s
+		i=$(( SECONDS - start_time ))
 	done
 
 	return 1
