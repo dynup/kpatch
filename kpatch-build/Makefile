@@ -1,6 +1,6 @@
 include ../Makefile.inc
 
-CFLAGS += -MMD -MP -I../kmod/patch -Iinsn -Wall -Wsign-compare \
+CFLAGS += -std=gnu11 -MMD -MP -I../kmod/patch -Iinsn -Wall -Wsign-compare \
 	  -Wconversion -Wno-sign-conversion -g -Werror
 LDLIBS = -lelf
 
@@ -18,7 +18,7 @@ SOURCES += gcc-plugins/ppc64le-plugin.c
 PLUGIN   = gcc-plugins/ppc64le-plugin.so
 TARGETS += $(PLUGIN)
 GCC_PLUGINS_DIR := $(shell $(CROSS_COMPILE)gcc -print-file-name=plugin)
-PLUGIN_CFLAGS := $(filter-out -Wconversion, $(CFLAGS))
+PLUGIN_CFLAGS := $(filter-out -std=gnu11 -Wconversion, $(CFLAGS))
 PLUGIN_CFLAGS += -shared -I$(GCC_PLUGINS_DIR)/include \
 		   -Igcc-plugins -fPIC -fno-rtti -O2 -Wall
 endif
