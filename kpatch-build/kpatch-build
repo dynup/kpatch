@@ -33,6 +33,7 @@
 # - Builds the patched kernel/module and monitors changed objects
 # - Builds the patched objects with gcc flags -f[function|data]-sections
 # - Runs kpatch tools to create and link the patch kernel module
+VERSION=0.9.9
 
 set -o pipefail
 
@@ -733,13 +734,14 @@ usage() {
 	echo "		--skip-cleanup          Skip post-build cleanup" >&2
 	echo "		--skip-compiler-check   Skip compiler version matching check" >&2
 	echo "		                        (not recommended)" >&2
+	echo "		--version               Version of kpatch-build"
 }
 
 if ! command -v gawk &> /dev/null; then
 	die "gawk not installed"
 fi
 
-options="$(getopt -o ha:r:s:c:v:j:t:n:o:dR -l "help,archversion:,sourcerpm:,sourcedir:,config:,vmlinux:,jobs:,target:,name:,output:,oot-module:,oot-module-src:,debug,skip-gcc-check,skip-compiler-check,skip-cleanup,non-replace" -- "$@")" || die "getopt failed"
+options="$(getopt -o ha:r:s:c:v:j:t:n:o:dR -l "help,archversion:,sourcerpm:,sourcedir:,config:,vmlinux:,jobs:,target:,name:,output:,oot-module:,oot-module-src:,debug,skip-gcc-check,skip-compiler-check,skip-cleanup,non-replace,version" -- "$@")" || die "getopt failed"
 
 eval set -- "$options"
 
@@ -820,6 +822,10 @@ while [[ $# -gt 0 ]]; do
 	--skip-compiler-check)
 		echo "WARNING: Skipping compiler version matching check (not recommended)"
 		SKIPCOMPILERCHECK=1
+		;;
+	--version)
+		echo "Version : $VERSION"
+		exit 0
 		;;
 	*)
 		[[ "$1" = "--" ]] && shift && continue
