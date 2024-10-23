@@ -7,7 +7,6 @@ LDLIBS = -lelf
 TARGETS = create-diff-object create-klp-module create-kpatch-module
 SOURCES = create-diff-object.c kpatch-elf.c \
 		  create-klp-module.c \
-		  create-kpatch-module.c \
 		  create-kpatch-module.c lookup.c
 
 SOURCES += insn/insn.c insn/inat.c
