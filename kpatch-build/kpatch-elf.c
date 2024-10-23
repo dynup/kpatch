@@ -88,15 +88,27 @@ struct section *find_section_by_index(struct list_head *list, unsigned int index
 	return NULL;
 }
 
-struct section *find_section_by_name(struct list_head *list, const char *name)
+struct section *find_nth_section_by_name( struct list_head *list, int nth, const char *name)
 {
 	struct section *sec;
 
-	list_for_each_entry(sec, list, list)
-		if (!strcmp(sec->name, name))
-			return sec;
+	if (!list || !list->next || !name)
+		return NULL;
+
+	list_for_each_entry(sec, list, list) {
+		if (strcmp(sec->name, name))
+			continue;
+		if (--nth >= 0)
+			continue;
+		return sec;
+	}
 
 	return NULL;
+}
+
+struct section *find_section_by_name(struct list_head *list, const char *name)
+{
+	return find_nth_section_by_name(list, 0, name);
 }
 
 struct symbol *find_symbol_by_index(struct list_head *list, size_t index)
@@ -608,6 +620,9 @@ struct kpatch_elf *kpatch_elf_open(const char *name)
 		kpatch_create_rela_list(kelf, relasec);
 	}
 
+	if (find_section_by_name(&kelf->sections, "__patchable_function_entries"))
+		kelf->has_pfe = true;
+
 	return kelf;
 }
 
@@ -644,6 +659,7 @@ void kpatch_dump_kelf(struct kpatch_elf *kelf)
 			if (sec->rela)
 				printf(", rela-> %s", sec->rela->name);
 		}
+		printf(", pfe-> [%d]", (sec->pfe) == NULL ? -1 : (int)sec->pfe->index);
 next:
 		printf("\n");
 	}
@@ -653,8 +669,10 @@ next:
 		printf("sym %02d, type %d, bind %d, ndx %02d, name %s (%s)",
 			sym->index, sym->type, sym->bind, sym->sym.st_shndx,
 			sym->name, status_str(sym->status));
-		if (sym->sec && (sym->type == STT_FUNC || sym->type == STT_OBJECT))
+		if (sym->sec && (sym->type == STT_FUNC || sym->type == STT_OBJECT)) {
 			printf(" -> %s", sym->sec->name);
+			printf(", profiling: %d", sym->has_func_profiling);
+		}
 		printf("\n");
 	}
 }
@@ -923,6 +941,7 @@ struct section *create_section_pair(struct kpatch_elf *kelf, char *name,
 	relasec->sh.sh_type = SHT_RELA;
 	relasec->sh.sh_entsize = sizeof(GElf_Rela);
 	relasec->sh.sh_addralign = 8;
+	relasec->sh.sh_flags = SHF_INFO_LINK;
 
 	/* set text rela section pointer */
 	sec->rela = relasec;
@@ -977,11 +996,17 @@ void kpatch_reindex_elements(struct kpatch_elf *kelf)
 	index = 0;
 	list_for_each_entry(sym, &kelf->symbols, list) {
 		sym->index = index++;
-		if (sym->sec)
+		if (sym->sec) {
 			sym->sym.st_shndx = (unsigned short)sym->sec->index;
-		else if (sym->sym.st_shndx != SHN_ABS &&
-			 sym->sym.st_shndx != SHN_LIVEPATCH)
+			if (sym->sec->pfe) {
+				sym->sec->pfe->sh.sh_link = sym->sec->index;
+				if (sym->sec->pfe->rela)
+					sym->sec->pfe->rela->sh.sh_info = sym->sec->index;
+			}
+		} else if (sym->sym.st_shndx != SHN_ABS &&
+			 sym->sym.st_shndx != SHN_LIVEPATCH) {
 			sym->sym.st_shndx = SHN_UNDEF;
+		}
 	}
 }
 

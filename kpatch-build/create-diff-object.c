@@ -615,9 +615,14 @@ static void kpatch_compare_correlated_section(struct section *sec)
 	     !is_text_section(sec1)))
 		DIFF_FATAL("%s section header details differ from %s", sec1->name, sec2->name);
 
-	/* Short circuit for mcount sections, we rebuild regardless */
+	/*
+	 * Short circuit for mcount and patchable_function_entries
+	 * sections, we rebuild regardless
+	 */
 	if (!strcmp(sec->name, ".rela__mcount_loc") ||
-	    !strcmp(sec->name, "__mcount_loc")) {
+	    !strcmp(sec->name, "__mcount_loc") ||
+	    !strcmp(sec->name, ".rela__patchable_function_entries") ||
+	    !strcmp(sec->name, "__patchable_function_entries")) {
 		sec->status = SAME;
 		goto out;
 	}
@@ -3676,6 +3681,206 @@ static void kpatch_create_callbacks_objname_rela(struct kpatch_elf *kelf, char *
 	}
 }
 
+static void kpatch_set_pfe_link(struct kpatch_elf *kelf)
+{
+	struct section* sec;
+	struct rela *rela;
+
+	if (!kelf->has_pfe)
+		return;
+
+	list_for_each_entry(sec, &kelf->sections, list) {
+		if (strcmp(sec->name, "__patchable_function_entries")) {
+			continue;
+		}
+
+		if (!sec->rela) {
+			continue;
+		}
+		list_for_each_entry(rela, &sec->rela->relas, list) {
+			rela->sym->sec->pfe = sec;
+		}
+	}
+}
+
+static void kpatch_create_pfe_sections(struct kpatch_elf *kelf)
+{
+	int nr, index;
+	struct section *sec, *relasec;
+	struct symbol *sym;
+	struct rela *pfe_rela;
+
+	nr = 0;
+	list_for_each_entry(sym, &kelf->symbols, list)
+		if (sym->type == STT_FUNC && sym->status != SAME &&
+		    sym->has_func_profiling)
+			nr++;
+
+	/*
+	 * We will create separate __patchable_function_entries
+	 * sections for each symbols.
+	 */
+	kelf->has_pfe = true;
+	sec = find_section_by_name(&kelf->sections, "__patchable_function_entries");
+	relasec = NULL;
+
+	/* populate sections */
+	index = 0;
+	list_for_each_entry(sym, &kelf->symbols, list) {
+		unsigned long insn_offset = 0;
+		unsigned char *insn;
+
+		if (sym->type != STT_FUNC || sym->status == SAME)
+			continue;
+
+		if (!sym->has_func_profiling) {
+			log_debug("function %s doesn't have patchable function entry, no __patchable_function_entries record is needed\n",
+				  sym->name);
+			continue;
+		}
+
+		switch(kelf->arch) {
+		case PPC64:
+			/*
+			 * Assume ppc64le is built with -fpatchable-function-entry=2, which means that all 2 nops are
+			 * after the (local) entry point of the function.
+			 *
+			 * Example 1 - TOC setup for global entry
+			 * Disassembly of section .text.c_stop:
+			 *
+			 * 0000000000000000 <c_stop-0x8>:
+			 *         ...
+			 *                         0: R_PPC64_REL64        .TOC.-0x8
+			 *
+			 * 0000000000000008 <c_stop>:
+			 *    8:   f8 ff 4c e8     ld      r2,-8(r12)
+			 *                         8: R_PPC64_ENTRY        *ABS*
+			 *    c:   14 62 42 7c     add     r2,r2,r12
+			 *   10:   00 00 00 60     nop                                   << <<
+			 *   14:   00 00 00 60     nop
+			 *
+			 * Relocation section '.rela__patchable_function_entries' at offset 0x17870 contains 1 entry:
+			 *     Offset             Info             Type               Symbol's Value  Symbol's Name + Addend
+			 * 0000000000000000  0000001100000026 R_PPC64_ADDR64         0000000000000000 .text.c_stop + 10
+			 *                                                                                           ^^
+			 *
+			 * Example 2 - no TOC setup, local entry only
+			 * Disassembly of section .text.c_stop:
+			 *
+			 * 0000000000000000 <c_stop>:
+			 *    0:   00 00 00 60     nop                                   << <<
+			 *    4:   00 00 00 60     nop
+			 *    8:   20 00 80 4e     blr
+			 *
+			 * Relocation section '.rela__patchable_function_entries' at offset 0x386a8 contains 1 entry:
+			 *     Offset             Info             Type               Symbol's Value  Symbol's Name + Addend
+			 * 0000000000000000  0000001800000026 R_PPC64_ADDR64         0000000000000000 .text.c_stop + 0
+			 *                                                                                           ^
+			 */
+			insn_offset = sym->sym.st_value + PPC64_LOCAL_ENTRY_OFFSET(sym->sym.st_other);
+			insn = sym->sec->data->d_buf + insn_offset;
+
+			/* verify nops */
+			if (insn[0] != 0x00 || insn[1] != 0x00 || insn[2] != 0x00 || insn[3] != 0x60 ||
+			    insn[4] != 0x00 || insn[5] != 0x00 || insn[6] != 0x00 || insn[7] != 0x60) {
+				ERROR("%s: unexpected instruction in patch section of function\n", sym->name);
+			}
+
+			break;
+		case X86_64:
+			/*
+			 * Assume x86_64 is built with -fpatchable-function-entry=16,16, which means all 16 nops are
+			 * before the entry point of the function.  This is rather odd, but since call __fentry__ is
+			 * still used for the ftrace callsite, this option may only be currently used for alignment
+			 * purposes (and not ftrace as on other arches).
+			 *
+			 * Disassembly of section .text.cmdline_proc_show:
+			 *
+			 * 0000000000000000 <cmdline_proc_show-0x10>:
+			 *    0:   90                      nop                           << <<
+			 *    1:   90                      nop
+			 *    2:   90                      nop
+			 *    3:   90                      nop
+			 *    4:   90                      nop
+			 *    5:   90                      nop
+			 *    6:   90                      nop
+			 *    7:   90                      nop
+			 *    8:   90                      nop
+			 *    9:   90                      nop
+			 *    a:   90                      nop
+			 *    b:   90                      nop
+			 *    c:   90                      nop
+			 *    d:   90                      nop
+			 *    e:   90                      nop
+			 *    f:   90                      nop
+			 *
+			 * 0000000000000010 <cmdline_proc_show>:
+			 *   10:   f3 0f 1e fa             endbr64
+			 *   14:   e8 00 00 00 00          call   19 <cmdline_proc_show+0x9>
+			 *                         15: R_X86_64_PLT32      __fentry__-0x4
+			 *
+			 * Relocation section '.rela__patchable_function_entries' at offset 0x113f8 contains 1 entry:
+			 *     Offset             Info             Type               Symbol's Value  Symbol's Name + Addend
+			 * 0000000000000000  0000000700000001 R_X86_64_64            0000000000000000 .text.cmdline_proc_show + 0
+			 *                                                                                                      ^
+			 */
+			insn_offset = 0;
+			insn = sym->sec->data->d_buf + insn_offset;
+
+			/* verify nops */
+			for (int i=0; i<16; i++) {
+				if (insn[0] != 0x90) {
+					ERROR("%s: unexpected instruction in CONFIG_FUNCTION_PADDING_BYTES section of function\n", sym->name);
+				}
+				insn++;
+			}
+
+			/* optional endbr64 instruction */
+			if (insn[0] == 0xf3 && insn[1] == 0x0f && insn[2] == 0x1e && insn[3] == 0xfa)
+				insn+=4;
+
+			/*
+			 * We can't verify the ftrace call site as x86_64 adds nops (and
+			 * rela__patchable_function_entries) regardless of whether it is ftrace-able or not.
+			 * This arch still relies on __mcount_loc section, so we will check then.
+			 */
+			break;
+		default:
+			ERROR("unsupported arch");
+		}
+
+		/* Allocate __patchable_function_entries for symbol */
+		sec = create_section_pair(kelf, "__patchable_function_entries", sizeof(void *), 1);
+		sec->sh.sh_flags |= SHF_WRITE | SHF_LINK_ORDER;
+		/* We will reset this sh_link in the reindex function. */
+		sec->sh.sh_link = 0;
+
+		relasec = sec->rela;
+		sym->sec->pfe = sec;
+
+		/*
+		 * 'rela' points to the patchable function entry
+		 *
+		 * Create a .rela__patchable_function_entries entry which also points to it.
+		 */
+		ALLOC_LINK(pfe_rela, &relasec->relas);
+		struct symbol *section_sym;
+
+		/* __patchable_function_entries relocates off the section symbol */
+		section_sym = find_symbol_by_name(&kelf->symbols, sym->sec->name);
+		pfe_rela->sym = section_sym;
+		pfe_rela->type = absolute_rela_type(kelf);
+		pfe_rela->addend = insn_offset - section_sym->sym.st_value;
+		pfe_rela->offset = 0;
+
+		index++;
+	}
+
+	/* sanity check, index should equal nr */
+	if (index != nr)
+		ERROR("size mismatch in funcs sections");
+}
+
 /*
  * This function basically reimplements the functionality of the Linux
  * recordmcount script, so that patched functions can be recognized by ftrace.
@@ -3800,6 +4005,16 @@ static void kpatch_create_mcount_sections(struct kpatch_elf *kelf)
 	/* sanity check, index should equal nr */
 	if (index != nr)
 		ERROR("size mismatch in funcs sections");
+}
+
+static void kpatch_create_ftrace_callsite_sections(struct kpatch_elf *kelf, bool create_pfe)
+{
+	if (create_pfe)
+		kpatch_create_pfe_sections(kelf);
+
+	/* x86 is special, it always creates mcount_loc section */
+	if (!create_pfe || kelf->arch == X86_64)
+		kpatch_create_mcount_sections(kelf);
 }
 
 /*
@@ -3945,6 +4160,32 @@ static void kpatch_no_sibling_calls_ppc64le(struct kpatch_elf *kelf)
 		      sibling_call_errors);
 }
 
+static bool kpatch_symbol_has_pfe_entry(struct kpatch_elf *kelf, struct symbol *sym)
+{
+	struct section *sec;
+	struct rela *rela;
+
+	if (!kelf->has_pfe)
+		return false;
+
+	list_for_each_entry(sec, &kelf->sections, list) {
+		if (strcmp(sec->name, "__patchable_function_entries"))
+			continue;
+		if (sym->sec->pfe != sec)
+			continue;
+		if (!sec->rela)
+			continue;
+
+		list_for_each_entry(rela, &sec->rela->relas, list) {
+			if (rela->sym->sec && sym->sec == rela->sym->sec) {
+				return true;
+			}
+		}
+	}
+
+	return false;
+}
+
 /* Check which functions have fentry/mcount calls; save this info for later use. */
 static void kpatch_find_func_profiling_calls(struct kpatch_elf *kelf)
 {
@@ -3952,37 +4193,51 @@ static void kpatch_find_func_profiling_calls(struct kpatch_elf *kelf)
 	struct rela *rela;
 	unsigned char *insn;
 	list_for_each_entry(sym, &kelf->symbols, list) {
-		if (sym->type != STT_FUNC || sym->is_pfx ||
-		    !sym->sec || !sym->sec->rela)
+		if (sym->type != STT_FUNC || sym->is_pfx || !sym->sec)
 			continue;
 
 		switch(kelf->arch) {
 		case PPC64:
-			list_for_each_entry(rela, &sym->sec->rela->relas, list) {
-				if (!strcmp(rela->sym->name, "_mcount")) {
-					sym->has_func_profiling = 1;
-					break;
+			if (kpatch_symbol_has_pfe_entry(kelf, sym)) {
+				sym->has_func_profiling = 1;
+			} else if (sym->sec->rela) {
+				list_for_each_entry(rela, &sym->sec->rela->relas, list) {
+					if (!strcmp(rela->sym->name, "_mcount")) {
+						sym->has_func_profiling = 1;
+						break;
+					}
 				}
 			}
 			break;
 		case X86_64:
-			rela = list_first_entry(&sym->sec->rela->relas, struct rela,
-						list);
-			if ((rela->type != R_X86_64_NONE &&
-			     rela->type != R_X86_64_PC32 &&
-			     rela->type != R_X86_64_PLT32) ||
-			    strcmp(rela->sym->name, "__fentry__"))
-				continue;
+			/*
+			 * x86_64 still uses __fentry__, cannot rely on
+			 * pfe to indicate ftrace call site
+			 */
+			if (sym->sec->rela) {
+				rela = list_first_entry(&sym->sec->rela->relas, struct rela,
+							list);
+				if ((rela->type != R_X86_64_NONE &&
+				     rela->type != R_X86_64_PC32 &&
+				     rela->type != R_X86_64_PLT32) ||
+				    strcmp(rela->sym->name, "__fentry__"))
+					continue;
 
-			sym->has_func_profiling = 1;
+				sym->has_func_profiling = 1;
+			}
 			break;
 		case S390:
-			/* Check for compiler generated fentry nop - jgnop 0 */
-			insn = sym->sec->data->d_buf;
-			if (insn[0] == 0xc0 && insn[1] == 0x04 &&
-				insn[2] == 0x00 && insn[3] == 0x00 &&
-				insn[4] == 0x00 && insn[5] == 0x00)
-				sym->has_func_profiling = 1;
+			if (kpatch_symbol_has_pfe_entry(kelf, sym)) {
+				ERROR("unsupported arch");
+			} else if (sym->sec->rela) {
+
+				/* Check for compiler generated fentry nop - jgnop 0 */
+				insn = sym->sec->data->d_buf;
+				if (insn[0] == 0xc0 && insn[1] == 0x04 &&
+					insn[2] == 0x00 && insn[3] == 0x00 &&
+					insn[4] == 0x00 && insn[5] == 0x00)
+					sym->has_func_profiling = 1;
+			}
 			break;
 		default:
 			ERROR("unsupported arch");
@@ -4045,6 +4300,7 @@ int main(int argc, char *argv[])
 	struct section *relasec, *symtab;
 	char *orig_obj, *patched_obj, *parent_name;
 	char *parent_symtab, *mod_symvers, *patch_name, *output_obj;
+	bool create_pfe = false;
 
 	memset(&arguments, 0, sizeof(arguments));
 	argp_parse (&argp, argc, argv, 0, NULL, &arguments);
@@ -4067,6 +4323,12 @@ int main(int argc, char *argv[])
 
 	kelf_orig = kpatch_elf_open(orig_obj);
 	kelf_patched = kpatch_elf_open(patched_obj);
+
+	kpatch_set_pfe_link(kelf_orig);
+	kpatch_set_pfe_link(kelf_patched);
+	if (kelf_orig->has_pfe || kelf_patched->has_pfe)
+		create_pfe = true;
+
 	kpatch_find_func_profiling_calls(kelf_orig);
 	kpatch_find_func_profiling_calls(kelf_patched);
 
@@ -4146,7 +4408,7 @@ int main(int argc, char *argv[])
 	kpatch_create_callbacks_objname_rela(kelf_out, parent_name);
 	kpatch_build_strings_section_data(kelf_out);
 
-	kpatch_create_mcount_sections(kelf_out);
+	kpatch_create_ftrace_callsite_sections(kelf_out, create_pfe);
 
 	/*
 	 *  At this point, the set of output sections and symbols is
