@@ -3706,10 +3706,22 @@ static void kpatch_create_mcount_sections(struct kpatch_elf *kelf)
 			nr++;
 
 	/* create text/rela section pair */
-	if (kelf->arch == LOONGARCH64)
+	if (kelf->arch == LOONGARCH64) {
 		sec = create_section_pair(kelf, "__patchable_function_entries", sizeof(void *), nr);
-	else
+		/*
+		 * With -fpatchable-function-entry, LoongArch GCC sets WAL flags
+		 * for section __patchable_function_entries in object file
+		 * (certainly include patch-hook.o) by default.
+		 * Kpatch sets A flags for output.o in create_section_pair().
+		 * So here assign sh_flags = WAL to fix error:
+		 * "ld: __patchable_function_entries has both ordered and
+		 * unordered sections" when link patch-hook.o and output.o.
+		 */
+		sec->sh.sh_flags = SHF_WRITE | SHF_ALLOC | SHF_LINK_ORDER;
+		sec->sh.sh_link = 1;
+	} else
 		sec = create_section_pair(kelf, "__mcount_loc", sizeof(void *), nr);
+
 	relasec = sec->rela;
 
 	/* populate sections */
