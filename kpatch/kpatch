@@ -452,7 +452,7 @@ show_enabled_function() {
 	for module_dir in /sys/kernel/livepatch/*; do
 		if [ -d "$module_dir" ]; then
 			if [[ ! -e "$module_dir/stack_order" ]]; then
-				folder_count=$(ls "/sys/kernel/livepatch/" | wc -l)
+				folder_count=$(find /sys/kernel/livepatch/ -mindepth 1 -maxdepth 1 -type d | wc -l)
 				if [[ $folder_count -le 1 ]]; then
 					# older version without 'stack_order' with only one patch is accurate
 					module_name=$(basename "$module_dir")
@@ -496,6 +496,8 @@ show_enabled_function() {
 							IFS=':' read -r recorded_order this_module this_obj <<< "${function_map[$func_name]}"
 							if [[ $recorded_order -lt $stack_order ]]; then
 								function_map[$func_name]="$stack_order:$module_name:$obj_name"
+								echo "$this_module" >> /dev/null
+								echo "$this_obj" >> /dev/null
 							fi
 						fi
 					fi
