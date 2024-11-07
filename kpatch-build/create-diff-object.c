@@ -617,9 +617,11 @@ static void kpatch_compare_correlated_section(struct section *sec)
 	     !is_text_section(sec1)))
 		DIFF_FATAL("%s section header details differ from %s", sec1->name, sec2->name);
 
-	/* Short circuit for mcount sections, we rebuild regardless */
+	/* Short circuit for mcount/patchable sections, we rebuild regardless */
 	if (!strcmp(sec->name, ".rela__mcount_loc") ||
-	    !strcmp(sec->name, "__mcount_loc")) {
+	    !strcmp(sec->name, "__mcount_loc") ||
+	    !strcmp(sec->name, ".rela__patchable_function_entries") ||
+	    !strcmp(sec->name, "__patchable_function_entries")) {
 		sec->status = SAME;
 		goto out;
 	}
