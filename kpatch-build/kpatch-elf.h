@@ -65,6 +65,7 @@ struct section {
 			struct symbol *secsym, *sym;
 		};
 	};
+	struct section *pfe; /* arm64 per-func __patchable_function_entries */
 };
 
 enum symbol_strip {
@@ -115,6 +116,7 @@ enum architecture {
 	PPC64  = 0x1 << 0,
 	X86_64 = 0x1 << 1,
 	S390   = 0x1 << 2,
+	AARCH64 = 0x1 << 3,
 };
 
 struct kpatch_elf {
@@ -137,6 +139,8 @@ bool is_debug_section(struct section *sec);
 
 struct section *find_section_by_index(struct list_head *list, unsigned int index);
 struct section *find_section_by_name(struct list_head *list, const char *name);
+struct section *find_nth_section_by_name(struct list_head *list, int nth,
+					 const char *name);
 struct symbol *find_symbol_by_index(struct list_head *list, size_t index);
 struct symbol *find_symbol_by_name(struct list_head *list, const char *name);
 struct rela *find_rela_by_offset(struct section *relasec, unsigned int offset);
@@ -157,6 +161,9 @@ int offset_of_string(struct list_head *list, char *name);
 long rela_target_offset(struct kpatch_elf *kelf, struct section *relasec,
 			struct rela *rela);
 unsigned int insn_length(struct kpatch_elf *kelf, void *addr);
+enum architecture def_arch(void);
+void set_arch(enum architecture);
+bool is_arch(enum architecture);
 
 #ifndef R_PPC64_ENTRY
 #define R_PPC64_ENTRY   118
