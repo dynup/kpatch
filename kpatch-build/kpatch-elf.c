@@ -608,6 +608,16 @@ struct kpatch_elf *kpatch_elf_open(const char *name)
 		kpatch_create_rela_list(kelf, relasec);
 	}
 
+	/*
+	 * x86_64's pfe sections are only a side effect
+	 * CONFIG_CALL_PADDING building with * -fpatchable-function-entry=16,16,
+	 * These sections aren't used by ftrace on this arch, so do not
+	 * bother reading/writing them for x86_64.
+	 */
+	if (kelf->arch != X86_64)
+		if (find_section_by_name(&kelf->sections, "__patchable_function_entries"))
+			kelf->has_pfe = true;
+
 	return kelf;
 }
 
@@ -643,6 +653,9 @@ void kpatch_dump_kelf(struct kpatch_elf *kelf)
 				printf(", secsym-> %s", sec->secsym->name);
 			if (sec->rela)
 				printf(", rela-> %s", sec->rela->name);
+			if (sec->secsym && sec->secsym->pfe)
+				printf(", pfe-> [%d]",
+				       (sec->secsym->pfe) == NULL ? -1 : (int)sec->secsym->pfe->index);
 		}
 next:
 		printf("\n");
@@ -653,8 +666,10 @@ next:
 		printf("sym %02d, type %d, bind %d, ndx %02d, name %s (%s)",
 			sym->index, sym->type, sym->bind, sym->sym.st_shndx,
 			sym->name, status_str(sym->status));
-		if (sym->sec && (sym->type == STT_FUNC || sym->type == STT_OBJECT))
+		if (sym->sec && (sym->type == STT_FUNC || sym->type == STT_OBJECT)) {
 			printf(" -> %s", sym->sec->name);
+			printf(", profiling: %d", sym->has_func_profiling);
+		}
 		printf("\n");
 	}
 }
@@ -923,6 +938,7 @@ struct section *create_section_pair(struct kpatch_elf *kelf, char *name,
 	relasec->sh.sh_type = SHT_RELA;
 	relasec->sh.sh_entsize = sizeof(GElf_Rela);
 	relasec->sh.sh_addralign = 8;
+	relasec->sh.sh_flags = SHF_INFO_LINK;
 
 	/* set text rela section pointer */
 	sec->rela = relasec;
@@ -977,8 +993,11 @@ void kpatch_reindex_elements(struct kpatch_elf *kelf)
 	index = 0;
 	list_for_each_entry(sym, &kelf->symbols, list) {
 		sym->index = index++;
-		if (sym->sec)
+		if (sym->sec) {
 			sym->sym.st_shndx = (unsigned short)sym->sec->index;
+                        if (sym->pfe)
+                                sym->pfe->sh.sh_link = sym->sec->index;
+		}
 		else if (sym->sym.st_shndx != SHN_ABS &&
 			 sym->sym.st_shndx != SHN_LIVEPATCH)
 			sym->sym.st_shndx = SHN_UNDEF;

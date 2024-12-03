@@ -93,6 +93,7 @@ struct symbol {
 	};
 	int has_func_profiling;
 	bool is_pfx;
+	struct section *pfe;
 };
 
 struct rela {
@@ -125,6 +126,7 @@ struct kpatch_elf {
 	struct list_head strings;
 	Elf_Data *symtab_shndx;
 	int fd;
+	bool has_pfe;
 };
 
 /*******************

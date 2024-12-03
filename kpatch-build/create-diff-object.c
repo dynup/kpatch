@@ -615,9 +615,14 @@ static void kpatch_compare_correlated_section(struct section *sec)
 	     !is_text_section(sec1)))
 		DIFF_FATAL("%s section header details differ from %s", sec1->name, sec2->name);
 
-	/* Short circuit for mcount sections, we rebuild regardless */
+	/*
+	 * Short circuit for mcount and patchable_function_entries
+	 * sections, we rebuild regardless
+	 */
 	if (!strcmp(sec->name, ".rela__mcount_loc") ||
-	    !strcmp(sec->name, "__mcount_loc")) {
+	    !strcmp(sec->name, "__mcount_loc") ||
+	    !strcmp(sec->name, ".rela__patchable_function_entries") ||
+	    !strcmp(sec->name, "__patchable_function_entries")) {
 		sec->status = SAME;
 		goto out;
 	}
@@ -3677,20 +3682,46 @@ static void kpatch_create_callbacks_objname_rela(struct kpatch_elf *kelf, char *
 }
 
 /*
+ * Create links between text sections and their corresponding
+ * __patchable_function_entries sections (as there may be multiple pfe
+ * sections).
+ */
+static void kpatch_set_pfe_link(struct kpatch_elf *kelf)
+{
+	struct section* sec;
+	struct rela *rela;
+
+	if (!kelf->has_pfe)
+		return;
+
+	list_for_each_entry(sec, &kelf->sections, list) {
+		if (strcmp(sec->name, "__patchable_function_entries"))
+			continue;
+
+		if (!sec->rela)
+			continue;
+
+		list_for_each_entry(rela, &sec->rela->relas, list)
+			rela->sym->pfe = sec;
+	}
+}
+
+/*
  * This function basically reimplements the functionality of the Linux
  * recordmcount script, so that patched functions can be recognized by ftrace.
  *
  * TODO: Eventually we can modify recordmount so that it recognizes our bundled
  * sections as valid and does this work for us.
  */
-static void kpatch_create_mcount_sections(struct kpatch_elf *kelf)
+static void kpatch_create_ftrace_callsite_sections(struct kpatch_elf *kelf, bool has_pfe)
 {
 	int nr, index;
-	struct section *sec, *relasec;
-	struct symbol *sym;
-	struct rela *rela, *mcount_rela;
+	struct section *sec = NULL;
+	struct symbol *sym, *rela_sym;
+	struct rela *rela;
 	void **funcs;
 	unsigned long insn_offset = 0;
+	unsigned int rela_offset;
 
 	nr = 0;
 	list_for_each_entry(sym, &kelf->symbols, list)
@@ -3698,9 +3729,18 @@ static void kpatch_create_mcount_sections(struct kpatch_elf *kelf)
 		    sym->has_func_profiling)
 			nr++;
 
-	/* create text/rela section pair */
-	sec = create_section_pair(kelf, "__mcount_loc", sizeof(void*), nr);
-	relasec = sec->rela;
+	if (has_pfe)
+		/*
+		 * Create separate __patchable_function_entries sections
+		 * for each function in the following loop.
+		 */
+		kelf->has_pfe = true;
+	else
+		/*
+		 * Create a single __mcount_loc section pair for all
+		 * functions.
+		 */
+		sec = create_section_pair(kelf, "__mcount_loc", sizeof(void*), nr);
 
 	/* populate sections */
 	index = 0;
@@ -3709,25 +3749,37 @@ static void kpatch_create_mcount_sections(struct kpatch_elf *kelf)
 			continue;
 
 		if (!sym->has_func_profiling) {
-			log_debug("function %s has no fentry/mcount call, no mcount record is needed\n",
+			log_debug("function %s has no ftrace callsite, no __patchable_function_entries/mcount record is needed\n",
 				  sym->name);
 			continue;
 		}
 
 		switch(kelf->arch) {
 		case PPC64: {
-			bool found = false;
+			unsigned char *insn;
 
-			list_for_each_entry(rela, &sym->sec->rela->relas, list)
-				if (!strcmp(rela->sym->name, "_mcount")) {
-					found = true;
-					break;
-				}
+			if (kelf->has_pfe) {
+				insn_offset = sym->sym.st_value + PPC64_LOCAL_ENTRY_OFFSET(sym->sym.st_other);
+				insn = sym->sec->data->d_buf + insn_offset;
 
-			if (!found)
-				ERROR("%s: unexpected missing call to _mcount()", __func__);
+				/* verify nops */
+				if (insn[0] != 0x00 || insn[1] != 0x00 || insn[2] != 0x00 || insn[3] != 0x60 ||
+				    insn[4] != 0x00 || insn[5] != 0x00 || insn[6] != 0x00 || insn[7] != 0x60)
+					ERROR("%s: unexpected instruction in patch section of function\n", sym->name);
+			} else {
+				bool found = false;
 
-			insn_offset = rela->offset;
+				list_for_each_entry(rela, &sym->sec->rela->relas, list)
+					if (!strcmp(rela->sym->name, "_mcount")) {
+						found = true;
+						break;
+					}
+
+				if (!found)
+					ERROR("%s: unexpected missing call to _mcount()", __func__);
+
+				insn_offset = rela->offset;
+			}
 			break;
 		}
 		case X86_64: {
@@ -3783,16 +3835,31 @@ static void kpatch_create_mcount_sections(struct kpatch_elf *kelf)
 			ERROR("unsupported arch");
 		}
 
-		/*
-		 * 'rela' points to the mcount/fentry call.
-		 *
-		 * Create a .rela__mcount_loc entry which also points to it.
-		 */
-		ALLOC_LINK(mcount_rela, &relasec->relas);
-		mcount_rela->sym = sym;
-		mcount_rela->type = absolute_rela_type(kelf);
-		mcount_rela->addend = insn_offset - sym->sym.st_value;
-		mcount_rela->offset = (unsigned int) (index * sizeof(*funcs));
+		if (kelf->has_pfe) {
+			/*
+			 * Allocate a dedicated __patchable_function_entries for this function:
+			 *   - its .sh_link will be updated by kpatch_reindex_elements()
+			 *   - its lone rela is based on the section symbol
+			 */
+			sec = create_section_pair(kelf, "__patchable_function_entries", sizeof(void *), 1);
+			sec->sh.sh_flags |= SHF_WRITE | SHF_ALLOC | SHF_LINK_ORDER;
+			rela_sym = sym->sec->secsym;
+			rela_offset = 0;
+			rela_sym->pfe = sec;
+		} else {
+			/*
+			 * mcount relas are based on the function symbol and saved in a
+			 * single aggregate __mcount_loc section
+			 */
+			rela_sym = sym;
+			rela_offset = (unsigned int) (index * sizeof(*funcs));
+		}
+
+		ALLOC_LINK(rela, &sec->rela->relas);
+		rela->sym = rela_sym;
+		rela->type = absolute_rela_type(kelf);
+		rela->addend = insn_offset - rela->sym->sym.st_value;
+		rela->offset = rela_offset;
 
 		index++;
 	}
@@ -3945,6 +4012,31 @@ static void kpatch_no_sibling_calls_ppc64le(struct kpatch_elf *kelf)
 		      sibling_call_errors);
 }
 
+static bool kpatch_symbol_has_pfe_entry(struct kpatch_elf *kelf, struct symbol *sym)
+{
+	struct section *sec;
+	struct rela *rela;
+
+	if (!kelf->has_pfe)
+		return false;
+
+	list_for_each_entry(sec, &kelf->sections, list) {
+		if (strcmp(sec->name, "__patchable_function_entries"))
+			continue;
+		if (!sec->rela)
+			continue;
+
+		list_for_each_entry(rela, &sec->rela->relas, list) {
+			if (rela->sym->sec && sym->sec == rela->sym->sec &&
+			    rela->sym->pfe == sec) {
+				return true;
+			}
+		}
+	}
+
+	return false;
+}
+
 /* Check which functions have fentry/mcount calls; save this info for later use. */
 static void kpatch_find_func_profiling_calls(struct kpatch_elf *kelf)
 {
@@ -3952,29 +4044,34 @@ static void kpatch_find_func_profiling_calls(struct kpatch_elf *kelf)
 	struct rela *rela;
 	unsigned char *insn;
 	list_for_each_entry(sym, &kelf->symbols, list) {
-		if (sym->type != STT_FUNC || sym->is_pfx ||
-		    !sym->sec || !sym->sec->rela)
+		if (sym->type != STT_FUNC || sym->is_pfx || !sym->sec)
 			continue;
 
 		switch(kelf->arch) {
 		case PPC64:
-			list_for_each_entry(rela, &sym->sec->rela->relas, list) {
-				if (!strcmp(rela->sym->name, "_mcount")) {
-					sym->has_func_profiling = 1;
-					break;
+			if (kpatch_symbol_has_pfe_entry(kelf, sym)) {
+				sym->has_func_profiling = 1;
+			} else if (sym->sec->rela) {
+				list_for_each_entry(rela, &sym->sec->rela->relas, list) {
+					if (!strcmp(rela->sym->name, "_mcount")) {
+						sym->has_func_profiling = 1;
+						break;
+					}
 				}
 			}
 			break;
 		case X86_64:
-			rela = list_first_entry(&sym->sec->rela->relas, struct rela,
-						list);
-			if ((rela->type != R_X86_64_NONE &&
-			     rela->type != R_X86_64_PC32 &&
-			     rela->type != R_X86_64_PLT32) ||
-			    strcmp(rela->sym->name, "__fentry__"))
-				continue;
+			if (sym->sec->rela) {
+				rela = list_first_entry(&sym->sec->rela->relas, struct rela,
+							list);
+				if ((rela->type != R_X86_64_NONE &&
+				     rela->type != R_X86_64_PC32 &&
+				     rela->type != R_X86_64_PLT32) ||
+				    strcmp(rela->sym->name, "__fentry__"))
+					continue;
 
-			sym->has_func_profiling = 1;
+				sym->has_func_profiling = 1;
+			}
 			break;
 		case S390:
 			/* Check for compiler generated fentry nop - jgnop 0 */
@@ -4045,6 +4142,7 @@ int main(int argc, char *argv[])
 	struct section *relasec, *symtab;
 	char *orig_obj, *patched_obj, *parent_name;
 	char *parent_symtab, *mod_symvers, *patch_name, *output_obj;
+	bool has_pfe = false;
 
 	memset(&arguments, 0, sizeof(arguments));
 	argp_parse (&argp, argc, argv, 0, NULL, &arguments);
@@ -4067,6 +4165,12 @@ int main(int argc, char *argv[])
 
 	kelf_orig = kpatch_elf_open(orig_obj);
 	kelf_patched = kpatch_elf_open(patched_obj);
+
+	kpatch_set_pfe_link(kelf_orig);
+	kpatch_set_pfe_link(kelf_patched);
+	if (kelf_patched->has_pfe)
+		has_pfe = true;
+
 	kpatch_find_func_profiling_calls(kelf_orig);
 	kpatch_find_func_profiling_calls(kelf_patched);
 
@@ -4146,7 +4250,7 @@ int main(int argc, char *argv[])
 	kpatch_create_callbacks_objname_rela(kelf_out, parent_name);
 	kpatch_build_strings_section_data(kelf_out);
 
-	kpatch_create_mcount_sections(kelf_out);
+	kpatch_create_ftrace_callsite_sections(kelf_out, has_pfe);
 
 	/*
 	 *  At this point, the set of output sections and symbols is
