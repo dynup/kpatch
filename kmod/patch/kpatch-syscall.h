@@ -92,7 +92,8 @@
 #elif defined(CONFIG_S390)
 
 /* arch/s390/include/asm/syscall_wrapper.h versions */
-# if LINUX_VERSION_CODE >= KERNEL_VERSION(6, 3, 0)
+# if LINUX_VERSION_CODE >= KERNEL_VERSION(6, 3, 0) || \
+     RHEL_RELEASE_CODE >= RHEL_RELEASE_VERSION(9, 6)
 
 #define __KPATCH_S390_SYS_STUBx(x, name, ...)                                          \
 	long __s390_sys##name(struct pt_regs *regs);                            \
