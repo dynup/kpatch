@@ -1,6 +1,6 @@
 /*
  * Copyright (C) 2013-2014 Josh Poimboeuf <jpoimboe@redhat.com>
- * Copyright (C) 2014 Seth Jennings <sjenning@redhat.com> 
+ * Copyright (C) 2014 Seth Jennings <sjenning@redhat.com>
  *
  * This program is free software; you can redistribute it and/or
  * modify it under the terms of the GNU General Public License
@@ -54,14 +54,6 @@
 #elif (LINUX_VERSION_CODE >= KERNEL_VERSION(4, 12, 0) &&		\
        LINUX_VERSION_CODE <= KERNEL_VERSION(4, 15, 0))
 # define HAVE_IMMEDIATE
-#endif
-
-#ifdef RHEL_RELEASE_CODE
-# if RHEL_RELEASE_CODE >= RHEL_RELEASE_VERSION(7, 5)
-#  define HAVE_CALLBACKS
-# endif
-#elif LINUX_VERSION_CODE >= KERNEL_VERSION(4, 15, 0)
-# define HAVE_CALLBACKS
 #endif
 
 #ifdef RHEL_RELEASE_CODE
@@ -356,8 +348,7 @@ static int add_callbacks_to_patch_objects(void)
 				object->name ? object->name : "vmlinux");
 			return -EINVAL;
 		}
-		object->callbacks.pre_patch = (int (*)(struct klp_object *))
-					       p_pre_patch_callback->callback;
+		object->callbacks.pre_patch = p_pre_patch_callback->callback;
 	}
 
 	for (p_post_patch_callback = __kpatch_callbacks_post_patch;
@@ -371,8 +362,7 @@ static int add_callbacks_to_patch_objects(void)
 				object->name ? object->name : "vmlinux");
 			return -EINVAL;
 		}
-		object->callbacks.post_patch = (void (*)(struct klp_object *))
-						p_post_patch_callback->callback;
+		object->callbacks.post_patch = p_post_patch_callback->callback;
 	}
 
 	for (p_pre_unpatch_callback = __kpatch_callbacks_pre_unpatch;
@@ -386,8 +376,7 @@ static int add_callbacks_to_patch_objects(void)
 				object->name ? object->name : "vmlinux");
 			return -EINVAL;
 		}
-		object->callbacks.pre_unpatch = (void (*)(struct klp_object *))
-						p_pre_unpatch_callback->callback;
+		object->callbacks.pre_unpatch = p_pre_unpatch_callback->callback;
 	}
 
 	for (p_post_unpatch_callback = __kpatch_callbacks_post_unpatch;
@@ -401,8 +390,7 @@ static int add_callbacks_to_patch_objects(void)
 				object->name ? object->name : "vmlinux");
 			return -EINVAL;
 		}
-		object->callbacks.post_unpatch = (void (*)(struct klp_object *))
-						p_post_unpatch_callback->callback;
+		object->callbacks.post_unpatch = p_post_unpatch_callback->callback;
 	}
 
 	return 0;

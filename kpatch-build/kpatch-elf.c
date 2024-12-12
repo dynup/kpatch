@@ -470,7 +470,7 @@ static void kpatch_link_prefixed_functions(struct kpatch_elf *kelf)
 
 		list_for_each_entry(func, &kelf->symbols, list) {
 			if (func->type == STT_FUNC && func->sec == pfx->sec &&
-			    func->sym.st_value == pfx->sym.st_value + 16) {
+			    func->sym.st_value == pfx->sym.st_value + pfx->sym.st_size) {
 
 				/*
 				 * If a func has aliases, it's possible for

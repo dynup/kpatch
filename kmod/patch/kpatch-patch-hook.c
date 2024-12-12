@@ -24,6 +24,7 @@
 #include <linux/slab.h>
 #include <linux/kallsyms.h>
 #include "kpatch.h"
+#include <linux/livepatch.h>
 #include "kpatch-patch.h"
 
 static bool replace;

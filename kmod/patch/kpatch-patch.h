@@ -22,6 +22,34 @@
 #ifndef _KPATCH_PATCH_H_
 #define _KPATCH_PATCH_H_
 
+#include <linux/version.h>
+
+/* Support for livepatch callbacks? */
+#ifdef RHEL_RELEASE_CODE
+# if RHEL_RELEASE_CODE >= RHEL_RELEASE_VERSION(7, 5)
+#  define HAVE_CALLBACKS
+# endif
+#elif LINUX_VERSION_CODE >= KERNEL_VERSION(4, 15, 0)
+# define HAVE_CALLBACKS
+#endif
+
+#ifdef HAVE_CALLBACKS
+/* IMPORTANT: include ordering is critical! */
+# ifdef _LINUX_LIVEPATCH_H_
+typedef struct klp_object klp_obj;
+# else
+/*
+ * Basically just a placeholder for when we can't include linux/livepatch.h.
+ * The correct type, which is what gets packed in the section, is
+ * struct klp_object.
+ */
+typedef void klp_obj;
+# endif /* _LINUX_LIVEPATCH_H_ */
+#else
+#include "kpatch.h"
+typedef struct kpatch_object klp_obj;
+#endif /* HAVE_CALLBACKS */
+
 struct kpatch_patch_func {
 	unsigned long new_addr;
 	unsigned long new_size;
@@ -43,20 +71,21 @@ struct kpatch_patch_dynrela {
 	long addend;
 };
 
+
 struct kpatch_pre_patch_callback {
-	int (*callback)(void *obj);
+	int (*callback)(klp_obj *obj);
 	char *objname;
 };
 struct kpatch_post_patch_callback {
-	void (*callback)(void *obj);
+	void (*callback)(klp_obj *obj);
 	char *objname;
 };
 struct kpatch_pre_unpatch_callback {
-	void (*callback)(void *obj);
+	void (*callback)(klp_obj *obj);
 	char *objname;
 };
 struct kpatch_post_unpatch_callback {
-	void (*callback)(void *obj);
+	void (*callback)(klp_obj *obj);
 	char *objname;
 };
 
