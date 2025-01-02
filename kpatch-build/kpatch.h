@@ -8,4 +8,10 @@ enum exit_status {
 	EXIT_STATUS_NO_CHANGE		= 3,
 };
 
+#define GET_CHILD_OBJ(obj) \
+((obj) == NULL ? NULL : ({ \
+	char *_childobj = strchr((obj), '/'); \
+	(_childobj == NULL) ? (obj) : (_childobj + 1 ); \
+}))
+
 #endif /* _KPATCH_H_ */
