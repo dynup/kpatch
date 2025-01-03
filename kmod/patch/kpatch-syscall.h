@@ -109,6 +109,7 @@
 /* arch/s390/include/asm/syscall_wrapper.h versions */
 #if defined(KPATCH_SYSCALL_WRAPPERS_V1)
 
+#if defined(CONFIG_COMPAT)
 #define __KPATCH_S390_SYS_STUBx(x, name, ...)					\
 	long __s390_sys##name(struct pt_regs *regs);				\
 	ALLOW_ERROR_INJECTION(__s390_sys##name, ERRNO);				\
@@ -119,6 +120,9 @@
 		__MAP(x,__SC_TEST,__VA_ARGS__);					\
 		return ret;							\
 	}
+#else
+#define __KPATCH_S390_SYS_STUBx(x, name, ...)
+#endif /* CONFIG_COMPAT */
 
 #define __KPATCH_SYSCALL_DEFINEx(x, name, ...)						\
 	__diag_push();									\
@@ -142,6 +146,7 @@
 
 # else /* KPATCH_SYSCALL_WRAPPERS_V2 */
 
+#if defined(CONFIG_COMPAT)
 #define __KPATCH_S390_SYS_STUBx(x, name, ...)                                          \
 	long __s390_sys##name(struct pt_regs *regs);                            \
 	ALLOW_ERROR_INJECTION(__s390_sys##name, ERRNO);                         \
@@ -155,6 +160,9 @@
 		__MAP(x, __SC_TEST, __VA_ARGS__);                               \
 		return __kpatch_do_sys##name(__MAP(x, __SC_COMPAT_CAST, __VA_ARGS__)); \
 	}
+#else
+#define __KPATCH_S390_SYS_STUBx(x, name, ...)
+#endif /* CONFIG_COMPAT */
 
 #define __KPATCH_SYSCALL_DEFINEx(x, name, ...)					\
        long __s390x_sys##name(struct pt_regs *regs);                           \
