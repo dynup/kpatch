@@ -255,6 +255,42 @@ static bool kpatch_is_mapping_symbol(struct kpatch_elf *kelf, struct symbol *sym
 	return false;
 }
 
+static unsigned int function_padding_size(struct kpatch_elf *kelf, struct symbol *sym)
+{
+	unsigned int size = 0;
+
+	switch (kelf->arch) {
+	case AARCH64:
+	{
+		uint8_t *insn = sym->sec->data->d_buf;
+		unsigned int i;
+		void *insn_end = sym->sec->data->d_buf + sym->sym.st_value;
+
+		/*
+		 * If the arm64 kernel is compiled with CONFIG_DYNAMIC_FTRACE_WITH_CALL_OPS
+		 * then there are two NOPs before the function and a `BTI C` + 2 NOPs at the
+		 * start of the function. Verify the presence of the two NOPs before the
+		 * function entry.
+		 */
+		for (i = 0; (void *)insn < insn_end; i++, insn += 4)
+			if (insn[0] != 0x1f || insn[1] != 0x20 ||
+			    insn[2] != 0x03 || insn[3] != 0xd5)
+				break;
+
+		if (i == 2)
+			size = 8;
+		else if (i != 0)
+			log_error("function %s within section %s has invalid padding\n", sym->name, sym->sec->name);
+			
+		break;
+	}
+	default:
+		break;
+	}
+
+	return size;
+}
+
 /*
  * When compiling with -ffunction-sections and -fdata-sections, almost every
  * symbol gets its own dedicated section.  We call such symbols "bundled"
@@ -271,6 +307,8 @@ static void kpatch_bundle_symbols(struct kpatch_elf *kelf)
 				expected_offset = sym->pfx->sym.st_size;
 			else if (is_gcc6_localentry_bundled_sym(kelf, sym))
 				expected_offset = 8;
+			else if (sym->type == STT_FUNC)
+				expected_offset = function_padding_size(kelf, sym);
 			else
 				expected_offset = 0;
 
@@ -3898,7 +3936,14 @@ static void kpatch_create_ftrace_callsite_sections(struct kpatch_elf *kelf)
 		switch(kelf->arch) {
 		case AARCH64: {
 			unsigned char *insn = sym->sec->data->d_buf;
+			int padding;
 			int i;
+
+			/*
+			 * Skip the padding NOPs added by CALL_OPS.
+			 */
+			padding = function_padding_size(kelf, sym);
+			insn += padding;
 
 			/*
 			 * If BTI (Branch Target Identification) is enabled then there
@@ -3909,7 +3954,8 @@ static void kpatch_create_ftrace_callsite_sections(struct kpatch_elf *kelf)
 			if (insn[0] == 0x5f) {
 				if (insn[1] != 0x24 || insn[2] != 0x03 || insn[3] != 0xd5)
 					ERROR("%s: unexpected instruction in patch section of function\n", sym->name);
-				insn_offset += 4;
+				if (!padding)
+					insn_offset += 4;
 				insn += 4;
 			}
 			for (i = 0; i < 8; i += 4) {
