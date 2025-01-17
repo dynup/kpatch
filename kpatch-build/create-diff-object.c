@@ -236,19 +236,19 @@ static struct rela *toc_rela(const struct rela *rela)
 static void kpatch_bundle_symbols(struct kpatch_elf *kelf)
 {
 	struct symbol *sym;
-	unsigned int expected_offset;
+	uint64_t expected_offset;
 
 	list_for_each_entry(sym, &kelf->symbols, list) {
 		if (is_bundleable(sym)) {
 			if (sym->pfx)
-				expected_offset = 16;
+				expected_offset = sym->pfx->sym.st_size;
 			else if (is_gcc6_localentry_bundled_sym(kelf, sym))
 				expected_offset = 8;
 			else
 				expected_offset = 0;
 
 			if (sym->sym.st_value != expected_offset) {
-				ERROR("symbol %s at offset %lu within section %s, expected %u",
+				ERROR("symbol %s at offset %lu within section %s, expected %lu",
 				      sym->name, sym->sym.st_value,
 				      sym->sec->name, expected_offset);
 			}
