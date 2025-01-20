@@ -6,7 +6,7 @@
 
 Name: kpatch
 Summary: Dynamic kernel patching
-Version: 0.9.9
+Version: 0.9.10
 License: GPLv2
 Group: System Environment/Kernel
 URL: http://github.com/dynup/kpatch
@@ -104,6 +104,13 @@ rm -rf %{buildroot}
 %{_mandir}/man1/kpatch-build.1*
 
 %changelog
+* Mon Jan 20 2025 Joe Lawrence <joe.lawrence@redhat.com> - 0.9.10
+- Support for Amazon Linux, Anolis OS, and OpenCloudOS distros
+- Fix cleanup when kpatch is installed in read-only location
+- Added RHEL-8.9, 9.3, 8.10, 9.4, and 9.5 integration tests
+- Added AL2023 integration tests
+- Support for __patchable_function_entries sections
+
 * Thu Jul 27 2023 Joe Lawrence <joe.lawrence@redhat.com> - 0.9.9
 - Support for gcc-13
 - Support for Linux 6.2
