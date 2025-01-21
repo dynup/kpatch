@@ -21,6 +21,7 @@
 #include <stdlib.h>
 #include <libgen.h>
 #include <argp.h>
+#include <limits.h>
 
 #include "log.h"
 #include "kpatch-elf.h"
