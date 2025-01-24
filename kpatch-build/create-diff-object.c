@@ -3847,6 +3847,30 @@ static void kpatch_create_ftrace_callsite_sections(struct kpatch_elf *kelf)
 		}
 
 		switch(kelf->arch) {
+		case AARCH64: {
+			unsigned char *insn = sym->sec->data->d_buf;
+			int i;
+
+			/*
+			 * If BTI (Branch Target Identification) is enabled then there
+			 * might be an additional 'BTI C' instruction before the two
+			 * patchable function entry 'NOP's.
+			 * i.e. 0xd503245f (little endian)
+			 */
+			if (insn[0] == 0x5f) {
+				if (insn[1] != 0x24 || insn[2] != 0x03 || insn[3] != 0xd5)
+					ERROR("%s: unexpected instruction in patch section of function\n", sym->name);
+				insn_offset += 4;
+				insn += 4;
+			}
+			for (i = 0; i < 8; i += 4) {
+				/* We expect a NOP i.e. 0xd503201f (little endian) */
+				if (insn[i] != 0x1f || insn[i + 1] != 0x20 ||
+				    insn[i + 2] != 0x03 || insn [i + 3] != 0xd5)
+					ERROR("%s: unexpected instruction in patch section of function\n", sym->name);
+			}
+			break;
+		}
 		case PPC64: {
 			unsigned char *insn;
 
