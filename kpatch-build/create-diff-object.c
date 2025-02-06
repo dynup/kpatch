@@ -687,6 +687,8 @@ static void kpatch_compare_correlated_section(struct section *sec)
 	 */
 	if (!strcmp(sec->name, ".rela__mcount_loc") ||
 	    !strcmp(sec->name, "__mcount_loc") ||
+	    !strcmp(sec->name, ".sframe") ||
+	    !strcmp(sec->name, ".rela.sframe") ||
 	    !strcmp(sec->name, ".rela__patchable_function_entries") ||
 	    !strcmp(sec->name, "__patchable_function_entries")) {
 		sec->status = SAME;
