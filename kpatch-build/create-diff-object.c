@@ -1645,6 +1645,13 @@ static void kpatch_replace_sections_syms(struct kpatch_elf *kelf)
 		if (!is_rela_section(relasec) || is_debug_section(relasec))
 			continue;
 
+		/*
+		 * We regenerate __patchable_function_entries from scratch so
+		 * don't bother replacing section symbols in its relasec.
+		 */
+		if (is_patchable_function_entries_section(relasec))
+			continue;
+
 		list_for_each_entry(rela, &relasec->relas, list) {
 
 			if (rela->sym->type != STT_SECTION || !rela->sym->sec)

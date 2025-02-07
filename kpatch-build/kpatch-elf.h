@@ -139,6 +139,7 @@ struct kpatch_elf {
 char *status_str(enum status status);
 bool is_rela_section(struct section *sec);
 bool is_text_section(struct section *sec);
+bool is_patchable_function_entries_section(struct section *sec);
 bool is_debug_section(struct section *sec);
 
 struct section *find_section_by_index(struct list_head *list, unsigned int index);

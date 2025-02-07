@@ -65,6 +65,18 @@ bool is_text_section(struct section *sec)
 		(sec->sh.sh_flags & SHF_EXECINSTR));
 }
 
+bool is_patchable_function_entries_section(struct section *sec)
+{
+	char *name;
+
+	if (is_rela_section(sec))
+		name = sec->base->name;
+	else
+		name = sec->name;
+
+	return !strcmp(name, "__patchable_function_entries");
+}
+
 bool is_debug_section(struct section *sec)
 {
 	char *name;
