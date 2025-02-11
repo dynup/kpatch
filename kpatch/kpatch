@@ -55,7 +55,7 @@ usage () {
 	echo >&2
 	usage_cmd "info <module>" "show information about a patch module"
 	echo >&2
-	usage_cmd "list" "list installed patch modules"
+	usage_cmd "list" "list installed patch modules. If the system supports the livepatch 'stack_order' sysfs attribute, provide the list of currently livepatched functions"
 	echo >&2
 	usage_cmd "signal" "signal/poke any process stalling the current patch transition. This is only useful on systems that have the sysfs livepatch signal interface. On other systems, the signaling should be done automatically by the OS and this subcommand is a no-op."
 	echo >&2
@@ -446,6 +446,97 @@ get_module_version() {
 	MODVER="${MODVER/ */}"
 }
 
+show_enabled_function() {
+	declare -A function_map
+	declare -A transition_map
+        for module_dir in "$SYSFS"/*; do
+		if [[ ! -d "$module_dir" ]] || \
+		   [[ ! -e "$module_dir/stack_order" ]]; then
+			continue
+		fi
+		stack_order=$(cat "$module_dir/stack_order")
+		module_name=$(basename "$module_dir")
+		transition=$(cat "$module_dir/transition")
+
+		if [[ $transition -eq 1 ]]; then
+			transition_map[$module_name]="transition"
+		fi
+
+		for obj_dir in "$module_dir"/*; do
+			if [[ ! -d $obj_dir ]]; then
+				continue;
+			fi
+			obj_name=$(basename "$obj_dir")
+			for func_dir in "$obj_dir"/*; do
+				if [[ ! -d "$func_dir" ]]; then
+					continue
+				fi
+				# we should take pos into account.
+				func_name_and_pos=$(basename "$func_dir")
+				key="$obj_name:$func_name_and_pos"
+
+				if [[ -z "${function_map[$key]}" ]]; then
+					function_map[$key]="$stack_order:$module_name"
+				else
+					# Update the map only iff this livepatch has a
+					# higher stack_order value
+					IFS=':' read -r recorded_order _ <<< "${function_map[$key]}"
+					if [[ $recorded_order -lt $stack_order ]]; then
+						function_map[$key]="$stack_order:$module_name:$obj_name"
+					fi
+				fi
+			done
+		done
+
+	done
+
+	# Pretty print the function map if it has any contents
+	if [[ ${#function_map[@]} -ne 0 ]]; then
+		echo ""
+		echo "Currently livepatched functions:"
+		declare -a output_data=("Module Object Function/Occurrence")
+		for key in "${!function_map[@]}"; do
+			IFS=':' read -r stack_order module_name obj_name <<< "${function_map[$key]}"
+			obj_name=${key%%:*}
+			func_name_and_pos=${key##*:}
+			if [[ -n ${transition_map[$module_name]} ]]; then
+				output_data+=("$module_name $obj_name $func_name_and_pos (${transition_map[$module_name]})")
+			else
+				output_data+=("$module_name $obj_name $func_name_and_pos")
+			fi
+		done
+		printf "%s\n" "${output_data[@]}" | column -t
+	fi
+}
+
+print_patch_info() {
+	echo "Loaded patch modules:"
+        for module in "$SYSFS"/*; do
+                if [[ -e "$module" ]]; then
+                        modname=$(basename "$module")
+                        if [[ "$(cat "$module/enabled" 2>/dev/null)" -eq 1 ]]; then
+                                in_transition "$modname" && state="enabling..." \
+                                                         || state="enabled"
+                        else
+                                in_transition "$modname" && state="disabling..." \
+                                                         || state="disabled"
+                        fi
+                        echo "$modname [$state]"
+                fi
+        done
+        show_stalled_processes
+        echo ""
+        echo "Installed patch modules:"
+        for kdir in "$INSTALLDIR"/*; do
+                [[ -e "$kdir" ]] || continue
+                for module in "$kdir"/*.ko; do
+                        [[ -e "$module" ]] || continue
+                        mod_name "$module"
+                        echo "$MODNAME ($(basename "$kdir"))"
+                done
+        done
+}
+
 unset MODULE
 
 # Initialize the $SYSFS var.  This only works if the core module has been
@@ -593,31 +684,8 @@ case "$1" in
 
 "list")
 	[[ "$#" -ne 1 ]] && usage
-	echo "Loaded patch modules:"
-	for module in "$SYSFS"/*; do
-		if [[ -e "$module" ]]; then
-			modname=$(basename "$module")
-			if [[ "$(cat "$module/enabled" 2>/dev/null)" -eq 1 ]]; then
-				in_transition "$modname" && state="enabling..." \
-							 || state="enabled"
-			else
-				in_transition "$modname" && state="disabling..." \
-							 || state="disabled"
-			fi
-			echo "$modname [$state]"
-		fi
-	done
-	show_stalled_processes
-	echo ""
-	echo "Installed patch modules:"
-	for kdir in "$INSTALLDIR"/*; do
-		[[ -e "$kdir" ]] || continue
-		for module in "$kdir"/*.ko; do
-			[[ -e "$module" ]] || continue
-			mod_name "$module"
-			echo "$MODNAME ($(basename "$kdir"))"
-		done
-	done
+	print_patch_info
+	show_enabled_function
 	;;
 
 "info")
