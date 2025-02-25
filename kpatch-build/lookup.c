@@ -479,13 +479,10 @@ static bool lookup_local_symbol(struct lookup_table *table,
 	struct object_symbol *sym;
 	unsigned long sympos = 0;
 	int i, in_file = 0;
+	bool found = false;
 
 	memset(result, 0, sizeof(*result));
 	for_each_obj_symbol(i, sym, table) {
-		if (sym->bind == STB_LOCAL && !strcmp(sym->name,
-					lookup_sym->name))
-			sympos++;
-
 		if (lookup_sym->lookup_table_file_sym == sym) {
 			in_file = 1;
 			continue;
@@ -499,20 +496,35 @@ static bool lookup_local_symbol(struct lookup_table *table,
 
 		if (sym->bind == STB_LOCAL && !strcmp(sym->name,
 					lookup_sym->name)) {
-			if (result->objname)
+			if (found)
 				ERROR("duplicate local symbol found for %s",
 						lookup_sym->name);
 
 			result->objname		= table->objname;
 			result->addr		= sym->addr;
 			result->size		= sym->size;
-			result->sympos		= sympos;
 			result->global		= false;
 			result->exported	= false;
+			found = true;
 		}
 	}
+	if (!found)
+		return false;
 
-	return !!result->objname;
+	/*
+	 * The kernel calculates sympos based on the order of addresses.
+	 * "readelf -s" does not guarantee the ordering of symbols.
+	 * Therefore, it is safer to iterate the symbol table again to
+	 * calcuate the actual sympos.
+	 */
+	for_each_obj_symbol(i, sym, table) {
+		if (sym->bind == STB_LOCAL &&
+		    !strcmp(sym->name, lookup_sym->name) &&
+		    sym->addr <= result->addr)
+			sympos++;
+	}
+	result->sympos = sympos;
+	return true;
 }
 
 static bool lookup_exported_symbol(struct lookup_table *table, char *name,
