@@ -393,6 +393,9 @@ find_special_section_data() {
 		"s390x")
 			check[a]=true					# alt_instr
 			;;
+		"loongarch64")
+			check[a]=true					# alt_instr
+			;;
 	esac
 
 	# Kernel CONFIG_ features
