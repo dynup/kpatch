@@ -59,6 +59,12 @@
 	errx(EXIT_STATUS_DIFF_FATAL, "unreconcilable difference"); \
 })
 
+#define GET_CHILD_OBJ(obj) \
+((obj) == NULL ? NULL : ({ \
+	char *_childobj = strchr((obj), '/'); \
+	(_childobj == NULL) ? (obj) : (_childobj + 1 ); \
+}))
+
 char *childobj;
 
 enum subsection {
@@ -4177,7 +4183,7 @@ int main(int argc, char *argv[])
 	patch_name    = arguments.args[5];
 	output_obj    = arguments.args[6];
 
-	childobj = basename(orig_obj);
+	childobj = GET_CHILD_OBJ(orig_obj);
 
 	kelf_orig = kpatch_elf_open(orig_obj);
 	kelf_patched = kpatch_elf_open(patched_obj);
