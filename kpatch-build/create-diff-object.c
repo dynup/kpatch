@@ -3237,16 +3237,32 @@ static bool is_expoline(struct kpatch_elf *kelf, char *name)
 	return kelf->arch == S390 && !strncmp(name, "__s390_indirect_jump_r", 22);
 }
 
-static int function_ptr_rela(const struct rela *rela)
+static int function_ptr_rela(const struct rela *rela, struct kpatch_elf *kelf)
 {
 	const struct rela *rela_toc = toc_rela(rela);
+	bool funcptr = false;
 
-	return (rela_toc && rela_toc->sym->type == STT_FUNC &&
-		!rela_toc->sym->parent &&
-		rela_toc->addend == (int)rela_toc->sym->sym.st_value &&
-		(rela->type == R_X86_64_32S ||
-		rela->type == R_PPC64_TOC16_HA ||
-		rela->type == R_PPC64_TOC16_LO_DS));
+	if (rela_toc && rela_toc->sym->type == STT_FUNC && !rela_toc->sym->parent) {
+		switch (kelf->arch) {
+		case X86_64:
+			if (rela_toc->addend == (int)rela_toc->sym->sym.st_value &&
+			    rela->type == R_X86_64_32S)
+				funcptr = true;
+			break;
+		case PPC64:
+			if (rela_toc->addend == (int)rela_toc->sym->sym.st_value &&
+			    (rela->type == R_PPC64_TOC16_HA || rela->type == R_PPC64_TOC16_LO_DS))
+				funcptr = true;
+			break;
+		case S390:
+			if (rela->type == R_390_GOTENT)
+				funcptr = true;
+			break;
+		default:
+			break;
+		}
+	}
+	return funcptr;
 }
 
 static bool need_klp_reloc(struct kpatch_elf *kelf, struct lookup_table *table,
@@ -3316,7 +3332,7 @@ static bool need_klp_reloc(struct kpatch_elf *kelf, struct lookup_table *table,
 		 * is called asynchronously after the patch module has been
 		 * unloaded.
 		 */
-		if (!function_ptr_rela(rela))
+		if (!function_ptr_rela(rela, kelf))
 			return false;
 
 		/*
