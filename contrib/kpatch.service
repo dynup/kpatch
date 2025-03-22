@@ -3,6 +3,8 @@ Description="Apply kpatch kernel patches"
 ConditionKernelCommandLine=!kpatch.enable=0
 Before=network-pre.target
 Wants=network-pre.target
+DefaultDependencies=no
+RequiresMountsFor=/var/lib/
 
 [Service]
 Type=oneshot
