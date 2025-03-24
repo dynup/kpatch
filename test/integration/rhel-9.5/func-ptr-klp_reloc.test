@@ -1,0 +1,9 @@
+#!/bin/bash
+
+kpatch_value=$(cat /proc/uptime | grep -o 'uptime_proc_show=.*' | awk -F= '{print $2}')
+kernel_value=$(awk '$NF=="uptime_proc_show" { print $1 }' /proc/kallsyms)
+
+if [[ "$kpatch_value" != "$kernel_value" ]]; then
+        echo "kpatch_value($kpatch_value) != kernel_value($kernel_value)"
+        exit 1
+fi

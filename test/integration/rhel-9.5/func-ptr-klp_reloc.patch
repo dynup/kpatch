@@ -1,0 +1,17 @@
+--- src.old/fs/proc/uptime.c	2025-03-25 09:35:31.468574086 -0400
++++ src/fs/proc/uptime.c	2025-03-25 09:35:46.848570153 -0400
+@@ -29,11 +29,12 @@ static int uptime_proc_show(struct seq_f
+ 
+ 	idle.tv_sec = div_u64_rem(idle_nsec, NSEC_PER_SEC, &rem);
+ 	idle.tv_nsec = rem;
+-	seq_printf(m, "%lu.%02lu %lu.%02lu\n",
++	seq_printf(m, "%lu.%02lu %lu.%02lu uptime_proc_show=%pK\n",
+ 			(unsigned long) uptime.tv_sec,
+ 			(uptime.tv_nsec / (NSEC_PER_SEC / 100)),
+ 			(unsigned long) idle.tv_sec,
+-			(idle.tv_nsec / (NSEC_PER_SEC / 100)));
++			(idle.tv_nsec / (NSEC_PER_SEC / 100)),
++			uptime_proc_show);
+ 	return 0;
+ }
+ 
