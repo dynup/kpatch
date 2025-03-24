@@ -3259,9 +3259,16 @@ static int function_ptr_rela(const struct rela *rela, struct kpatch_elf *kelf)
 				funcptr = true;
 			break;
 		case PPC64:
-			if (rela_toc->addend == (int)rela_toc->sym->sym.st_value &&
-			    (rela->type == R_PPC64_TOC16_HA || rela->type == R_PPC64_TOC16_LO_DS))
+			if ((rela->type == R_PPC64_TOC16_HA || rela->type == R_PPC64_TOC16_LO_DS) &&
+			    (rela_toc->addend == (int)rela_toc->sym->sym.st_value)) {
 				funcptr = true;
+			} else if (rela->type == R_PPC64_ADDR64) {
+				struct rela *entry;
+				entry = find_rela_by_offset(rela_toc->sym->sec->rela,
+							    (unsigned int) (rela_toc->addend + rela_toc->sym->sym.st_value));
+				if (entry && entry->type == R_PPC64_ENTRY)
+					funcptr = true;
+			}
 			break;
 		case S390:
 			if (rela->type == R_390_GOTENT)
