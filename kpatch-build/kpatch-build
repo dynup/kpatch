@@ -472,6 +472,31 @@ find_special_section_data() {
 	return
 }
 
+# Determine if this configuration uses the -fpatchable-function-entry=N[,M]
+# compiler flag, for which create-diff-object will need to know any non-zero M
+# NOPs value (i.e. to expect an entry point M NOPs instructions inside its
+# function section.)
+find_entry_offset() {
+	local entry_offset=0
+
+	case "$ARCH" in
+		"x86_64")
+			# arch/x86/Makefile: For CONFIG_CALL_PADDING, sets M=CONFIG_FUNCTION_PADDING_BYTES
+			if [[ -n "$CONFIG_CALL_PADDING" ]]; then
+				entry_offset="$CONFIG_FUNCTION_PADDING_BYTES"
+			fi
+			;;
+		"ppc64le")
+			# arch/powerpc/Makefile: N/A
+			;;
+		"s390x")
+			# arch/s390x/Makefile: N/A
+			;;
+	esac
+
+	export ENTRY_OFFSET_BYTES="$entry_offset"
+}
+
 # path of file, relative to dir
 # adapted from https://stackoverflow.com/a/24848739
 relpath() {
@@ -1262,6 +1287,7 @@ export KCFLAGS="-I$DATADIR/patch -ffunction-sections -fdata-sections \
 
 echo "Reading special section data"
 find_special_section_data
+find_entry_offset
 
 if [[ $DEBUG -ge 4 ]]; then
 	export KPATCH_GCC_DEBUG=1

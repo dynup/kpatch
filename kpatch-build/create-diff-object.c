@@ -3240,12 +3240,21 @@ static bool is_expoline(struct kpatch_elf *kelf, char *name)
 static int function_ptr_rela(const struct rela *rela, struct kpatch_elf *kelf)
 {
 	const struct rela *rela_toc = toc_rela(rela);
+	static int entry_offset = -1;
 	bool funcptr = false;
+
+	if (entry_offset < 0) {
+		char *str = getenv("ENTRY_OFFSET_BYTES");
+		if (str)
+			entry_offset = atoi(str);
+		else
+			entry_offset = 0;
+	}
 
 	if (rela_toc && rela_toc->sym->type == STT_FUNC && !rela_toc->sym->parent) {
 		switch (kelf->arch) {
 		case X86_64:
-			if (rela_toc->addend == (int)rela_toc->sym->sym.st_value &&
+			if (rela_toc->addend + entry_offset == (int)rela_toc->sym->sym.st_value &&
 			    rela->type == R_X86_64_32S)
 				funcptr = true;
 			break;
