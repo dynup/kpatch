@@ -1421,7 +1421,7 @@ static void kpatch_correlate_static_local_variables(struct kpatch_elf *orig,
 			patched_bundled = patched_sym == patched_sym->sec->sym;
 			if (bundled != patched_bundled)
 				ERROR("bundle mismatch for symbol %s", sym->name);
-			if (!bundled && sym->sec->twin != patched_sym->sec)
+			if (!bundled && sym->sec->twin && sym->sec->twin != patched_sym->sec)
 				ERROR("sections %s and %s aren't correlated for symbol %s",
 				      sym->sec->name, patched_sym->sec->name, sym->name);
 
