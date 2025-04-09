@@ -127,6 +127,7 @@ struct kpatch_elf {
 	Elf_Data *symtab_shndx;
 	int fd;
 	bool has_pfe;
+	bool pfe_ordered;
 };
 
 /*******************
