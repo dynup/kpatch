@@ -900,7 +900,11 @@ else
 	BUILDDIR="$KERNEL_SRCDIR"
 fi
 
-[[ "$SKIPCLEANUP" -eq 0 ]] && trap cleanup EXIT INT TERM HUP
+if [[ "$SKIPCLEANUP" -eq 0 ]]; then
+	trap cleanup EXIT INT TERM HUP
+else
+	trap remove_patches EXIT INT TERM HUP
+fi
 
 # Don't check external file.
 # shellcheck disable=SC1090
