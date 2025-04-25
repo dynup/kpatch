@@ -91,20 +91,19 @@
 
 #elif defined(CONFIG_S390)
 
-# if LINUX_VERSION_CODE >= KERNEL_VERSION(6, 3, 0)
-#  define KPATCH_SYSCALL_WRAPPERS_V2
-# else
-#  define KPATCH_SYSCALL_WRAPPERS_V1
-# endif
-
 # if defined(RHEL_RELEASE_CODE)
 #  if RHEL_RELEASE_CODE >= RHEL_RELEASE_VERSION(9, 6)
 #   define KPATCH_SYSCALL_WRAPPERS_V2
 #  else
 #   define KPATCH_SYSCALL_WRAPPERS_V1
 #  endif
+# else
+#  if LINUX_VERSION_CODE >= KERNEL_VERSION(6, 3, 0)
+#   define KPATCH_SYSCALL_WRAPPERS_V2
+#  else
+#   define KPATCH_SYSCALL_WRAPPERS_V1
+#  endif
 # endif
-
 
 /* arch/s390/include/asm/syscall_wrapper.h versions */
 #if defined(KPATCH_SYSCALL_WRAPPERS_V1)
