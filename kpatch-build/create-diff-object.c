@@ -1700,8 +1700,8 @@ static void kpatch_check_func_profiling_calls(struct kpatch_elf *kelf)
 		    (sym->parent && sym->parent->status == CHANGED))
 			continue;
 		if (!sym->twin->has_func_profiling) {
-			log_normal("function %s has no fentry/mcount call, unable to patch\n",
-				   sym->name);
+			log_error("function %s has no fentry/mcount call, unable to patch\n",
+				  sym->name);
 			errs++;
 		}
 	}
@@ -1717,19 +1717,19 @@ static void kpatch_verify_patchability(struct kpatch_elf *kelf)
 
 	list_for_each_entry(sec, &kelf->sections, list) {
 		if (sec->status == CHANGED && !sec->include) {
-			log_normal("changed section %s not selected for inclusion\n",
-				   sec->name);
+			log_error("changed section %s not selected for inclusion\n",
+				  sec->name);
 			errs++;
 		}
 
 		if (sec->status != SAME && sec->grouped) {
-			log_normal("changed section %s is part of a section group\n",
-				   sec->name);
+			log_error("changed section %s is part of a section group\n",
+				  sec->name);
 			errs++;
 		}
 
 		if (sec->sh.sh_type == SHT_GROUP && sec->status == NEW) {
-			log_normal("new/changed group sections are not supported\n");
+			log_error("new/changed group sections are not supported\n");
 			errs++;
 		}
 
@@ -1742,7 +1742,7 @@ static void kpatch_verify_patchability(struct kpatch_elf *kelf)
 		    (!strncmp(sec->name, ".data", 5) || !strncmp(sec->name, ".bss", 4)) &&
 		    (strcmp(sec->name, ".data.unlikely") && strcmp(sec->name, ".data..unlikely") &&
 		     strcmp(sec->name, ".data.once") && strcmp(sec->name, ".data..once"))) {
-			log_normal("data section %s selected for inclusion\n",
+			log_error("data section %s selected for inclusion\n",
 				   sec->name);
 			errs++;
 		}
@@ -2310,8 +2310,8 @@ static bool jump_table_group_filter(struct lookup_table *lookup,
 		 * This will be upgraded to an error after all jump labels have
 		 * been reported.
 		 */
-		log_normal("Found a jump label at %s()+0x%lx, using key %s.  Jump labels aren't supported with this kernel.  Use static_key_enabled() instead.\n",
-			   code->sym->name, code->addend, key->sym->name);
+		log_error("Found a jump label at %s()+0x%lx, using key %s.  Jump labels aren't supported with this kernel.  Use static_key_enabled() instead.\n",
+			  code->sym->name, code->addend, key->sym->name);
 		jump_label_errors++;
 		return false;
 	}
@@ -2340,8 +2340,8 @@ static bool jump_table_group_filter(struct lookup_table *lookup,
 		 * This will be upgraded to an error after all jump label
 		 * errors have been reported.
 		 */
-		log_normal("Found a jump label at %s()+0x%lx, using key %s, which is defined in a module.  Use static_key_enabled() instead.\n",
-			   code->sym->name, code->addend, key->sym->name);
+		log_error("Found a jump label at %s()+0x%lx, using key %s, which is defined in a module.  Use static_key_enabled() instead.\n",
+			  code->sym->name, code->addend, key->sym->name);
 		jump_label_errors++;
 		return false;
 	}
@@ -2411,7 +2411,7 @@ static bool static_call_sites_group_filter(struct lookup_table *lookup,
 		 * This will be upgraded to an error after all static call
 		 * errors have been reported.
 		 */
-		log_normal("Found a static call at %s()+0x%lx, using key %s, which is defined in a module.  Use KPATCH_STATIC_CALL() instead.\n",
+		log_error("Found a static call at %s()+0x%lx, using key %s, which is defined in a module.  Use KPATCH_STATIC_CALL() instead.\n",
 			   code->sym->name, code->addend, key->sym->name);
 		static_call_errors++;
 		return false;
@@ -4023,8 +4023,8 @@ static void kpatch_no_sibling_calls_ppc64le(struct kpatch_elf *kelf)
 			if (!find_rela_by_offset(sym->sec->rela, offset))
 				continue;
 
-			log_normal("Found an unsupported sibling call at %s()+0x%lx.  Add __attribute__((optimize(\"-fno-optimize-sibling-calls\"))) to %s() definition.\n",
-			      sym->name, sym->sym.st_value + offset, sym->name);
+			log_error("Found an unsupported sibling call at %s()+0x%lx.  Add __attribute__((optimize(\"-fno-optimize-sibling-calls\"))) to %s() definition.\n",
+				  sym->name, sym->sym.st_value + offset, sym->name);
 			sibling_call_errors++;
 		}
 	}
