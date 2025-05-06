@@ -1735,13 +1735,13 @@ static void kpatch_verify_patchability(struct kpatch_elf *kelf)
 
 		/*
 		 * ensure we aren't including .data.* or .bss.*
-		 * (.data.unlikely, .data.once, and .data..once is ok b/c it only
-		 * has __warned vars)
+		 * (.data.unlikely, .data..unlikely, .data.once, and .data..once is ok
+		 * b/c it only has __warned vars)
 		 */
 		if (sec->include && sec->status != NEW &&
 		    (!strncmp(sec->name, ".data", 5) || !strncmp(sec->name, ".bss", 4)) &&
-		    (strcmp(sec->name, ".data.unlikely") && strcmp(sec->name, ".data.once") &&
-		     strcmp(sec->name, ".data..once"))) {
+		    (strcmp(sec->name, ".data.unlikely") && strcmp(sec->name, ".data..unlikely") &&
+		     strcmp(sec->name, ".data.once") && strcmp(sec->name, ".data..once"))) {
 			log_normal("data section %s selected for inclusion\n",
 				   sec->name);
 			errs++;
