@@ -20,6 +20,11 @@ extern char *childobj;
 		printf(format, ##__VA_ARGS__); \
 })
 
+#define log_error(format, ...) \
+({ \
+	fprintf(stderr, "ERROR: " format, ##__VA_ARGS__);	\
+})
+
 enum loglevel {
 	DEBUG,
 	NORMAL
