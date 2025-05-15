@@ -142,6 +142,8 @@ unsigned int absolute_rela_type(struct kpatch_elf *kelf)
 		return R_X86_64_64;
 	case S390:
 		return R_390_64;
+	case LOONGARCH64:
+		return R_LARCH_64;
 	default:
 		ERROR("unsupported arch");
 	}
@@ -206,6 +208,7 @@ long rela_target_offset(struct kpatch_elf *kelf, struct section *relasec,
 
 	switch(kelf->arch) {
 	case PPC64:
+	case LOONGARCH64:
 		add_off = 0;
 		break;
 	case X86_64:
@@ -261,6 +264,7 @@ unsigned int insn_length(struct kpatch_elf *kelf, void *addr)
 		return decoded_insn.length;
 
 	case PPC64:
+	case LOONGARCH64:
 		return 4;
 
 	case S390:
@@ -331,6 +335,22 @@ static void kpatch_create_rela_list(struct kpatch_elf *kelf,
 				ERROR("could not lookup rela string for %s+%ld",
 				      rela->sym->name, rela->addend);
 		}
+
+		if (kelf->arch == LOONGARCH64) {
+			/*
+			 * LoongArch GCC creates local labels such as .LBB7266,
+			 * replace them with section symbols.
+			 */
+			if (rela->sym->sec && (rela->sym->type == STT_NOTYPE) &&
+				(rela->sym->bind == STB_LOCAL)) {
+				log_debug("local label: %s -> ", rela->sym->name);
+
+				rela->addend += rela->sym->sym.st_value;
+				rela->sym = rela->sym->sec->secsym;
+				log_debug("section symbol: %s\n", rela->sym->name);
+			}
+		}
+
 
 		if (skip)
 			continue;
@@ -594,6 +614,9 @@ struct kpatch_elf *kpatch_elf_open(const char *name)
 	case EM_S390:
 		kelf->arch = S390;
 		break;
+	case EM_LOONGARCH:
+		kelf->arch = LOONGARCH64;
+		break;
 	default:
 		ERROR("Unsupported target architecture");
 	}
@@ -624,6 +647,18 @@ struct kpatch_elf *kpatch_elf_open(const char *name)
 			 * flag set. This info is used while generating pfe sections in the diff object.
 			 */
 			kelf->pfe_ordered = !!(pfesec->sh.sh_flags & SHF_LINK_ORDER);
+		}
+	}
+
+	if (kelf->arch == LOONGARCH64) {
+		struct symbol *sym, *tmp;
+
+		/* Delete local labels created by LoongArch GCC */
+		list_for_each_entry_safe(sym, tmp, &kelf->symbols, list) {
+			if (sym->sec && !is_rela_section(sym->sec) &&
+				(sym->type == STT_NOTYPE) &&
+				(sym->bind == STB_LOCAL))
+				list_del(&sym->list);
 		}
 	}
 
