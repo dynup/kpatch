@@ -79,6 +79,50 @@ kpatch_rhel_dependencies()
 	fi
 }
 
+kpatch_almalinux_dependencies()
+{
+	local kernel_version
+	local arch
+	local rhel_major
+	local yum_utils_version
+	kernel_version=$(uname -r)
+	arch=$(uname -m)
+	rhel_major=${VERSION_ID%%.*}
+
+	# kpatch-build dependencies
+	sudo yum install -y \
+		elfutils \
+		elfutils-devel \
+		gcc \
+		gcc-c++ \
+		git \
+		"kernel-rt-devel-${kernel_version%.*}" \
+		rpm-build \
+		wget \
+		yum-utils
+	#sudo debuginfo-install -y "kernel-${kernel_version%.*}"
+	[[ "$arch" == "ppc64le" ]] && sudo yum install -y gcc-plugin-devel
+
+	# kernel dependencies
+	#yum_utils_version=$(rpm -q --queryformat="%{version}" yum-utils)
+	#if [[ "${yum_utils_version}" = "$(echo -e "${yum_utils_version}\\n4.0.12" | sort -rV | head -n1)" ]]; then
+	#	sudo yum-builddep -y --skip-unavailable "kernel-${kernel_version%.*}"
+	#else
+	#	sudo yum-builddep -y "kernel-${kernel_version%.*}"
+	#fi
+	[[ "$arch" == "x86_64" ]] && sudo yum install -y pesign
+
+	# ccache
+	if ! command -v ccache &> /dev/null; then
+		if ! sudo yum install -y ccache; then
+#			sudo yum install -y "https://dl.fedoraproject.org/pub/epel/epel-release-latest-${rhel_major}.noarch.rpm" && \
+#			sudo yum install -y ccache && \
+			sudo yum install -y ccache &&
+			sudo yum remove -y epel-release
+		fi
+	fi
+}
+
 kpatch_centos_dependencies()
 {
 	kpatch_rhel_dependencies
