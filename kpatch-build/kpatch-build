@@ -992,7 +992,7 @@ else
 		echo "Downloading kernel source for $ARCHVERSION"
 		if [[ -z "$SRCRPM" ]]; then
 			if [[ "$DISTRO" = fedora ]]; then
-				wget -P "$TEMPDIR" "http://kojipkgs.fedoraproject.org/packages/kernel/$KVER/$KREL/src/kernel-$KVER-$KREL.src.rpm" 2>&1 | logger || die
+				wget -P "$TEMPDIR" "https://kojipkgs.fedoraproject.org/packages/kernel/$KVER/$KREL/src/kernel-$KVER-$KREL.src.rpm" 2>&1 | logger || die
 			elif [[ "$DISTRO" = photon ]]; then
 				if [[ -n "$PH_FLAVOR" ]]; then
 					SRC_RPM_NAME="linux-$PH_FLAVOR-$KVER-$KREL.$PH_TAG.src.rpm"
