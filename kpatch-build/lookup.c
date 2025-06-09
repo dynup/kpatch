@@ -172,7 +172,7 @@ static bool file_has_locals(struct symbol *file_sym, struct list_head *sym_list)
 	list_for_each_entry_continue(sym, sym_list, list) {
 		if (sym->type == STT_FILE)
 			break;
-		if (sym->type != STB_LOCAL)
+		if (sym->bind != STB_LOCAL)
 			continue;
 		if (maybe_discarded_sym(sym->name))
 			continue;
