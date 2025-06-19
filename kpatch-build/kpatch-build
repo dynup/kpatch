@@ -276,6 +276,14 @@ support_klp_replace()
 	fi
 }
 
+check_paravirt() {
+	if kernel_is_rhel; then
+		! rhel_kernel_version_gte 5.14.0-582.el9
+	else
+		! kernel_version_gte 6.8.0
+	fi
+}
+
 find_dirs() {
 	if [[ -e "$SCRIPTDIR/create-diff-object" ]]; then
 		# git repo
@@ -386,7 +394,7 @@ find_special_section_data() {
 		"x86_64")
 			check[a]=true					# alt_instr
 			kernel_version_gte 5.10.0 && check[s]=true	# static_call_site
-			[[ -n "$CONFIG_PARAVIRT" ]] && ! kernel_version_gte 6.8.0 && check[p]=true	# paravirt_patch_site
+			[[ -n "$CONFIG_PARAVIRT" ]] && check_paravirt && check[p]=true	# paravirt_patch_site
 			;;
 		"ppc64le")
 			check[f]=true					# fixup_entry
@@ -985,7 +993,7 @@ else
 		echo "Downloading kernel source for $ARCHVERSION"
 		if [[ -z "$SRCRPM" ]]; then
 			if [[ "$DISTRO" = fedora ]]; then
-				wget -P "$TEMPDIR" "http://kojipkgs.fedoraproject.org/packages/kernel/$KVER/$KREL/src/kernel-$KVER-$KREL.src.rpm" 2>&1 | logger || die
+				wget -P "$TEMPDIR" "https://kojipkgs.fedoraproject.org/packages/kernel/$KVER/$KREL/src/kernel-$KVER-$KREL.src.rpm" 2>&1 | logger || die
 			elif [[ "$DISTRO" = photon ]]; then
 				if [[ -n "$PH_FLAVOR" ]]; then
 					SRC_RPM_NAME="linux-$PH_FLAVOR-$KVER-$KREL.$PH_TAG.src.rpm"
