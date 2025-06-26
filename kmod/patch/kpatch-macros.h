@@ -141,6 +141,34 @@ struct kpatch_post_unpatch_callback {
 		printk(_fmt, ## __VA_ARGS__); \
 })
 
+
+/*
+ * KPATCH_PRINTK_DEFERRED macro
+ *
+ * Use this instead of calling printk_deferred to avoid unwanted compiler optimizations
+ * which cause kpatch-build errors.
+ *
+ * The printk function is annotated with the __cold attribute, which tells gcc
+ * that the function is unlikely to be called.  A side effect of this is that
+ * code paths containing calls to printk might also be marked cold, leading to
+ * other functions called in those code paths getting moved into .text.unlikely
+ * or being uninlined.
+ *
+ * And yet, printk may cause dead lock in the context in kernel because when printing
+ * warning in console, it will call schedule_work which will take the rq_lock.
+ * If queue_work put this task into current queue, it will cause dead lock when
+ * try_to_weak_up try to take the rq_lock either. However, printk_deferred will
+ * call irq_work_queue which can avoid this situation.
+ *
+ * This macro places printk_deferred in its own code path so as not to make the
+ * surrounding code path cold.
+ */
+#define KPATCH_PRINTK_DEFERRED(_fmt, ...) \
+({ \
+	if (jiffies) \
+		printk_deferred(_fmt, ## __VA_ARGS__); \
+})
+
 /*
  * KPATCH_STATIC_CALL macro
  *
