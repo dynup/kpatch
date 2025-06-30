@@ -128,6 +128,8 @@ struct kpatch_elf {
 	int fd;
 	bool has_pfe;
 	bool pfe_ordered;
+	int modinfo_data_len;
+	char *modinfo_data;
 };
 
 /*******************
