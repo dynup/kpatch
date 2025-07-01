@@ -2901,8 +2901,10 @@ static void kpatch_mark_ignored_sections(struct kpatch_elf *kelf)
 
 		name = strsec->data->d_buf + rela->addend;
 		ignoresec = find_section_by_name(&kelf->sections, name);
-		if (!ignoresec)
-			ERROR("KPATCH_IGNORE_SECTION: can't find %s", name);
+		if (!ignoresec) {
+			log_normal("KPATCH_IGNORE_SECTION: can't find %s", name);
+			continue;
+		}
 		log_normal("ignoring section: %s\n", name);
 		if (is_rela_section(ignoresec))
 			ignoresec = ignoresec->base;
