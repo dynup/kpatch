@@ -1,6 +1,6 @@
 diff -Nupr src.orig/fs/nfsd/export.c src/fs/nfsd/export.c
---- src.orig/fs/nfsd/export.c	2025-05-19 11:11:45.413442422 -0400
-+++ src/fs/nfsd/export.c	2025-05-19 11:12:07.929420322 -0400
+--- src.orig/fs/nfsd/export.c	2025-07-01 13:11:10.551931019 -0400
++++ src/fs/nfsd/export.c	2025-07-01 13:11:24.924876973 -0400
 @@ -1365,6 +1365,10 @@ static void exp_flags(struct seq_file *m
  	}
  }
@@ -50,8 +50,8 @@ diff -Nupr src.orig/fs/nfsd/export.c src/fs/nfsd/export.c
  	}
  
 diff -Nupr src.orig/net/netlink/af_netlink.c src/net/netlink/af_netlink.c
---- src.orig/net/netlink/af_netlink.c	2025-05-19 11:11:45.963441883 -0400
-+++ src/net/netlink/af_netlink.c	2025-05-19 11:12:07.930420321 -0400
+--- src.orig/net/netlink/af_netlink.c	2025-07-01 13:11:10.866929835 -0400
++++ src/net/netlink/af_netlink.c	2025-07-01 13:11:24.925876969 -0400
 @@ -2943,4 +2943,9 @@ panic:
  	panic("netlink_init: Cannot allocate nl_table\n");
  }

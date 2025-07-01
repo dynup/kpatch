@@ -1,6 +1,6 @@
 diff -Nupr src.orig/net/ipv6/netfilter.c src/net/ipv6/netfilter.c
---- src.orig/net/ipv6/netfilter.c	2025-05-19 11:11:45.937441908 -0400
-+++ src/net/ipv6/netfilter.c	2025-05-19 11:11:59.545428551 -0400
+--- src.orig/net/ipv6/netfilter.c	2025-07-01 13:11:10.853929884 -0400
++++ src/net/ipv6/netfilter.c	2025-07-01 13:11:19.888895909 -0400
 @@ -97,6 +97,8 @@ static int nf_ip6_reroute(struct sk_buff
  	return 0;
  }
