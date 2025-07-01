@@ -896,18 +896,11 @@ void kpatch_create_symtab(struct kpatch_elf *kelf)
 	symtab->sh.sh_info = nr_local;
 }
 
-struct section *create_section_pair(struct kpatch_elf *kelf, char *name,
-                                    int entsize, int nr)
+struct section *create_section(struct kpatch_elf *kelf, char *name,
+                               int entsize, int nr)
 {
-	char *relaname;
-	struct section *sec, *relasec;
+	struct section *sec;
 	int size = entsize * nr;
-
-	relaname = malloc(strlen(name) + strlen(".rela") + 1);
-	if (!relaname)
-		ERROR("malloc");
-	strcpy(relaname, ".rela");
-	strcat(relaname, name);
 
 	/* allocate text section resources */
 	ALLOC_LINK(sec, &kelf->sections);
@@ -930,6 +923,24 @@ struct section *create_section_pair(struct kpatch_elf *kelf, char *name,
 	sec->sh.sh_addralign = 8;
 	sec->sh.sh_flags = SHF_ALLOC;
 	sec->sh.sh_size = size;
+
+	return sec;
+
+}
+
+struct section *create_section_pair(struct kpatch_elf *kelf, char *name,
+                                    int entsize, int nr)
+{
+	char *relaname;
+	struct section *sec, *relasec;
+
+	relaname = malloc(strlen(name) + strlen(".rela") + 1);
+	if (!relaname)
+		ERROR("malloc");
+	strcpy(relaname, ".rela");
+	strcat(relaname, name);
+
+	sec = create_section(kelf, name, entsize, nr);
 
 	/* allocate rela section resources */
 	ALLOC_LINK(relasec, &kelf->sections);

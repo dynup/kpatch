@@ -1,7 +1,7 @@
 include ../Makefile.inc
 
 CFLAGS += -std=gnu11 -MMD -MP -I../kmod/patch -Iinsn -Wall -Wsign-compare \
-	  -Wconversion -Wno-sign-conversion -g -Werror
+	  -Wconversion -Wno-sign-conversion -g -Werror -D_GNU_SOURCE
 LDLIBS = -lelf
 
 TARGETS = create-diff-object create-klp-module create-kpatch-module
