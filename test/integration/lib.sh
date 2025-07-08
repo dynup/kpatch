@@ -79,6 +79,11 @@ kpatch_rhel_dependencies()
 	fi
 }
 
+kpatch_almalinux_dependencies()
+{
+	kpatch_rhel_dependencies
+}
+
 kpatch_centos_dependencies()
 {
 	kpatch_rhel_dependencies
