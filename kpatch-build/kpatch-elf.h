@@ -128,6 +128,8 @@ struct kpatch_elf {
 	int fd;
 	bool has_pfe;
 	bool pfe_ordered;
+	int modinfo_data_len;
+	char *modinfo_data;
 };
 
 /*******************
@@ -181,6 +183,8 @@ void print_strtab(char *buf, size_t size);
 void kpatch_create_shstrtab(struct kpatch_elf *kelf);
 void kpatch_create_strtab(struct kpatch_elf *kelf);
 void kpatch_create_symtab(struct kpatch_elf *kelf);
+struct section *create_section(struct kpatch_elf *kelf, char *name,
+                               int entsize, int nr);
 struct section *create_section_pair(struct kpatch_elf *kelf, char *name,
                                     int entsize, int nr);
 void kpatch_remove_and_free_section(struct kpatch_elf *kelf, char *secname);

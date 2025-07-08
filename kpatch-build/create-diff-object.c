@@ -1804,6 +1804,74 @@ static void kpatch_include_symbol(struct symbol *sym)
 		kpatch_include_section(sym->sec);
 }
 
+/*
+ * Module namespaces are saved as key value pairs in the .modinfo
+ * section.  For modules, they are in the form "import_ns=<value" and
+ * for built-ins, "<object>.import_ns=<value>".  Extract just these
+ * namespace strings from the patched .modinfo to put back into the
+ * output ELF.
+ */
+static void kpatch_get_modinfo_namespaces(struct kpatch_elf *kelf_patched,
+					  struct section *sec)
+{
+	char *data = NULL;
+	int data_len = 0;
+	const char *p, *end;
+
+	if (!sec->data || !sec->data->d_buf)
+		return;
+
+       /*
+        * Copy all the "import_ns=<value>" strings into
+        * a temporary data array (ignore other key-values)
+        */
+	p = sec->data->d_buf;
+	end = p + sec->sh.sh_size;
+
+	while (p < end) {
+		const char *match;
+		char *new_data;
+		size_t match_len;
+
+		match = memmem(p, end - p, "import_ns=", 10);
+		if (!match)
+			break;
+		match_len = strlen(match) + 1;
+
+		new_data = realloc(data, data_len + match_len);
+		if (!new_data)
+			ERROR("realloc");
+		data = new_data;
+
+		memcpy(data + data_len, match, match_len);
+		data_len += (int) match_len;
+
+		p = match + match_len;
+	}
+
+	/*
+	 * Update the patched elf modinfo data array with namespace
+	 * strings for kpatch_put_modinfo_namespaces()
+	 */
+	kelf_patched->modinfo_data = data;
+	kelf_patched->modinfo_data_len = data_len;
+}
+
+static void kpatch_put_modinfo_namespaces(struct kpatch_elf *kelf_patched,
+					  struct kpatch_elf *kelf_out)
+{
+	struct section *sec;
+
+	if (!kelf_patched->modinfo_data)
+		return;
+
+	sec = create_section(kelf_out, ".modinfo",
+			     kelf_patched->modinfo_data_len, 1);
+	memcpy(sec->data->d_buf, kelf_patched->modinfo_data,
+	       kelf_patched->modinfo_data_len);
+	sec->include = 1;
+}
+
 static void kpatch_include_standard_elements(struct kpatch_elf *kelf)
 {
 	struct section *sec;
@@ -2869,6 +2937,15 @@ static void kpatch_mark_ignored_sections(struct kpatch_elf *kelf)
 		    !strncmp(sec->name, ".llvm_addrsig", 13) ||
 		    !strncmp(sec->name, ".llvm.", 6))
 			sec->ignore = 1;
+
+		/*
+		 * Ignore .modinfo changes, but do stash any module
+		 * namespaces for kpatch_put_modinfo_namespaces()
+		 */
+		if (!strcmp(sec->name, ".modinfo")) {
+			kpatch_get_modinfo_namespaces(kelf, sec);
+			sec->ignore = 1;
+		}
 
 		if (kelf->arch == X86_64) {
 			if (!strcmp(sec->name, ".rela__patchable_function_entries") ||
@@ -4250,6 +4327,7 @@ int main(int argc, char *argv[])
 
 	/* this is destructive to kelf_patched */
 	kpatch_migrate_included_elements(kelf_patched, &kelf_out);
+	kpatch_put_modinfo_namespaces(kelf_patched, kelf_out);
 
 	/*
 	 * Teardown kelf_patched since we shouldn't access sections or symbols
