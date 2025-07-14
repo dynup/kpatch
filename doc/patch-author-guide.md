@@ -28,6 +28,7 @@ Table of contents
 - [Sibling calls](#sibling-calls)
 - [Exported symbol versioning](#exported-symbol-versioning)
 - [System calls](#system-calls)
+- [Symbol Namespaces](#symbol-namespaces)
 
 Patch analysis
 --------------
@@ -945,3 +946,21 @@ missing because of the 'inline' annotation, which invokes 'notrace'.
 This problem can be worked around by adding `#include "kpatch-syscall.h"` and
 replacing the use of the `SYSCALL_DEFINE1` (or similar) macro with the
 `KPATCH_` prefixed version.
+
+Symbol Namespaces
+-----------------
+
+While kpatch modules automatically inherit namespace imports from
+already-patched object files, a manual import may be required when
+patching kernel code that is normally built-in.
+
+The original built-in code doesn't need to explicitly import namespaces.
+However, when converted into a kpatch module, it must declare any namespace
+dependencies. Without this explicit import, the kpatch-build command will fail
+with modpost errors for using symbols from a namespace without importing
+it, i.e.
+```
+ERROR: modpost: module livepatch-test uses symbol dma_buf_export from namespace DMA_BUF, but does not import it.
+```
+To manually import the required namespace, add the MODULE_IMPORT_NS() macro to
+the patch source. For example: `MODULE_IMPORT_NS("DMA_BUF")`
