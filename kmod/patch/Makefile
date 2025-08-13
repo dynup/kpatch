@@ -18,7 +18,7 @@ $(KPATCH_NAME).ko:
 
 $(obj)/$(KPATCH_NAME).o: $(src)/kpatch.lds
 
-patch-hook.o: patch-hook.c kpatch-patch-hook.c livepatch-patch-hook.c
+patch-hook.o: patch-hook.c
 
 clean:
 	$(RM) -Rf .*.o.cmd .*.ko.cmd .tmp_versions $(BUILDABLE_OBJS) *.ko *.mod.c \
