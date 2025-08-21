@@ -17,3 +17,4 @@ kpatch-build/create-klp-module
 kpatch-build/create-kpatch-module
 man/kpatch.1.gz
 man/kpatch-build.1.gz
+prepare_sources_result*/
