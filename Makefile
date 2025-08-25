@@ -93,3 +93,4 @@ help:
 	@echo "[1] requires admin privileges"
 	@echo "[2] installs test kpatch kernel modules, run at your own risk"
 	@echo
+
