@@ -1,0 +1,42 @@
+jobs:
+  - job: tests
+    trigger: pull_request
+    branch: main
+    identifier: "integration-upstream"
+    labels:
+      - integration-pr
+    use_internal_tf: true
+    targets:
+      - fedora-37-x86_64
+      - fedora-37-s390x
+      - fedora-37-ppc64le
+    skip_build: true
+    manual_trigger: true
+    tmt_plan: kpatch-integration-upstream
+    fmf_url: https://gitlab.com/redhat/centos-stream/tests/kernel/test-plans.git
+    fmf_ref: main
+    tf_extra_params:
+      environment:
+        - variables:
+          KPATCH_REV: "$PACKIT_COMMIT_SHA"
+
+  - job: tests
+    trigger: commit
+    branch: main
+    identifier: "integration-upstream"
+    labels:
+      - integration-commit
+    use_internal_tf: true
+    targets:
+      - fedora-37-x86_64
+      - fedora-37-s390x
+      - fedora-37-ppc64le
+    skip_build: true
+    manual_trigger: true
+    tmt_plan: kpatch-integration-upstream
+    fmf_url: https://gitlab.com/redhat/centos-stream/tests/kernel/test-plans.git
+    fmf_ref: main
+    tf_extra_params:
+      environment:
+        - variables:
+          KPATCH_REV: "$PACKIT_COMMIT_SHA"
