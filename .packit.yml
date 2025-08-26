@@ -1,5 +1,5 @@
 _:
-  common-test-config: &common-test-config
+  common-upstream-kernel-test-config: &common-upstream-kernel-test-config
     job: tests
     branch: master
     identifier: "integration-upstream"
@@ -20,19 +20,15 @@ _:
     tmt_plan: kpatch-integration-upstream
     fmf_url: https://gitlab.com/redhat/centos-stream/tests/kernel/test-plans.git
     fmf_ref: main
-    tf_extra_params:
-      environments:
-        - variables:
-            KPATCH_REV: "$PACKIT_COMMIT_SHA"
 
 jobs:
-  - <<: *common-test-config
+  - <<: *common-upstream-kernel-test-config
     # [NOTE] Runs only for PRs to be merged into `master`
     trigger: pull_request
     labels:
       - integration-pr
 
-  - <<: *common-test-config
+  - <<: *common-upstream-kernel-test-config
     trigger: commit
     labels:
       - integration-commit
