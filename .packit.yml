@@ -1,42 +1,34 @@
-jobs:
-  - job: tests
-    trigger: pull_request
-    branch: main
+_:
+  common-upstream-kernel-test-config: &common-upstream-kernel-test-config
+    job: tests
+    branch: master
     identifier: "integration-upstream"
+    use_internal_tf: true
+    targets:
+      # [NOTE] There needs to be a matching target among the Copr targets,
+      # because of the default mapping and filtering (to avoid invalid values).
+      # In this case (no build), it is a bug, see packit/packit-service#2841
+      # Yet, the `rawhide` has no effect as there is no Copr build happening.
+      fedora-rawhide-x86_64:
+        distros: [Fedora-37-Updated]
+      fedora-rawhide-s390x:
+        distros: [Fedora-37-Updated]
+      fedora-rawhide-ppc64le:
+        distros: [Fedora-37-Updated]
+    skip_build: true
+    manual_trigger: true
+    tmt_plan: kpatch-integration-upstream
+    fmf_url: https://gitlab.com/redhat/centos-stream/tests/kernel/test-plans.git
+    fmf_ref: main
+
+jobs:
+  - <<: *common-upstream-kernel-test-config
+    # [NOTE] Runs only for PRs to be merged into `master`
+    trigger: pull_request
     labels:
       - integration-pr
-    use_internal_tf: true
-    targets:
-      - fedora-37-x86_64
-      - fedora-37-s390x
-      - fedora-37-ppc64le
-    skip_build: true
-    manual_trigger: true
-    tmt_plan: kpatch-integration-upstream
-    fmf_url: https://gitlab.com/redhat/centos-stream/tests/kernel/test-plans.git
-    fmf_ref: main
-    tf_extra_params:
-      environment:
-        - variables:
-          KPATCH_REV: "$PACKIT_COMMIT_SHA"
 
-  - job: tests
+  - <<: *common-upstream-kernel-test-config
     trigger: commit
-    branch: main
-    identifier: "integration-upstream"
     labels:
       - integration-commit
-    use_internal_tf: true
-    targets:
-      - fedora-37-x86_64
-      - fedora-37-s390x
-      - fedora-37-ppc64le
-    skip_build: true
-    manual_trigger: true
-    tmt_plan: kpatch-integration-upstream
-    fmf_url: https://gitlab.com/redhat/centos-stream/tests/kernel/test-plans.git
-    fmf_ref: main
-    tf_extra_params:
-      environment:
-        - variables:
-          KPATCH_REV: "$PACKIT_COMMIT_SHA"
