@@ -3854,9 +3854,8 @@ static void kpatch_create_ftrace_callsite_sections(struct kpatch_elf *kelf)
 				insn_offset = sym->sym.st_value + PPC64_LOCAL_ENTRY_OFFSET(sym->sym.st_other);
 				insn = sym->sec->data->d_buf + insn_offset;
 
-				/* verify nops */
-				if (insn[0] != 0x00 || insn[1] != 0x00 || insn[2] != 0x00 || insn[3] != 0x60 ||
-				    insn[4] != 0x00 || insn[5] != 0x00 || insn[6] != 0x00 || insn[7] != 0x60)
+				/* verify nop */
+				if (insn[0] != 0x00 || insn[1] != 0x00 || insn[2] != 0x00 || insn[3] != 0x60)
 					ERROR("%s: unexpected instruction in patch section of function\n", sym->name);
 			} else {
 				bool found = false;
