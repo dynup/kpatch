@@ -37,7 +37,7 @@ _:
       rhel+epel-9-ppc64le:
         distros: [RHEL-9.6.0-Nightly, RHEL-9.4.0-Nightly, RHEL-9.2.0-Nightly, RHEL-9.0.0-Nightly]
       rhel+epel-10-ppc64le:
-        distros: [RHEL-10.0.0-Nightly]
+        distros: [RHEL-10.0-Nightly]
     skip_build: true
     manual_trigger: true
     tmt_plan: kpatch-integration-rhel
