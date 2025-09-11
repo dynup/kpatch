@@ -27,16 +27,16 @@ _:
     identifier: "integration-rhel"
     use_internal_tf: true
     targets:
-      rhel+epel-8-x86_64:
+      rhel-8-x86_64:
         distros: [RHEL-8.10.0-Nightly, RHEL-8.8.0-Nightly, RHEL-8.6.0-Nightly, RHEL-8.4.0-Nightly]
-      rhel+epel-9-x86_64:
+      rhel-9-x86_64:
         distros: [RHEL-9.6.0-Nightly, RHEL-9.4.0-Nightly, RHEL-9.2.0-Nightly, RHEL-9.0.0-Nightly]
-      rhel+epel-8-ppc64le:
+      rhel-8-ppc64le:
         distros: [RHEL-8.10.0-Nightly, RHEL-8.8.0-Nightly, RHEL-8.6.0-Nightly, RHEL-8.4.0-Nightly]
-      rhel+epel-9-ppc64le:
+      rhel-9-ppc64le:
         distros: [RHEL-9.6.0-Nightly, RHEL-9.4.0-Nightly, RHEL-9.2.0-Nightly, RHEL-9.0.0-Nightly]
-      # rhel+epel-10-ppc64le:
-      #   distros: [RHEL-10.0-Nightly]
+      rhel-10-ppc64le:
+        distros: [RHEL-10.0-Nightly]
     skip_build: true
     manual_trigger: true
     tmt_plan: kpatch-integration-rhel
