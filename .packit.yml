@@ -21,7 +21,6 @@ _:
     fmf_url: https://gitlab.com/redhat/centos-stream/tests/kernel/test-plans.git
     fmf_ref: main
 
-_:
   common-rhel-test-config: &common-rhel-test-config
     job: tests
     branch: master
