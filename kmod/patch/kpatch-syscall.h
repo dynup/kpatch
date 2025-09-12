@@ -209,7 +209,34 @@
 
 # endif /* LINUX_VERSION_CODE */
 
-#endif /* CONFIG_X86_64 */
+#elif defined(CONFIG_ARM64)
+
+/* arm64/include/asm/syscall_wrapper.h versions */
+
+#define SC_ARM64_REGS_TO_ARGS(x, ...)       \
+  __MAP(x,__SC_ARGS         \
+        ,,regs->regs[0],,regs->regs[1],,regs->regs[2] \
+        ,,regs->regs[3],,regs->regs[4],,regs->regs[5])
+
+#define __KPATCH_SYSCALL_DEFINEx(x, name, ...)           \
+  asmlinkage long __arm64_sys##name(const struct pt_regs *regs);    \
+  ALLOW_ERROR_INJECTION(__arm64_sys##name, ERRNO);      \
+  static long __se_sys##name(__MAP(x,__SC_LONG,__VA_ARGS__));   \
+  static inline long __kpatch_do_sys##name(__MAP(x,__SC_DECL,__VA_ARGS__));  \
+  asmlinkage long __arm64_sys##name(const struct pt_regs *regs)   \
+  {                 \
+    return __se_sys##name(SC_ARM64_REGS_TO_ARGS(x,__VA_ARGS__));  \
+  }                 \
+  static long __se_sys##name(__MAP(x,__SC_LONG,__VA_ARGS__))    \
+  {                 \
+    long ret = __kpatch_do_sys##name(__MAP(x,__SC_CAST,__VA_ARGS__));  \
+    __MAP(x,__SC_TEST,__VA_ARGS__);         \
+    __PROTECT(x, ret,__MAP(x,__SC_ARGS,__VA_ARGS__));   \
+    return ret;             \
+  }                 \
+  static inline long __kpatch_do_sys##name(__MAP(x,__SC_DECL,__VA_ARGS__))
+
+#endif /* which arch */
 
 
 #ifndef __KPATCH_SYSCALL_DEFINEx
