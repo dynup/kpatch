@@ -3520,6 +3520,77 @@ static bool need_klp_reloc(struct kpatch_elf *kelf, struct lookup_table *table,
 	return false;
 }
 
+static bool is_la_pcrel(void *ptr)
+{
+	unsigned int *insn = ptr;
+	int rd;
+
+	/* pcalau12i rd, si20: 0 0 0 1 1 0 1 si20 rd*/
+	if ((*insn & 0xfe000000) != 0x1a000000)
+		return false;
+
+	rd = *insn & 0x1f;
+
+	/* addi.d rd, rd, si12: 0 0 0 0 0 0 1 0 1 1 si12 rd rd */
+	if ((*(insn + 3) & 0xffc003ff) != (0x02c00000U | (rd << 5) | rd)) {
+		return false;
+	}
+
+	return true;
+}
+
+static void la_pcrel_to_la_got(void *ptr)
+{
+	unsigned int *insn = ptr;
+	int rd;
+
+	rd = *insn & 0x1f;
+
+	/* ld.d rd, rd, si12: 0 0 1 0 1 0 0 0 1 1 si12 rd rd */
+	*(insn + 3) = 0x28c00000 | (rd << 5) | rd;
+}
+
+static void kpatch_modify_la_rela_sections(struct kpatch_elf *kelf)
+{
+	struct rela *rela, *cur;
+	struct section *sec;
+	unsigned int offset;
+	void *ndata_buf;
+
+	list_for_each_entry(sec, &kelf->sections, list) {
+		if (!is_rela_section(sec) || !(sec->base->sh.sh_flags & SHF_EXECINSTR))
+			continue;
+		ndata_buf = NULL;
+		list_for_each_entry(rela, &sec->relas, list) {
+			if (rela->sym->sec)
+				continue;
+
+			if (!is_la_pcrel(sec->base->data->d_buf + rela->offset))
+				continue;
+
+			if (ndata_buf == NULL) {
+				ndata_buf = malloc(sec->base->data->d_size + 4);
+				ndata_buf = ndata_buf + 4 - ((unsigned long)ndata_buf % 4);
+				memcpy(ndata_buf, sec->base->data->d_buf, sec->base->data->d_size);
+				sec->base->data->d_buf = ndata_buf;
+			}
+			la_pcrel_to_la_got(sec->base->data->d_buf + rela->offset);
+
+			log_debug("change rela type = %d to %d\n", rela->type, R_LARCH_GOT_PC_HI20);
+			rela->type = R_LARCH_GOT_PC_HI20;
+
+			offset = rela->offset;
+			list_for_each_entry(cur, &(rela->list), list) {
+				if (cur->offset == offset + 12) {
+					log_debug("change rela type = %d to %d\n", cur->type, R_LARCH_GOT_PC_LO12);
+					cur->type = R_LARCH_GOT_PC_LO12;
+					break;
+				}
+			}
+		}
+	}
+}
+
 /*
  * kpatch_create_intermediate_sections()
  *
@@ -4374,6 +4445,8 @@ int main(int argc, char *argv[])
 	/* create strings, patches, and klp relocation sections */
 	kpatch_create_strings_elements(kelf_out);
 	kpatch_create_patches_sections(kelf_out, lookup, parent_name);
+	if (kelf_out->arch == LOONGARCH64)
+		kpatch_modify_la_rela_sections(kelf_out);
 	kpatch_create_intermediate_sections(kelf_out, lookup, parent_name, patch_name);
 	kpatch_create_kpatch_arch_section(kelf_out, parent_name);
 	kpatch_create_callbacks_objname_rela(kelf_out, parent_name);
