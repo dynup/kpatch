@@ -27,15 +27,17 @@ _:
     identifier: "integration-rhel"
     use_internal_tf: true
     targets:
-      rhel-8-x86_64:
+      # Same as above, need a public copr chroot target. Use `copr-cli list` to
+      # list all of the available public copr chroots.
+      epel-8-x86_64:
         distros: [RHEL-8.10.0-Nightly, RHEL-8.8.0-Nightly, RHEL-8.6.0-Nightly, RHEL-8.4.0-Nightly]
-      rhel-9-x86_64:
+      epel-9-x86_64:
         distros: [RHEL-9.6.0-Nightly, RHEL-9.4.0-Nightly, RHEL-9.2.0-Nightly, RHEL-9.0.0-Nightly]
-      rhel-8-ppc64le:
+      epel-8-ppc64le:
         distros: [RHEL-8.10.0-Nightly, RHEL-8.8.0-Nightly, RHEL-8.6.0-Nightly, RHEL-8.4.0-Nightly]
-      rhel-9-ppc64le:
+      epel-9-ppc64le:
         distros: [RHEL-9.6.0-Nightly, RHEL-9.4.0-Nightly, RHEL-9.2.0-Nightly, RHEL-9.0.0-Nightly]
-      # rhel-10-ppc64le:
+      # rhel+epel-10-ppc64le:
       #   distros: [RHEL-10.0-Nightly]
     skip_build: true
     manual_trigger: true
