@@ -21,6 +21,30 @@ _:
     fmf_url: https://gitlab.com/redhat/centos-stream/tests/kernel/test-plans.git
     fmf_ref: main
 
+  common-rhel-test-config: &common-rhel-test-config
+    job: tests
+    branch: master
+    identifier: "integration-rhel"
+    use_internal_tf: true
+    targets:
+      # Same as above, need a public copr chroot target. Use `copr-cli list` to
+      # list all of the available public copr chroots.
+      epel-8-x86_64:
+        distros: [RHEL-8.10.0-Nightly, RHEL-8.8.0-Nightly, RHEL-8.6.0-Nightly, RHEL-8.4.0-Nightly]
+      epel-9-x86_64:
+        distros: [RHEL-9.6.0-Nightly, RHEL-9.4.0-Nightly, RHEL-9.2.0-Nightly, RHEL-9.0.0-Nightly]
+      epel-8-ppc64le:
+        distros: [RHEL-8.10.0-Nightly, RHEL-8.8.0-Nightly, RHEL-8.6.0-Nightly, RHEL-8.4.0-Nightly]
+      epel-9-ppc64le:
+        distros: [RHEL-9.6.0-Nightly, RHEL-9.4.0-Nightly, RHEL-9.2.0-Nightly, RHEL-9.0.0-Nightly]
+      # rhel+epel-10-ppc64le:
+      #   distros: [RHEL-10.0-Nightly]
+    skip_build: true
+    manual_trigger: true
+    tmt_plan: kpatch-integration-rhel
+    fmf_url: https://gitlab.com/redhat/centos-stream/tests/kernel/test-plans.git
+    fmf_ref: main
+
 jobs:
   - <<: *common-upstream-kernel-test-config
     # [NOTE] Runs only for PRs to be merged into `master`
@@ -29,6 +53,17 @@ jobs:
       - integration-pr
 
   - <<: *common-upstream-kernel-test-config
+    trigger: commit
+    labels:
+      - integration-commit
+
+  - <<: *common-rhel-test-config
+    # [NOTE] Runs only for PRs to be merged into `master`
+    trigger: pull_request
+    labels:
+      - integration-pr
+
+  - <<: *common-rhel-test-config
     trigger: commit
     labels:
       - integration-commit
