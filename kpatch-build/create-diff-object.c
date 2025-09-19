@@ -173,6 +173,8 @@ static bool is_gcc6_localentry_bundled_sym(struct kpatch_elf *kelf,
 					  struct symbol *sym)
 {
 	switch(kelf->arch) {
+	case AARCH64:
+		return false;
 	case PPC64:
 		return ((PPC64_LOCAL_ENTRY_OFFSET(sym->sym.st_other) != 0) &&
 			sym->sym.st_value == 8);
@@ -229,6 +231,67 @@ static struct rela *toc_rela(const struct rela *rela)
 }
 
 /*
+ * Mapping symbols are used to mark and label the transitions between code and
+ * data in elf files. They begin with a "$" dollar symbol. Don't correlate them
+ * as they often all have the same name either "$x" to mark the start of code
+ * or "$d" to mark the start of data.
+ */
+static bool kpatch_is_mapping_symbol(struct kpatch_elf *kelf, struct symbol *sym)
+{
+	switch (kelf->arch) {
+	case AARCH64:
+		if (sym->name && sym->name[0] == '$'
+			&& sym->type == STT_NOTYPE \
+			&& sym->bind == STB_LOCAL)
+			return true;
+	case X86_64:
+	case PPC64:
+	case S390:
+		return false;
+	default:
+		ERROR("unsupported arch");
+	}
+
+	return false;
+}
+
+static unsigned int function_padding_size(struct kpatch_elf *kelf, struct symbol *sym)
+{
+	unsigned int size = 0;
+
+	switch (kelf->arch) {
+	case AARCH64:
+	{
+		uint8_t *insn = sym->sec->data->d_buf;
+		unsigned int i;
+		void *insn_end = sym->sec->data->d_buf + sym->sym.st_value;
+
+		/*
+		 * If the arm64 kernel is compiled with CONFIG_DYNAMIC_FTRACE_WITH_CALL_OPS
+		 * then there are two NOPs before the function and a `BTI C` + 2 NOPs at the
+		 * start of the function. Verify the presence of the two NOPs before the
+		 * function entry.
+		 */
+		for (i = 0; (void *)insn < insn_end; i++, insn += 4)
+			if (insn[0] != 0x1f || insn[1] != 0x20 ||
+			    insn[2] != 0x03 || insn[3] != 0xd5)
+				break;
+
+		if (i == 2)
+			size = 8;
+		else if (i != 0)
+			log_error("function %s within section %s has invalid padding\n", sym->name, sym->sec->name);
+			
+		break;
+	}
+	default:
+		break;
+	}
+
+	return size;
+}
+
+/*
  * When compiling with -ffunction-sections and -fdata-sections, almost every
  * symbol gets its own dedicated section.  We call such symbols "bundled"
  * symbols.  They're indicated by "sym->sec->sym == sym".
@@ -244,6 +307,8 @@ static void kpatch_bundle_symbols(struct kpatch_elf *kelf)
 				expected_offset = sym->pfx->sym.st_size;
 			else if (is_gcc6_localentry_bundled_sym(kelf, sym))
 				expected_offset = 8;
+			else if (sym->type == STT_FUNC)
+				expected_offset = function_padding_size(kelf, sym);
 			else
 				expected_offset = 0;
 
@@ -622,6 +687,8 @@ static void kpatch_compare_correlated_section(struct section *sec)
 	 */
 	if (!strcmp(sec->name, ".rela__mcount_loc") ||
 	    !strcmp(sec->name, "__mcount_loc") ||
+	    !strcmp(sec->name, ".sframe") ||
+	    !strcmp(sec->name, ".rela.sframe") ||
 	    !strcmp(sec->name, ".rela__patchable_function_entries") ||
 	    !strcmp(sec->name, "__patchable_function_entries")) {
 		sec->status = SAME;
@@ -706,6 +773,12 @@ static bool insn_is_load_immediate(struct kpatch_elf *kelf, void *addr)
 
 		break;
 
+	case AARCH64:
+		/* Verify mov w2 <line number> */
+		if ((insn[0] & 0b11111) == 0x2 && insn[3] == 0x52)
+			return true;
+		break;
+
 	default:
 		ERROR("unsupported arch");
 	}
@@ -746,6 +819,7 @@ static bool kpatch_line_macro_change_only(struct kpatch_elf *kelf,
 	void *data1, *data2, *insn1, *insn2;
 	struct rela *r, *rela;
 	bool found, found_any = false;
+	bool warn_printk_only = (kelf->arch == AARCH64);
 
 	if (sec->status != CHANGED ||
 	    is_rela_section(sec) ||
@@ -809,8 +883,15 @@ static bool kpatch_line_macro_change_only(struct kpatch_elf *kelf,
 			    !strncmp(rela->sym->name, "__func__.", 9))
 				continue;
 
+			if (!strcmp(rela->sym->name, "__warn_printk")) {
+				found = true;
+				break;
+			}
+
+			if (warn_printk_only)
+				return false;
+
 			if (!strncmp(rela->sym->name, "warn_slowpath_", 14) ||
-			    !strcmp(rela->sym->name, "__warn_printk") ||
 			    !strcmp(rela->sym->name, "__might_sleep") ||
 			    !strcmp(rela->sym->name, "___might_sleep") ||
 			    !strcmp(rela->sym->name, "__might_fault") ||
@@ -1075,15 +1156,15 @@ static void kpatch_correlate_sections(struct list_head *seclist_orig,
 	}
 }
 
-static void kpatch_correlate_symbols(struct list_head *symlist_orig,
-		struct list_head *symlist_patched)
+static void kpatch_correlate_symbols(struct kpatch_elf *kelf_orig,
+		struct kpatch_elf *kelf_patched)
 {
 	struct symbol *sym_orig, *sym_patched;
 
-	list_for_each_entry(sym_orig, symlist_orig, list) {
+	list_for_each_entry(sym_orig, &kelf_orig->symbols, list) {
 		if (sym_orig->twin)
 			continue;
-		list_for_each_entry(sym_patched, symlist_patched, list) {
+		list_for_each_entry(sym_patched, &kelf_patched->symbols, list) {
 			if (kpatch_mangled_strcmp(sym_orig->name, sym_patched->name) ||
 			    sym_orig->type != sym_patched->type || sym_patched->twin)
 				continue;
@@ -1101,6 +1182,9 @@ static void kpatch_correlate_symbols(struct list_head *symlist_orig,
 			 */
 			if (sym_orig->type == STT_NOTYPE &&
 			    !strncmp(sym_orig->name, ".LC", 3))
+				continue;
+
+			if (kpatch_is_mapping_symbol(kelf_orig, sym_orig))
 				continue;
 
 			/* group section symbols must have correlated sections */
@@ -1508,7 +1592,7 @@ static void kpatch_correlate_elfs(struct kpatch_elf *kelf_orig,
 		struct kpatch_elf *kelf_patched)
 {
 	kpatch_correlate_sections(&kelf_orig->sections, &kelf_patched->sections);
-	kpatch_correlate_symbols(&kelf_orig->symbols, &kelf_patched->symbols);
+	kpatch_correlate_symbols(kelf_orig, kelf_patched);
 }
 
 static void kpatch_compare_correlated_elements(struct kpatch_elf *kelf)
@@ -1559,6 +1643,13 @@ static void kpatch_replace_sections_syms(struct kpatch_elf *kelf)
 
 	list_for_each_entry(relasec, &kelf->sections, list) {
 		if (!is_rela_section(relasec) || is_debug_section(relasec))
+			continue;
+
+		/*
+		 * We regenerate __patchable_function_entries from scratch so
+		 * don't bother replacing section symbols in its relasec.
+		 */
+		if (is_patchable_function_entries_section(relasec))
 			continue;
 
 		list_for_each_entry(rela, &relasec->relas, list) {
@@ -1624,7 +1715,8 @@ static void kpatch_replace_sections_syms(struct kpatch_elf *kelf)
 
 				if (is_text_section(relasec->base) &&
 				    !is_text_section(sym->sec) &&
-				    rela->type == R_X86_64_32S &&
+				    (rela->type == R_X86_64_32S ||
+				     rela->type == R_AARCH64_ABS64) &&
 				    rela->addend == (long)sym->sec->sh.sh_size &&
 				    end == (long)sym->sec->sh.sh_size) {
 
@@ -1660,6 +1752,9 @@ static void kpatch_replace_sections_syms(struct kpatch_elf *kelf)
 					 *    be the same as &var2.
 					 */
 				} else if (target_off == start && target_off == end) {
+
+					if(kpatch_is_mapping_symbol(kelf, sym))
+						continue;
 
 					/*
 					 * Allow replacement for references to
@@ -1700,8 +1795,8 @@ static void kpatch_check_func_profiling_calls(struct kpatch_elf *kelf)
 		    (sym->parent && sym->parent->status == CHANGED))
 			continue;
 		if (!sym->twin->has_func_profiling) {
-			log_error("function %s has no fentry/mcount call, unable to patch\n",
-				  sym->name);
+			log_error("function %s doesn't have patchable function entry, unable to patch\n",
+				   sym->name);
 			errs++;
 		}
 	}
@@ -1905,6 +2000,7 @@ static void kpatch_include_standard_elements(struct kpatch_elf *kelf)
 		    !strcmp(sec->name, ".symtab") ||
 		    !strcmp(sec->name, ".toc") ||
 		    !strcmp(sec->name, ".rodata") ||
+		    !strcmp(sec->name, ".rodata.str") ||
 		    is_string_literal_section(sec)) {
 			kpatch_include_section(sec);
 		}
@@ -2493,28 +2589,28 @@ static bool static_call_sites_group_filter(struct lookup_table *lookup,
 static struct special_section special_sections[] = {
 	{
 		.name		= "__bug_table",
-		.arch		= X86_64 | PPC64 | S390,
+		.arch		= AARCH64 | X86_64 | PPC64 | S390,
 		.group_size	= bug_table_group_size,
 	},
 	{
 		.name		= ".fixup",
-		.arch		= X86_64 | PPC64 | S390,
+		.arch		= AARCH64 | X86_64 | PPC64 | S390,
 		.group_size	= fixup_group_size,
 	},
 	{
 		.name		= "__ex_table", /* must come after .fixup */
-		.arch		= X86_64 | PPC64 | S390,
+		.arch		= AARCH64 | X86_64 | PPC64 | S390,
 		.group_size	= ex_table_group_size,
 	},
 	{
 		.name		= "__jump_table",
-		.arch		= X86_64 | PPC64 | S390,
+		.arch		= AARCH64 | X86_64 | PPC64 | S390,
 		.group_size	= jump_table_group_size,
 		.group_filter	= jump_table_group_filter,
 	},
 	{
 		.name		= ".printk_index",
-		.arch		= X86_64 | PPC64 | S390,
+		.arch		= AARCH64 | X86_64 | PPC64 | S390,
 		.group_size	= printk_index_group_size,
 	},
 	{
@@ -2529,7 +2625,7 @@ static struct special_section special_sections[] = {
 	},
 	{
 		.name		= ".altinstructions",
-		.arch		= X86_64 | S390,
+		.arch		= AARCH64 | X86_64 | S390,
 		.group_size	= altinstructions_group_size,
 	},
 	{
@@ -3847,6 +3943,38 @@ static void kpatch_create_ftrace_callsite_sections(struct kpatch_elf *kelf)
 		}
 
 		switch(kelf->arch) {
+		case AARCH64: {
+			unsigned char *insn = sym->sec->data->d_buf;
+			int padding;
+			int i;
+
+			/*
+			 * Skip the padding NOPs added by CALL_OPS.
+			 */
+			padding = function_padding_size(kelf, sym);
+			insn += padding;
+
+			/*
+			 * If BTI (Branch Target Identification) is enabled then there
+			 * might be an additional 'BTI C' instruction before the two
+			 * patchable function entry 'NOP's.
+			 * i.e. 0xd503245f (little endian)
+			 */
+			if (insn[0] == 0x5f) {
+				if (insn[1] != 0x24 || insn[2] != 0x03 || insn[3] != 0xd5)
+					ERROR("%s: unexpected instruction in patch section of function\n", sym->name);
+				if (!padding)
+					insn_offset += 4;
+				insn += 4;
+			}
+			for (i = 0; i < 8; i += 4) {
+				/* We expect a NOP i.e. 0xd503201f (little endian) */
+				if (insn[i] != 0x1f || insn[i + 1] != 0x20 ||
+				    insn[i + 2] != 0x03 || insn [i + 3] != 0xd5)
+					ERROR("%s: unexpected instruction in patch section of function\n", sym->name);
+			}
+			break;
+		}
 		case PPC64: {
 			unsigned char *insn;
 
@@ -4177,6 +4305,10 @@ static void kpatch_find_func_profiling_calls(struct kpatch_elf *kelf)
 			if (insn[0] == 0xc0 && insn[1] == 0x04 &&
 				insn[2] == 0x00 && insn[3] == 0x00 &&
 				insn[4] == 0x00 && insn[5] == 0x00)
+				sym->has_func_profiling = 1;
+			break;
+		case AARCH64:
+			if (kpatch_symbol_has_pfe_entry(kelf, sym))
 				sym->has_func_profiling = 1;
 			break;
 		default:
