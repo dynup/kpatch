@@ -382,6 +382,19 @@ clang_version_check() {
 	return
 }
 
+cc_option_check() {
+	local option="$1"
+
+	if $GCC -Werror "$option" -c -x c /dev/null -o /dev/null 2>/dev/null; then
+		CC_OPTION+="$option";
+	fi
+
+	if $CLANG -Werror "$option" -c -x c /dev/null -o /dev/null 2>/dev/null; then
+		CC_OPTION+="$option";
+	fi
+
+}
+
 find_special_section_data() {
 	local -A check
 
@@ -403,6 +416,9 @@ find_special_section_data() {
 			check[a]=true					# alt_instr
 			;;
 		"aarch64")
+			check[a]=true					# alt_instr
+			;;
+		"loongarch64")
 			check[a]=true					# alt_instr
 			;;
 	esac
@@ -1288,7 +1304,15 @@ declare -a MAKEVARS
 if [[ -n "$CONFIG_CC_IS_CLANG" ]]; then
 	MAKEVARS+=("CC=${KPATCH_CC_PREFIX}${CLANG}")
 	MAKEVARS+=("HOSTCC=clang")
+	if [[ "$ARCH" = "loongarch64" ]]; then
+		cc_option_check "-fno-direct-access-external-data"
+		MAKEVARS+=("KBUILD_CFLAGS_KERNEL+="$CC_OPTION"")
+	fi
 else
+	if [[ "$ARCH" = "loongarch64" ]]; then
+		cc_option_check "-mno-direct-extern-access"
+		MAKEVARS+=("KBUILD_CFLAGS_KERNEL+="$CC_OPTION"")
+	fi
 	MAKEVARS+=("CC=${KPATCH_CC_PREFIX}${GCC}")
 fi
 
