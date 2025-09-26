@@ -40,6 +40,7 @@ set -o pipefail
 BASE="$PWD"
 SCRIPTDIR="$(readlink -f "$(dirname "$(type -p "$0")")")"
 ARCH="$(uname -m)"
+TARGET_ARCH="${TARGET_ARCH:-$ARCH}"
 CPUS="$(getconf _NPROCESSORS_ONLN)"
 CACHEDIR="${CACHEDIR:-$HOME/.kpatch}"
 KERNEL_SRCDIR="$CACHEDIR/src"
@@ -390,7 +391,7 @@ find_special_section_data() {
 	check[e]=true						# exception_table_entry
 
 	# Arch-specific features
-	case "$ARCH" in
+	case "$TARGET_ARCH" in
 		"x86_64")
 			check[a]=true					# alt_instr
 			kernel_version_gte 5.10.0 && check[s]=true	# static_call_site
@@ -722,6 +723,15 @@ print_supported_distro(){
 	fi
 }
 
+# Used in "make ARCH=xxx" when making the kernel.
+# Match "aarch64" to "arm64", while keep everything else the same.
+kernel_make_arch() {
+	if [[ "$1" == "aarch64" ]]; then
+		echo "arm64"
+	else
+		echo "$1"
+	fi
+}
 
 usage() {
 	echo "usage: $(basename "$0") [options] <patch1 ... patchN>" >&2
@@ -1299,6 +1309,11 @@ else
 	MAKEVARS+=("LD=${KPATCH_CC_PREFIX}${LD}")
 fi
 
+if [[ "$ARCH" != "$TARGET_ARCH" ]]; then
+	KARCH=$(kernel_make_arch "$TARGET_ARCH")
+	MAKEVARS+=("ARCH=$KARCH")
+fi
+
 
 # $TARGETS used as list, no quotes.
 # shellcheck disable=SC2086
@@ -1489,7 +1504,12 @@ fi
 cd "$TEMPDIR/output" || die
 # $KPATCH_LDFLAGS and result of find used as list, no quotes.
 # shellcheck disable=SC2086,SC2046
-"$LD" -r $KPATCH_LDFLAGS -o ../patch/tmp_output.o $(find . -name "*.o") 2>&1 | logger || die
+if [[ "$ARCH" != "$TARGET_ARCH" ]]; then
+	# if cross compiling, use LLD to link
+	"$LLD" -r $KPATCH_LDFLAGS -o ../patch/tmp_output.o $(find . -name "*.o") 2>&1 | logger || die
+else
+	"$LD" -r $KPATCH_LDFLAGS -o ../patch/tmp_output.o $(find . -name "*.o") 2>&1 | logger || die
+fi
 
 if [[ "$USE_KLP" -eq 1 ]]; then
 	cp -f "$TEMPDIR"/patch/tmp_output.o "$TEMPDIR"/patch/output.o || die
