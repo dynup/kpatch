@@ -281,7 +281,7 @@ static unsigned int function_padding_size(struct kpatch_elf *kelf, struct symbol
 			size = 8;
 		else if (i != 0)
 			log_error("function %s within section %s has invalid padding\n", sym->name, sym->sec->name);
-			
+
 		break;
 	}
 	default:
@@ -517,6 +517,15 @@ static int kpatch_mangled_strcmp(char *s1, char *s2)
 		return strcmp(s1, s2);
 
 	if (!strncmp(s1, "__UNIQUE_ID_", 12))
+		return __kpatch_unique_id_strcmp(s1, s2);
+
+	/*
+	 * With LLVM, dynamic debug unique id looks like
+	 *   <func_name>.__UNIQUE_ID_ddebug<number>.
+	 *
+	 * Use __kpatch_unique_id_strcmp to compare them.
+	 */
+	if (strstr(s1, "__UNIQUE_ID_ddebug"))
 		return __kpatch_unique_id_strcmp(s1, s2);
 
 	while (*s1 == *s2) {
