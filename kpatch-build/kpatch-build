@@ -33,7 +33,7 @@
 # - Builds the patched kernel/module and monitors changed objects
 # - Builds the patched objects with gcc flags -f[function|data]-sections
 # - Runs kpatch tools to create and link the patch kernel module
-VERSION=0.9.10
+VERSION=0.9.11
 
 set -o pipefail
 
