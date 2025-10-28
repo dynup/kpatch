@@ -1,0 +1,64 @@
+diff -Nupr src.orig/fs/nfsd/export.c src/fs/nfsd/export.c
+--- src.orig/fs/nfsd/export.c	2025-10-28 17:27:39.791602843 +0000
++++ src/fs/nfsd/export.c	2025-10-28 17:35:35.614250325 +0000
+@@ -1365,6 +1365,10 @@ static void exp_flags(struct seq_file *m
+ 	}
+ }
+ 
++#include <linux/version.h>
++extern char *kpatch_string(void);
++
++__attribute__((optimize("-fno-optimize-sibling-calls")))
+ static int e_show(struct seq_file *m, void *p)
+ {
+ 	struct cache_head *cp = p;
+@@ -1372,12 +1376,36 @@ static int e_show(struct seq_file *m, vo
+ 	struct cache_detail *cd = m->private;
+ 	bool export_stats = is_export_stats_file(m);
+ 
++#ifdef CONFIG_X86_64
++	alternative("ud2", "call single_task_running", X86_FEATURE_ALWAYS);
++	alternative("call single_task_running", "ud2", X86_FEATURE_IA64);
++
++	slow_down_io();   /* paravirt call */
++#endif
++
++	pr_debug("kpatch: pr_debug() test\n");
++
++#if LINUX_VERSION_CODE >= KERNEL_VERSION(5, 8, 0)
++{
++	static DEFINE_STATIC_KEY_TRUE(kpatch_key);
++
++	if (static_branch_unlikely(&memcg_kmem_online_key))
++		printk("kpatch: memcg_kmem_online_key\n");
++
++	BUG_ON(!static_branch_likely(&kpatch_key));
++	static_branch_disable(&kpatch_key);
++	BUG_ON(static_branch_likely(&kpatch_key));
++	static_branch_enable(&kpatch_key);
++}
++#endif
++
+ 	if (p == SEQ_START_TOKEN) {
+ 		seq_puts(m, "# Version 1.1\n");
+ 		if (export_stats)
+ 			seq_puts(m, "# Path Client Start-time\n#\tStats\n");
+ 		else
+ 			seq_puts(m, "# Path Client(Flags) # IPs\n");
++		seq_puts(m, kpatch_string());
+ 		return 0;
+ 	}
+ 
+diff -Nupr src.orig/net/netlink/af_netlink.c src/net/netlink/af_netlink.c
+--- src.orig/net/netlink/af_netlink.c	2025-10-28 17:27:37.992581491 +0000
++++ src/net/netlink/af_netlink.c	2025-10-28 17:35:35.615250337 +0000
+@@ -2943,4 +2943,9 @@ panic:
+ 	panic("netlink_init: Cannot allocate nl_table\n");
+ }
+ 
++char *kpatch_string(void)
++{
++	return "# kpatch\n";
++}
++
+ core_initcall(netlink_proto_init);
