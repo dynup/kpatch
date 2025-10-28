@@ -6,7 +6,7 @@
 
 Name: kpatch
 Summary: Dynamic kernel patching
-Version: 0.9.10
+Version: 0.9.11
 License: GPLv2
 Group: System Environment/Kernel
 URL: http://github.com/dynup/kpatch
@@ -104,6 +104,15 @@ rm -rf %{buildroot}
 %{_mandir}/man1/kpatch-build.1*
 
 %changelog
+* Mon Oct 27 2025 Joe Lawrence <joe.lawrence@redhat.com> - 0.9.11
+- Initial ARM64 architecture support
+- Support for kernel module namepsaces
+- Kpatch utility support for 'stack_order' sysfs attribute
+- Distro support/fixes for AlmaLinux, Fedora, Photon OS, RHEL-9.6
+- Cross compilation with env TARGET_ARCH
+- Migrated internal testing to Packit Testing Farm
+- Support for gcc-14
+
 * Mon Jan 20 2025 Joe Lawrence <joe.lawrence@redhat.com> - 0.9.10
 - Support for Amazon Linux, Anolis OS, and OpenCloudOS distros
 - Fix cleanup when kpatch is installed in read-only location
