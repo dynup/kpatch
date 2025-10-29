@@ -18,9 +18,15 @@
 #    ID=rhel VERSION_ID=7.8 ./rebase-patches rhel-7.7/*{.patch,.disabled}
 # % cp rhel-7.7/*.test rhel-7.8/
 
-OUTDIR=$(pwd)/${ID}-${VERSION_ID}
-mkdir -p "$OUTDIR"
+if [ -z "$SRCDIR" ] || [ -z "$ID" ] || [ -z "$VERSION_ID" ]; then
+  echo "ERROR: SRCDIR, ID, and VERSION_ID environment variables must be set"
+  exit 1
+fi
 
+SRCDIR="$(realpath "$SRCDIR")"
+OUTDIR="$(realpath "${ID}"-"${VERSION_ID}")"
+
+mkdir -p "$OUTDIR"
 echo "* Making backup copy of kernel sources"
 rm -rf "${SRCDIR}.orig"
 cp -r "$SRCDIR" "${SRCDIR}.orig"
