@@ -1,6 +1,15 @@
 diff -Nupr src.orig/fs/proc/array.c src/fs/proc/array.c
---- src.orig/fs/proc/array.c	2025-11-03 16:25:30.873267824 -0500
-+++ src/fs/proc/array.c	2025-11-03 16:26:14.796687815 -0500
+--- src.orig/fs/proc/array.c	2025-11-14 13:00:30.746093746 -0300
++++ src/fs/proc/array.c	2025-11-14 13:59:53.699363889 -0300
+@@ -145,7 +145,7 @@ static inline const char *get_task_state
+ 	return task_state_array[task_state_index(tsk)];
+ }
+ 
+-static inline void task_state(struct seq_file *m, struct pid_namespace *ns,
++static __always_inline void task_state(struct seq_file *m, struct pid_namespace *ns,
+ 				struct pid *pid, struct task_struct *p)
+ {
+ 	struct user_namespace *user_ns = seq_user_ns(m);
 @@ -395,12 +395,19 @@ static inline void task_seccomp(struct s
  	seq_putc(m, '\n');
  }
@@ -22,8 +31,8 @@ diff -Nupr src.orig/fs/proc/array.c src/fs/proc/array.c
  
  static void task_cpus_allowed(struct seq_file *m, struct task_struct *task)
 diff -Nupr src.orig/kernel/exit.c src/kernel/exit.c
---- src.orig/kernel/exit.c	2025-11-03 16:25:30.893268015 -0500
-+++ src/kernel/exit.c	2025-11-03 16:26:14.796687815 -0500
+--- src.orig/kernel/exit.c	2025-11-14 13:00:31.154098292 -0300
++++ src/kernel/exit.c	2025-11-14 13:01:14.887585603 -0300
 @@ -889,6 +889,7 @@ static void synchronize_group_exit(struc
  		coredump_task_exit(tsk, core_state);
  }
@@ -42,8 +51,8 @@ diff -Nupr src.orig/kernel/exit.c src/kernel/exit.c
  	 * FIXME: do that only when needed, using sched_exit tracepoint
  	 */
 diff -Nupr src.orig/kernel/fork.c src/kernel/fork.c
---- src.orig/kernel/fork.c	2025-11-03 16:25:30.893268015 -0500
-+++ src/kernel/fork.c	2025-11-03 16:26:14.797687824 -0500
+--- src.orig/kernel/fork.c	2025-11-14 13:00:31.154098292 -0300
++++ src/kernel/fork.c	2025-11-14 13:01:14.889741434 -0300
 @@ -2561,6 +2561,7 @@ struct task_struct *create_io_thread(int
   *
   * args->exit_signal is expected to be checked for sanity by the caller.
