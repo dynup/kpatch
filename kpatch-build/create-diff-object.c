@@ -400,6 +400,18 @@ static bool is_string_literal_section(struct section *sec)
 }
 
 /*
+ * Clang generates .data..L__unnamed_XX sections for anonymous constants.
+ * The numeric suffix is unstable (it can change if code is added/removed).
+ * Therefore, we must never correlate these by name; the patched object
+ * must always allocate a fresh copy (Status: NEW).
+ */
+static bool is_clang_unnamed_data(const char *name)
+{
+	return !strncmp(name, ".data..L__unnamed_", 18) ||
+		!strncmp(name, ".data.__unnamed_", 16);
+}
+
+/*
  * This function detects whether the given symbol is a "special" static local
  * variable (for lack of a better term).
  *
@@ -426,6 +438,10 @@ static bool is_special_static(struct symbol *sym)
 
 	/* pr_debug() uses static local variables in the __verbose or __dyndbg section */
 	if (is_dynamic_debug_symbol(sym))
+		return true;
+
+	/* Do not try to correlate statics inside unstable Clang sections */
+	if (sym->sec && is_clang_unnamed_data(sym->sec->name))
 		return true;
 
 	if (sym->type == STT_SECTION) {
@@ -1150,6 +1166,11 @@ static void kpatch_correlate_sections(struct list_head *seclist_orig,
 			if (is_ubsan_sec(sec_orig->name))
 				continue;
 
+			/* Skip correlation for unstable Clang anonymous sections */
+			if (is_clang_unnamed_data(sec_orig->name) ||
+			    is_clang_unnamed_data(sec_patched->name))
+				continue;
+
 			if (is_special_static(is_rela_section(sec_orig) ?
 					      sec_orig->base->secsym :
 					      sec_orig->secsym))
@@ -1793,6 +1814,7 @@ static void kpatch_replace_sections_syms(struct kpatch_elf *kelf)
 			}
 
 			if (!found && !is_string_literal_section(rela->sym->sec) &&
+			    !is_clang_unnamed_data(rela->sym->name) &&
 			    strncmp(rela->sym->name, ".rodata", 7)) {
 				ERROR("%s+0x%x: can't find replacement symbol for %s+%ld reference",
 				      relasec->base->name, rela->offset, rela->sym->name, rela->addend);
