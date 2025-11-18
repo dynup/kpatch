@@ -82,7 +82,8 @@ declare -rA SUPPORTED_RPM_DISTROS=(
 	["photon"]="Photon OS"
 	["rhel"]="RHEL"
 	["almalinux"]="AlmaLinux"
-	["amzn"]="Amazon Linux")
+	["amzn"]="Amazon Linux"
+	["rocky"]="Rocky")
 
 
 warn() {

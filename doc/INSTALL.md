@@ -5,7 +5,7 @@ Table of contents
 =================
 
 - [Prerequisites](#prerequisites)
-	- [Fedora, RHEL, CentOS](#fedora-rhel-centos)
+	- [Fedora, RHEL, CentOS, Rocky](#fedora-rhel-centos-rocky)
 	- [Oracle Linux 7](#oracle-linux-7)
 	- [Ubuntu](#ubuntu)
 	- [Debian 9 (Stretch)](#debian-9-stretch)
@@ -24,7 +24,7 @@ Before starting, see [Supported
 Architectures](../README.md#supported-architectures) and check if your device's
 architecture is supported.
 
-### Fedora, RHEL, CentOS
+### Fedora, RHEL, CentOS, Rocky
 
 *NOTE: You'll need about 15GB of free disk space for the kpatch-build cache in
 `~/.kpatch` and for ccache.*
@@ -312,5 +312,3 @@ OPTIONAL: Install kpatch to `/usr/local`:
 
 Alternatively, the kpatch and kpatch-build scripts can be run directly from the
 git tree.
-
-
