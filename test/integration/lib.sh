@@ -94,6 +94,11 @@ kpatch_fedora_dependencies()
 	kpatch_rhel_dependencies
 }
 
+kpatch_rocky_dependencies()
+{
+	kpatch_rhel_dependencies
+}
+
 kpatch_openEuler_dependencies()
 {
 	local kernel_version
