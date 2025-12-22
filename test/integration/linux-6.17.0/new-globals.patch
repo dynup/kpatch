@@ -1,12 +1,13 @@
 diff -Nupr src.orig/fs/proc/cmdline.c src/fs/proc/cmdline.c
 --- src.orig/fs/proc/cmdline.c	2025-11-03 16:25:30.873267824 -0500
 +++ src/fs/proc/cmdline.c	2025-11-03 16:26:10.350645302 -0500
-@@ -22,3 +22,10 @@ static int __init proc_cmdline_init(void
+@@ -22,3 +22,11 @@ static int __init proc_cmdline_init(void
  	return 0;
  }
  fs_initcall(proc_cmdline_init);
 +
 +#include <linux/printk.h>
++void kpatch_print_message(void);
 +void kpatch_print_message(void)
 +{
 +	if (!jiffies)

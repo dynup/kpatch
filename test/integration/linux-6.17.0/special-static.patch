@@ -5,7 +5,7 @@ diff -Nupr src.orig/kernel/fork.c src/kernel/fork.c
  	posix_cputimers_group_init(pct, cpu_limit);
  }
  
-+void kpatch_foo(void)
++static void kpatch_foo(void)
 +{
 +	if (!jiffies)
 +		printk("kpatch copy signal\n");

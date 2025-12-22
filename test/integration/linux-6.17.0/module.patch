@@ -63,10 +63,11 @@ diff -Nupr src.orig/fs/xfs/xfs_stats.c src/fs/xfs/xfs_stats.c
 diff -Nupr src.orig/net/netlink/af_netlink.c src/net/netlink/af_netlink.c
 --- src.orig/net/netlink/af_netlink.c	2025-11-03 16:25:28.759247610 -0500
 +++ src/net/netlink/af_netlink.c	2025-11-03 16:25:57.359521082 -0500
-@@ -2952,4 +2952,9 @@ panic:
+@@ -2952,4 +2952,10 @@ panic:
  	panic("netlink_init: Cannot allocate nl_table\n");
  }
  
++char *kpatch_string(void);
 +char *kpatch_string(void)
 +{
 +	return "kpatch";
