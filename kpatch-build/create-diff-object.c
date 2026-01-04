@@ -4067,6 +4067,21 @@ static void kpatch_create_ftrace_callsite_sections(struct kpatch_elf *kelf)
 			insn_offset = sym->sym.st_value;
 			break;
 		}
+		case LOONGARCH64: {
+			bool found = false;
+			unsigned char *insn = sym->sec->data->d_buf + sym->sym.st_value;
+
+			/* 0x03400000 is NOP instruction for LoongArch. */
+			if (insn[0] == 0x00 && insn[1] == 0x00 && insn[2] == 0x40 && insn[3] == 0x03 &&
+			    insn[4] == 0x00 && insn[5] == 0x00 && insn[6] == 0x40 && insn[7] == 0x03)
+				found = true;
+
+			if (!found)
+				ERROR("%s: unexpected instruction at the start of the function", sym->name);
+
+			insn_offset = 0;
+			break;
+		}
 		default:
 			ERROR("unsupported arch");
 		}
@@ -4325,6 +4340,7 @@ static void kpatch_find_func_profiling_calls(struct kpatch_elf *kelf)
 				sym->has_func_profiling = 1;
 			break;
 		case AARCH64:
+		case LOONGARCH64:
 			if (kpatch_symbol_has_pfe_entry(kelf, sym))
 				sym->has_func_profiling = 1;
 			break;
