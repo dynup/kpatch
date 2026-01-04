@@ -407,6 +407,9 @@ find_special_section_data() {
 		"aarch64")
 			check[a]=true					# alt_instr
 			;;
+		"loongarch64")
+			check[a]=true					# alt_instr
+			;;
 	esac
 
 	# Kernel CONFIG_ features
