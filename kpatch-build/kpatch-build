@@ -1290,6 +1290,7 @@ if [[ "$ARCH" = "s390x" ]]; then
 fi
 
 if [[ "$ARCH" = "loongarch64" ]]; then
+	ARCH_KCFLAGS="-fPIC"
 	if [[ -n "$CONFIG_CC_IS_CLANG" ]]; then
 		ARCH_MAKEVARS+=("KBUILD_CFLAGS_KERNEL+=-fno-direct-access-external-data")
 	else
