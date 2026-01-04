@@ -3065,6 +3065,11 @@ static void kpatch_mark_ignored_sections(struct kpatch_elf *kelf)
 			    !strcmp(sec->name, "__patchable_function_entries"))
 				sec->ignore = 1;
 		}
+
+		if (kelf->arch == LOONGARCH64) {
+			if (!strncmp(sec->name, ".rela.orc_unwind_ip", 19))
+				sec->ignore = 1;
+		}
 	}
 
 	sec = find_section_by_name(&kelf->sections, ".kpatch.ignore.sections");
