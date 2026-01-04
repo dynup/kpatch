@@ -42,6 +42,7 @@ Supported Architectures
 - [x] ppc64le
 - [x] arm64
 - [x] s390 [upstream prerequisites](doc/s390-upstream-prerequisites.md)
+- [x] loongarch64
 
 Installation
 ------------
