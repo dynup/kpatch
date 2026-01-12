@@ -1,0 +1,9 @@
+#!/bin/bash
+
+set -o errexit
+
+sudo modprobe xfs
+sleep 5
+echo "file fs/xfs/xfs_stats.c +p" > /sys/kernel/debug/dynamic_debug/control
+grep -q kpatch /sys/fs/xfs/stats/stats
+dmesg | grep -q "kpatch: pr_debug"

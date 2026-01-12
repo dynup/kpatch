@@ -10,11 +10,13 @@ _:
       # In this case (no build), it is a bug, see packit/packit-service#2841
       # Yet, the `rawhide` has no effect as there is no Copr build happening.
       fedora-rawhide-x86_64:
-        distros: [Fedora-37-Updated]
+        distros: [Fedora-43-Updated]
       fedora-rawhide-s390x:
-        distros: [Fedora-37-Updated]
+        distros: [Fedora-43-Updated]
       fedora-rawhide-ppc64le:
-        distros: [Fedora-37-Updated]
+        distros: [Fedora-43-Updated]
+      fedora-rawhide-aarch64:
+        distros: [Fedora-43-Updated]
     skip_build: true
     manual_trigger: false
     tmt_plan: kpatch-integration-upstream

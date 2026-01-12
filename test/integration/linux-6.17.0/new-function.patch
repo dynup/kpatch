@@ -1,0 +1,25 @@
+diff -Nupr src.orig/drivers/tty/n_tty.c src/drivers/tty/n_tty.c
+--- src.orig/drivers/tty/n_tty.c	2025-11-03 16:25:29.659256215 -0500
++++ src/drivers/tty/n_tty.c	2025-11-03 16:26:05.536599271 -0500
+@@ -2343,7 +2343,7 @@ more_to_be_read:
+  *	 (note that the process_output*() functions take this lock themselves)
+  */
+ 
+-static ssize_t n_tty_write(struct tty_struct *tty, struct file *file,
++static ssize_t noinline kpatch_n_tty_write(struct tty_struct *tty, struct file *file,
+ 			   const u8 *buf, size_t nr)
+ {
+ 	const u8 *b = buf;
+@@ -2428,6 +2428,12 @@ break_out:
+ 	return (b - buf) ? b - buf : retval;
+ }
+ 
++static ssize_t __attribute__((optimize("-fno-optimize-sibling-calls"))) n_tty_write(struct tty_struct *tty, struct file *file,
++										    const unsigned char *buf, size_t nr)
++{
++	return kpatch_n_tty_write(tty, file, buf, nr);
++}
++
+ /**
+  * n_tty_poll		-	poll method for N_TTY
+  * @tty: terminal device
