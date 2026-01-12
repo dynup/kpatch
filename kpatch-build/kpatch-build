@@ -319,6 +319,17 @@ find_core_symvers() {
 	[[ -e "$SYMVERSFILE" ]]
 }
 
+cc_option_check() {
+	local compiler="$1"
+	local option="$2"
+
+	if "$compiler" -Werror "$option" -c -x c /dev/null -o /dev/null 2>/dev/null; then
+		return 0
+	fi
+
+	return 1
+}
+
 gcc_version_from_file() {
 	"$READELF" -p .comment "$1" | grep -m 1 -o 'GCC:.*'
 }
@@ -339,6 +350,11 @@ gcc_version_check() {
 		warn "gcc >= 4.8 required for -pg -ffunction-settings"
 		echo "gcc output: $out"
 		return 1
+	fi
+
+	if [[ "$ARCH" = "loongarch64" ]]; then
+		cc_option_check "$GCC" "-mno-direct-extern-access" || \
+			die "gcc version ($gccver) doesn't support -mno-direct-extern-access"
 	fi
 
 	out="$("$GCC" -c -gz=none -o "$o" "$c" 2>&1)"
@@ -370,6 +386,11 @@ clang_version_check() {
 
 	clangver=$("$CLANG" --version | grep -m 1 -Eo 'clang version [0-9.]+')
 	kclangver="$(clang_version_from_file "$target")"
+
+	if [[ "$ARCH" = "loongarch64" ]]; then
+		cc_option_check "$CLANG" "-fno-direct-access-external-data" || \
+			die "clang version ($clangver) doesn't support -fno-direct-access-external-data"
+	fi
 
 	# ensure clang version matches that used to build the kernel
 	if [[ "$clangver" != "$kclangver" ]]; then
@@ -405,6 +426,9 @@ find_special_section_data() {
 			check[a]=true					# alt_instr
 			;;
 		"aarch64")
+			check[a]=true					# alt_instr
+			;;
+		"loongarch64")
 			check[a]=true					# alt_instr
 			;;
 	esac
@@ -1255,6 +1279,7 @@ remove_patches
 cp -LR "$DATADIR/patch" "$TEMPDIR" || die
 chmod -R u+rw "$TEMPDIR" || die
 
+declare -a ARCH_MAKEVARS
 if [[ "$ARCH" = "ppc64le" ]]; then
 	ARCH_KCFLAGS="-mcmodel=large -fplugin=$PLUGINDIR/ppc64le-plugin.so"
 fi
@@ -1262,6 +1287,15 @@ fi
 if [[ "$ARCH" = "s390x" ]]; then
 	ARCH_KCFLAGS="-mno-pic-data-is-text-relative -fno-section-anchors"
 	! kernel_version_gte 6.10.0 && ARCH_KCFLAGS+=" -fPIE"
+fi
+
+if [[ "$ARCH" = "loongarch64" ]]; then
+	ARCH_KCFLAGS="-fPIC"
+	if [[ -n "$CONFIG_CC_IS_CLANG" ]]; then
+		ARCH_MAKEVARS+=("KBUILD_CFLAGS_KERNEL+=-fno-direct-access-external-data")
+	else
+		ARCH_MAKEVARS+=("KBUILD_CFLAGS_KERNEL+=-mno-direct-extern-access")
+	fi
 fi
 
 export KCFLAGS="-I$DATADIR/patch -ffunction-sections -fdata-sections \
@@ -1302,7 +1336,7 @@ fi
 
 # $TARGETS used as list, no quotes.
 # shellcheck disable=SC2086
-make "${MAKEVARS[@]}" "-j$CPUS" $TARGETS 2>&1 | logger || die
+make "${ARCH_MAKEVARS[@]}" "${MAKEVARS[@]}" "-j$CPUS" $TARGETS 2>&1 | logger || die
 
 # Save original module symvers
 cp -f "$BUILDDIR/Module.symvers" "$TEMPDIR/Module.symvers" || die
@@ -1315,7 +1349,7 @@ export KPATCH_GCC_SRCDIR="$BUILDDIR"
 save_env
 # $TARGETS used as list, no quotes.
 # shellcheck disable=SC2086
-KBUILD_MODPOST_WARN=1 make "${MAKEVARS[@]}" "-j$CPUS" $TARGETS 2>&1 | logger || die
+KBUILD_MODPOST_WARN=1 make "${ARCH_MAKEVARS[@]}" "${MAKEVARS[@]}" "-j$CPUS" $TARGETS 2>&1 | logger || die
 
 # source.c:(.section+0xFF): undefined reference to `symbol'
 grep "undefined reference" "$LOGFILE" | sed -r "s/^.*\`(.*)'$/\\1/" \
