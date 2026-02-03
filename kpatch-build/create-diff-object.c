@@ -287,6 +287,43 @@ static unsigned int function_padding_size(struct kpatch_elf *kelf, struct symbol
 
 		break;
 	}
+	case X86_64: 
+	{
+		uint8_t *insn = sym->sec->data->d_buf;
+		uint8_t *insn_end = sym->sec->data->d_buf + sym->sym.st_value;
+	
+	       /*
+  	        * If the x86_64 kernel is compiled with CONFIG_CALL_PADDING
+  	        * then there are CONFIG_FUNCTION_PADDING_BYTES NOPs before the function.Verify the presence of the CONFIG_FUNCTION_PADDING_BYTES 
+  	        * NOPs before the function entry.
+  	        * Possible padding patterns before X86 functions:
+  	        * 1. NOP instructions (0x90) for alignment.
+  	        * 2. Multi-byte NOPs that compilers may insert (e.g., 0x66 0x90).
+  	        * 3. Jump tables or special instructions may exist before functions (adjust according to actual scenarios).
+                */
+		while (insn < insn_end) {
+
+			if (*insn == 0x90) {
+				size++;
+				insn++;
+			}
+			else if (insn + 1 < insn_end && 
+					  insn[0] == 0x66 && insn[1] == 0x90) {
+				size += 2;
+				insn += 2;
+			}
+			else {
+				break;
+			}
+		}
+	
+		if (size > 16) {
+			 log_error("function %s in section %s has excessive padding (%u bytes)\n",
+					  sym->name, sym->sec->name, size);
+			 size = 0;
+		}
+		break;
+	}
 	default:
 		break;
 	}
