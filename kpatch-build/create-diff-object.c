@@ -3011,7 +3011,7 @@ static void kpatch_check_relocations(struct kpatch_elf *kelf)
 			if (!rela->sym->sec)
 				continue;
 
-			sec_size = rela->sym->sec->data->d_size;
+			sec_size = rela->sym->sec->sh.sh_size;
 			sec_off = (long)rela->sym->sym.st_value +
 				  rela_target_offset(kelf, relasec, rela);
 
@@ -4233,6 +4233,7 @@ static void kpatch_build_strings_section_data(struct kpatch_elf *kelf)
 		strcpy(strtab, string->name);
 		strtab += strlen(string->name) + 1;
 	}
+	sec->sh.sh_size = sec->data->d_size;
 }
 
 /*
