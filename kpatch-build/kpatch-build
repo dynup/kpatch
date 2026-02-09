@@ -269,6 +269,15 @@ use_klp_arch()
 	fi
 }
 
+use_s390_no_pic_data_is_text_relative_flag()
+{
+	if kernel_is_rhel; then
+		! rhel_kernel_version_gte 5.14.0-595.el9
+	else
+		! kernel_version_gte 6.10.0
+	fi
+}
+
 support_klp_replace()
 {
 	if kernel_is_rhel; then
@@ -1285,7 +1294,8 @@ if [[ "$ARCH" = "ppc64le" ]]; then
 fi
 
 if [[ "$ARCH" = "s390x" ]]; then
-	ARCH_KCFLAGS="-mno-pic-data-is-text-relative -fno-section-anchors"
+	ARCH_KCFLAGS="-fno-section-anchors"
+	use_s390_no_pic_data_is_text_relative_flag && ARCH_KCFLAGS+=" -mno-pic-data-is-text-relative"
 	! kernel_version_gte 6.10.0 && ARCH_KCFLAGS+=" -fPIE"
 fi
 
