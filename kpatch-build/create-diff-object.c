@@ -2462,6 +2462,69 @@ static int fixup_group_size(struct kpatch_elf *kelf, int offset)
 	return (int)(rela->addend - offset);
 }
 
+/*
+ * Exclude function symbols absent from any rela sections (except
+ * .rela__bug_table) to eliminate undefined symbols modpost errors.
+ */
+static void kpatch_exclude_unreferenced_symbols(struct kpatch_elf *kelf)
+{
+	struct section *sec, *relasec;
+	unsigned int i = 0, count = 0;
+	unsigned int *symindex;
+	struct symbol *sym;
+	struct rela *rela;
+	bool found;
+
+	relasec = find_section_by_name(&kelf->sections, ".rela__bug_table");
+	if (!relasec)
+		return;
+	list_for_each_entry(rela, &relasec->relas, list) {
+		if (rela->sym->type == STT_FUNC && rela->sym->sec &&
+		    !rela->sym->sec->include)
+			count++;
+	}
+	symindex = (unsigned int *)malloc(sizeof(unsigned int) * count);
+	if (!symindex)
+		ERROR("malloc");
+	list_for_each_entry(rela, &relasec->relas, list) {
+		if (rela->sym->type == STT_FUNC && rela->sym->sec &&
+		    !rela->sym->sec->include)
+			symindex[i++] = rela->sym->index;
+	}
+	for (i = 0; i < count; i++) {
+		found = false;
+		list_for_each_entry(sec, &kelf->sections, list) {
+			if (!is_rela_section(sec) ||
+			    is_debug_section(sec))
+				continue;
+			if (!strcmp(sec->name, relasec->name) ||
+			    !strcmp(sec->name, ".rela__mcount_loc") ||
+			    !sec->include)
+				continue;
+			list_for_each_entry(rela, &sec->relas, list) {
+				if (symindex[i] == rela->sym->index) {
+					found = true;
+					break;
+				}
+			}
+		}
+		if (!found) {
+			/*
+			 * Function symbol is present in only __bug_table.
+			 * i.e. function symbol was included earlier, but its
+			 * associated section is not included and not
+			 * referenced in any relas. Exclude the function symbol
+			 * to eliminate UND symbols modpost errors.
+			 */
+			sym = find_symbol_by_index(&kelf->symbols, symindex[i]);
+			if (!sym)
+				ERROR("could not find function symbol\n");
+			sym->include = 0;
+		}
+	}
+	free(symindex);
+}
+
 static bool jump_table_group_filter(struct lookup_table *lookup,
 				    struct section *relasec,
 				    unsigned int group_offset,
@@ -3684,10 +3747,10 @@ static void kpatch_create_intermediate_sections(struct kpatch_elf *kelf,
 	list_for_each_entry(relasec, &kelf->sections, list) {
 		if (!is_rela_section(relasec))
 			continue;
-		if (!strcmp(relasec->name, ".rela.kpatch.funcs"))
+		if (!strcmp(relasec->name, ".rela.kpatch.funcs") ||
+		    !strcmp(relasec->name, ".rela__bug_table"))
 			continue;
 		list_for_each_entry(rela, &relasec->relas, list) {
-
 			/* upper bound on number of kpatch relas and symbols */
 			nr++;
 
@@ -4499,6 +4562,7 @@ int main(int argc, char *argv[])
 	kpatch_include_force_elements(kelf_patched);
 	new_globals_exist = kpatch_include_new_globals(kelf_patched);
 	kpatch_include_debug_sections(kelf_patched);
+	kpatch_exclude_unreferenced_symbols(kelf_patched);
 
 	kpatch_process_special_sections(kelf_patched, lookup);
 
