@@ -39,6 +39,7 @@ set -o pipefail
 
 BASE="$PWD"
 SCRIPTDIR="$(readlink -f "$(dirname "$(type -p "$0")")")"
+source "$SCRIPTDIR/kpatch-funcs.sh"
 ARCH="$(uname -m)"
 TARGET_ARCH="${TARGET_ARCH:-$ARCH}"
 CPUS="$(getconf _NPROCESSORS_ONLN)"
@@ -1091,7 +1092,7 @@ else
 		elif [[ "$DISTRO" = photon ]]; then
 			mv "$RPMTOPDIR"/BUILD/linux-"$KVER" "$KERNEL_SRCDIR" 2>&1 | logger || die
 		else
-			mv "$RPMTOPDIR"/BUILD/kernel-*/linux-* "$KERNEL_SRCDIR" 2>&1 | logger || die
+			find_rpm_linux_srcdir
 		fi
 
 		rm -rf "$RPMTOPDIR"
