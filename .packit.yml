@@ -10,11 +10,14 @@ _:
       # In this case (no build), it is a bug, see packit/packit-service#2841
       # Yet, the `rawhide` has no effect as there is no Copr build happening.
       fedora-rawhide-x86_64:
-        distros: [Fedora-37-Updated]
+        distros: [Fedora-43-Updated]
       fedora-rawhide-s390x:
-        distros: [Fedora-37-Updated]
-      fedora-rawhide-ppc64le:
-        distros: [Fedora-37-Updated]
+        distros: [Fedora-43-Updated]
+      # FIXME: https://redhat.atlassian.net/browse/KLP-656
+      # fedora-rawhide-ppc64le:
+      #   distros: [Fedora-43-Updated]
+      fedora-rawhide-aarch64:
+        distros: [Fedora-43-Updated]
     skip_build: true
     manual_trigger: false
     tmt_plan: kpatch-integration-upstream
@@ -27,8 +30,6 @@ _:
     identifier: "integration-rhel"
     use_internal_tf: true
     targets:
-      # Same as above, need a public copr chroot target. Use `copr-cli list` to
-      # list all of the available public copr chroots.
       epel-8-x86_64:
         distros: [RHEL-8.10.0-Nightly, RHEL-8.8.0-Nightly, RHEL-8.6.0-Nightly, RHEL-8.4.0-Nightly]
       epel-9-x86_64:
@@ -47,7 +48,6 @@ _:
 
 jobs:
   - <<: *common-upstream-kernel-test-config
-    # [NOTE] Runs only for PRs to be merged into `master`
     trigger: pull_request
     labels:
       - integration-pr
@@ -58,7 +58,6 @@ jobs:
       - integration-commit
 
   - <<: *common-rhel-test-config
-    # [NOTE] Runs only for PRs to be merged into `master`
     trigger: pull_request
     labels:
       - integration-pr
