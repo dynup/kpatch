@@ -1,3 +1,26 @@
+> [!IMPORTANT]
+>
+> NOTICE: The kpatch project is in maintenance mode
+> =================================================
+>
+> Starting with Linux 6.19, **the kpatch project is deprecated** and in maintenance mode.  kpatch-build functionality is being replaced by
+> [klp-build](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tree/scripts/livepatch/klp-build),
+> which is now part of the upstream Linux kernel.
+>
+> **klp-build architecture support:**
+> - x86-64: supported (Linux 6.19+)
+> - arm64: patches in development on LKML
+> - ppc64le, s390, loongarch: coming soon
+>
+> **What this means for kpatch:**
+> - kpatch is now in maintenance mode.
+> - No new features will be added.
+> - Bug fixes for newer kernels or toolchains will not be provided.
+> - Existing functionality for older kernels continues to work and will be maintained minimally as needed.
+>
+> **Questions?**
+> - For more information, see [issue 1498](https://github.com/dynup/kpatch/issues/1498).
+
 kpatch: dynamic kernel patching
 ===============================
 
