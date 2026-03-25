@@ -1886,6 +1886,23 @@ static void kpatch_verify_patchability(struct kpatch_elf *kelf)
 		DIFF_FATAL("%d unsupported section change(s)", errs);
 }
 
+/*
+ * Do not perform symbol inclusion initially from .rela__bug_table.
+ *
+ * WARN() is converted to a static call which emits relocations that point
+ * directly into __bug_table+off. If the usual "include every symbol referenced
+ * by this rela section" rule is applied here, it could end up dragging in the
+ * entire __bug_table via propagation.
+ *
+ * .rela__bug_table relocations are processed later in
+ * kpatch_regenerate_special_section(), which also adjusts relocations
+ * targetting __bug_table.
+ */
+static bool kpatch_skip_symbol_inclusion_from_relasec(struct section *relasec)
+{
+	return !strcmp(relasec->name, ".rela__bug_table");
+}
+
 static void kpatch_include_symbol(struct symbol *sym);
 
 static void kpatch_include_section(struct section *sec)
@@ -1906,6 +1923,8 @@ static void kpatch_include_section(struct section *sec)
 	if (!sec->rela)
 		return;
 	sec->rela->include = 1;
+	if (kpatch_skip_symbol_inclusion_from_relasec(sec->rela))
+		return;
 	list_for_each_entry(rela, &sec->rela->relas, list)
 		kpatch_include_symbol(rela->sym);
 }
@@ -2791,6 +2810,44 @@ static void kpatch_update_ex_table_addend(struct kpatch_elf *kelf,
 	}
 }
 
+static bool is_reloc_to_bug_table(struct rela *rela)
+{
+	return !strcmp(rela->sym->name, "__bug_table");
+}
+
+static void recalculate_bug_table_rela_addend(struct kpatch_elf *kelf,
+					      long old_bug_offset,
+					      long new_bug_offset)
+{
+	long add_offset, old_target_offset;
+	struct section *relasec;
+	struct rela *rela;
+
+	list_for_each_entry(relasec, &kelf->sections, list) {
+		if (!is_rela_section(relasec) ||
+		    !relasec->include ||
+		    !strcmp(relasec->name, ".rela__bug_table"))
+			continue;
+		list_for_each_entry(rela, &relasec->relas, list) {
+			if (!is_reloc_to_bug_table(rela))
+				continue;
+			old_target_offset = rela_target_offset(kelf, relasec, rela);
+			if (old_target_offset == old_bug_offset) {
+				add_offset = rela_target_offset(kelf, relasec, rela) - rela->addend;
+				rela->addend = new_bug_offset - add_offset;
+				rela->rela.r_addend = rela->addend;
+				log_debug("%s: adjusting rela from %s+%lx to %s+%lx\n",
+					relasec->name,
+					rela->sym->name,
+					old_bug_offset - add_offset,
+					rela->sym->name,
+					new_bug_offset - add_offset);
+			}
+		}
+	}
+
+}
+
 static void kpatch_regenerate_special_section(struct kpatch_elf *kelf,
 					      struct lookup_table *lookup,
 					      struct special_section *special,
@@ -2798,7 +2855,7 @@ static void kpatch_regenerate_special_section(struct kpatch_elf *kelf,
 {
 	struct rela *rela, *safe;
 	char *src, *dest;
-	unsigned int group_size, src_offset, dest_offset;
+	unsigned int group_size, src_offset, dest_offset, new_offset;
 
 	LIST_HEAD(newrelas);
 
@@ -2851,6 +2908,21 @@ static void kpatch_regenerate_special_section(struct kpatch_elf *kelf,
 				/* copy rela entry */
 				list_del(&rela->list);
 				list_add_tail(&rela->list, &newrelas);
+
+				if (!strcmp(relasec->name, ".rela__bug_table")) {
+					new_offset = rela->offset - (src_offset - dest_offset);
+					/*
+					 * When a bug table rela entry is
+					 * reassigned to a new offset
+					 * (rela->offset adjustment below),
+					 * update the addends of all
+					 * relocations targeting __bug_table so
+					 * they continue to reference the
+					 * updated bug entry.
+					 */
+					recalculate_bug_table_rela_addend(kelf, rela->offset,
+									  new_offset);
+				}
 
 				rela->offset -= src_offset - dest_offset;
 				rela->rela.r_offset = rela->offset;
