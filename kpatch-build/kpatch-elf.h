@@ -31,6 +31,11 @@
 #define SHF_RELA_LIVEPATCH	0x00100000
 #define SHN_LIVEPATCH		0xff20
 
+#ifndef __loongarch__
+#define EM_LOONGARCH		258     /* LoongArch */
+#define R_LARCH_64              2
+#endif
+
 /*******************
  * Data structures
  * ****************/
@@ -117,6 +122,7 @@ enum architecture {
 	X86_64 = 0x1 << 1,
 	S390   = 0x1 << 2,
 	AARCH64  = 0x1 << 3,
+	LOONGARCH64 = 0x1 << 4,
 };
 
 struct kpatch_elf {

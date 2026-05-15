@@ -134,8 +134,22 @@ core_loaded () {
 	[[ -d "/sys/kernel/kpatch" ]] || [[ -d "/sys/kernel/livepatch" ]]
 }
 
+if command -v readelf >/dev/null 2>&1; then
+	get_module_section_string() {
+		readelf -p "$2" "$1" | awk 'NF>=3 && /^\s*\[/ {print $3; exit}'
+	}
+elif command -v eu-readelf >/dev/null 2>&1; then
+	get_module_section_string() {
+		eu-readelf --string-dump="$2" "$1" | awk 'NF>=3 && /^\s*\[/ {print $3; exit}'
+	}
+else
+	get_module_section_string() {
+		return 1
+	}
+fi
+
 get_module_name () {
-	readelf -p .gnu.linkonce.this_module "$1" | grep '\[.*\]' | awk '{print $3}'
+	get_module_section_string "$1" .gnu.linkonce.this_module
 }
 
 init_sysfs_var() {
@@ -156,10 +170,10 @@ init_sysfs_var() {
 }
 
 verify_module_checksum () {
-	modname="$(get_module_name "$1")"
+	modname="$(get_module_name "$1")" || return 1
 	[[ -z "$modname" ]] && return 1
 
-	checksum="$(readelf -p .kpatch.checksum "$1" 2>&1 | grep '\[.*\]' | awk '{print $3}')"
+	checksum="$(get_module_section_string "$1" .kpatch.checksum 2>/dev/null)" || return 1
 
 	# Fail checksum match only if both exist and diverge
 	if [[ -n "$checksum" ]] && [[ -e "$SYSFS/${modname}/checksum" ]] ; then
@@ -316,7 +330,8 @@ load_module () {
 	fi
 
 	local modname
-	modname="$(get_module_name "$module")"
+	modname="$(get_module_name "$module")" || die "failed to get module name from $module"
+	[[ -z "$modname" ]] && die "failed to get module name from $module"
 	local moddir="$SYSFS/$modname"
 	if [[ -d "$moddir" ]] ; then
 		if [[ "$(cat "${moddir}/enabled")" -eq 0 ]]; then

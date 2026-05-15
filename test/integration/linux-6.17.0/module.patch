@@ -1,0 +1,76 @@
+kpatch module integration test
+
+This tests several things related to the patching of modules:
+
+- 'kpatch_string' tests the referencing of a symbol which is outside the
+  .o, but inside the patch module.
+
+- alternatives patching (.altinstructions)
+
+- paravirt patching (.parainstructions)
+
+- jump labels (5.8+ kernels only) -- including dynamic printk
+
+Signed-off-by: Josh Poimboeuf <jpoimboe@redhat.com>
+
+diff -Nupr src.orig/fs/xfs/xfs_stats.c src/fs/xfs/xfs_stats.c
+--- src.orig/fs/xfs/xfs_stats.c	2025-11-03 16:25:30.831267422 -0500
++++ src/fs/xfs/xfs_stats.c	2025-11-03 16:25:57.359521082 -0500
+@@ -16,6 +16,8 @@ static int counter_val(struct xfsstats _
+ 	return val;
+ }
+ 
++extern char *kpatch_string(void);
++
+ int xfs_stats_format(struct xfsstats __percpu *stats, char *buf)
+ {
+ 	int		i, j;
+@@ -90,6 +92,34 @@ int xfs_stats_format(struct xfsstats __p
+ 		0);
+ #endif
+ 
++	/* Reference a symbol outside the .o yet inside the patch module: */
++	len += scnprintf(buf + len, PATH_MAX-len, "%s\n", kpatch_string());
++
++#ifdef CONFIG_X86_64
++	/* Test alternatives patching: */
++	alternative("ud2", "nop", X86_FEATURE_ALWAYS);
++	alternative("nop", "ud2", X86_FEATURE_IA64);
++
++	/* Test paravirt patching: */
++	slow_down_io();   /* paravirt call */
++#endif
++
++	/* Test pr_debug: */
++	pr_debug("kpatch: pr_debug() test\n");
++
++{
++	/* Test static branches: */
++	static DEFINE_STATIC_KEY_TRUE(kpatch_key);
++
++       if (static_branch_unlikely(&memcg_kmem_online_key))
++		printk("kpatch: memcg_kmem_online_key\n");
++
++	BUG_ON(!static_branch_likely(&kpatch_key));
++	static_branch_disable(&kpatch_key);
++	BUG_ON(static_branch_likely(&kpatch_key));
++	static_branch_enable(&kpatch_key);
++}
++
+ 	return len;
+ }
+ 
+diff -Nupr src.orig/net/netlink/af_netlink.c src/net/netlink/af_netlink.c
+--- src.orig/net/netlink/af_netlink.c	2025-11-03 16:25:28.759247610 -0500
++++ src/net/netlink/af_netlink.c	2025-11-03 16:25:57.359521082 -0500
+@@ -2952,4 +2952,10 @@ panic:
+ 	panic("netlink_init: Cannot allocate nl_table\n");
+ }
+ 
++char *kpatch_string(void);
++char *kpatch_string(void)
++{
++	return "kpatch";
++}
++
+ core_initcall(netlink_proto_init);

@@ -1,4 +1,4 @@
-ARCHES ?= aarch64 ppc64le x86_64
+ARCHES ?= loongarch64 aarch64 ppc64le x86_64
 
 .PHONY: all clean submodule-check
 

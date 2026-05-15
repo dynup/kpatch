@@ -1,0 +1,35 @@
+diff -Nupr src.orig/fs/proc/cmdline.c src/fs/proc/cmdline.c
+--- src.orig/fs/proc/cmdline.c	2025-11-03 16:25:30.873267824 -0500
++++ src/fs/proc/cmdline.c	2025-11-03 16:26:10.350645302 -0500
+@@ -22,3 +22,11 @@ static int __init proc_cmdline_init(void
+ 	return 0;
+ }
+ fs_initcall(proc_cmdline_init);
++
++#include <linux/printk.h>
++void kpatch_print_message(void);
++void kpatch_print_message(void)
++{
++	if (!jiffies)
++		printk("hello there!\n");
++}
+diff -Nupr src.orig/fs/proc/meminfo.c src/fs/proc/meminfo.c
+--- src.orig/fs/proc/meminfo.c	2025-11-03 16:25:30.873267824 -0500
++++ src/fs/proc/meminfo.c	2025-11-03 16:26:10.350645302 -0500
+@@ -21,6 +21,8 @@
+ #include <asm/page.h>
+ #include "internal.h"
+ 
++void kpatch_print_message(void);
++
+ void __attribute__((weak)) arch_report_meminfo(struct seq_file *m)
+ {
+ }
+@@ -57,6 +59,7 @@ static int meminfo_proc_show(struct seq_
+ 	sreclaimable = global_node_page_state_pages(NR_SLAB_RECLAIMABLE_B);
+ 	sunreclaim = global_node_page_state_pages(NR_SLAB_UNRECLAIMABLE_B);
+ 
++	kpatch_print_message();
+ 	show_val_kb(m, "MemTotal:       ", i.totalram);
+ 	show_val_kb(m, "MemFree:        ", i.freeram);
+ 	show_val_kb(m, "MemAvailable:   ", available);

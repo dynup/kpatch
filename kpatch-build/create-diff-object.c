@@ -182,6 +182,8 @@ static bool is_gcc6_localentry_bundled_sym(struct kpatch_elf *kelf,
 		return false;
 	case S390:
 		return false;
+	case LOONGARCH64:
+		return false;
 	default:
 		ERROR("unsupported arch");
 	}
@@ -247,6 +249,7 @@ static bool kpatch_is_mapping_symbol(struct kpatch_elf *kelf, struct symbol *sym
 	case X86_64:
 	case PPC64:
 	case S390:
+	case LOONGARCH64:
 		return false;
 	default:
 		ERROR("unsupported arch");
@@ -434,6 +437,18 @@ static bool is_string_literal_section(struct section *sec)
 }
 
 /*
+ * Clang generates .data..L__unnamed_XX sections for anonymous constants.
+ * The numeric suffix is unstable (it can change if code is added/removed).
+ * Therefore, we must never correlate these by name; the patched object
+ * must always allocate a fresh copy (Status: NEW).
+ */
+static bool is_clang_unnamed_data(const char *name)
+{
+	return !strncmp(name, ".data..L__unnamed_", 18) ||
+		!strncmp(name, ".data.__unnamed_", 16);
+}
+
+/*
  * This function detects whether the given symbol is a "special" static local
  * variable (for lack of a better term).
  *
@@ -460,6 +475,10 @@ static bool is_special_static(struct symbol *sym)
 
 	/* pr_debug() uses static local variables in the __verbose or __dyndbg section */
 	if (is_dynamic_debug_symbol(sym))
+		return true;
+
+	/* Do not try to correlate statics inside unstable Clang sections */
+	if (sym->sec && is_clang_unnamed_data(sym->sec->name))
 		return true;
 
 	if (sym->type == STT_SECTION) {
@@ -805,6 +824,11 @@ static bool insn_is_load_immediate(struct kpatch_elf *kelf, void *addr)
 		/* arg3: li r5, imm */
 		if (insn[3] == 0x38 && insn[2] == 0xa0)
 			return true;
+
+		break;
+
+	case LOONGARCH64:
+		/* to be done */
 
 		break;
 
@@ -1177,6 +1201,11 @@ static void kpatch_correlate_sections(struct list_head *seclist_orig,
 				continue;
 
 			if (is_ubsan_sec(sec_orig->name))
+				continue;
+
+			/* Skip correlation for unstable Clang anonymous sections */
+			if (is_clang_unnamed_data(sec_orig->name) ||
+			    is_clang_unnamed_data(sec_patched->name))
 				continue;
 
 			if (is_special_static(is_rela_section(sec_orig) ?
@@ -1822,6 +1851,7 @@ static void kpatch_replace_sections_syms(struct kpatch_elf *kelf)
 			}
 
 			if (!found && !is_string_literal_section(rela->sym->sec) &&
+			    !is_clang_unnamed_data(rela->sym->name) &&
 			    strncmp(rela->sym->name, ".rodata", 7)) {
 				ERROR("%s+0x%x: can't find replacement symbol for %s+%ld reference",
 				      relasec->base->name, rela->offset, rela->sym->name, rela->addend);
@@ -2635,22 +2665,22 @@ static bool static_call_sites_group_filter(struct lookup_table *lookup,
 static struct special_section special_sections[] = {
 	{
 		.name		= "__bug_table",
-		.arch		= AARCH64 | X86_64 | PPC64 | S390,
+		.arch		= AARCH64 | X86_64 | PPC64 | S390 | LOONGARCH64,
 		.group_size	= bug_table_group_size,
 	},
 	{
 		.name		= ".fixup",
-		.arch		= AARCH64 | X86_64 | PPC64 | S390,
+		.arch		= AARCH64 | X86_64 | PPC64 | S390 | LOONGARCH64,
 		.group_size	= fixup_group_size,
 	},
 	{
 		.name		= "__ex_table", /* must come after .fixup */
-		.arch		= AARCH64 | X86_64 | PPC64 | S390,
+		.arch		= AARCH64 | X86_64 | PPC64 | S390 | LOONGARCH64,
 		.group_size	= ex_table_group_size,
 	},
 	{
 		.name		= "__jump_table",
-		.arch		= AARCH64 | X86_64 | PPC64 | S390,
+		.arch		= AARCH64 | X86_64 | PPC64 | S390 | LOONGARCH64,
 		.group_size	= jump_table_group_size,
 		.group_filter	= jump_table_group_filter,
 	},
@@ -2671,7 +2701,7 @@ static struct special_section special_sections[] = {
 	},
 	{
 		.name		= ".altinstructions",
-		.arch		= AARCH64 | X86_64 | S390,
+		.arch		= AARCH64 | X86_64 | S390 | LOONGARCH64,
 		.group_size	= altinstructions_group_size,
 	},
 	{
@@ -3092,6 +3122,11 @@ static void kpatch_mark_ignored_sections(struct kpatch_elf *kelf)
 		if (kelf->arch == X86_64) {
 			if (!strcmp(sec->name, ".rela__patchable_function_entries") ||
 			    !strcmp(sec->name, "__patchable_function_entries"))
+				sec->ignore = 1;
+		}
+
+		if (kelf->arch == LOONGARCH64) {
+			if (!strncmp(sec->name, ".rela.orc_unwind_ip", 19))
 				sec->ignore = 1;
 		}
 	}
@@ -4096,6 +4131,21 @@ static void kpatch_create_ftrace_callsite_sections(struct kpatch_elf *kelf)
 			insn_offset = sym->sym.st_value;
 			break;
 		}
+		case LOONGARCH64: {
+			bool found = false;
+			unsigned char *insn = sym->sec->data->d_buf + sym->sym.st_value;
+
+			/* 0x03400000 is NOP instruction for LoongArch. */
+			if (insn[0] == 0x00 && insn[1] == 0x00 && insn[2] == 0x40 && insn[3] == 0x03 &&
+			    insn[4] == 0x00 && insn[5] == 0x00 && insn[6] == 0x40 && insn[7] == 0x03)
+				found = true;
+
+			if (!found)
+				ERROR("%s: unexpected instruction at the start of the function", sym->name);
+
+			insn_offset = 0;
+			break;
+		}
 		default:
 			ERROR("unsupported arch");
 		}
@@ -4354,6 +4404,7 @@ static void kpatch_find_func_profiling_calls(struct kpatch_elf *kelf)
 				sym->has_func_profiling = 1;
 			break;
 		case AARCH64:
+		case LOONGARCH64:
 			if (kpatch_symbol_has_pfe_entry(kelf, sym))
 				sym->has_func_profiling = 1;
 			break;
