@@ -108,6 +108,8 @@ static bool locals_match(struct lookup_table *table, int idx,
 			continue;
 		if (table_sym->type != STT_FUNC && table_sym->type != STT_OBJECT)
 			continue;
+		if(!strncmp(table_sym->name, "__pfx_", 6))
+			continue;
 
 		found = 0;
 		sym = file_sym;
@@ -136,6 +138,8 @@ static bool locals_match(struct lookup_table *table, int idx,
 			continue;
 		if (sym->type != STT_FUNC && sym->type != STT_OBJECT)
 			continue;
+		if(!strncmp(sym->name, "__pfx_", 6))
+			continue;		
 		/*
 		 * Symbols which get discarded at link time are missing from
 		 * the lookup table, so skip them.
