@@ -1194,7 +1194,7 @@ trace_off "reading .config"
 source "$CONFIGFILE"
 trace_on
 
-[[ "$DISTRO" = openEuler ]] && [[ -z "$CONFIG_LIVEPATCH_PER_TASK_CONSISTENCY" ]] && \
+[[ "$DISTRO" = openEuler ]] && ! kernel_version_gte 6.6.0 && [[ -z "$CONFIG_LIVEPATCH_PER_TASK_CONSISTENCY" ]] && \
 	die "openEuler kernel doesn't have 'CONFIG_LIVEPATCH_PER_TASK_CONSISTENCY' enabled"
 
 [[ -z "$CONFIG_DEBUG_INFO" ]] && die "kernel doesn't have 'CONFIG_DEBUG_INFO' enabled"
