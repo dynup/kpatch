@@ -86,6 +86,11 @@
 #define KLP_REPLACE_ENABLE true
 #endif
 
+
+#ifdef CONFIG_LIVEPATCH_WO_FTRACE
+#define HAVE_WO_FTRACE_ENABLE
+#endif
+
 /*
  * There are quite a few similar structures at play in this file:
  * - livepatch.h structs prefixed with klp_*
@@ -576,6 +581,7 @@ static int __init patch_init(void)
 	}
 #endif
 
+#if defined(HAVE_WO_FTRACE_ENABLE)
 	ret = klp_enable_patch(lpatch);
 	if (ret) {
 #ifndef HAVE_SIMPLE_ENABLE
@@ -584,6 +590,7 @@ static int __init patch_init(void)
 		patch_free_livepatch(lpatch);
 		return ret;
 	}
+#endif
 
 	return 0;
 out:
