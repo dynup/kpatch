@@ -1148,6 +1148,49 @@ static bool insn_is_load_immediate(struct kpatch_elf *kelf, void *addr)
 
 		break;
 
+	case RISCV64:
+		/*
+		 * RISC-V li a1, imm = addi a1, x0, imm:
+		 *
+		 * Verify the complete I-type encoding fields.  The immediate
+		 * field is intentionally ignored because it contains __LINE__.
+		 */
+		{
+			unsigned int insn32;
+			unsigned int opcode, funct3, rd, rs1;
+
+			insn32 = (unsigned int)insn[0] |
+				 ((unsigned int)insn[1] << 8) |
+				 ((unsigned int)insn[2] << 16) |
+				 ((unsigned int)insn[3] << 24);
+
+			opcode = insn32 & 0x7f;
+			funct3 = (insn32 >> 12) & 0x7;
+			rd = (insn32 >> 7) & 0x1f;
+			rs1 = (insn32 >> 15) & 0x1f;
+
+			if (opcode == 0x13 &&	/* OP-IMM */
+			    funct3 == 0x0 &&	/* ADDI */
+			    rs1 == 0 &&		/* x0 */
+			    rd == 11)		/* a1 */
+				return true;
+		}
+
+		/*
+		 * C-ext: C.li rd, imm (16-bit compressed):
+		 *   byte0 & 0x03 == 0x01 (quadrant 1)
+		 *   byte1 >> 5 == 0x02  (funct3 = 010 for C.li)
+		 *   rd = ((byte1 & 0x0f) << 1) | ((byte0 >> 7) & 1)
+		 */
+		if ((insn[0] & 0x03) == 0x01 && (insn[1] >> 5) == 0x02) {
+			int rd = ((insn[1] & 0x0f) << 1) | ((insn[0] >> 7) & 1);
+
+			if (rd == 11) /* a1 */
+				return true;
+		}
+
+		break;
+
 	case S390:
 		/* arg2: lghi %r3, imm */
 		if (insn[0] == 0xa7 && insn[1] == 0x39)
