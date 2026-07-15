@@ -236,6 +236,27 @@
   }                 \
   static inline long __kpatch_do_sys##name(__MAP(x,__SC_DECL,__VA_ARGS__))
 
+#elif defined(CONFIG_RISCV)
+
+/* arch/riscv/include/asm/syscall_wrapper.h versions */
+
+#define __KPATCH_SYSCALL_DEFINEx(x, name, ...)					\
+	asmlinkage long __riscv_sys##name(const struct pt_regs *regs);		\
+	ALLOW_ERROR_INJECTION(__riscv_sys##name, ERRNO);			\
+	static inline long __kpatch_do_sys##name(__MAP(x, __SC_DECL, __VA_ARGS__));\
+	__SYSCALL_SE_DEFINEx(x, sys, name, __VA_ARGS__)				\
+	{									\
+		long ret = __kpatch_do_sys##name(__MAP(x, __SC_CAST, __VA_ARGS__));\
+		__MAP(x, __SC_TEST, __VA_ARGS__);				\
+		__PROTECT(x, ret, __MAP(x, __SC_ARGS, __VA_ARGS__));		\
+		return ret;							\
+	}									\
+	asmlinkage long __riscv_sys##name(const struct pt_regs *regs)		\
+	{									\
+		return __se_sys##name(SC_RISCV_REGS_TO_ARGS(x, __VA_ARGS__));	\
+	}									\
+	static inline long __kpatch_do_sys##name(__MAP(x, __SC_DECL, __VA_ARGS__))
+
 #endif /* which arch */
 
 
