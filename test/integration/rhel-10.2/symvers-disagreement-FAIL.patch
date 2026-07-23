@@ -1,6 +1,6 @@
 diff -Nupr src.orig/drivers/base/core.c src/drivers/base/core.c
---- src.orig/drivers/base/core.c	2026-06-29 20:46:09.537091298 +0000
-+++ src/drivers/base/core.c	2026-06-29 20:47:23.321712480 +0000
+--- src.orig/drivers/base/core.c	2026-07-23 10:53:35.766142795 -0400
++++ src/drivers/base/core.c	2026-07-23 10:53:52.063341392 -0400
 @@ -37,6 +37,8 @@
  #include "physical_location.h"
  #include "power/power.h"
@@ -11,9 +11,9 @@ diff -Nupr src.orig/drivers/base/core.c src/drivers/base/core.c
  static LIST_HEAD(deferred_sync);
  static unsigned int defer_sync_state_count = 1;
 diff -Nupr src.orig/drivers/usb/core/usb.c src/drivers/usb/core/usb.c
---- src.orig/drivers/usb/core/usb.c	2026-06-29 20:46:11.001063361 +0000
-+++ src/drivers/usb/core/usb.c	2026-06-29 20:47:23.322405500 +0000
-@@ -767,6 +767,8 @@ EXPORT_SYMBOL_GPL(usb_alloc_dev);
+--- src.orig/drivers/usb/core/usb.c	2026-07-23 10:53:36.309791205 -0400
++++ src/drivers/usb/core/usb.c	2026-07-23 10:53:52.063646938 -0400
+@@ -770,6 +770,8 @@ EXPORT_SYMBOL_GPL(usb_alloc_dev);
   */
  struct usb_device *usb_get_dev(struct usb_device *dev)
  {

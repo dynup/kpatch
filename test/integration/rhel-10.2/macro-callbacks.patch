@@ -1,6 +1,6 @@
 diff -Nupr src.orig/drivers/input/joydev.c src/drivers/input/joydev.c
---- src.orig/drivers/input/joydev.c	2026-06-29 20:46:08.880103835 +0000
-+++ src/drivers/input/joydev.c	2026-06-29 20:46:54.087620103 +0000
+--- src.orig/drivers/input/joydev.c	2026-07-23 10:53:36.070138215 -0400
++++ src/drivers/input/joydev.c	2026-07-23 10:53:40.548839395 -0400
 @@ -1095,3 +1095,47 @@ static void __exit joydev_exit(void)
  
  module_init(joydev_init);
@@ -50,8 +50,8 @@ diff -Nupr src.orig/drivers/input/joydev.c src/drivers/input/joydev.c
 +}
 +KPATCH_POST_UNPATCH_CALLBACK(post_unpatch_callback);
 diff -Nupr src.orig/drivers/input/misc/pcspkr.c src/drivers/input/misc/pcspkr.c
---- src.orig/drivers/input/misc/pcspkr.c	2026-06-29 20:46:08.893103587 +0000
-+++ src/drivers/input/misc/pcspkr.c	2026-06-29 20:46:54.087928955 +0000
+--- src.orig/drivers/input/misc/pcspkr.c	2026-07-23 10:53:36.067151665 -0400
++++ src/drivers/input/misc/pcspkr.c	2026-07-23 10:53:40.548967661 -0400
 @@ -132,3 +132,46 @@ static struct platform_driver pcspkr_pla
  };
  module_platform_driver(pcspkr_platform_driver);
@@ -100,8 +100,8 @@ diff -Nupr src.orig/drivers/input/misc/pcspkr.c src/drivers/input/misc/pcspkr.c
 +}
 +KPATCH_POST_UNPATCH_CALLBACK(post_unpatch_callback);
 diff -Nupr src.orig/fs/aio.c src/fs/aio.c
---- src.orig/fs/aio.c	2026-06-29 20:46:12.203040424 +0000
-+++ src/fs/aio.c	2026-06-29 20:46:54.088264119 +0000
+--- src.orig/fs/aio.c	2026-07-23 10:53:36.364567041 -0400
++++ src/fs/aio.c	2026-07-23 10:53:40.549104195 -0400
 @@ -50,6 +50,50 @@
  
  #define KIOCB_KEY		0

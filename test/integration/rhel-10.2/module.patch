@@ -1,6 +1,6 @@
 diff -Nupr src.orig/fs/xfs/xfs_stats.c src/fs/xfs/xfs_stats.c
---- src.orig/fs/xfs/xfs_stats.c	2026-06-29 20:46:12.188040711 +0000
-+++ src/fs/xfs/xfs_stats.c	2026-06-29 20:46:59.902822221 +0000
+--- src.orig/fs/xfs/xfs_stats.c	2026-07-23 10:53:36.364486828 -0400
++++ src/fs/xfs/xfs_stats.c	2026-07-23 10:53:42.433455786 -0400
 @@ -16,6 +16,8 @@ static int counter_val(struct xfsstats _
  	return val;
  }
@@ -46,8 +46,8 @@ diff -Nupr src.orig/fs/xfs/xfs_stats.c src/fs/xfs/xfs_stats.c
  }
  
 diff -Nupr src.orig/net/netlink/af_netlink.c src/net/netlink/af_netlink.c
---- src.orig/net/netlink/af_netlink.c	2026-06-29 20:46:07.000962142 +0000
-+++ src/net/netlink/af_netlink.c	2026-06-29 20:46:59.903130180 +0000
+--- src.orig/net/netlink/af_netlink.c	2026-07-23 10:53:36.459451880 -0400
++++ src/net/netlink/af_netlink.c	2026-07-23 10:53:42.433595906 -0400
 @@ -2964,4 +2964,10 @@ panic:
  	panic("netlink_init: Cannot allocate nl_table\n");
  }

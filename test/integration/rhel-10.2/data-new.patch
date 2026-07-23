@@ -1,6 +1,6 @@
 diff -Nupr src.orig/fs/proc/meminfo.c src/fs/proc/meminfo.c
---- src.orig/fs/proc/meminfo.c	2026-06-29 20:46:12.063043096 +0000
-+++ src/fs/proc/meminfo.c	2026-06-29 20:46:12.353377118 +0000
+--- src.orig/fs/proc/meminfo.c	2026-07-23 10:53:36.355085982 -0400
++++ src/fs/proc/meminfo.c	2026-07-23 10:53:36.726078009 -0400
 @@ -31,6 +31,8 @@ static void show_val_kb(struct seq_file
  	seq_write(m, " kB\n", 4);
  }
