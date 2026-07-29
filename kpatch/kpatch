@@ -149,7 +149,12 @@ else
 fi
 
 get_module_name () {
-	get_module_section_string "$1" .gnu.linkonce.this_module
+	local modname
+	modname="$(get_module_section_string "$1" .gnu.linkonce.this_module 2>/dev/null)" && [[ -n "$modname" ]] && {
+		echo "$modname"
+		return
+	}
+	modinfo -F name "$1"
 }
 
 init_sysfs_var() {
