@@ -299,8 +299,22 @@ run_combined_test() {
 
 # save existing dmesg so we can detect new content
 save_dmesg() {
-	SAVED_DMESG="kpatch-test timestamp: $(date --rfc-3339=ns)"
-	echo "$SAVED_DMESG" > /dev/kmsg
+	local marker
+
+	marker="kpatch-test timestamp: $(date --rfc-3339=ns)"
+	echo "$marker" > /dev/kmsg
+	SAVED_DMESG=$(dmesg --notime | awk -v marker="$marker" '
+		length($0) >= length(marker) &&
+		substr($0, length($0) - length(marker) + 1) == marker {
+			line = $0
+		}
+		END {print line}
+	')
+
+	if [[ -z "$SAVED_DMESG" ]]; then
+		error "failed to save dmesg marker"
+		return 1
+	fi
 }
 
 # new dmesg entries since our saved entry
@@ -353,7 +367,9 @@ build_combined_module
 
 unload_all
 
-save_dmesg
+if ! save_dmesg; then
+	exit 1
+fi
 
 if [ "${DYNDEBUG_ENABLED}" == "1" ]; then
 	prev_dyndebug=$(sudo sh -c "grep klp_try_switch_task ${DYNDEBUG_CONTROL}" | awk '{print $3;}')
