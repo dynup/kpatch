@@ -229,6 +229,7 @@ long rela_target_offset(struct kpatch_elf *kelf, struct section *relasec,
 	case X86_64:
 		if (!is_text_section(sec) ||
 		    rela->type == R_X86_64_64 ||
+		    rela->type == R_X86_64_32 ||
 		    rela->type == R_X86_64_32S)
 			add_off = 0;
 		else if (rela->type == R_X86_64_PC32 ||
