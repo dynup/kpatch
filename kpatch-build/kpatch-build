@@ -662,7 +662,7 @@ find_parent_obj() {
 		[[ -n "$PARENT" ]] && return
 	fi
 	if [[ $file = virt/kvm/* ]]; then
-		find_parent_obj_in_dir "$file" "arch/x86/kvm"
+		find_parent_obj_in_dir "$file" "arch/$(kernel_src_arch "$TARGET_ARCH")/kvm"
 		[[ -n "$PARENT" ]] && return
 	fi
 	if [[ $file = drivers/oprofile/* ]]; then
@@ -757,14 +757,20 @@ print_supported_distro(){
 	fi
 }
 
-# Used in "make ARCH=xxx" when making the kernel.
-# Match "aarch64" to "arm64", while keep everything else the same.
-kernel_make_arch() {
-	if [[ "$1" == "aarch64" ]]; then
-		echo "arm64"
-	else
-		echo "$1"
-	fi
+# Translate a kpatch TARGET_ARCH into the corresponding kernel source arch
+# directory name (and the value expected by "make ARCH=").  kpatch's
+# TARGET_ARCH values don't always match the kernel arch names, e.g.
+# x86_64 -> x86, aarch64 -> arm64, ppc64le -> powerpc, s390x -> s390,
+# loongarch64 -> loongarch.
+kernel_src_arch() {
+	case "$1" in
+		x86_64)      echo "x86" ;;
+		aarch64)     echo "arm64" ;;
+		ppc64le)     echo "powerpc" ;;
+		s390x)       echo "s390" ;;
+		loongarch64) echo "loongarch" ;;
+		*)           echo "$1" ;;
+	esac
 }
 
 usage() {
@@ -1339,7 +1345,7 @@ else
 fi
 
 if [[ "$ARCH" != "$TARGET_ARCH" ]]; then
-	KARCH=$(kernel_make_arch "$TARGET_ARCH")
+	KARCH=$(kernel_src_arch "$TARGET_ARCH")
 	MAKEVARS+=("ARCH=$KARCH")
 fi
 
