@@ -1048,14 +1048,18 @@ static void kpatch_compare_correlated_symbol(struct symbol *sym)
 	 * If two symbols are correlated but their sections are not, then the
 	 * symbol has changed sections.  This is only allowed if the symbol is
 	 * moving out of an ignored section, or moving between normal/hot/unlikely
-	 * subsections.
+	 * subsections.  A prefix symbol moves along with its parent function,
+	 * but it's padding rather than a patchable function, so leave its status
+	 * alone; it's included via the parent's sym->pfx link.
 	 */
 	if (sym1->sec && sym2->sec && sym1->sec->twin != sym2->sec) {
 		if ((sym2->sec->twin && sym2->sec->twin->ignore) ||
-		    kpatch_subsection_changed(sym1->sec, sym2->sec))
-			sym->status = CHANGED;
-		else
+		    kpatch_subsection_changed(sym1->sec, sym2->sec)) {
+			if (!sym->is_pfx)
+				sym->status = CHANGED;
+		} else {
 			DIFF_FATAL("symbol changed sections: %s", sym1->name);
+		}
 	}
 
 	if (sym1->type == STT_OBJECT &&
