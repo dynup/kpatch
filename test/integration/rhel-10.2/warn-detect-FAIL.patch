@@ -1,6 +1,6 @@
 diff -Nupr src.orig/arch/x86/kvm/x86.c src/arch/x86/kvm/x86.c
---- src.orig/arch/x86/kvm/x86.c	2026-06-29 20:46:07.078138221 +0000
-+++ src/arch/x86/kvm/x86.c	2026-06-29 20:47:35.256455547 +0000
+--- src.orig/arch/x86/kvm/x86.c	2026-07-23 10:53:35.739475962 -0400
++++ src/arch/x86/kvm/x86.c	2026-07-23 10:53:55.900653447 -0400
 @@ -1,4 +1,5 @@
  // SPDX-License-Identifier: GPL-2.0-only
 +
