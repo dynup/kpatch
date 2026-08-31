@@ -33,6 +33,7 @@ if [[ "$TOOLCHAINCMD" =~ ^(.*-)?gcc$ || "$TOOLCHAINCMD" =~ ^(.*-)?clang$ ]] ; th
 				.tmp_kallsyms2.o|\
 				arch/x86/boot/*|\
 				arch/x86/entry/vdso/*|\
+				arch/x86/platform/pvh/*|\
 				arch/x86/purgatory/*|\
 				arch/x86/realmode/*|\
 				arch/x86/tools/*|\
