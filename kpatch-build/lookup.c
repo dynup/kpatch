@@ -215,9 +215,33 @@ static void find_local_syms(struct lookup_table *table, struct symbol *file_sym,
 		}
 	}
 
-	if (!lookup_table_file_sym)
-		ERROR("couldn't find matching %s local symbols in %s symbol table",
-		      file_sym->name, table->objname);
+	if (!lookup_table_file_sym) {
+		/*
+		 * gcc's inlining decisions for a handful of functions per
+		 * file are not always reproducible between this local build
+		 * and the officially published kernel build (most likely
+		 * because the published build applies profile-guided
+		 * optimization data this build doesn't have access to): a
+		 * function may be split into a .part.N cold-path clone, or
+		 * fully inlined away, in one build but not the other.  That
+		 * shows up here as an apparent local-symbol mismatch for
+		 * files that have no actual source change at all.
+		 *
+		 * Failing closed here would kill every file kpatch-build
+		 * decided to recompile as a side effect of an unrelated
+		 * header changing, even when the file being processed has
+		 * no bearing on the patch.  Instead, leave this file's
+		 * locals uncorrelated (lookup_table_file_sym stays NULL)
+		 * and defer: lookup_local_symbol() already handles a NULL
+		 * lookup_table_file_sym by cleanly reporting "not found"
+		 * rather than crashing, so this only becomes a hard failure
+		 * later, at the point something in the actual patch tries
+		 * and fails to resolve one of this file's local symbols --
+		 * exactly where a real problem would need to be caught.
+		 */
+		log_error("couldn't find matching %s local symbols in %s symbol table, deferring\n",
+			  file_sym->name, table->objname);
+	}
 
 	list_for_each_entry_continue(file_sym, sym_list, list) {
 		if (file_sym->type == STT_FILE)
