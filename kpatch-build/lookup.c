@@ -87,6 +87,8 @@ static bool maybe_discarded_sym(const char *name)
 	    strstr(name, "__UNIQUE_ID_") ||
 	    !strncmp(name, ".L.str", 6) ||
 	    !strncmp(name, ".L__const", 9) ||
+	    !strncmp(name, "__gendwarfksyms_", 16) ||
+	    !strncmp(name, "__export_symbol_", 16) ||
 	    is_ubsan_sec(name))
 		return true;
 
