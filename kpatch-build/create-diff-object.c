@@ -2937,7 +2937,7 @@ static void kpatch_regenerate_special_section(struct kpatch_elf *kelf,
 				rela->offset -= src_offset - dest_offset;
 				rela->rela.r_offset = rela->offset;
 
-				rela->sym->include = 1;
+				kpatch_include_symbol(rela->sym);
 
 				if (!strcmp(special->name, ".fixup"))
 					kpatch_update_ex_table_addend(kelf, special,
@@ -3079,6 +3079,20 @@ next:
 	ip_sec->data->d_size = dest_idx * ORC_IP_PTR_SIZE;
 }
 
+static bool is_ftr_alt_fixup_reloc(struct section *relasec, struct rela *rela)
+{
+	if (!relasec->base)
+		return false;
+
+	if (strncmp(relasec->base->name, "__ftr_fixup", 11) &&
+	    strncmp(relasec->base->name, "__mmu_ftr_fixup", 15) &&
+	    strncmp(relasec->base->name, "__fw_ftr_fixup", 14))
+		return false;
+
+	return rela->sym->type == STT_SECTION &&
+		!strncmp(rela->sym->name, "__ftr_alt_", 10);
+}
+
 static void kpatch_check_relocations(struct kpatch_elf *kelf)
 {
 	struct rela *rela;
@@ -3091,6 +3105,8 @@ static void kpatch_check_relocations(struct kpatch_elf *kelf)
 			continue;
 		list_for_each_entry(rela, &relasec->relas, list) {
 			if (!rela->sym->sec)
+				continue;
+			if (is_ftr_alt_fixup_reloc(relasec, rela))
 				continue;
 
 			sec_size = rela->sym->sec->data->d_size;
