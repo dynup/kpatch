@@ -86,6 +86,9 @@ struct special_section {
 			     unsigned int size);
 };
 
+#define GENERIC_SPECIAL_SECTION_ARCHS \
+	(AARCH64 | X86_64 | PPC64 | S390 | LOONGARCH64 | RISCV64)
+
 /*************
  * Functions
  * **********/
@@ -3048,22 +3051,22 @@ static bool static_call_sites_group_filter(struct lookup_table *lookup,
 static struct special_section special_sections[] = {
 	{
 		.name		= "__bug_table",
-		.arch		= AARCH64 | X86_64 | PPC64 | S390 | LOONGARCH64,
+		.arch		= GENERIC_SPECIAL_SECTION_ARCHS,
 		.group_size	= bug_table_group_size,
 	},
 	{
 		.name		= ".fixup",
-		.arch		= AARCH64 | X86_64 | PPC64 | S390 | LOONGARCH64,
+		.arch		= GENERIC_SPECIAL_SECTION_ARCHS,
 		.group_size	= fixup_group_size,
 	},
 	{
 		.name		= "__ex_table", /* must come after .fixup */
-		.arch		= AARCH64 | X86_64 | PPC64 | S390 | LOONGARCH64,
+		.arch		= GENERIC_SPECIAL_SECTION_ARCHS,
 		.group_size	= ex_table_group_size,
 	},
 	{
 		.name		= "__jump_table",
-		.arch		= AARCH64 | X86_64 | PPC64 | S390 | LOONGARCH64,
+		.arch		= GENERIC_SPECIAL_SECTION_ARCHS,
 		.group_size	= jump_table_group_size,
 		.group_filter	= jump_table_group_filter,
 	},
@@ -3576,7 +3579,7 @@ static void kpatch_mark_ignored_sections(struct kpatch_elf *kelf)
 			sec->ignore = 1;
 		}
 
-		if (kelf->arch == X86_64) {
+		if (kelf->arch == X86_64 || kelf->arch == RISCV64) {
 			if (!strcmp(sec->name, ".rela__patchable_function_entries") ||
 			    !strcmp(sec->name, "__patchable_function_entries"))
 				sec->ignore = 1;
