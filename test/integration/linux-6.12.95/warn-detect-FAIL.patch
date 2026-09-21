@@ -1,0 +1,9 @@
+diff -Nupr src.orig/arch/riscv/kernel/setup.c src/arch/riscv/kernel/setup.c
+--- src.orig/arch/riscv/kernel/setup.c
++++ src/arch/riscv/kernel/setup.c
+@@ -1,4 +1,5 @@
+ // SPDX-License-Identifier: GPL-2.0-or-later
++
+ /*
+  * Copyright (C) 2009 Sunplus Core Technology Co., Ltd.
+  *  Chen Liqin <liqin.chen@sunplusct.com>
