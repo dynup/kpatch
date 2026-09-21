@@ -3677,6 +3677,14 @@ static void kpatch_check_relocations(struct kpatch_elf *kelf)
 			if (is_ftr_alt_fixup_reloc(relasec, rela))
 				continue;
 
+			/*
+			 * Sections without allocated data (e.g. NOBITS/.bss
+			 * or sections not materialized for the output) have no
+			 * size to check against; skip the range validation.
+			 */
+			if (!rela->sym->sec->data)
+				continue;
+
 			sec_size = rela->sym->sec->data->d_size;
 			sec_off = (long)rela->sym->sym.st_value +
 				  rela_target_offset(kelf, relasec, rela);
