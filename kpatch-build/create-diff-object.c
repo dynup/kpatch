@@ -3091,6 +3091,11 @@ static struct special_section special_sections[] = {
 		.group_size	= altinstructions_group_size,
 	},
 	{
+		.name		= ".alternative",
+		.arch		= RISCV64,
+		.group_size	= altinstructions_group_size,
+	},
+	{
 		.name		= ".static_call_sites",
 		.arch		= X86_64,
 		.group_size	= static_call_sites_group_size,
