@@ -97,6 +97,7 @@ struct symbol {
 		enum symbol_strip strip; /* used in the output elf */
 	};
 	int has_func_profiling;
+	long func_profiling_callsite;
 	bool is_pfx;
 	struct section *pfe;
 };
