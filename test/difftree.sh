@@ -41,6 +41,11 @@ do
 		arch/x86/boot/header.o|\
 		arch/x86/boot/compressed/efi_stub_64.o|\
 		arch/x86/boot/compressed/piggy.o|\
+		arch/riscv/boot/version.o|\
+		arch/riscv/boot/compressed/efi_stub_64.o|\
+		arch/riscv/boot/compressed/piggy.o|\
+		arch/riscv/boot/header.o|\
+		arch/riscv/kernel/head.o|\
 		kernel/system_certificates.o|\
 		.*.o)
 		continue
