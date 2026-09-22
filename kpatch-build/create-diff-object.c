@@ -2885,33 +2885,126 @@ static int fixup_group_size(struct kpatch_elf *kelf, int offset)
 	return (int)(rela->addend - offset);
 }
 
+static bool is_riscv_jump_table_rela(const struct rela *rela)
+{
+	return rela->type == R_RISCV_ADD32 ||
+	       rela->type == R_RISCV_SUB32 ||
+	       rela->type == R_RISCV_ADD64 ||
+	       rela->type == R_RISCV_SUB64;
+}
+
 static bool jump_table_group_filter(struct lookup_table *lookup,
 				    struct section *relasec,
 				    unsigned int group_offset,
 				    unsigned int group_size)
 {
 	struct rela *code = NULL, *key = NULL, *rela;
+	struct rela *riscv_field[3][2] = {};
 	bool tracepoint = false, dynamic_debug = false;
 	struct lookup_result symbol;
+	bool riscv_relative = false;
 	int i = 0;
 
 	/*
 	 * Here we hard-code knowledge about the contents of the jump_entry
 	 * struct.  It has three fields: code, target, and key.  Each field has
 	 * a relocation associated with it.
+	 *
+	 * On RISC-V, each field uses paired ADD/SUB relocations, so there
+	 * are 6 relocations per entry instead of 3.  The ADD relocation
+	 * (first of each pair) is the one that references the actual symbol.
 	 */
 	list_for_each_entry(rela, &relasec->relas, list) {
-		if (rela->offset >= group_offset &&
-		    rela->offset < group_offset + group_size) {
+		if (rela->offset < group_offset ||
+		    rela->offset >= group_offset + group_size)
+			continue;
+
+		i++;
+	}
+
+	if (i == 6) {
+		/*
+		 * RISC-V RV64 jump_entry is: s32 code, s32 target,
+		 * long key.  Each field is represented by an ADD/SUB
+		 * pair.  Identify entries by type and offset rather than
+		 * relocation list order.
+		 */
+		list_for_each_entry(rela, &relasec->relas, list) {
+			unsigned int offset, field;
+			int pair;
+
+			if (rela->offset < group_offset ||
+			    rela->offset >= group_offset + group_size)
+				continue;
+
+			if (!is_riscv_jump_table_rela(rela))
+				ERROR("BUG: mixed RISC-V __jump_table relocation group");
+
+			offset = rela->offset - group_offset;
+			switch (offset) {
+			case 0:
+				field = 0;
+				break;
+			case 4:
+				field = 1;
+				break;
+			case 8:
+				field = 2;
+				break;
+			default:
+				ERROR("BUG: invalid RISC-V __jump_table relocation offset");
+			}
+
+			if (field == 2) {
+				if (rela->type == R_RISCV_ADD64)
+					pair = 0;
+				else if (rela->type == R_RISCV_SUB64)
+					pair = 1;
+				else
+					ERROR("BUG: invalid RISC-V __jump_table key relocation");
+			} else {
+				if (rela->type == R_RISCV_ADD32)
+					pair = 0;
+				else if (rela->type == R_RISCV_SUB32)
+					pair = 1;
+				else
+					ERROR("BUG: invalid RISC-V __jump_table 32-bit relocation");
+			}
+
+			if (riscv_field[field][pair])
+				ERROR("BUG: duplicate RISC-V __jump_table relocation");
+
+			riscv_field[field][pair] = rela;
+		}
+
+		if (!riscv_field[0][0] || !riscv_field[0][1] ||
+		    !riscv_field[1][0] || !riscv_field[1][1] ||
+		    !riscv_field[2][0] || !riscv_field[2][1])
+			ERROR("BUG: incomplete RISC-V __jump_table relocation pair");
+
+		code = riscv_field[0][0];
+		key = riscv_field[2][0];
+		riscv_relative = true;
+	} else if (i == 3) {
+		/* Generic architectures use one relocation per field. */
+		i = 0;
+		list_for_each_entry(rela, &relasec->relas, list) {
+			if (rela->offset < group_offset ||
+			    rela->offset >= group_offset + group_size)
+				continue;
+
 			if (i == 0)
 				code = rela;
 			else if (i == 2)
 				key = rela;
+
 			i++;
 		}
+	} else {
+		ERROR("BUG: __jump_table has an unexpected format");
 	}
 
-	if (i != 3 || !key || !code)
+	if (!key || !code)
 		ERROR("BUG: __jump_table has an unexpected format");
 
 	if (!strncmp(key->sym->name, "__tracepoint_", 13))
@@ -2919,6 +3012,28 @@ static bool jump_table_group_filter(struct lookup_table *lookup,
 
 	if (is_dynamic_debug_symbol(key->sym))
 		dynamic_debug = true;
+
+	if (riscv_relative &&
+	    lookup_symbol(lookup, key->sym, &symbol) &&
+	    !strcmp(symbol.objname, "vmlinux") &&
+	    !symbol.exported) {
+		/*
+		 * RISC-V relative jump entries are made from ADD/SUB rela
+		 * pairs. If the ADD side is converted to a livepatch rela
+		 * while the SUB side remains a normal module rela, module jump
+		 * label init can see an invalid key pointer. Tracepoints and
+		 * dynamic debug entries are inert when omitted; for other keys,
+		 * fail the build instead of producing a module which can crash
+		 * during MODULE_STATE_COMING.
+		 */
+		if (tracepoint || dynamic_debug)
+			return false;
+
+		log_error("RISC-V jump label at %s()+0x%lx uses unexported key %s\n",
+			  code->sym->name, code->addend, key->sym->name);
+		jump_label_errors++;
+		return false;
+	}
 
 	if (KLP_ARCH) {
 		/*
