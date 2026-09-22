@@ -282,6 +282,14 @@ static struct rela *toc_rela(const struct rela *rela)
 				   (unsigned int)rela->addend);
 }
 
+static bool kpatch_is_local_notype_symbol(struct symbol *sym)
+{
+	return sym->name &&
+	       sym->type == STT_NOTYPE &&
+	       sym->bind == STB_LOCAL &&
+	       sym->sym.st_size == 0;
+}
+
 /*
  * Mapping symbols are used to mark and label the transitions between code and
  * data in elf files. They begin with a "$" dollar symbol. Don't correlate them
@@ -290,12 +298,13 @@ static struct rela *toc_rela(const struct rela *rela)
  */
 static bool kpatch_is_mapping_symbol(struct kpatch_elf *kelf, struct symbol *sym)
 {
+	if (!kpatch_is_local_notype_symbol(sym))
+		return false;
+
 	switch (kelf->arch) {
 	case AARCH64:
-		if (sym->name && sym->name[0] == '$'
-			&& sym->type == STT_NOTYPE \
-			&& sym->bind == STB_LOCAL)
-			return true;
+	case RISCV64:
+		return sym->name[0] == '$';
 	case X86_64:
 	case PPC64:
 	case S390:
@@ -306,6 +315,43 @@ static bool kpatch_is_mapping_symbol(struct kpatch_elf *kelf, struct symbol *sym
 	}
 
 	return false;
+}
+
+/*
+ * GCC generates local labels like .L0, .LVL133, etc. for DWARF info.
+ * They have zero size and can change sections between compilations.  Do
+ * not include .LC* here; those symbols point to string literals and are
+ * handled by kpatch_include_standard_elements().
+ */
+static bool kpatch_is_unstable_local_label(struct kpatch_elf *kelf,
+					   struct symbol *sym)
+{
+	if (!kpatch_is_local_notype_symbol(sym))
+		return false;
+
+	switch (kelf->arch) {
+	case AARCH64:
+	case RISCV64:
+		return sym->name[0] == '.' &&
+		       sym->name[1] == 'L' &&
+		       strncmp(sym->name, ".LC", 3);
+	case X86_64:
+	case PPC64:
+	case S390:
+	case LOONGARCH64:
+		return false;
+	default:
+		ERROR("unsupported arch");
+	}
+
+	return false;
+}
+
+static bool kpatch_is_ignorable_local_symbol(struct kpatch_elf *kelf,
+					     struct symbol *sym)
+{
+	return kpatch_is_mapping_symbol(kelf, sym) ||
+	       kpatch_is_unstable_local_label(kelf, sym);
 }
 
 static unsigned int function_padding_size(struct kpatch_elf *kelf, struct symbol *sym)
@@ -1529,7 +1575,7 @@ static void kpatch_correlate_symbols(struct kpatch_elf *kelf_orig,
 			    !strncmp(sym_orig->name, ".LC", 3))
 				continue;
 
-			if (kpatch_is_mapping_symbol(kelf_orig, sym_orig))
+			if (kpatch_is_ignorable_local_symbol(kelf_orig, sym_orig))
 				continue;
 
 			/* group section symbols must have correlated sections */
@@ -2098,7 +2144,7 @@ static void kpatch_replace_sections_syms(struct kpatch_elf *kelf)
 					 */
 				} else if (target_off == start && target_off == end) {
 
-					if(kpatch_is_mapping_symbol(kelf, sym))
+					if (kpatch_is_ignorable_local_symbol(kelf, sym))
 						continue;
 
 					/*

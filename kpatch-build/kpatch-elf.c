@@ -365,13 +365,33 @@ static void kpatch_create_rela_list(struct kpatch_elf *kelf,
 				      rela->sym->name, rela->addend);
 		}
 
-		if (kelf->arch == LOONGARCH64) {
+		if (kelf->arch == LOONGARCH64 || kelf->arch == RISCV64) {
 			/*
-			 * LoongArch GCC creates local labels such as .LBB7266,
-			 * replace them with section symbols.
+			 * LoongArch and RISC-V GCC create local labels such as
+			 * .LBB7266 / .L1245, replace them with section symbols
+			 * to avoid false CHANGED detection due to label
+			 * renumbering between compilations.
+			 * Apply to text sections (branch target labels) and
+			 * .rodata.* sections (function-specific read-only data
+			 * like jump tables).  Exclude special sections like
+			 * __jump_table, __ex_table, .alternative which use
+			 * local labels for specific purposes.
 			 */
 			if (rela->sym->sec && rela->sym->type == STT_NOTYPE &&
-			    rela->sym->bind == STB_LOCAL) {
+			    rela->sym->bind == STB_LOCAL &&
+			    (is_text_section(rela->sym->sec) ||
+			     !strncmp(rela->sym->sec->name, ".rodata.", 8))) {
+				if (!rela->sym->sec->secsym) {
+					struct symbol *secsym;
+
+					ALLOC_LINK(secsym, &kelf->symbols);
+					secsym->sec = rela->sym->sec;
+					secsym->sym.st_info = GELF_ST_INFO(STB_LOCAL, STT_SECTION);
+					secsym->type = STT_SECTION;
+					secsym->bind = STB_LOCAL;
+					secsym->name = rela->sym->sec->name;
+					rela->sym->sec->secsym = secsym;
+				}
 				log_debug("local label: %s -> ", rela->sym->name);
 				rela->addend += rela->sym->sym.st_value;
 				rela->sym = rela->sym->sec->secsym;
