@@ -3456,7 +3456,40 @@ static void kpatch_regenerate_special_section(struct kpatch_elf *kelf,
 				rela->offset -= src_offset - dest_offset;
 				rela->rela.r_offset = rela->offset;
 
-				kpatch_include_symbol(rela->sym);
+				/*
+				 * On RISC-V the fields in .alternative,
+				 * __jump_table, __bug_table and __ex_table are
+				 * encoded with paired R_RISCV_ADD/SUB
+				 * relocations: the SUB half references a local
+				 * anchor symbol whose st_value equals the
+				 * field's own offset in the base section.  When
+				 * a group is compacted to a new offset, move these
+				 * anchors together with it; otherwise the resolved
+				 * field value keeps referencing the group's old
+				 * offset, which makes the kernel patch arbitrary
+				 * code at module load time (e.g. cpufeature
+				 * alternatives can overwrite unrelated functions).
+				 *
+				 * The range check makes the adjustment idempotent
+				 * in case an anchor is shared.
+				 */
+				if (kelf->arch == RISCV64 &&
+				    rela->sym->sec == relasec->base) {
+					if (rela->sym->sym.st_value >= src_offset &&
+					    rela->sym->sym.st_value < src_offset + group_size)
+						rela->sym->sym.st_value +=
+							(long)dest_offset - (long)src_offset;
+
+					/*
+					 * The regenerated base section is included below.
+					 * Including it recursively here would walk the old,
+					 * unfiltered relocation list and pull references from
+					 * discarded groups into the output.
+					 */
+					rela->sym->include = 1;
+				} else {
+					kpatch_include_symbol(rela->sym);
+				}
 
 				if (!strcmp(special->name, ".fixup"))
 					kpatch_update_ex_table_addend(kelf, special,
@@ -3489,6 +3522,22 @@ static void kpatch_regenerate_special_section(struct kpatch_elf *kelf,
 
 	/* overwrite with new relas list */
 	list_replace(&newrelas, &relasec->relas);
+
+	/*
+	 * On RISC-V the paired R_RISCV_SUB* relocations reference local
+	 * anchor symbols inside the base section itself.  After compaction
+	 * every such anchor must lie within the regenerated section; an
+	 * out-of-bounds value means the fields would resolve to garbage and
+	 * the kernel could patch arbitrary code at module load time.
+	 */
+	if (kelf->arch == RISCV64) {
+		list_for_each_entry(rela, &relasec->relas, list) {
+			if (rela->sym->sec == relasec->base &&
+			    rela->sym->sym.st_value >= dest_offset)
+				ERROR("special section %s: unresolved in-section anchor",
+				      relasec->base->name);
+		}
+	}
 
 	/* include both rela and base sections */
 	relasec->include = 1;
