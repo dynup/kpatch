@@ -123,6 +123,7 @@ enum architecture {
 	S390   = 0x1 << 2,
 	AARCH64  = 0x1 << 3,
 	LOONGARCH64 = 0x1 << 4,
+	RISCV64 = 0x1 << 5,
 };
 
 struct kpatch_elf {

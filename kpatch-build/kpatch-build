@@ -448,6 +448,10 @@ find_special_section_data() {
 		"loongarch64")
 			check[a]=true					# alt_instr
 			;;
+		"riscv64")
+			check[b]=true					# bug_entry
+			check[j]=true					# jump_entry
+			;;
 	esac
 
 	# Kernel CONFIG_ features
@@ -777,6 +781,7 @@ kernel_src_arch() {
 		ppc64le)     echo "powerpc" ;;
 		s390x)       echo "s390" ;;
 		loongarch64) echo "loongarch" ;;
+		riscv64)     echo "riscv" ;;
 		*)           echo "$1" ;;
 	esac
 }
@@ -1320,6 +1325,10 @@ if [[ "$ARCH" = "loongarch64" ]]; then
 	else
 		ARCH_MAKEVARS+=("KBUILD_CFLAGS_KERNEL+=-mno-direct-extern-access")
 	fi
+fi
+
+if [[ "$TARGET_ARCH" = "riscv64" ]]; then
+	ARCH_KCFLAGS="-fPIC"
 fi
 
 export KCFLAGS="-I$DATADIR/patch -ffunction-sections -fdata-sections \

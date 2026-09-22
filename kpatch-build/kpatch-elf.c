@@ -158,6 +158,8 @@ unsigned int absolute_rela_type(struct kpatch_elf *kelf)
 		return R_AARCH64_ABS64;
 	case LOONGARCH64:
 		return R_LARCH_64;
+	case RISCV64:
+		return R_RISCV_64;
 	default:
 		ERROR("unsupported arch");
 	}
@@ -224,6 +226,7 @@ long rela_target_offset(struct kpatch_elf *kelf, struct section *relasec,
 	case PPC64:
 	case AARCH64:
 	case LOONGARCH64:
+	case RISCV64:
 		add_off = 0;
 		break;
 	case X86_64:
@@ -283,6 +286,15 @@ unsigned int insn_length(struct kpatch_elf *kelf, void *addr)
 	case PPC64:
 	case LOONGARCH64:
 		return 4;
+
+	case RISCV64:
+		/*
+		 * RISC-V instruction length is determined by the lowest 2 bits:
+		 *   0b11 -> 32-bit (base) instruction
+		 *   0b00, 0b01, 0b10 -> 16-bit compressed (C-ext) instruction
+		 * This matches the kernel's GET_INSN_LENGTH() macro.
+		 */
+		return (*(unsigned char *)addr & 0x3) == 0x3 ? 4 : 2;
 
 	case S390:
 		switch(insn[0] >> 6) {
@@ -635,6 +647,9 @@ struct kpatch_elf *kpatch_elf_open(const char *name)
 		break;
 	case EM_LOONGARCH:
 		kelf->arch = LOONGARCH64;
+		break;
+	case EM_RISCV:
+		kelf->arch = RISCV64;
 		break;
 	default:
 		ERROR("Unsupported target architecture");
