@@ -4171,6 +4171,117 @@ static int function_ptr_rela(const struct rela *rela, struct kpatch_elf *kelf)
 	return funcptr;
 }
 
+static struct symbol *find_or_create_section_symbol(struct kpatch_elf *kelf,
+						    struct section *sec)
+{
+	struct symbol *sym;
+
+	if (sec->secsym)
+		return sec->secsym;
+
+	/*
+	 * Newer toolchains are stingy with their section symbols, create one
+	 * if it doesn't exist already.
+	 */
+	ALLOC_LINK(sym, &kelf->symbols);
+	sym->sec = sec;
+	sym->sym.st_info = GELF_ST_INFO(STB_LOCAL, STT_SECTION);
+	sym->type = STT_SECTION;
+	sym->bind = STB_LOCAL;
+	sym->name = sec->name;
+	sec->secsym = sym;
+
+	return sym;
+}
+
+static void add_intermediate_rela(struct kpatch_elf *kelf,
+				  struct section *relasec,
+				  struct symbol *sym, long addend,
+				  unsigned int offset)
+{
+	struct rela *rela;
+
+	ALLOC_LINK(rela, &relasec->relas);
+	rela->sym = sym;
+	rela->type = absolute_rela_type(kelf);
+	rela->addend = addend;
+	rela->offset = offset;
+}
+
+static unsigned int kpatch_relocation_field_offset(unsigned int index,
+						   size_t field)
+{
+	return (unsigned int)(index * sizeof(struct kpatch_relocation) + field);
+}
+
+static void add_kpatch_relocation_relas(struct kpatch_elf *kelf,
+					struct section *krela_sec,
+					struct section *dest_sec,
+					struct symbol *strsym, char *objname,
+					unsigned int index, unsigned int dest_off,
+					struct symbol *ksym, long ksym_addend)
+{
+	struct symbol *dest_sym;
+
+	dest_sym = find_or_create_section_symbol(kelf, dest_sec);
+	add_intermediate_rela(kelf, krela_sec->rela, dest_sym, dest_off,
+		kpatch_relocation_field_offset(index,
+			offsetof(struct kpatch_relocation, dest)));
+
+	add_intermediate_rela(kelf, krela_sec->rela, strsym,
+		offset_of_string(&kelf->strings, objname),
+		kpatch_relocation_field_offset(index,
+			offsetof(struct kpatch_relocation, objname)));
+
+	add_intermediate_rela(kelf, krela_sec->rela, ksym, ksym_addend,
+		kpatch_relocation_field_offset(index,
+			offsetof(struct kpatch_relocation, ksym)));
+}
+
+static struct symbol *create_riscv_hi20_anchor(struct kpatch_elf *kelf,
+					       struct section *sec,
+					       unsigned long value,
+					       unsigned int index)
+{
+	struct symbol *sym;
+	char buf[64];
+
+	ALLOC_LINK(sym, &kelf->symbols);
+	snprintf(buf, sizeof(buf), KPATCH_RISCV_HI20_PREFIX "%u", index);
+	sym->name = strdup(buf);
+	if (!sym->name)
+		ERROR("strdup");
+	sym->sec = sec;
+	sym->sym.st_info = GELF_ST_INFO(STB_LOCAL, STT_NOTYPE);
+	sym->sym.st_value = value;
+	sym->type = STT_NOTYPE;
+	sym->bind = STB_LOCAL;
+	sym->strip = SYMBOL_USED;
+
+	return sym;
+}
+
+static void mark_riscv_paired_lo12_relas(struct section *relasec,
+					 const struct rela *hi20)
+{
+	struct rela *rela;
+
+	if (!is_riscv_hi20_rela(hi20))
+		return;
+
+	list_for_each_entry(rela, &relasec->relas, list) {
+		if (!is_riscv_lo12_rela(rela))
+			continue;
+		if (!rela->sym)
+			continue;
+		if ((unsigned int)(rela->sym->sym.st_value + rela->addend) != hi20->offset)
+			continue;
+
+		rela->need_klp_reloc = true;
+		rela->riscv_paired_lo12 = true;
+	}
+}
+
 static bool need_klp_reloc(struct kpatch_elf *kelf, struct lookup_table *table,
 			   struct section *relasec, const struct rela *rela)
 {
@@ -4386,8 +4497,12 @@ static void kpatch_create_intermediate_sections(struct kpatch_elf *kelf,
 			 * internal symbol function pointer check which is done
 			 * via .toc indirection in need_klp_reloc().
 			 */
-			if (need_klp_reloc(kelf, table, relasec, rela))
+			if (need_klp_reloc(kelf, table, relasec, rela)) {
 				toc_rela(rela)->need_klp_reloc = true;
+				if (kelf->arch == RISCV64)
+					mark_riscv_paired_lo12_relas(relasec,
+								     toc_rela(rela));
+			}
 		}
 	}
 
@@ -4454,6 +4569,34 @@ static void kpatch_create_intermediate_sections(struct kpatch_elf *kelf,
 				ERROR("unsupported klp relocation reference to symbol '%s' in module-specific special section '%s'",
 				      rela->sym->name, relasec->base->name);
 
+			if (rela->riscv_paired_lo12) {
+				struct symbol *lo12_sym;
+
+				/*
+				 * The RISC-V module loader requires a PCREL_LO12
+				 * relocation to live in the same relsec as its
+				 * matching HI20 relocation, but the LO12 still
+				 * points at the local text address of that HI20.
+				 */
+				krelas[index].addend = rela->addend;
+				krelas[index].type = rela->type;
+				krelas[index].external = 0;
+				krelas[index].local = 1;
+
+				lo12_sym = create_riscv_hi20_anchor(kelf, relasec->base,
+					rela->sym->sym.st_value + rela->addend, index);
+				add_kpatch_relocation_relas(kelf, krela_sec,
+							    relasec->base, strsym,
+							    objname, index,
+							    rela->offset, lo12_sym, 0);
+
+				rela->sym->strip = SYMBOL_USED;
+				list_del(&rela->list);
+				free(rela);
+				index++;
+				continue;
+			}
+
 			if (!lookup_symbol(table, rela->sym, &symbol))
 				ERROR("can't find symbol '%s' in symbol table",
 				      rela->sym->name);
@@ -4495,46 +4638,12 @@ static void kpatch_create_intermediate_sections(struct kpatch_elf *kelf,
 			krelas[index].addend = rela->addend;
 			krelas[index].type = rela->type;
 			krelas[index].external = !vmlinux && symbol.exported;
+			krelas[index].local = 0;
 
-			/* add rela to fill in krelas[index].dest field */
-			ALLOC_LINK(rela2, &krela_sec->rela->relas);
-			if (!relasec->base->secsym) {
-				struct symbol *sym;
-
-				/*
-				 * Newer toolchains are stingy with their
-				 * section symbols, create one if it doesn't
-				 * exist already.
-				 */
-				ALLOC_LINK(sym, &kelf->symbols);
-				sym->sec = relasec->base;
-				sym->sym.st_info = GELF_ST_INFO(STB_LOCAL, STT_SECTION);
-				sym->type = STT_SECTION;
-				sym->bind = STB_LOCAL;
-				sym->name = relasec->base->name;
-				relasec->base->secsym = sym;
-			}
-			rela2->sym = relasec->base->secsym;
-			rela2->type = absolute_rela_type(kelf);
-			rela2->addend = rela->offset;
-			rela2->offset = (unsigned int)(index * sizeof(*krelas) + \
-					offsetof(struct kpatch_relocation, dest));
-
-			/* add rela to fill in krelas[index].objname field */
-			ALLOC_LINK(rela2, &krela_sec->rela->relas);
-			rela2->sym = strsym;
-			rela2->type = absolute_rela_type(kelf);
-			rela2->addend = offset_of_string(&kelf->strings, objname);
-			rela2->offset = (unsigned int)(index * sizeof(*krelas) + \
-				offsetof(struct kpatch_relocation, objname));
-
-			/* add rela to fill in krelas[index].ksym field */
-			ALLOC_LINK(rela2, &krela_sec->rela->relas);
-			rela2->sym = ksym_sec_sym;
-			rela2->type = absolute_rela_type(kelf);
-			rela2->addend = (unsigned int)(index * sizeof(*ksyms));
-			rela2->offset = (unsigned int)(index * sizeof(*krelas) + \
-				offsetof(struct kpatch_relocation, ksym));
+			add_kpatch_relocation_relas(kelf, krela_sec, relasec->base,
+						    strsym, objname, index,
+						    rela->offset, ksym_sec_sym,
+						    (long)(index * sizeof(*ksyms)));
 
 			/*
 			 * Mark the referred to symbol for removal but

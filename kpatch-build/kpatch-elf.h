@@ -111,6 +111,7 @@ struct rela {
 	long addend;
 	char *string;
 	bool need_klp_reloc;
+	bool riscv_paired_lo12;
 };
 
 struct string {
@@ -188,6 +189,18 @@ bool is_file_sym(struct symbol *sym);
 bool is_local_func_sym(struct symbol *sym);
 bool is_local_sym(struct symbol *sym);
 bool is_ubsan_sec(const char *name);
+
+static inline bool is_riscv_hi20_rela(const struct rela *rela)
+{
+	return rela->type == R_RISCV_GOT_HI20 ||
+	       rela->type == R_RISCV_PCREL_HI20;
+}
+
+static inline bool is_riscv_lo12_rela(const struct rela *rela)
+{
+	return rela->type == R_RISCV_PCREL_LO12_I ||
+	       rela->type == R_RISCV_PCREL_LO12_S;
+}
 
 void print_strtab(char *buf, size_t size);
 void kpatch_create_shstrtab(struct kpatch_elf *kelf);

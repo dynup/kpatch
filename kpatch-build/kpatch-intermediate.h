@@ -24,6 +24,10 @@
 
 /* For .kpatch.{symbols,relocations,arch} sections */
 
+#define KPATCH_RISCV_HI20_PREFIX ".Lkpatch_riscv_hi20_"
+#define KPATCH_RISCV_SLOT_PREFIX ".Lkpatch_riscv_slot_"
+#define KPATCH_RISCV_KLP_DATA_SEC ".data.kpatch.riscv"
+
 struct kpatch_symbol {
 	unsigned long src;
 	unsigned long sympos;
@@ -36,6 +40,7 @@ struct kpatch_relocation {
 	unsigned long dest;
 	unsigned int type;
 	int external;
+	int local; /* ksym points to a local anchor, not .kpatch.symbols */
 	long addend;
 	char *objname; /* object to which this rela applies to */
 	struct kpatch_symbol *ksym;
