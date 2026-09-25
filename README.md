@@ -7,6 +7,12 @@
 > [klp-build](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tree/scripts/livepatch/klp-build),
 > which is now part of the upstream Linux kernel.
 >
+> The new `klp-build` functionality may also be backported/necessary
+> on various downstream vendor kernels, depending on the presence of
+> other patches and/or kernel config options which are not supported
+> by this tool.  Consult your vendor documentation and kernel sources
+> for further information.
+>
 > **klp-build architecture support:**
 > - x86-64: supported (Linux 6.19+)
 > - arm64: patches in development on LKML
