@@ -25,10 +25,43 @@
 #include "log.h"
 #include "kpatch-elf.h"
 #include "kpatch-intermediate.h"
+#include "kpatch-riscv-insn.h"
 
 /* For log.h */
 char *childobj;
 enum loglevel loglevel = NORMAL;
+
+struct riscv_pcrel_slot {
+	struct list_head list;
+	struct section *sec;
+	unsigned int offset;
+};
+
+struct writable_section {
+	struct list_head list;
+	struct section *sec;
+};
+
+static LIST_HEAD(riscv_pcrel_slots);
+static LIST_HEAD(writable_sections);
+
+static struct section *find_or_add_klp_relasec(struct kpatch_elf *kelf,
+					       struct section *base,
+					       char *objname);
+
+static void link_local_symbol(struct kpatch_elf *kelf, struct symbol *sym)
+{
+	struct list_head *head;
+	struct symbol *s;
+
+	head = &kelf->symbols;
+	list_for_each_entry(s, &kelf->symbols, list) {
+		if (!is_local_sym(s))
+			break;
+		head = &s->list;
+	}
+	list_add_tail(&sym->list, head);
+}
 
 /*
  * Add a symbol from .kpatch.symbols to the symbol table
@@ -112,6 +145,295 @@ static struct symbol *find_or_add_ksym_to_symbols(struct kpatch_elf *kelf,
 	return sym;
 }
 
+static struct symbol *find_or_add_local_anchor(struct kpatch_elf *kelf,
+					       struct symbol *src,
+					       long addend,
+					       unsigned int index)
+{
+	struct symbol *sym, *anchor;
+	char buf[64];
+	unsigned long value;
+
+	value = src->sym.st_value + addend;
+
+	list_for_each_entry(sym, &kelf->symbols, list) {
+		if (sym->sec == src->sec &&
+		    sym->type == STT_NOTYPE &&
+		    sym->bind == STB_LOCAL &&
+		    sym->sym.st_value == value &&
+		    sym->name &&
+		    !strncmp(sym->name, KPATCH_RISCV_HI20_PREFIX,
+			     sizeof(KPATCH_RISCV_HI20_PREFIX) - 1))
+			return sym;
+	}
+
+	ALLOC_LINK(anchor, NULL);
+	snprintf(buf, sizeof(buf), KPATCH_RISCV_HI20_PREFIX "%u", index);
+	anchor->name = strdup(buf);
+	if (!anchor->name)
+		ERROR("strdup");
+	anchor->sec = src->sec;
+	anchor->sym.st_info = GELF_ST_INFO(STB_LOCAL, STT_NOTYPE);
+	anchor->sym.st_value = value;
+	anchor->type = STT_NOTYPE;
+	anchor->bind = STB_LOCAL;
+
+	link_local_symbol(kelf, anchor);
+
+	return anchor;
+}
+
+static size_t append_zeroed_section_data(struct section *sec, size_t len,
+					 size_t align)
+{
+	size_t old_size, offset, new_size;
+	void *buf;
+
+	old_size = sec->data->d_size;
+	offset = align ? (old_size + align - 1) & ~(align - 1) : old_size;
+	new_size = offset + len;
+
+	buf = realloc(sec->data->d_buf, new_size);
+	if (!buf)
+		ERROR("realloc");
+
+	sec->data->d_buf = buf;
+	memset((char *)sec->data->d_buf + old_size, 0, new_size - old_size);
+	sec->data->d_size = new_size;
+	sec->sh.sh_size = new_size;
+
+	return offset;
+}
+
+static struct symbol *add_riscv_klp_data_slot(struct kpatch_elf *kelf)
+{
+	static unsigned int slot_index;
+	struct section *sec;
+	struct symbol *sym;
+	char buf[64];
+	size_t offset;
+
+	sec = find_section_by_name(&kelf->sections, KPATCH_RISCV_KLP_DATA_SEC);
+	if (!sec) {
+		sec = create_section_pair(kelf, KPATCH_RISCV_KLP_DATA_SEC,
+					  sizeof(unsigned long), 1);
+		sec->sh.sh_flags = SHF_ALLOC | SHF_WRITE;
+		offset = 0;
+	} else {
+		offset = append_zeroed_section_data(sec, sizeof(unsigned long), 0);
+	}
+
+	ALLOC_LINK(sym, NULL);
+	snprintf(buf, sizeof(buf), KPATCH_RISCV_SLOT_PREFIX "%u", slot_index++);
+	sym->name = strdup(buf);
+	if (!sym->name)
+		ERROR("strdup");
+	sym->sec = sec;
+	sym->sym.st_info = GELF_ST_INFO(STB_LOCAL, STT_OBJECT);
+	sym->sym.st_value = offset;
+	sym->sym.st_size = sizeof(unsigned long);
+	sym->type = STT_OBJECT;
+	sym->bind = STB_LOCAL;
+	link_local_symbol(kelf, sym);
+
+	return sym;
+}
+
+static void add_rela(struct section *relasec, unsigned int offset,
+		     unsigned int type, struct symbol *sym, long addend)
+{
+	struct rela *rela;
+
+	ALLOC_LINK(rela, &relasec->relas);
+	rela->offset = offset;
+	rela->type = type;
+	rela->sym = sym;
+	rela->addend = addend;
+}
+
+static void mark_riscv_pcrel_slot(struct section *sec, unsigned int offset)
+{
+	struct riscv_pcrel_slot *slot;
+
+	ALLOC_LINK(slot, NULL);
+	slot->sec = sec;
+	slot->offset = offset;
+	list_add_tail(&slot->list, &riscv_pcrel_slots);
+}
+
+static bool is_riscv_pcrel_slot(struct section *sec, unsigned int offset)
+{
+	struct riscv_pcrel_slot *slot;
+
+	list_for_each_entry(slot, &riscv_pcrel_slots, list) {
+		if (slot->sec == sec && slot->offset == offset)
+			return true;
+	}
+
+	return false;
+}
+
+static void ensure_section_writable(struct section *sec)
+{
+	struct writable_section *wsec;
+	void *buf;
+
+	list_for_each_entry(wsec, &writable_sections, list) {
+		if (wsec->sec == sec)
+			return;
+	}
+
+	buf = malloc(sec->data->d_size);
+	if (!buf)
+		ERROR("malloc");
+	if (sec->data->d_buf)
+		memcpy(buf, sec->data->d_buf, sec->data->d_size);
+	else if (sec->data->d_size)
+		ERROR("section %s has size %zu but no data buffer",
+		      sec->name, sec->data->d_size);
+	sec->data->d_buf = buf;
+
+	ALLOC_LINK(wsec, NULL);
+	wsec->sec = sec;
+	list_add_tail(&wsec->list, &writable_sections);
+}
+
+static bool rewrite_riscv_addi_lo12_load(struct section *sec,
+					 unsigned int offset,
+					 unsigned int insn,
+					 unsigned int rd,
+					 unsigned int rs1)
+{
+	if (riscv_opcode(insn) != RISCV_OPCODE_OP_IMM || rd != rs1)
+		return false;
+
+	/* Convert addi rd, rs1, imm to ld rd, imm(rs1). */
+	insn = riscv_set_opcode_funct3(insn, RISCV_OPCODE_LOAD,
+					RISCV_FUNCT3_LD);
+	memcpy((char *)sec->data->d_buf + offset, &insn, sizeof(insn));
+
+	return true;
+}
+
+static void patch_riscv_lo12_load(struct section *sec, unsigned int offset)
+{
+	unsigned int insn, rd, rs1;
+
+	if (offset + sizeof(insn) > sec->data->d_size)
+		ERROR("RISC-V LO12 offset out of range for %s", sec->name);
+
+	ensure_section_writable(sec);
+	memcpy(&insn, (char *)sec->data->d_buf + offset, sizeof(insn));
+	rd = riscv_rd(insn);
+	rs1 = riscv_rs1(insn);
+
+	if (!rewrite_riscv_addi_lo12_load(sec, offset, insn, rd, rs1))
+		ERROR("unsupported RISC-V PCREL_LO12 instruction at %s+0x%x",
+		      sec->name, offset);
+}
+
+static bool is_riscv_linker_rela(const struct rela *rela)
+{
+	return rela->type == R_RISCV_ALIGN ||
+	       rela->type == R_RISCV_RELAX;
+}
+
+static void remove_riscv_linker_relas(struct kpatch_elf *kelf)
+{
+	struct section *relasec;
+	struct rela *rela, *safe;
+
+	if (kelf->arch != RISCV64)
+		return;
+
+	list_for_each_entry(relasec, &kelf->sections, list) {
+		if (!is_rela_section(relasec))
+			continue;
+
+		list_for_each_entry_safe(rela, safe, &relasec->relas, list) {
+			if (!is_riscv_linker_rela(rela))
+				continue;
+
+			list_del(&rela->list);
+			free(rela);
+		}
+	}
+}
+
+static void normalize_riscv_lo12_relas(struct kpatch_elf *kelf)
+{
+	struct section *relasec;
+	struct rela *rela;
+	unsigned int index = 0;
+
+	if (kelf->arch != RISCV64)
+		return;
+
+	list_for_each_entry(relasec, &kelf->sections, list) {
+		if (!is_rela_section(relasec))
+			continue;
+
+		list_for_each_entry(rela, &relasec->relas, list) {
+			if (!is_riscv_lo12_rela(rela))
+				continue;
+
+			rela->sym = find_or_add_local_anchor(kelf, rela->sym,
+							     rela->addend,
+							     index++);
+			rela->addend = 0;
+		}
+	}
+}
+
+static void create_riscv_klp_addr_relas(struct kpatch_elf *kelf,
+				       struct symbol *dest,
+				       unsigned int dest_off,
+				       char *objname,
+				       struct symbol *klp_sym,
+				       long klp_addend,
+				       bool patch_lo12)
+{
+	struct section *klp_relasec;
+	struct symbol *slot;
+
+	if (!dest->sec->rela)
+		ERROR("missing rela section for %s", dest->sec->name);
+
+	slot = add_riscv_klp_data_slot(kelf);
+
+	add_rela(dest->sec->rela,
+		 (unsigned int)(dest->sym.st_value + dest_off),
+		 R_RISCV_PCREL_HI20, slot, 0);
+	if (patch_lo12)
+		mark_riscv_pcrel_slot(dest->sec,
+				      (unsigned int)(dest->sym.st_value + dest_off));
+
+	klp_relasec = find_or_add_klp_relasec(kelf, slot->sec, objname);
+	if (!klp_relasec)
+		ERROR("error finding or adding .klp.rela section");
+
+	add_rela(klp_relasec, (unsigned int)slot->sym.st_value,
+		 R_RISCV_64, klp_sym, klp_addend);
+}
+
+static void create_riscv_local_rela(struct kpatch_elf *kelf,
+				    struct symbol *dest,
+				    unsigned int dest_off,
+				    struct symbol *src,
+				    unsigned int type)
+{
+	if (!dest->sec->rela)
+		ERROR("missing rela section for %s", dest->sec->name);
+
+	if (is_riscv_pcrel_slot(dest->sec, (unsigned int)src->sym.st_value))
+		patch_riscv_lo12_load(dest->sec,
+				      (unsigned int)(dest->sym.st_value + dest_off));
+
+	add_rela(dest->sec->rela,
+		 (unsigned int)(dest->sym.st_value + dest_off),
+		 type, src, 0);
+}
+
 /*
  * Create a .klp.rela section given the base section and objname
  *
@@ -176,6 +498,7 @@ static void create_klp_relasecs_and_syms(struct kpatch_elf *kelf, struct section
 	struct rela *rela;
 	char *objname;
 	unsigned int nr, index, offset, dest_off;
+	long src_addend;
 
 	krelas = krelasec->data->d_buf;
 	nr = (unsigned int)(krelasec->data->d_size / sizeof(*krelas));
@@ -200,17 +523,44 @@ static void create_klp_relasecs_and_syms(struct kpatch_elf *kelf, struct section
 
 		objname = strings + rela->addend;
 
-		/* Get the .kpatch.symbol entry for the rela src */
-		rela = find_rela_by_offset(krelasec->rela,
-			(unsigned int)(offset + offsetof(struct kpatch_relocation, ksym)));
-		if (!rela)
-			ERROR("find_rela_by_offset");
+		src_addend = krelas[index].addend;
+		if (krelas[index].local) {
+			rela = find_rela_by_offset(krelasec->rela,
+				(unsigned int)(offset + offsetof(struct kpatch_relocation, ksym)));
+			if (!rela)
+				ERROR("find_rela_by_offset");
 
-		/* Create (or find) a klp symbol from the rela src entry */
-		sym = find_or_add_ksym_to_symbols(kelf, ksymsec, strings,
-							(unsigned int)rela->addend);
-		if (!sym)
-			ERROR("error finding or adding ksym to symtab");
+			sym = find_or_add_local_anchor(kelf, rela->sym,
+						       rela->addend, index);
+			src_addend = 0;
+		} else {
+			/* Get the .kpatch.symbol entry for the rela src */
+			rela = find_rela_by_offset(krelasec->rela,
+				(unsigned int)(offset + offsetof(struct kpatch_relocation, ksym)));
+			if (!rela)
+				ERROR("find_rela_by_offset");
+
+			/* Create (or find) a klp symbol from the rela src entry */
+			sym = find_or_add_ksym_to_symbols(kelf, ksymsec, strings,
+								(unsigned int)rela->addend);
+			if (!sym)
+				ERROR("error finding or adding ksym to symtab");
+		}
+
+		if (kelf->arch == RISCV64 && krelas[index].local) {
+			create_riscv_local_rela(kelf, dest, dest_off, sym,
+						krelas[index].type);
+			continue;
+		}
+
+		if (kelf->arch == RISCV64 &&
+		    (krelas[index].type == R_RISCV_GOT_HI20 ||
+		     krelas[index].type == R_RISCV_PCREL_HI20)) {
+			create_riscv_klp_addr_relas(kelf, dest, dest_off,
+						    objname, sym, src_addend,
+						    krelas[index].type == R_RISCV_PCREL_HI20);
+			continue;
+		}
 
 		/* Create (or find) the .klp.rela section for the dest sec and object */
 		klp_relasec = find_or_add_klp_relasec(kelf, dest->sec, objname);
@@ -222,7 +572,7 @@ static void create_klp_relasecs_and_syms(struct kpatch_elf *kelf, struct section
 		rela->offset = (unsigned int)(dest->sym.st_value + dest_off);
 		rela->type = krelas[index].type;
 		rela->sym = sym;
-		rela->addend = krelas[index].addend;
+		rela->addend = src_addend;
 	}
 }
 
@@ -486,6 +836,8 @@ int main(int argc, char *argv[])
 	}
 
 	remove_intermediate_sections(kelf);
+	remove_riscv_linker_relas(kelf);
+	normalize_riscv_lo12_relas(kelf);
 	kpatch_reindex_elements(kelf);
 
 	/* Rebuild rela sections, new .klp.rela sections will be rebuilt too. */
