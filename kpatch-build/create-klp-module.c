@@ -31,6 +31,11 @@
 char *childobj;
 enum loglevel loglevel = NORMAL;
 
+enum riscv_lo12_patch_result {
+	RISCV_LO12_KEEP_RELA,
+	RISCV_LO12_RELA_HANDLED,
+};
+
 struct riscv_pcrel_slot {
 	struct list_head list;
 	struct section *sec;
@@ -127,20 +132,10 @@ static struct symbol *find_or_add_ksym_to_symbols(struct kpatch_elf *kelf,
 	 *   a) locals need to be grouped together, before globals
 	 *   b) globals can be tacked into the end of the list
 	 */
-	if (is_local_sym(sym)) {
-		struct list_head *head;
-		struct symbol *s;
-
-		head = &kelf->symbols;
-		list_for_each_entry(s, &kelf->symbols, list) {
-			if (!is_local_sym(s))
-				break;
-			head = &s->list;
-		}
-		list_add_tail(&sym->list, head);
-	} else {
+	if (is_local_sym(sym))
+		link_local_symbol(kelf, sym);
+	else
 		list_add_tail(&sym->list, &kelf->symbols);
-	}
 
 	return sym;
 }
@@ -298,6 +293,21 @@ static void ensure_section_writable(struct section *sec)
 	list_add_tail(&wsec->list, &writable_sections);
 }
 
+static struct rela *find_riscv_slot_hi20_rela(struct section *sec,
+					       unsigned int offset)
+{
+	struct rela *rela;
+
+	list_for_each_entry(rela, &sec->rela->relas, list) {
+		if (rela->offset == offset && rela->type == R_RISCV_PCREL_HI20 &&
+		    rela->sym && rela->sym->sec &&
+		    !strcmp(rela->sym->sec->name, KPATCH_RISCV_KLP_DATA_SEC))
+			return rela;
+	}
+
+	return NULL;
+}
+
 static bool rewrite_riscv_addi_lo12_load(struct section *sec,
 					 unsigned int offset,
 					 unsigned int insn,
@@ -315,7 +325,88 @@ static bool rewrite_riscv_addi_lo12_load(struct section *sec,
 	return true;
 }
 
-static void patch_riscv_lo12_load(struct section *sec, unsigned int offset)
+static void emit_riscv_load_trampoline(struct kpatch_elf *kelf,
+				       struct section *sec,
+				       unsigned int offset,
+				       struct symbol *hi20_anchor,
+				       unsigned int insn,
+				       unsigned int rd,
+				       unsigned int rs1)
+{
+	static unsigned int trampoline_index;
+	struct rela *hi20_rela;
+	struct symbol *trampoline_anchor;
+	unsigned int hi20_insn, hi20_rd, call_jalr;
+	unsigned int trampoline[4], hi20_offset, trampoline_offset;
+
+	/*
+	 * A direct load consumes the resolved symbol value, while the KLP data
+	 * slot contains its address.  Preserve the extra dereference in an
+	 * out-of-line sequence:
+	 *
+	 *   auipc rd, slot_hi       auipc rd, trampoline_hi
+	 *   load  rd, slot_lo(rd)   jalr  x0, trampoline_lo(rd)
+	 *                             ...
+	 *                           trampoline:
+	 *                             auipc rd, slot_hi
+	 *                             ld    rd, slot_lo(rd)
+	 *                             load  rd, 0(rd)
+	 *                             jal   x0, return
+	 */
+	if (riscv_opcode(insn) != RISCV_OPCODE_LOAD || rd != rs1 || rd == 0)
+		ERROR("unsupported RISC-V PCREL_LO12 instruction at %s+0x%x",
+		      sec->name, offset);
+
+	hi20_offset = (unsigned int)hi20_anchor->sym.st_value;
+	if (offset != hi20_offset + RISCV_INSN_SIZE ||
+	    hi20_offset + sizeof(hi20_insn) > sec->data->d_size)
+		ERROR("unsupported RISC-V PCREL_HI20/LO12 layout at %s+0x%x",
+		      sec->name, offset);
+
+	memcpy(&hi20_insn, (char *)sec->data->d_buf + hi20_offset,
+	       sizeof(hi20_insn));
+	hi20_rd = riscv_rd(hi20_insn);
+	if (riscv_opcode(hi20_insn) != RISCV_OPCODE_AUIPC || hi20_rd != rd)
+		ERROR("unsupported RISC-V PCREL_HI20 instruction at %s+0x%x",
+		      sec->name, hi20_offset);
+
+	hi20_rela = find_riscv_slot_hi20_rela(sec, hi20_offset);
+	if (!hi20_rela)
+		ERROR("missing RISC-V KLP slot relocation at %s+0x%x",
+		      sec->name, hi20_offset);
+
+	trampoline_offset = (unsigned int)append_zeroed_section_data(sec,
+		sizeof(trampoline), RISCV_INSN_SIZE);
+
+	encode_riscv_auipc_jalr(rd, (long)trampoline_offset - hi20_offset,
+				&hi20_insn, &call_jalr);
+	memcpy((char *)sec->data->d_buf + hi20_offset, &hi20_insn,
+	       sizeof(hi20_insn));
+	memcpy((char *)sec->data->d_buf + offset, &call_jalr,
+	       sizeof(call_jalr));
+
+	/* Move the normal HI20 relocation from the call site to the trampoline. */
+	hi20_rela->offset = trampoline_offset;
+	trampoline[0] = riscv_auipc_insn(rd); /* auipc rd, slot_hi */
+	trampoline[1] = riscv_ld_insn(rd, rd); /* ld rd, slot_lo(rd) */
+	trampoline[2] = insn & ~RISCV_IMM_MASK; /* original load, imm=0 */
+	trampoline[3] = encode_riscv_jal(0,
+		(long)(offset + RISCV_INSN_SIZE) -
+		(trampoline_offset + 3 * RISCV_INSN_SIZE));
+	memcpy((char *)sec->data->d_buf + trampoline_offset, trampoline,
+	       sizeof(trampoline));
+
+	trampoline_anchor = find_or_add_local_anchor(kelf, hi20_anchor,
+		(long)trampoline_offset - hi20_offset,
+		RISCV_TRAMPOLINE_INDEX_BASE + trampoline_index++);
+	add_rela(sec->rela, trampoline_offset + RISCV_INSN_SIZE,
+		 R_RISCV_PCREL_LO12_I, trampoline_anchor, 0);
+}
+
+static enum riscv_lo12_patch_result
+patch_riscv_lo12_load(struct kpatch_elf *kelf,
+		      struct section *sec, unsigned int offset,
+		      struct symbol *hi20_anchor)
 {
 	unsigned int insn, rd, rs1;
 
@@ -327,9 +418,13 @@ static void patch_riscv_lo12_load(struct section *sec, unsigned int offset)
 	rd = riscv_rd(insn);
 	rs1 = riscv_rs1(insn);
 
-	if (!rewrite_riscv_addi_lo12_load(sec, offset, insn, rd, rs1))
-		ERROR("unsupported RISC-V PCREL_LO12 instruction at %s+0x%x",
-		      sec->name, offset);
+	if (rewrite_riscv_addi_lo12_load(sec, offset, insn, rd, rs1))
+		return RISCV_LO12_KEEP_RELA;
+
+	emit_riscv_load_trampoline(kelf, sec, offset, hi20_anchor,
+				   insn, rd, rs1);
+
+	return RISCV_LO12_RELA_HANDLED;
 }
 
 static bool is_riscv_linker_rela(const struct rela *rela)
@@ -422,12 +517,18 @@ static void create_riscv_local_rela(struct kpatch_elf *kelf,
 				    struct symbol *src,
 				    unsigned int type)
 {
+	enum riscv_lo12_patch_result result;
+
 	if (!dest->sec->rela)
 		ERROR("missing rela section for %s", dest->sec->name);
 
-	if (is_riscv_pcrel_slot(dest->sec, (unsigned int)src->sym.st_value))
-		patch_riscv_lo12_load(dest->sec,
-				      (unsigned int)(dest->sym.st_value + dest_off));
+	if (is_riscv_pcrel_slot(dest->sec, (unsigned int)src->sym.st_value)) {
+		result = patch_riscv_lo12_load(kelf, dest->sec,
+				(unsigned int)(dest->sym.st_value + dest_off),
+				src);
+		if (result == RISCV_LO12_RELA_HANDLED)
+			return;
+	}
 
 	add_rela(dest->sec->rela,
 		 (unsigned int)(dest->sym.st_value + dest_off),
@@ -523,23 +624,18 @@ static void create_klp_relasecs_and_syms(struct kpatch_elf *kelf, struct section
 
 		objname = strings + rela->addend;
 
+		/* Get the .kpatch.symbol entry for the rela src */
+		rela = find_rela_by_offset(krelasec->rela,
+			(unsigned int)(offset + offsetof(struct kpatch_relocation, ksym)));
+		if (!rela)
+			ERROR("find_rela_by_offset");
+
 		src_addend = krelas[index].addend;
 		if (krelas[index].local) {
-			rela = find_rela_by_offset(krelasec->rela,
-				(unsigned int)(offset + offsetof(struct kpatch_relocation, ksym)));
-			if (!rela)
-				ERROR("find_rela_by_offset");
-
 			sym = find_or_add_local_anchor(kelf, rela->sym,
 						       rela->addend, index);
 			src_addend = 0;
 		} else {
-			/* Get the .kpatch.symbol entry for the rela src */
-			rela = find_rela_by_offset(krelasec->rela,
-				(unsigned int)(offset + offsetof(struct kpatch_relocation, ksym)));
-			if (!rela)
-				ERROR("find_rela_by_offset");
-
 			/* Create (or find) a klp symbol from the rela src entry */
 			sym = find_or_add_ksym_to_symbols(kelf, ksymsec, strings,
 								(unsigned int)rela->addend);
@@ -551,11 +647,9 @@ static void create_klp_relasecs_and_syms(struct kpatch_elf *kelf, struct section
 			create_riscv_local_rela(kelf, dest, dest_off, sym,
 						krelas[index].type);
 			continue;
-		}
-
-		if (kelf->arch == RISCV64 &&
-		    (krelas[index].type == R_RISCV_GOT_HI20 ||
-		     krelas[index].type == R_RISCV_PCREL_HI20)) {
+		} else if (kelf->arch == RISCV64 &&
+			   (krelas[index].type == R_RISCV_GOT_HI20 ||
+			    krelas[index].type == R_RISCV_PCREL_HI20)) {
 			create_riscv_klp_addr_relas(kelf, dest, dest_off,
 						    objname, sym, src_addend,
 						    krelas[index].type == R_RISCV_PCREL_HI20);
