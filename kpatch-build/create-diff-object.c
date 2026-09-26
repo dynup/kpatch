@@ -2175,13 +2175,39 @@ static int kpatch_include_changed_functions(struct kpatch_elf *kelf)
 	return changed_nr;
 }
 
+/*
+ * A compiler-generated child function is independently patchable when it has
+ * its own profiling call and no changed ancestor already redirects execution
+ * to the replacement child.  Children without a profiling call are carried by
+ * their changed parent instead.
+ */
+static bool kpatch_is_patch_func(struct symbol *sym)
+{
+	struct symbol *parent;
+
+	if (sym->type != STT_FUNC || sym->status != CHANGED)
+		return false;
+
+	if (!sym->parent)
+		return true;
+
+	if (!sym->has_func_profiling)
+		return false;
+
+	for (parent = sym->parent; parent; parent = parent->parent)
+		if (parent->status == CHANGED)
+			return false;
+
+	return true;
+}
+
 static void kpatch_print_changes(struct kpatch_elf *kelf)
 {
 	struct symbol *sym;
 
 	list_for_each_entry(sym, &kelf->symbols, list) {
-		if (!sym->include || !sym->sec || sym->type != STT_FUNC ||
-		    sym->parent || sym->is_pfx)
+		if (!sym->include || !sym->sec || !kpatch_is_patch_func(sym) ||
+		    sym->is_pfx)
 			continue;
 		if (sym->status == NEW)
 			log_normal("new function: %s\n", sym->name);
@@ -3452,8 +3478,7 @@ static void kpatch_create_patches_sections(struct kpatch_elf *kelf,
 	/* count patched functions */
 	nr = 0;
 	list_for_each_entry(sym, &kelf->symbols, list) {
-		if (sym->type != STT_FUNC || sym->status != CHANGED ||
-		    sym->parent)
+		if (!kpatch_is_patch_func(sym))
 			continue;
 		nr++;
 	}
@@ -3474,8 +3499,7 @@ static void kpatch_create_patches_sections(struct kpatch_elf *kelf,
 	/* populate sections */
 	index = 0;
 	list_for_each_entry(sym, &kelf->symbols, list) {
-		if (sym->type != STT_FUNC || sym->status != CHANGED ||
-		    sym->parent)
+		if (!kpatch_is_patch_func(sym))
 			continue;
 
 		if (!lookup_symbol(table, sym, &symbol))
