@@ -357,6 +357,10 @@ if ! support_klp_replace ; then
 	echo "KLP replace is not supported on '${PRETTY_NAME}', disabling."
 fi
 
+# Allow custom integration tests to invoke kpatch-build with the same binary
+# and options as the main test run.
+export KPATCHBUILD KPATCHBUILD_OPTS
+
 for file in "${PATCH_LIST[@]}"; do
 	if [[ $QUICK != 1 || "$file" =~ -FAIL ]]; then
 		build_module "$file"

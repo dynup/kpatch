@@ -1,0 +1,90 @@
+#!/bin/bash
+
+set -o errexit
+set -o nounset
+set -o pipefail
+
+arch=${KPATCH_TEST_ARCH:-$(uname -m)}
+if [[ $arch != riscv64 ]]; then
+	echo "SKIP: --skip-vmlinux-final-link is RISC-V only"
+	exit 0
+fi
+
+if [[ " ${KPATCHBUILD_OPTS:-} " != *" --skip-vmlinux-final-link "* ]]; then
+	echo "SKIP: --skip-vmlinux-final-link is not enabled"
+	exit 0
+fi
+
+rootdir=$(readlink -f "$(dirname "$0")/../../..")
+kpatch_build=${KPATCHBUILD:-$rootdir/kpatch-build/kpatch-build}
+kpatch_build_opts=${KPATCHBUILD_OPTS:-}
+patch=$(readlink -f "$(dirname "$0")/skip-vmlinux-in-tree-module.patch.disabled")
+output=$(mktemp)
+module_symvers_state=$(mktemp)
+
+read -r -a opts <<< "$kpatch_build_opts"
+kernel_src=
+for ((i = 0; i < ${#opts[@]}; i++)); do
+	case ${opts[i]} in
+	-s|--sourcedir)
+		((i++))
+		kernel_src=${opts[i]:-}
+		;;
+	--sourcedir=*)
+		kernel_src=${opts[i]#*=}
+		;;
+	esac
+done
+
+if [[ -z "$kernel_src" ]]; then
+	echo "SKIP: integration run does not use an explicit source directory"
+	exit 0
+fi
+kernel_src=$(readlink -f "$kernel_src")
+module_symvers=$kernel_src/Module.symvers
+
+cleanup()
+{
+	rm -f "$output" "$module_symvers_state"
+}
+trap cleanup EXIT
+
+if [[ ! -f "$kernel_src/fs/xfs/xfs_stats.o" ]] ||
+   ! grep -Eq '(^|[[:space:]])-DMODULE([[:space:]]|$)' 	"$kernel_src/fs/xfs/.xfs_stats.o.cmd"; then
+	echo "SKIP: CONFIG_XFS_FS is not built as an in-tree module"
+	exit 0
+fi
+
+if [[ -e "$module_symvers" ]]; then
+	sha256sum "$module_symvers" > "$module_symvers_state"
+else
+	printf 'absent\n' > "$module_symvers_state"
+fi
+
+# KPATCHBUILD_OPTS intentionally expands into multiple arguments.
+# shellcheck disable=SC2086
+if "$kpatch_build" $kpatch_build_opts -n test-skip-vmlinux-module \
+	"$patch" > "$output" 2>&1; then
+	echo "in-tree module patch unexpectedly succeeded"
+	exit 1
+fi
+
+if ! grep -q -- \
+	'--skip-vmlinux-final-link supports vmlinux objects only; fs/xfs/xfs_stats.c is built as a module' \
+	"$output"; then
+	cat "$output"
+	echo "missing vmlinux-only rejection"
+	exit 1
+fi
+
+if grep -q 'Building patched source' "$output"; then
+	cat "$output"
+	echo "in-tree module patch reached the patched build"
+	exit 1
+fi
+
+if grep -q '^absent$' "$module_symvers_state"; then
+	[[ ! -e "$module_symvers" ]]
+else
+	sha256sum --check --status "$module_symvers_state"
+fi
