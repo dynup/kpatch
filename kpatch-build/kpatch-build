@@ -59,6 +59,7 @@ declare -a PATCH_LIST
 APPLIED_PATCHES=0
 OOT_MODULE=
 KLP_REPLACE=1
+MODVERSION=""
 
 GCC="${CROSS_COMPILE:-}gcc"
 CLANG="${CROSS_COMPILE:-}clang"
@@ -785,6 +786,7 @@ usage() {
 	echo "		-j, --jobs              Specify the number of make jobs" >&2
 	echo "		-t, --target            Specify custom kernel build targets" >&2
 	echo "		-n, --name              Specify the name of the kpatch module" >&2
+	echo "		--module-version        Set the patch module's version metadata" >&2
 	echo "		-o, --output            Specify output folder" >&2
 	echo "		-d, --debug             Enable 'xtrace' and keep scratch files" >&2
 	echo "		                        in <CACHEDIR>/tmp" >&2
@@ -803,7 +805,7 @@ if ! command -v gawk &> /dev/null; then
 	die "gawk not installed"
 fi
 
-options="$(getopt -o ha:r:s:c:v:j:t:n:o:dR -l "help,archversion:,sourcerpm:,sourcedir:,config:,vmlinux:,jobs:,target:,name:,output:,oot-module:,oot-module-src:,debug,skip-gcc-check,skip-compiler-check,skip-cleanup,non-replace,version" -- "$@")" || die "getopt failed"
+options="$(getopt -o ha:r:s:c:v:j:t:n:o:dR -l "help,archversion:,sourcerpm:,sourcedir:,config:,vmlinux:,jobs:,target:,name:,module-version:,output:,oot-module:,oot-module-src:,debug,skip-gcc-check,skip-compiler-check,skip-cleanup,non-replace,version" -- "$@")" || die "getopt failed"
 
 eval set -- "$options"
 
@@ -848,6 +850,13 @@ while [[ $# -gt 0 ]]; do
 		;;
 	-n|--name)
 		MODNAME="$(module_name_string "$2")"
+		shift
+		;;
+	--module-version)
+		# Restrict the value to a safe C string and a single modinfo line.
+		[[ "$2" =~ ^[a-zA-Z0-9][a-zA-Z0-9._+-]{0,63}$ ]] ||
+			die "Invalid module version: expected 1-64 ASCII characters, starting with a letter or digit, followed by letters, digits, '.', '_', '+' or '-'"
+		MODVERSION="$2"
 		shift
 		;;
 	-o|--output)
@@ -1293,6 +1302,10 @@ remove_patches
 # interfere with cleanup later, so ensure the $TEMPDIR is read/write.
 cp -LR "$DATADIR/patch" "$TEMPDIR" || die
 chmod -R u+rw "$TEMPDIR" || die
+if [[ -n "$MODVERSION" ]]; then
+	printf '\nMODULE_VERSION("%s");\n' "$MODVERSION" >> "$TEMPDIR/patch/patch-hook.c" ||
+		die "Failed to add module version"
+fi
 
 declare -a ARCH_MAKEVARS
 if [[ "$ARCH" = "ppc64le" ]]; then
@@ -1583,6 +1596,12 @@ if [[ "$USE_KLP" -eq 1 ]]; then
 	"$TOOLSDIR"/create-klp-module "${extra_flags[@]}" "$TEMPDIR/patch/tmp.ko" "$TEMPDIR/patch/$MODNAME.ko" 2>&1 | logger 1
 	check_pipe_status create-klp-module
 	[[ "$rc" -ne 0 ]] && die "create-klp-module: exited with return code: $rc"
+fi
+
+if [[ -n "$MODVERSION" ]]; then
+	actual_version=$(modinfo -F version "$TEMPDIR/patch/$MODNAME.ko") ||
+		die "Failed to read module version"
+	[[ "$actual_version" = "$MODVERSION" ]] || die "Module version mismatch"
 fi
 
 if [[ -n "$CONFIG_MODVERSIONS" ]]; then
