@@ -40,6 +40,16 @@ effect.
 -n|--name
    Specify the name of the kpatch module
 
+--module-version <version>
+   Set MODULE_VERSION metadata in the generated patch module.
+   The value must contain 1-64 ASCII characters: an initial letter or digit,
+   followed by letters, digits, '.', '_', '+' or '-'.
+   Read it with 'modinfo -F version <module.ko>' or, after loading, from
+   /sys/module/<module_name>/version. This is a caller-supplied identifier,
+   not an indication of livepatch activation or symbol version compatibility.
+   If omitted, no version metadata is added. Unlike --version, this option
+   does not print the version of the kpatch-build tool.
+
 -o|--output
    Specify output folder
 

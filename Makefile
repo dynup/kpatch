@@ -71,7 +71,8 @@ check:
 	shellcheck test/difftree.sh test/integration/kpatch-test		\
 		   test/integration/lib.sh test/integration/rebase-patches	\
 		   test/integration/test-vagrant				\
-		   test/integration/vm-integration-run
+		   test/integration/vm-integration-run test/module-version-test.sh
+	bash test/module-version-test.sh
 
 help:
 	@echo "kpatch Makefile"
