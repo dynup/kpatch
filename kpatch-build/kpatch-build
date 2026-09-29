@@ -54,6 +54,8 @@ DEBUG=0
 SKIPCLEANUP=0
 SKIPCOMPILERCHECK=0
 SKIP_VMLINUX_FINAL_LINK=0
+CUSTOM_TARGETS=0
+MODULE_SYMVERS_WAS_ABSENT=0
 ARCH_KCFLAGS=""
 DEBUG_KCFLAGS=""
 declare -a PATCH_LIST
@@ -228,6 +230,10 @@ cleanup() {
 
 	remove_patches
 	restore_kernel_files
+
+	if [[ "$MODULE_SYMVERS_WAS_ABSENT" -eq 1 ]]; then
+		rm -f "$BUILDDIR/Module.symvers"
+	fi
 
 	[[ "$DEBUG" -eq 0 ]] && rm -rf "$TEMPDIR"
 	rm -rf "$RPMTOPDIR"
@@ -746,6 +752,77 @@ find_kobj() {
 	done
 }
 
+object_is_module() {
+	local obj="$1"
+	local cmdfile
+	local dry_run
+
+	cmdfile="$(dirname "$obj")/.$(basename "$obj").cmd"
+	if [[ -e "$cmdfile" ]]; then
+		grep -Eq '(^|[[:space:]])-DMODULE([[:space:]]|$)' "$cmdfile"
+		return
+	fi
+
+	# A clean tree may not have a .cmd file for a CONFIG=m object.
+	# Ask Kbuild to resolve the target without executing its recipes.
+	dry_run="$(make --no-print-directory -n \
+		"${ARCH_MAKEVARS[@]}" "${MAKEVARS[@]}" "$obj" 2>&1)" ||
+		die "--skip-vmlinux-final-link cannot determine the target for $obj"
+
+	grep -Eq '(^|[[:space:]])-DMODULE([[:space:]]|$)' <<< "$dry_run"
+}
+
+verify_skip_vmlinux_patch_targets() {
+	local patch
+	local path
+	local obj
+	local saved_pwd="$PWD"
+
+	[[ "$SKIP_VMLINUX_FINAL_LINK" -eq 1 ]] || return
+
+	cd "$BUILDDIR" || die
+	for patch in "${PATCH_LIST[@]}"; do
+		while IFS= read -r path; do
+			case "$path" in
+				*.c)
+					obj="${path%.c}.o"
+					if object_is_module "$obj"; then
+						die "--skip-vmlinux-final-link supports vmlinux objects only; $path is built as a module"
+					fi
+					;;
+				*)
+					die "--skip-vmlinux-final-link cannot verify that $path affects vmlinux objects only"
+					;;
+			esac
+		done < <(awk '($1 == "---" || $1 == "+++") &&
+				    NF >= 2 && $2 != "/dev/null" {
+			path = $2
+			sub(/^[^/]*\//, "", path)
+			print path
+		}' "$patch" | sort -u)
+	done
+	cd "$saved_pwd" || die
+}
+
+verify_skip_vmlinux_changed_objs() {
+	local obj
+	local saved_pwd="$PWD"
+
+	[[ "$SKIP_VMLINUX_FINAL_LINK" -eq 1 ]] || return
+
+	cd "$BUILDDIR" || die
+	while IFS= read -r obj; do
+		[[ -n "$obj" ]] || continue
+		if object_is_module "$obj"; then
+			die "--skip-vmlinux-final-link supports vmlinux objects only; $obj is built as a module"
+		fi
+		find_kobj "$obj"
+		[[ "$KOBJFILE" = vmlinux ]] ||
+			die "--skip-vmlinux-final-link supports vmlinux objects only; $obj belongs to $KOBJFILE"
+	done < "$TEMPDIR/changed_objs"
+	cd "$saved_pwd" || die
+}
+
 # Only allow alphanumerics and '_' and '-' in the module name.  Everything else
 # is replaced with '-'.  Also truncate to 55 chars so the full name + NUL
 # terminator fits in the kernel's 56-byte module name array.
@@ -809,8 +886,8 @@ usage() {
 	echo "		--oot-module-src        Specify out-of-tree module source directory" >&2
 	echo "		-R, --non-replace       Disable replace patch (replace is on by default)" >&2
 	echo "		--skip-cleanup          Skip post-build cleanup" >&2
-	echo "		--skip-vmlinux-final-link  RISC-V only: skip original and patched" >&2
-	echo "		                           final vmlinux links after building" >&2
+	echo "		--skip-vmlinux-final-link  RISC-V vmlinux objects only: skip original and" >&2
+	echo "		                           patched final vmlinux links after building" >&2
 	echo "		                           vmlinux.o and running modpost" >&2
 	echo "		--skip-compiler-check   Skip compiler version matching check" >&2
 	echo "		                        (not recommended)" >&2
@@ -862,6 +939,7 @@ while [[ $# -gt 0 ]]; do
 		;;
 	-t|--target)
 		TARGETS="$TARGETS $2"
+		CUSTOM_TARGETS=1
 		shift
 		;;
 	-n|--name)
@@ -928,6 +1006,10 @@ fi
 if [[ "$SKIP_VMLINUX_FINAL_LINK" -eq 1 ]]; then
 	[[ "$TARGET_ARCH" = riscv64 ]] ||
 		die "--skip-vmlinux-final-link is only supported for RISC-V builds"
+	[[ "$CUSTOM_TARGETS" -eq 0 ]] ||
+		die "--skip-vmlinux-final-link cannot be combined with --target"
+	[[ -z "$OOT_MODULE" ]] ||
+		die "--skip-vmlinux-final-link cannot be used for out-of-tree modules"
 fi
 
 trace_on
@@ -1355,6 +1437,17 @@ if [[ $DEBUG -ge 4 ]]; then
 fi
 save_env
 
+if [[ "$SKIP_VMLINUX_FINAL_LINK" -eq 1 ]]; then
+	# Module.symvers is temporarily replaced with vmlinux.symvers below
+	# for the external livepatch module build.  Preserve the original
+	# kernel tree state across kpatch-build.
+	if [[ -e "$BUILDDIR/Module.symvers" ]]; then
+		backup_kernel_file "Module.symvers"
+	else
+		MODULE_SYMVERS_WAS_ABSENT=1
+	fi
+fi
+
 echo "Building original source"
 unset KPATCH_GCC_TEMPDIR
 
@@ -1379,6 +1472,7 @@ if [[ "$ARCH" != "$TARGET_ARCH" ]]; then
 	MAKEVARS+=("ARCH=$KARCH")
 fi
 
+
 if [[ "$SKIP_VMLINUX_FINAL_LINK" -eq 1 ]]; then
 	echo "Skipping original vmlinux final link; building vmlinux.o and running modpost"
 	rm -f "$BUILDDIR/Module.symvers"
@@ -1399,6 +1493,8 @@ else
 	[[ -s "$BUILDDIR/Module.symvers" ]] || die "original Module.symvers was not generated"
 	cp -f "$BUILDDIR/Module.symvers" "$TEMPDIR/Module.symvers" || die
 fi
+
+verify_skip_vmlinux_patch_targets
 
 echo "Building patched source"
 apply_patches
@@ -1429,6 +1525,8 @@ if [[ ! -e "$TEMPDIR/changed_objs" ]]; then
 	die "no changed objects found"
 fi
 
+verify_skip_vmlinux_changed_objs
+
 if [[ "$SKIP_VMLINUX_FINAL_LINK" -eq 1 ]]; then
 	BUILD_SYMVERS_FILE="$BUILDDIR/vmlinux.symvers"
 else
@@ -1438,7 +1536,18 @@ fi
 grep -q vmlinux "$BUILD_SYMVERS_FILE" || die "truncated $BUILD_SYMVERS_FILE file"
 
 if [[ "$SKIP_VMLINUX_FINAL_LINK" -eq 1 ]]; then
+	ORIG_SYMVERS_SORTED="$TEMPDIR/Module.symvers.orig.sorted"
+	PATCHED_SYMVERS_SORTED="$TEMPDIR/Module.symvers.patched.sorted"
+	SYMVERS_DIFF="$CACHEDIR/Module.symvers.diff"
+
 	[[ -s "$BUILDDIR/vmlinux.symvers" ]] || die "patched vmlinux.symvers was not generated"
+	LC_ALL=C sort "$TEMPDIR/Module.symvers" > "$ORIG_SYMVERS_SORTED" || die
+	LC_ALL=C sort "$BUILDDIR/vmlinux.symvers" > "$PATCHED_SYMVERS_SORTED" || die
+	if ! cmp -s "$ORIG_SYMVERS_SORTED" "$PATCHED_SYMVERS_SORTED"; then
+		diff -u "$ORIG_SYMVERS_SORTED" "$PATCHED_SYMVERS_SORTED" > "$SYMVERS_DIFF" || true
+		die "patched vmlinux.symvers differs from the original; see $SYMVERS_DIFF"
+	fi
+
 	# External module builds consume Module.symvers from the kernel tree.
 	cp -f "$BUILDDIR/vmlinux.symvers" "$BUILDDIR/Module.symvers" || die
 elif [[ -n "$CONFIG_MODVERSIONS" ]]; then
