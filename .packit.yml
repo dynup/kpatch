@@ -2,7 +2,7 @@ _:
   common-upstream-kernel-test-config: &common-upstream-kernel-test-config
     job: tests
     branch: master
-    identifier: "integration-upstream"
+    identifier: "sanling1-probe-up"
     use_internal_tf: true
     targets:
       # [NOTE] There needs to be a matching target among the Copr targets,
@@ -27,7 +27,7 @@ _:
   common-rhel-test-config: &common-rhel-test-config
     job: tests
     branch: master
-    identifier: "integration-rhel"
+    identifier: "sanling1-probe-rhel"
     use_internal_tf: true
     targets:
       epel-8-x86_64:
