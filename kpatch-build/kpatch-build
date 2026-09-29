@@ -53,6 +53,7 @@ RELEASE_FILE=/etc/os-release
 DEBUG=0
 SKIPCLEANUP=0
 SKIPCOMPILERCHECK=0
+SKIP_VMLINUX_FINAL_LINK=0
 ARCH_KCFLAGS=""
 DEBUG_KCFLAGS=""
 declare -a PATCH_LIST
@@ -808,6 +809,9 @@ usage() {
 	echo "		--oot-module-src        Specify out-of-tree module source directory" >&2
 	echo "		-R, --non-replace       Disable replace patch (replace is on by default)" >&2
 	echo "		--skip-cleanup          Skip post-build cleanup" >&2
+	echo "		--skip-vmlinux-final-link  RISC-V only: skip original and patched" >&2
+	echo "		                           final vmlinux links after building" >&2
+	echo "		                           vmlinux.o and running modpost" >&2
 	echo "		--skip-compiler-check   Skip compiler version matching check" >&2
 	echo "		                        (not recommended)" >&2
 	echo "		--version               Version of kpatch-build"
@@ -817,7 +821,7 @@ if ! command -v gawk &> /dev/null; then
 	die "gawk not installed"
 fi
 
-options="$(getopt -o ha:r:s:c:v:j:t:n:o:dR -l "help,archversion:,sourcerpm:,sourcedir:,config:,vmlinux:,jobs:,target:,name:,output:,oot-module:,oot-module-src:,debug,skip-gcc-check,skip-compiler-check,skip-cleanup,non-replace,version" -- "$@")" || die "getopt failed"
+options="$(getopt -o ha:r:s:c:v:j:t:n:o:dR -l "help,archversion:,sourcerpm:,sourcedir:,config:,vmlinux:,jobs:,target:,name:,output:,oot-module:,oot-module-src:,debug,skip-gcc-check,skip-compiler-check,skip-cleanup,skip-vmlinux-final-link,non-replace,version" -- "$@")" || die "getopt failed"
 
 eval set -- "$options"
 
@@ -892,6 +896,9 @@ while [[ $# -gt 0 ]]; do
 		echo "Skipping cleanup"
 		SKIPCLEANUP=1
 		;;
+	--skip-vmlinux-final-link)
+		SKIP_VMLINUX_FINAL_LINK=1
+		;;
 	--skip-gcc-check)
 		echo "DEPRECATED: --skip-gcc-check is deprecated, use --skip-compiler-check instead"
 		;&
@@ -916,6 +923,11 @@ if [[ ${#PATCH_LIST[@]} -eq 0 ]]; then
 	warn "no patch file(s) specified"
 	usage
 	exit 1
+fi
+
+if [[ "$SKIP_VMLINUX_FINAL_LINK" -eq 1 ]]; then
+	[[ "$TARGET_ARCH" = riscv64 ]] ||
+		die "--skip-vmlinux-final-link is only supported for RISC-V builds"
 fi
 
 trace_on
@@ -1367,13 +1379,26 @@ if [[ "$ARCH" != "$TARGET_ARCH" ]]; then
 	MAKEVARS+=("ARCH=$KARCH")
 fi
 
-
-# $TARGETS used as list, no quotes.
+if [[ "$SKIP_VMLINUX_FINAL_LINK" -eq 1 ]]; then
+	echo "Skipping original vmlinux final link; building vmlinux.o and running modpost"
+	rm -f "$BUILDDIR/Module.symvers"
+	ORIGINAL_TARGETS="vmlinux.o modpost"
+else
+	ORIGINAL_TARGETS="$TARGETS"
+fi
+# $ORIGINAL_TARGETS used as list, no quotes.
 # shellcheck disable=SC2086
-make "${ARCH_MAKEVARS[@]}" "${MAKEVARS[@]}" "-j$CPUS" $TARGETS 2>&1 | logger || die
+make "${ARCH_MAKEVARS[@]}" "${MAKEVARS[@]}" "-j$CPUS" \
+	$ORIGINAL_TARGETS 2>&1 | logger || die
 
-# Save original module symvers
-cp -f "$BUILDDIR/Module.symvers" "$TEMPDIR/Module.symvers" || die
+# Save original symbol versions
+if [[ "$SKIP_VMLINUX_FINAL_LINK" -eq 1 ]]; then
+	[[ -s "$BUILDDIR/vmlinux.symvers" ]] || die "original vmlinux.symvers was not generated"
+	cp -f "$BUILDDIR/vmlinux.symvers" "$TEMPDIR/Module.symvers" || die
+else
+	[[ -s "$BUILDDIR/Module.symvers" ]] || die "original Module.symvers was not generated"
+	cp -f "$BUILDDIR/Module.symvers" "$TEMPDIR/Module.symvers" || die
+fi
 
 echo "Building patched source"
 apply_patches
@@ -1381,9 +1406,17 @@ mkdir -p "$TEMPDIR/orig" "$TEMPDIR/patched"
 export KPATCH_GCC_TEMPDIR="$TEMPDIR"
 export KPATCH_GCC_SRCDIR="$BUILDDIR"
 save_env
-# $TARGETS used as list, no quotes.
+if [[ "$SKIP_VMLINUX_FINAL_LINK" -eq 1 ]]; then
+	echo "Skipping patched vmlinux final link; building vmlinux.o and running modpost"
+	rm -f "$BUILDDIR/Module.symvers"
+	PATCHED_TARGETS="vmlinux.o modpost"
+else
+	PATCHED_TARGETS="$TARGETS"
+fi
+# $PATCHED_TARGETS used as list, no quotes.
 # shellcheck disable=SC2086
-KBUILD_MODPOST_WARN=1 make "${ARCH_MAKEVARS[@]}" "${MAKEVARS[@]}" "-j$CPUS" $TARGETS 2>&1 | logger || die
+KBUILD_MODPOST_WARN=1 make "${ARCH_MAKEVARS[@]}" "${MAKEVARS[@]}" "-j$CPUS" \
+	$PATCHED_TARGETS 2>&1 | logger || die
 
 # source.c:(.section+0xFF): undefined reference to `symbol'
 grep "undefined reference" "$LOGFILE" | sed -r "s/^.*\`(.*)'$/\\1/" \
@@ -1396,9 +1429,19 @@ if [[ ! -e "$TEMPDIR/changed_objs" ]]; then
 	die "no changed objects found"
 fi
 
-grep -q vmlinux "$KERNEL_SRCDIR/Module.symvers" || die "truncated $KERNEL_SRCDIR/Module.symvers file"
+if [[ "$SKIP_VMLINUX_FINAL_LINK" -eq 1 ]]; then
+	BUILD_SYMVERS_FILE="$BUILDDIR/vmlinux.symvers"
+else
+	BUILD_SYMVERS_FILE="$BUILDDIR/Module.symvers"
+fi
 
-if [[ -n "$CONFIG_MODVERSIONS" ]]; then
+grep -q vmlinux "$BUILD_SYMVERS_FILE" || die "truncated $BUILD_SYMVERS_FILE file"
+
+if [[ "$SKIP_VMLINUX_FINAL_LINK" -eq 1 ]]; then
+	[[ -s "$BUILDDIR/vmlinux.symvers" ]] || die "patched vmlinux.symvers was not generated"
+	# External module builds consume Module.symvers from the kernel tree.
+	cp -f "$BUILDDIR/vmlinux.symvers" "$BUILDDIR/Module.symvers" || die
+elif [[ -n "$CONFIG_MODVERSIONS" ]]; then
 	trace_off "reading Module.symvers"
 	while read -ra sym_line; do
 		if [[ ${#sym_line[@]} -lt 4 ]]; then
@@ -1491,13 +1534,13 @@ for i in $FILES; do
 			KOBJFILE_NAME=vmlinux
 			KOBJFILE_PATH="$VMLINUX"
 			SYMTAB="${TEMPDIR}/${KOBJFILE_NAME}.symtab"
-			SYMVERS_FILE="$BUILDDIR/Module.symvers"
+			SYMVERS_FILE="$BUILD_SYMVERS_FILE"
 		else
 			KOBJFILE_NAME=$(basename "${KOBJFILE%.ko}")
 			KOBJFILE_NAME="${KOBJFILE_NAME//-/_}"
 			KOBJFILE_PATH="${TEMPDIR}/module/$KOBJFILE"
 			SYMTAB="${KOBJFILE_PATH}.symtab"
-			SYMVERS_FILE="$BUILDDIR/Module.symvers"
+			SYMVERS_FILE="$BUILD_SYMVERS_FILE"
 		fi
 
 		"$READELF" -s --wide "$KOBJFILE_PATH" > "$SYMTAB"
