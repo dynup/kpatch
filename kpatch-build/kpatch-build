@@ -63,9 +63,17 @@ KLP_REPLACE=1
 GCC="${CROSS_COMPILE:-}gcc"
 CLANG="${CROSS_COMPILE:-}clang"
 LD="${CROSS_COMPILE:-}ld"
-LLD="${CROSS_COMPILE:-}ld.lld"
 READELF="${CROSS_COMPILE:-}readelf"
 OBJCOPY="${CROSS_COMPILE:-}objcopy"
+
+if [[ -z "${LLD:-}" ]]; then
+	if [[ -n "${CROSS_COMPILE:-}" ]] &&
+	   command -v "${CROSS_COMPILE}ld.lld" >/dev/null 2>&1; then
+		LLD="${CROSS_COMPILE}ld.lld"
+	else
+		LLD="ld.lld"
+	fi
+fi
 
 
 declare -rA SUPPORTED_DEB_DISTROS=(
