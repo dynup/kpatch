@@ -1,0 +1,11 @@
+diff --git a/fs/xfs/xfs_stats.c b/fs/xfs/xfs_stats.c
+--- a/fs/xfs/xfs_stats.c
++++ b/fs/xfs/xfs_stats.c
+@@ -1,6 +1,6 @@
+ // SPDX-License-Identifier: GPL-2.0
+ /*
+- * Copyright (c) 2000-2003,2005 Silicon Graphics, Inc.
++ * Copyright (c) 2000-2003, 2005 Silicon Graphics, Inc.
+  * All Rights Reserved.
+  */
+ #include "xfs.h"

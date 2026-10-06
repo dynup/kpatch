@@ -1,0 +1,54 @@
+diff -Nupr src.orig/fs/aio.c src/fs/aio.c
+--- src.orig/fs/aio.c
++++ src/fs/aio.c
+@@ -50,6 +50,50 @@
+
+ #define KIOCB_KEY		0
+
++#include <linux/module.h>
++#include "kpatch-macros.h"
++
++static const char *const module_state[] = {
++	[MODULE_STATE_LIVE]	= "[MODULE_STATE_LIVE] Normal state",
++	[MODULE_STATE_COMING]	= "[MODULE_STATE_COMING] Full formed, running module_init",
++	[MODULE_STATE_GOING]	= "[MODULE_STATE_GOING] Going away",
++	[MODULE_STATE_UNFORMED]	= "[MODULE_STATE_UNFORMED] Still setting it up",
++};
++
++static void callback_info(const char *callback, patch_object *obj)
++{
++	if (obj->mod)
++		pr_info("%s: %s -> %s\n", callback, obj->mod->name,
++			module_state[obj->mod->state]);
++	else
++		pr_info("%s: vmlinux\n", callback);
++}
++
++static int pre_patch_callback(patch_object *obj)
++{
++	callback_info(__func__, obj);
++	return 0;
++}
++KPATCH_PRE_PATCH_CALLBACK(pre_patch_callback);
++
++static void post_patch_callback(patch_object *obj)
++{
++	callback_info(__func__, obj);
++}
++KPATCH_POST_PATCH_CALLBACK(post_patch_callback);
++
++static void pre_unpatch_callback(patch_object *obj)
++{
++	callback_info(__func__, obj);
++}
++KPATCH_PRE_UNPATCH_CALLBACK(pre_unpatch_callback);
++
++static void post_unpatch_callback(patch_object *obj)
++{
++	callback_info(__func__, obj);
++}
++KPATCH_POST_UNPATCH_CALLBACK(post_unpatch_callback);
++
+ #define AIO_RING_MAGIC			0xa10a10a1
+ #define AIO_RING_COMPAT_FEATURES	1
+ #define AIO_RING_INCOMPAT_FEATURES	0

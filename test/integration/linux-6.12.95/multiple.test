@@ -1,0 +1,8 @@
+#!/bin/bash
+# SPDX-License-Identifier: GPL-2.0-or-later
+
+SCRIPTDIR="$(readlink -f $(dirname $(type -p $0)))"
+
+declare -a blacklist=()
+
+source ${SCRIPTDIR}/../common/multiple.template

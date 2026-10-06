@@ -158,6 +158,8 @@ unsigned int absolute_rela_type(struct kpatch_elf *kelf)
 		return R_AARCH64_ABS64;
 	case LOONGARCH64:
 		return R_LARCH_64;
+	case RISCV64:
+		return R_RISCV_64;
 	default:
 		ERROR("unsupported arch");
 	}
@@ -224,6 +226,7 @@ long rela_target_offset(struct kpatch_elf *kelf, struct section *relasec,
 	case PPC64:
 	case AARCH64:
 	case LOONGARCH64:
+	case RISCV64:
 		add_off = 0;
 		break;
 	case X86_64:
@@ -283,6 +286,15 @@ unsigned int insn_length(struct kpatch_elf *kelf, void *addr)
 	case PPC64:
 	case LOONGARCH64:
 		return 4;
+
+	case RISCV64:
+		/*
+		 * RISC-V instruction length is determined by the lowest 2 bits:
+		 *   0b11 -> 32-bit (base) instruction
+		 *   0b00, 0b01, 0b10 -> 16-bit compressed (C-ext) instruction
+		 * This matches the kernel's GET_INSN_LENGTH() macro.
+		 */
+		return (*(unsigned char *)addr & 0x3) == 0x3 ? 4 : 2;
 
 	case S390:
 		switch(insn[0] >> 6) {
@@ -353,13 +365,33 @@ static void kpatch_create_rela_list(struct kpatch_elf *kelf,
 				      rela->sym->name, rela->addend);
 		}
 
-		if (kelf->arch == LOONGARCH64) {
+		if (kelf->arch == LOONGARCH64 || kelf->arch == RISCV64) {
 			/*
-			 * LoongArch GCC creates local labels such as .LBB7266,
-			 * replace them with section symbols.
+			 * LoongArch and RISC-V GCC create local labels such as
+			 * .LBB7266 / .L1245, replace them with section symbols
+			 * to avoid false CHANGED detection due to label
+			 * renumbering between compilations.
+			 * Apply to text sections (branch target labels) and
+			 * .rodata.* sections (function-specific read-only data
+			 * like jump tables).  Exclude special sections like
+			 * __jump_table, __ex_table, .alternative which use
+			 * local labels for specific purposes.
 			 */
 			if (rela->sym->sec && rela->sym->type == STT_NOTYPE &&
-			    rela->sym->bind == STB_LOCAL) {
+			    rela->sym->bind == STB_LOCAL &&
+			    (is_text_section(rela->sym->sec) ||
+			     !strncmp(rela->sym->sec->name, ".rodata.", 8))) {
+				if (!rela->sym->sec->secsym) {
+					struct symbol *secsym;
+
+					ALLOC_LINK(secsym, &kelf->symbols);
+					secsym->sec = rela->sym->sec;
+					secsym->sym.st_info = GELF_ST_INFO(STB_LOCAL, STT_SECTION);
+					secsym->type = STT_SECTION;
+					secsym->bind = STB_LOCAL;
+					secsym->name = rela->sym->sec->name;
+					rela->sym->sec->secsym = secsym;
+				}
 				log_debug("local label: %s -> ", rela->sym->name);
 				rela->addend += rela->sym->sym.st_value;
 				rela->sym = rela->sym->sec->secsym;
@@ -635,6 +667,9 @@ struct kpatch_elf *kpatch_elf_open(const char *name)
 		break;
 	case EM_LOONGARCH:
 		kelf->arch = LOONGARCH64;
+		break;
+	case EM_RISCV:
+		kelf->arch = RISCV64;
 		break;
 	default:
 		ERROR("Unsupported target architecture");
