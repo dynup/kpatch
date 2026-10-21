@@ -47,8 +47,22 @@ _:
     skip_build: true
     manual_trigger: false
     tmt_plan: kpatch-integration-rhel/kernel$
-    fmf_url: https://gitlab.com/redhat/centos-stream/tests/kernel/test-plans.git
-    fmf_ref: main
+    fmf_url: https://gitlab.com/mkostic1/test-plans.git
+    fmf_ref: aarch64-64k-page-support
+
+  common-rhel-64k-test-config: &common-rhel-64k-test-config
+    job: tests
+    branch: master
+    identifier: "integration-rhel-64k"
+    use_internal_tf: true
+    targets:
+      rhel+epel-10-aarch64:
+        distros: [RHEL-10.3-Nightly]
+    skip_build: true
+    manual_trigger: false
+    tmt_plan: kpatch-integration-rhel/kernel-64k
+    fmf_url: https://gitlab.com/mkostic1/test-plans.git
+    fmf_ref: aarch64-64k-page-support
 
 jobs:
   - <<: *common-upstream-kernel-test-config
@@ -67,6 +81,15 @@ jobs:
       - integration-pr
 
   - <<: *common-rhel-test-config
+    trigger: commit
+    labels:
+      - integration-commit
+
+  - <<: *common-rhel-64k-test-config
+    trigger: pull_request
+    labels:
+      - integration-pr
+  - <<: *common-rhel-64k-test-config
     trigger: commit
     labels:
       - integration-commit
