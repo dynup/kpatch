@@ -1,0 +1,11 @@
+#!/bin/bash
+
+set -o errexit
+
+sudo modprobe xfs
+sleep 5
+grep -q kpatch /sys/fs/xfs/stats/stats
+# TODO: This will trigger a printk on newer kernels which have the .klp.arch
+# removal.  Don't actually do the grep until running on a newer kernel.
+echo "file fs/xfs/xfs_stats.c +p" > /sys/kernel/debug/dynamic_debug/control
+# dmesg | grep -q "kpatch: pr_debug"
