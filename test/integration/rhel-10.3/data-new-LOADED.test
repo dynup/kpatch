@@ -1,0 +1,3 @@
+#!/bin/bash
+
+grep "kpatch:         5" /proc/meminfo
