@@ -1,0 +1,24 @@
+diff -Nupr src.orig/drivers/base/core.c src/drivers/base/core.c
+--- src.orig/drivers/base/core.c	2026-10-30 11:06:21.756308164 +0100
++++ src/drivers/base/core.c	2026-10-30 11:06:57.499744398 +0100
+@@ -37,6 +37,8 @@
+ #include "physical_location.h"
+ #include "power/power.h"
+ 
++#include <linux/blktrace_api.h>
++
+ /* Device links support. */
+ static LIST_HEAD(deferred_sync);
+ static unsigned int defer_sync_state_count = 1;
+diff -Nupr src.orig/drivers/usb/core/usb.c src/drivers/usb/core/usb.c
+--- src.orig/drivers/usb/core/usb.c	2026-10-30 11:06:22.473858414 +0100
++++ src/drivers/usb/core/usb.c	2026-10-30 11:06:57.502140730 +0100
+@@ -771,6 +771,8 @@ EXPORT_SYMBOL_GPL(usb_alloc_dev);
+  */
+ struct usb_device *usb_get_dev(struct usb_device *dev)
+ {
++	barrier();
++
+ 	if (dev)
+ 		get_device(&dev->dev);
+ 	return dev;
