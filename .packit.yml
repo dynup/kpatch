@@ -1,3 +1,4 @@
+---
 _:
   common-upstream-kernel-test-config: &common-upstream-kernel-test-config
     job: tests
@@ -30,66 +31,23 @@ _:
     identifier: "integration-rhel"
     use_internal_tf: true
     targets:
-      epel-8-x86_64:
-        distros: [RHEL-8.10.0-Nightly, RHEL-8.8.0-Nightly, RHEL-8.6.0-Nightly, RHEL-8.4.0-Nightly]
       epel-9-x86_64:
-        distros: [RHEL-9.9.0-Nightly, RHEL-9.8.0-Nightly, RHEL-9.7.0-Nightly, RHEL-9.6.0-Nightly, RHEL-9.4.0-Nightly, RHEL-9.2.0-Nightly, RHEL-9.0.0-Nightly]
-      epel-8-ppc64le:
-        distros: [RHEL-8.10.0-Nightly, RHEL-8.8.0-Nightly, RHEL-8.6.0-Nightly, RHEL-8.4.0-Nightly]
+        distros: [RHEL-9.8.0-Nightly]
       epel-9-ppc64le:
-        distros: [RHEL-9.9.0-Nightly, RHEL-9.8.0-Nightly, RHEL-9.7.0-Nightly, RHEL-9.6.0-Nightly, RHEL-9.4.0-Nightly, RHEL-9.2.0-Nightly, RHEL-9.0.0-Nightly]
-      rhel+epel-10-s390x:
-        distros: [RHEL-10.3-Nightly, RHEL-10.2-Nightly]
-      rhel+epel-10-ppc64le:
-        distros: [RHEL-10.3-Nightly, RHEL-10.2-Nightly]
-      rhel+epel-10-aarch64:
-        distros: [RHEL-10.3-Nightly, RHEL-10.2-Nightly]
+        distros: [RHEL-9.8.0-Nightly]
     skip_build: true
     manual_trigger: false
     tmt_plan: kpatch-integration-rhel/kernel$
     fmf_url: https://gitlab.com/redhat/centos-stream/tests/kernel/test-plans.git
     fmf_ref: main
 
-  common-rhel-64k-test-config: &common-rhel-64k-test-config
-    job: tests
-    branch: master
-    identifier: "integration-rhel-64k"
-    use_internal_tf: true
-    targets:
-      rhel+epel-10-aarch64:
-        distros: [RHEL-10.3-Nightly]
-    skip_build: true
-    manual_trigger: false
-    tmt_plan: kpatch-integration-rhel/kernel-64k$
-    fmf_url: https://gitlab.com/redhat/centos-stream/tests/kernel/test-plans.git
-    fmf_ref: main
-
 jobs:
-  - <<: *common-upstream-kernel-test-config
+  - !!merge <<: *common-rhel-test-config
     trigger: pull_request
     labels:
       - integration-pr
 
-  - <<: *common-upstream-kernel-test-config
-    trigger: commit
-    labels:
-      - integration-commit
-
-  - <<: *common-rhel-test-config
-    trigger: pull_request
-    labels:
-      - integration-pr
-
-  - <<: *common-rhel-test-config
-    trigger: commit
-    labels:
-      - integration-commit
-
-  - <<: *common-rhel-64k-test-config
-    trigger: pull_request
-    labels:
-      - integration-pr
-  - <<: *common-rhel-64k-test-config
+  - !!merge <<: *common-rhel-test-config
     trigger: commit
     labels:
       - integration-commit

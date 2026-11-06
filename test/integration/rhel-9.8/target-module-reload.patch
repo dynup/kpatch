@@ -1,0 +1,23 @@
+diff --git a/fs/nfsd/export.c b/fs/nfsd/export.c
+--- a/fs/nfsd/export.c
++++ b/fs/nfsd/export.c
+@@ -1409,6 +1409,7 @@ static void exp_flags(struct seq_file *m, int flag, int fsid,
+ 	}
+ }
+
++__attribute__((optimize("-fno-optimize-sibling-calls")))
+ static int e_show(struct seq_file *m, void *p)
+ {
+ 	struct cache_head *cp = p;
+@@ -1416,8 +1417,11 @@ static int e_show(struct seq_file *m, void *p)
+ 	struct cache_detail *cd = m->private;
+ 	bool export_stats = is_export_stats_file(m);
+
++	pr_info("kpatch: e_show patched\n");
++
+ 	if (p == SEQ_START_TOKEN) {
+ 		seq_puts(m, "# Version 1.1\n");
++		seq_puts(m, "# kpatch\n");
+ 		if (export_stats)
+ 			seq_puts(m, "# Path Client Start-time\n#\tStats\n");
+ 		else
