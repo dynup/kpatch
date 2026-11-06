@@ -1,0 +1,22 @@
+#!/bin/bash
+
+set -o errexit
+
+# Clean slate:
+sudo systemctl stop nfs-server rpcbind 2>/dev/null || true
+sudo umount /proc/fs/nfsd 2>/dev/null || true
+
+# 1. Initial load & check
+sudo modprobe nfsd
+sleep 2
+grep -q kpatch /proc/fs/nfs/exports
+
+# 2. Target module reload
+sudo systemctl stop nfs-server rpcbind 2>/dev/null || true
+sudo umount /proc/fs/nfsd 2>/dev/null || true
+sudo modprobe -r nfsd
+
+# 3. Final load & check
+sudo modprobe nfsd
+sleep 2
+grep -q kpatch /proc/fs/nfs/exports
