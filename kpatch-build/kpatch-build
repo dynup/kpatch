@@ -55,6 +55,7 @@ SKIPCLEANUP=0
 SKIPCOMPILERCHECK=0
 ARCH_KCFLAGS=""
 DEBUG_KCFLAGS=""
+USER_KCFLAGS="${KCFLAGS:-}"
 declare -a PATCH_LIST
 APPLIED_PATCHES=0
 OOT_MODULE=
@@ -1343,7 +1344,7 @@ if [[ "$ARCH" = "loongarch64" ]]; then
 fi
 
 export KCFLAGS="-I$DATADIR/patch -ffunction-sections -fdata-sections \
-		$ARCH_KCFLAGS $DEBUG_KCFLAGS"
+		$ARCH_KCFLAGS $DEBUG_KCFLAGS${USER_KCFLAGS:+ $USER_KCFLAGS}"
 
 echo "Reading special section data"
 find_special_section_data
@@ -1361,6 +1362,9 @@ declare -a MAKEVARS
 if [[ -n "$CONFIG_CC_IS_CLANG" ]]; then
 	MAKEVARS+=("CC=${KPATCH_CC_PREFIX}${CLANG}")
 	MAKEVARS+=("HOSTCC=clang")
+	if [[ -n "$CONFIG_LD_IS_LLD" && -n "$CONFIG_AS_IS_LLVM" ]] && command -v llvm-objcopy &>/dev/null; then
+		MAKEVARS+=("LLVM=${LLVM:-1}")
+	fi
 else
 	MAKEVARS+=("CC=${KPATCH_CC_PREFIX}${GCC}")
 fi
@@ -1549,7 +1553,7 @@ do
 done
 echo
 
-export KCFLAGS="-I$DATADIR/patch $ARCH_KCFLAGS"
+export KCFLAGS="-I$DATADIR/patch $ARCH_KCFLAGS${USER_KCFLAGS:+ $USER_KCFLAGS}"
 if [[ "$USE_KLP" -eq 0 ]]; then
 	export KCPPFLAGS="-D__KPATCH_MODULE__"
 fi
