@@ -1399,7 +1399,8 @@ static bool kpatch_is_normal_static_local(struct symbol *sym)
 	if (sym->type != STT_OBJECT || sym->bind != STB_LOCAL)
 		return false;
 
-	if (!strncmp(sym->name, ".L", 2))
+	if (!strncmp(sym->name, ".L", 2) ||
+	    !strncmp(sym->name, ".compoundliteral", 16))
 		return false;
 
 	if (!strchr(sym->name, '.'))
