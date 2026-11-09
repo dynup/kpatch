@@ -4169,14 +4169,13 @@ static void kpatch_create_ftrace_callsite_sections(struct kpatch_elf *kelf)
 				ERROR("malloc");
 			memcpy(newdata, sym->sec->data->d_buf, sym->sec->data->d_size);
 			sym->sec->data->d_buf = newdata;
-			insn = newdata;
+			insn = newdata + insn_offset;
 
 			/*
 			 * Replace the NOP with a call to fentry.  The fentry
 			 * rela symbol is already there, just need to change
 			 * the relocation type accordingly.
 			 */
-			insn = sym->sec->data->d_buf;
 			if (insn[0] != 0xf)
 				ERROR("%s: unexpected instruction at the start of the function", sym->name);
 			insn[0] = 0xe8;
