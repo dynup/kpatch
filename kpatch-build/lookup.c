@@ -89,6 +89,7 @@ static bool maybe_discarded_sym(const char *name)
 	    !strncmp(name, ".L__const", 9) ||
 	    !strncmp(name, "__gendwarfksyms_", 16) ||
 	    !strncmp(name, "__export_symbol_", 16) ||
+	    !strncmp(name, "__mod_device_table__", 20) ||
 	    is_ubsan_sec(name))
 		return true;
 
@@ -110,6 +111,8 @@ static bool locals_match(struct lookup_table *table, int idx,
 			continue;
 		if (table_sym->type != STT_FUNC && table_sym->type != STT_OBJECT)
 			continue;
+		if (maybe_discarded_sym(table_sym->name))
+			continue;
 
 		found = 0;
 		sym = file_sym;
@@ -117,6 +120,8 @@ static bool locals_match(struct lookup_table *table, int idx,
 			if (sym->type == STT_FILE)
 				break;
 			if (sym->bind != STB_LOCAL)
+				continue;
+			if (maybe_discarded_sym(sym->name))
 				continue;
 
 			if (sym->type == table_sym->type &&
