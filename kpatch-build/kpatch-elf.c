@@ -25,6 +25,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <ctype.h>
 #include <fcntl.h>
 #include <unistd.h>
 #include <err.h>
@@ -767,6 +768,98 @@ bool is_ubsan_sec(const char *name) {
 		return true;
 	else
 		return false;
+}
+
+static bool has_digit_tail(char *tail)
+{
+	if (*tail != '.')
+		return false;
+
+	while (isdigit((unsigned char)*++tail))
+		;
+
+	if (!*tail)
+		return true;
+
+	return false;
+}
+
+/*
+ * Hack for __UNIQUE_ID().  The following should match:
+ *
+ *   __UNIQUE_ID_ddebug1131.186
+ *   __UNIQUE_ID_ddebug1132.187
+ */
+static int __kpatch_unique_id_strcmp(char *s1, char *s2)
+{
+	/* match '__UNIQUE_ID_ddebug' */
+	while (*s1 == *s2) {
+		if (!*s1)
+			return 0;
+		s1++;
+		s2++;
+	}
+
+	/* skip digits before '.' or EOL */
+	while (isdigit((unsigned char)*s1))
+		s1++;
+	while (isdigit((unsigned char)*s2))
+		s2++;
+
+	if ((!*s1 || has_digit_tail(s1)) &&
+	    (!*s2 || has_digit_tail(s2)))
+		return 0;
+
+	return 1;
+}
+
+/*
+ * This is like strcmp, but for gcc/clang-mangled symbols.  It skips the
+ * comparison of any substring which consists of '.' followed by any number of
+ * digits.
+ */
+int kpatch_mangled_strcmp(char *s1, char *s2)
+{
+	/*
+	 * ELF string sections aren't mangled, though they look that way.  Just
+	 * compare them normally.
+	 */
+	if (strstr(s1, ".str1."))
+		return strcmp(s1, s2);
+
+	if (!strncmp(s1, "__UNIQUE_ID_", 12))
+		return __kpatch_unique_id_strcmp(s1, s2);
+
+	/*
+	 * With LLVM, dynamic debug unique id looks like
+	 *   <func_name>.__UNIQUE_ID_ddebug<number>.
+	 *
+	 * Use __kpatch_unique_id_strcmp to compare them.
+	 */
+	if (strstr(s1, "__UNIQUE_ID_ddebug"))
+		return __kpatch_unique_id_strcmp(s1, s2);
+
+	while (*s1 == *s2) {
+		if (!*s1)
+			return 0;
+		if (*s1 == '.' && isdigit((unsigned char)s1[1])) {
+			if (!isdigit((unsigned char)s2[1]))
+				return 1;
+			while (isdigit((unsigned char)*++s1))
+				;
+			while (isdigit((unsigned char)*++s2))
+				;
+		} else {
+			s1++;
+			s2++;
+		}
+	}
+
+	if ((!*s1 && has_digit_tail(s2)) ||
+	    (!*s2 && has_digit_tail(s1)))
+		return 0;
+
+	return 1;
 }
 
 void print_strtab(char *buf, size_t size)
