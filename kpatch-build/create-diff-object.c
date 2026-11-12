@@ -1442,6 +1442,110 @@ static struct rela *kpatch_find_static_twin_ref(struct section *relasec,
 }
 
 /*
+ * Compiler-synthesized read-only data -- CSWTCH.N jump tables,
+ * __compound_literal.N, and similar deduplicated constants -- can be
+ * renumbered by gcc between two otherwise-identical compilations of the
+ * same translation unit, even with no source change at all.  This is a
+ * long-standing, still-unresolved gcc/kpatch correlation gap (see e.g.
+ * https://github.com/dynup/kpatch/issues/767, #519, #532, #545).  It
+ * surfaces here as a build-wide false positive whenever an unrelated file
+ * gets rebuilt only because a broadly-included header changed (kpatch-build
+ * recompiles anything Kbuild considers stale, not just what the patch
+ * actually touches), and it can hit files nowhere near the real patch.
+ *
+ * kpatch_find_static_twin() correlates by name/reference and fails closed
+ * when gcc's renumbering defeats that.  As a last resort, fall back to
+ * correlating by exact byte-for-byte content: if an uncorrelated candidate
+ * of the same base name (numeric suffix aside), type, and size in the
+ * patched object has identical section data, picking it as the twin cannot
+ * introduce a functional difference -- by definition the two are
+ * indistinguishable at the object level. This can only let through cases
+ * the reference-based match would otherwise (safely) reject; it never
+ * weakens the "no functional change" guarantee, since any genuine content
+ * difference still fails the comparison. The base-name requirement matters:
+ * content alone is not sufficient, since unrelated static tables in the
+ * same translation unit can coincidentally share identical bytes (e.g.
+ * short/terminator-only arrays), and matching on content alone risks
+ * stealing the correct twin for one symbol to satisfy a different one.
+ */
+static bool kpatch_static_data_matches(struct symbol *a, struct symbol *b)
+{
+	Elf_Data *da, *db;
+	unsigned char *pa, *pb;
+
+	if (a->sym.st_size != b->sym.st_size || a->sym.st_size == 0)
+		return false;
+
+	da = a->sec->data;
+	db = b->sec->data;
+	if (!da || !db || !da->d_buf || !db->d_buf)
+		return false;
+
+	if (a->sym.st_value + a->sym.st_size > da->d_size ||
+	    b->sym.st_value + b->sym.st_size > db->d_size)
+		return false;
+
+	pa = (unsigned char *)da->d_buf + a->sym.st_value;
+	pb = (unsigned char *)db->d_buf + b->sym.st_value;
+
+	return !memcmp(pa, pb, a->sym.st_size);
+}
+
+static struct symbol *kpatch_find_static_twin_by_content(struct kpatch_elf *patched,
+							 struct symbol *sym)
+{
+	struct symbol *candidate;
+
+	list_for_each_entry(candidate, &patched->symbols, list) {
+		if (candidate->twin)
+			continue;
+		if (candidate->type != sym->type)
+			continue;
+		if (!kpatch_is_normal_static_local(candidate))
+			continue;
+		if (kpatch_mangled_strcmp(candidate->name, sym->name))
+			continue;
+		if (kpatch_static_data_matches(sym, candidate))
+			return candidate;
+	}
+
+	return NULL;
+}
+
+/*
+ * CSWTCH.N (and similarly-named compiler-synthesized) sections cannot be
+ * correlated by name at all: every such section in a translation unit
+ * shares the same gcc-assigned base name, so name-based correlation is
+ * ambiguous by construction, not just numerically unstable.  When a
+ * symbol referenced from such a section has already been correlated (by
+ * kpatch_correlate_static_local_variables()'s normal reference-based path,
+ * e.g. via some other, ordinarily-named function that also references it),
+ * use that as an anchor: the patched section whose relocations reference
+ * the symbol's twin is the section's twin.
+ */
+static struct section *kpatch_find_section_twin_by_symbol_ref(struct kpatch_elf *patched,
+							      struct symbol *twin_sym)
+{
+	struct section *sec;
+	struct rela *rela, *rela_toc;
+
+	list_for_each_entry(sec, &patched->sections, list) {
+		if (!is_rela_section(sec) || sec->twin)
+			continue;
+
+		list_for_each_entry(rela, &sec->relas, list) {
+			rela_toc = toc_rela(rela);
+			if (!rela_toc)
+				continue;
+			if (rela_toc->sym == twin_sym)
+				return sec;
+		}
+	}
+
+	return NULL;
+}
+
+/*
  * gcc renames static local variables by appending a period and a number.  For
  * example, __foo could be renamed to __foo.31452.  Unfortunately this number
  * can arbitrarily change.  Correlate them by comparing which functions
@@ -1537,6 +1641,8 @@ static void kpatch_correlate_static_local_variables(struct kpatch_elf *orig,
 
 			patched_sym = kpatch_find_static_twin(relasec, sym);
 			if (!patched_sym)
+				patched_sym = kpatch_find_static_twin_by_content(patched, sym);
+			if (!patched_sym)
 				DIFF_FATAL("reference to static local variable %s in %s was removed",
 					   sym->name,
 					   kpatch_section_function_name(relasec));
@@ -1584,6 +1690,24 @@ static void kpatch_correlate_static_local_variables(struct kpatch_elf *orig,
 				parent = kpatch_get_correlated_parent(relasec->base->sym);
 				if (parent)
 					target_sec = parent->sec->rela;
+			}
+
+			if (!sym->twin) {
+				struct symbol *content_twin = kpatch_find_static_twin_by_content(patched, sym);
+
+				if (content_twin) {
+					kpatch_correlate_static_local(sym, content_twin);
+					if (sym == sym->sec->sym)
+						kpatch_correlate_section(sym->sec, content_twin->sec);
+				}
+			}
+
+			if (sym->twin && !target_sec->twin) {
+				struct section *sec_twin =
+					kpatch_find_section_twin_by_symbol_ref(patched, sym->twin);
+
+				if (sec_twin)
+					kpatch_correlate_section(target_sec, sec_twin);
 			}
 
 			if (!sym->twin || !target_sec->twin)
