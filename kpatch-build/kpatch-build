@@ -53,6 +53,7 @@ RELEASE_FILE=/etc/os-release
 DEBUG=0
 SKIPCLEANUP=0
 SKIPCOMPILERCHECK=0
+KVARIANT=""
 ARCH_KCFLAGS=""
 DEBUG_KCFLAGS=""
 declare -a PATCH_LIST
@@ -834,7 +835,7 @@ while [[ $# -gt 0 ]]; do
 		shift
 		;;
 	-V|--variant)
-		VARIANT="$2"
+		KVARIANT="$2"
 		shift
 		;;
 	-v|--vmlinux)
@@ -933,12 +934,12 @@ if [[ -n "$SRCRPM" ]]; then
 	ARCHVERSION="${ARCHVERSION#alt-}"
 	ARCHVERSION="${ARCHVERSION#linux-}"
 
-	if [[ -n "$VARIANT" ]]; then
-		ARCHVERSION="${ARCHVERSION}+${VARIANT//-/_}"
+	if [[ -n "$KVARIANT" ]]; then
+		ARCHVERSION="${ARCHVERSION}+${KVARIANT//-/_}"
 	fi
 fi
 
-if [[ -n "$VARIANT" && -z "$SRCRPM" && -z "$USERSRCDIR" ]]; then
+if [[ -n "$KVARIANT" && -z "$SRCRPM" && -z "$USERSRCDIR" ]]; then
 	die "--variant requires --sourcerpm or --sourcedir"
 fi
 
@@ -971,9 +972,9 @@ if [[ -n "$USERSRCDIR" ]]; then
 		ARCHVERSION="$VMLINUX_VER"
 	fi
 
-	if [[ -n "$VARIANT" ]]; then
+	if [[ -n "$KVARIANT" ]]; then
 		ARCHVERSION="${ARCHVERSION%+*}"
-		ARCHVERSION="${ARCHVERSION}+${VARIANT//-/_}"
+		ARCHVERSION="${ARCHVERSION}+${KVARIANT//-/_}"
 	fi
 fi
 
@@ -1017,8 +1018,8 @@ if [[ "$ARCHVERSION" =~ - ]]; then
 	KREL="${KREL%.*}"
 fi
 
-if [[ -z "$VARIANT" ]] && [[ "$ARCHVERSION" =~ \+(.*)$ ]]; then
-	VARIANT="${BASH_REMATCH[1]//_/-}"
+if [[ -z "$KVARIANT" ]] && [[ "$ARCHVERSION" =~ \+(.*)$ ]]; then
+	KVARIANT="${BASH_REMATCH[1]//_/-}"
 fi
 
 [[ "$ARCHVERSION" =~ .el7a. ]] && ALT="-alt"
@@ -1135,10 +1136,10 @@ else
 			[[ -z "$CONFIGFILE" ]] && CONFIGFILE="/boot/config-${ARCHVERSION}"
 		elif [[ "$DISTRO" = photon ]]; then
 			[[ -z "$CONFIGFILE" ]] && CONFIGFILE="$KERNEL_SRCDIR"/.config
-		elif [[ -n "$VARIANT" ]]; then
+		elif [[ -n "$KVARIANT" ]]; then
 			if [[ -z "$CONFIGFILE" ]]; then
-				cfg="$KERNEL_SRCDIR/configs/kernel$ALT-$KVER-$ARCH-$VARIANT.config"
-				[[ -e "$cfg" ]] || die "kernel variant '$VARIANT' not found (expected $(basename "$cfg"))"
+				cfg="$KERNEL_SRCDIR/configs/kernel$ALT-$KVER-$ARCH-$KVARIANT.config"
+				[[ -e "$cfg" ]] || die "kernel variant '$KVARIANT' not found (expected $(basename "$cfg"))"
 				CONFIGFILE="$cfg"
 			fi
 		else
