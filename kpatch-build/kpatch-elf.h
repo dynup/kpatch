@@ -186,6 +186,7 @@ bool is_file_sym(struct symbol *sym);
 bool is_local_func_sym(struct symbol *sym);
 bool is_local_sym(struct symbol *sym);
 bool is_ubsan_sec(const char *name);
+int kpatch_mangled_strcmp(char *s1, char *s2);
 
 void print_strtab(char *buf, size_t size);
 void kpatch_create_shstrtab(struct kpatch_elf *kelf);

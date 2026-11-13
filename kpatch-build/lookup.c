@@ -89,8 +89,35 @@ static bool maybe_discarded_sym(const char *name)
 	    !strncmp(name, ".L__const", 9) ||
 	    !strncmp(name, "__gendwarfksyms_", 16) ||
 	    !strncmp(name, "__export_symbol_", 16) ||
+	    !strncmp(name, "__mod_device_table__", 20) ||
 	    is_ubsan_sec(name))
 		return true;
+
+	return false;
+}
+
+/*
+ * Clang deduplicates .L.str literals differently between out-of-tree vmlinux
+ * builds and in-tree kpatch-build rebuilds.  Match the local symbol names when
+ * there are different numerical suffixes.
+ */
+static bool mangled_local_sym_equal(const char *s1, const char *s2)
+{
+	while (*s1 == *s2) {
+		if (!*s1)
+			return true;
+		if (*s1 == '.' && isdigit((unsigned char)s1[1])) {
+			if (!isdigit((unsigned char)s2[1]))
+				return false;
+			while (isdigit((unsigned char)*++s1))
+				;
+			while (isdigit((unsigned char)*++s2))
+				;
+		} else {
+			s1++;
+			s2++;
+		}
+	}
 
 	return false;
 }
@@ -110,6 +137,8 @@ static bool locals_match(struct lookup_table *table, int idx,
 			continue;
 		if (table_sym->type != STT_FUNC && table_sym->type != STT_OBJECT)
 			continue;
+		if (maybe_discarded_sym(table_sym->name))
+			continue;
 
 		found = 0;
 		sym = file_sym;
@@ -118,9 +147,11 @@ static bool locals_match(struct lookup_table *table, int idx,
 				break;
 			if (sym->bind != STB_LOCAL)
 				continue;
+			if (maybe_discarded_sym(sym->name))
+				continue;
 
 			if (sym->type == table_sym->type &&
-			    !strcmp(sym->name, table_sym->name)) {
+			    !kpatch_mangled_strcmp(sym->name, table_sym->name)) {
 				found = 1;
 				break;
 			}
@@ -156,7 +187,7 @@ static bool locals_match(struct lookup_table *table, int idx,
 				continue;
 
 			if (sym->type == table_sym->type &&
-			    !strcmp(sym->name, table_sym->name)) {
+			    !kpatch_mangled_strcmp(sym->name, table_sym->name)) {
 				found = 1;
 				break;
 			}
@@ -504,6 +535,7 @@ static bool lookup_local_symbol(struct lookup_table *table,
 				ERROR("duplicate local symbol found for %s",
 						lookup_sym->name);
 
+			result->name		= sym->name;
 			result->objname		= table->objname;
 			result->addr		= sym->addr;
 			result->size		= sym->size;
@@ -512,6 +544,39 @@ static bool lookup_local_symbol(struct lookup_table *table,
 			found = true;
 		}
 	}
+
+	if (!found) {
+		in_file = 0;
+		for_each_obj_symbol(i, sym, table) {
+			if (lookup_sym->lookup_table_file_sym == sym) {
+				in_file = 1;
+				continue;
+			}
+
+			if (!in_file)
+				continue;
+
+			if (sym->type == STT_FILE)
+				break;
+
+			if (sym->bind == STB_LOCAL &&
+			    sym->type == lookup_sym->type &&
+			    mangled_local_sym_equal(sym->name, lookup_sym->name)) {
+				if (found)
+					ERROR("duplicate local symbol found for %s",
+					      lookup_sym->name);
+
+				result->name		= sym->name;
+				result->objname		= table->objname;
+				result->addr		= sym->addr;
+				result->size		= sym->size;
+				result->global		= false;
+				result->exported	= false;
+				found = true;
+			}
+		}
+	}
+
 	if (!found)
 		return false;
 
@@ -523,7 +588,7 @@ static bool lookup_local_symbol(struct lookup_table *table,
 	 */
 	for_each_obj_symbol(i, sym, table) {
 		if (sym->bind == STB_LOCAL &&
-		    !strcmp(sym->name, lookup_sym->name) &&
+		    !strcmp(sym->name, result->name) &&
 		    sym->addr <= result->addr)
 			sympos++;
 	}
@@ -549,6 +614,7 @@ static bool lookup_exported_symbol(struct lookup_table *table, char *name,
 			if (result->objname)
 				ERROR("duplicate exported symbol found for %s", name);
 
+			result->name		= sym->name;
 			result->objname		= sym->objname;
 			result->addr		= 0; /* determined at runtime */
 			result->size		= 0; /* not used for exported symbols */
@@ -580,6 +646,7 @@ static bool lookup_global_symbol(struct lookup_table *table, char *name,
 			if (result->objname)
 				ERROR("duplicate global symbol found for %s", name);
 
+			result->name		= sym->name;
 			result->objname		= table->objname;
 			result->addr		= sym->addr;
 			result->size		= sym->size;

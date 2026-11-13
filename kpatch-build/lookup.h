@@ -7,6 +7,7 @@
 struct lookup_table;
 
 struct lookup_result {
+	char *name;
 	char *objname;
 	unsigned long addr;
 	unsigned long size;
