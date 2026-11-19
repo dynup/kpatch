@@ -1,0 +1,20 @@
+diff -Nupr src.orig/kernel/sys.c src/kernel/sys.c
+--- src.orig/kernel/sys.c	2026-11-19 16:37:35.959536181 +0100
++++ src/kernel/sys.c	2026-11-19 16:38:08.272729172 +0100
+@@ -1351,13 +1351,15 @@ static int override_release(char __user
+ 	return ret;
+ }
+ 
+-SYSCALL_DEFINE1(newuname, struct new_utsname __user *, name)
++#include "kpatch-syscall.h"
++KPATCH_SYSCALL_DEFINE1(newuname, struct new_utsname __user *, name)
+ {
+ 	struct new_utsname tmp;
+ 
+ 	down_read(&uts_sem);
+ 	memcpy(&tmp, utsname(), sizeof(tmp));
+ 	up_read(&uts_sem);
++	strcat(tmp.sysname, ".kpatch");
+ 	if (copy_to_user(name, &tmp, sizeof(tmp)))
+ 		return -EFAULT;
+ 
